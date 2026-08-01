@@ -2,12 +2,8 @@ import {
 	AppstoreOutlined,
 	EllipsisOutlined,
 	FolderOpenOutlined,
-	LogoutOutlined,
 	MenuOutlined,
-	MoonOutlined,
 	ProfileOutlined,
-	SettingOutlined,
-	SunOutlined,
 	ToolOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
@@ -15,7 +11,7 @@ import { Button, Layout } from 'antd'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 
-import { APP_NAVIGATION_DRAWER_ID, APP_SETTINGS_DRAWER_ID } from './appShellIds'
+import { APP_NAVIGATION_DRAWER_ID } from './appShellIds'
 import { BrandLockup } from './components/BrandLockup'
 import { MenuPopover } from './components/MenuPopover'
 import { OverlaySheet } from './components/OverlaySheet'
@@ -109,14 +105,10 @@ export function FullAppShellChrome({
 		shellScopeKey,
 		selectedKey,
 		navOpen,
-		settingsOpen,
 		openNav,
 		closeNav,
-		openSettings,
-		logout,
 		compactHeaderMenu,
 	} = session
-	const { mode, toggleMode } = theme
 	const { isDesktop, isStackedHeader, usesCompactHeader, hasMediumBreakpoint } =
 		viewport
 	const contentClassName = `${styles.content} ${hasMediumBreakpoint ? styles.contentPadMd : styles.contentPadSm}`
@@ -136,7 +128,7 @@ export function FullAppShellChrome({
 				Skip to content
 			</a>
 			{isDesktop ? (
-				<Sider width={220} theme={theme.mode} className={styles.desktopSider}>
+				<Sider width={192} theme={theme.mode} className={styles.desktopSider}>
 					<div className={styles.brandBlock}>
 						<Link
 							to={profileId ? '/objects' : '/profiles'}
@@ -144,7 +136,7 @@ export function FullAppShellChrome({
 							aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
 							title={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
 						>
-							<BrandLockup subtitle="Local Dashboard" variant="sidebar" />
+							<BrandLockup variant="sidebar" />
 						</Link>
 					</div>
 					<AppNavigation
@@ -180,16 +172,6 @@ export function FullAppShellChrome({
 							)}
 						</div>
 						<div className={styles.headerActions}>
-							{isDesktop ? (
-								<Button
-									type="link"
-									icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-									onClick={toggleMode}
-									aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-								>
-									{mode === 'dark' ? 'Light mode' : 'Dark mode'}
-								</Button>
-							) : null}
 							{isStackedHeader ? null : (
 								<TopBarProfileSelect
 									profileId={profileId}
@@ -201,37 +183,18 @@ export function FullAppShellChrome({
 								/>
 							)}
 							{isStackedHeader ? null : <TransfersButton showLabel={isDesktop} ariaLabel="Transfers" />}
-							{isDesktop ? (
-								<>
+							<MenuPopover menu={compactHeaderMenu} align="end" scopeKey={shellScopeKey}>
+								{({ toggle, open }) => (
 									<Button
-										type="link"
-										onClick={openSettings}
-										aria-haspopup="dialog"
-										aria-expanded={settingsOpen}
-										aria-controls={APP_SETTINGS_DRAWER_ID}
-									>
-										<SettingOutlined /> Settings
-									</Button>
-									{apiToken ? (
-										<Button type="link" onClick={logout}>
-											<LogoutOutlined /> Logout
-										</Button>
-									) : null}
-								</>
-							) : (
-								<MenuPopover menu={compactHeaderMenu} align="end" scopeKey={shellScopeKey}>
-									{({ toggle, open }) => (
-										<Button
-											type="text"
-											icon={<EllipsisOutlined />}
-											aria-label="App menu"
-											aria-haspopup="menu"
-											aria-expanded={open}
-											onClick={toggle}
-										/>
-									)}
-								</MenuPopover>
-							)}
+										type="text"
+										icon={<EllipsisOutlined />}
+										aria-label="App menu"
+										aria-haspopup="menu"
+										aria-expanded={open}
+										onClick={toggle}
+									/>
+								)}
+							</MenuPopover>
 						</div>
 					</div>
 					{isStackedHeader ? (

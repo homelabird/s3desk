@@ -106,19 +106,19 @@
 }
 
 .brandBlock {
-	padding: 20px 16px 12px;
+	padding: 18px 16px 14px;
 }
 
 .header {
 	background: var(--s3d-color-bg-glass);
 	border-bottom: 1px solid var(--s3d-color-border-strong);
-	min-height: 56px;
+	min-height: 52px;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	gap: 10px;
 	backdrop-filter: blur(12px);
-	box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 28px rgba(15, 23, 42, 0.06);
+	box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
 }
 
 .headerCompact {
@@ -187,8 +187,8 @@
 }
 
 .headerPadMd {
-	padding-inline: 20px;
-	padding-block: 12px;
+	padding-inline: 16px;
+	padding-block: 8px;
 }
 
 .headerPadSm {
@@ -224,7 +224,7 @@
 }
 
 .contentPadMd {
-	padding: 20px;
+	padding: 16px;
 }
 
 .contentPadSm {

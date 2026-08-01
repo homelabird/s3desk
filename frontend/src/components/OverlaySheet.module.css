@@ -21,8 +21,8 @@
 .panel {
 	display: flex;
 	flex-direction: column;
-	background: var(--s3d-gradient-surface);
-	box-shadow: var(--s3d-shadow-lg);
+	background: var(--s3d-color-bg-elevated, var(--s3d-color-bg));
+	box-shadow: var(--s3d-shadow-md);
 	min-width: 0;
 }
 
@@ -46,7 +46,7 @@
 .panelBottom {
 	width: 100%;
 	max-height: calc(min(100dvh, 100vh) - env(safe-area-inset-top));
-	border-radius: 18px 18px 0 0;
+	border-radius: 16px 16px 0 0;
 }
 
 .header {
@@ -55,7 +55,7 @@
 	gap: 10px;
 	padding: 18px 20px 14px;
 	border-bottom: 1px solid var(--s3d-color-border);
-	background: var(--s3d-gradient-section);
+	background: var(--s3d-color-bg-elevated, var(--s3d-color-bg));
 	min-width: 0;
 }
 
@@ -91,9 +91,9 @@
 	flex: 0 0 auto;
 	width: 36px;
 	height: 36px;
-	border: 1px solid var(--s3d-color-border);
+	border: 0;
 	border-radius: 999px;
-	background: var(--s3d-color-bg-secondary);
+	background: transparent;
 	color: inherit;
 	display: inline-flex;
 	align-items: center;

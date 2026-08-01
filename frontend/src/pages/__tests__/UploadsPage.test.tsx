@@ -257,9 +257,7 @@ describe("UploadsPage", () => {
         files,
       });
     });
-    expect(
-      screen.getByText("No files or folders selected."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Add files or a folder first.")).toBeInTheDocument();
   });
 
   it("reads bucket and prefix from the active profile scope", async () => {

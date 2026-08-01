@@ -45,8 +45,7 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.queryByText('0 B')).not.toBeInTheDocument()
 		expect(screen.queryByText('Not selected')).not.toBeInTheDocument()
 		expect(screen.getByText(addFilesOrFolderFirstSentenceHint())).toBeInTheDocument()
-		expect(screen.getByText('No files or folders selected.')).toBeInTheDocument()
-		expect(screen.getByText('Choose files or a folder to preview what will be uploaded.')).toBeInTheDocument()
+		expect(screen.queryByText('No files or folders selected.')).not.toBeInTheDocument()
 		expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
 		const addButton = screen.getByRole('button', { name: /Add from device/i })

@@ -8,12 +8,11 @@
 .decisionHeader {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
+  gap: 10px;
+  padding: 12px 14px;
   border: 1px solid var(--s3d-color-border);
   border-radius: var(--s3d-radius-lg);
-  background: var(--s3d-gradient-page-header);
-  box-shadow: var(--s3d-shadow-sm);
+  background: var(--s3d-color-bg-card);
 }
 
 .decisionHeaderTop {
@@ -69,66 +68,23 @@
   background: var(--s3d-color-danger-bg);
 }
 
-.decisionRouteGrid,
 .structuredFieldGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.decisionRoute,
 .validationActionRow {
   display: flex;
   padding: 12px;
   border-radius: var(--s3d-radius-lg);
 }
 
-.decisionRoute {
+.decisionRouteSummary {
+  display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  border: 1px solid var(--s3d-color-border);
-  background: var(--s3d-color-bg-card);
-}
-
-.routeTagPrimary,
-.routeTagAdvanced {
-  width: fit-content;
-  margin-inline-end: 0 !important;
-}
-
-.routeTagPrimary {
-  color: var(--s3d-color-primary) !important;
-  border-color: color-mix(in srgb, var(--s3d-color-primary) 38%, var(--s3d-color-border)) !important;
-  background: var(--s3d-color-primary-bg) !important;
-}
-
-.routeTagAdvanced {
-  color: var(--s3d-color-warning-text) !important;
-  border-color: var(--s3d-color-warning-border) !important;
-  background: var(--s3d-color-warning-bg) !important;
-}
-
-.decisionRoutePrimary {
-  border-color: color-mix(in srgb, var(--s3d-color-primary) 45%, var(--s3d-color-border));
-  background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
-  box-shadow: inset 4px 0 0 var(--s3d-color-primary);
-}
-
-.decisionRouteAdvanced {
-  border-color: color-mix(in srgb, var(--s3d-color-warning-border) 42%, var(--s3d-color-border));
-  background: linear-gradient(90deg, var(--s3d-color-warning-bg), var(--s3d-color-bg-card));
-  box-shadow: inset 4px 0 0 var(--s3d-color-warning-border);
-}
-
-.decisionRouteList {
-  margin: 2px 0 0;
-  padding-left: 18px;
-  color: var(--s3d-color-text-secondary);
-}
-
-.decisionRouteList li + li {
-  margin-top: 4px;
+  gap: 4px;
+  line-height: 1.45;
 }
 
 .tableWrap {
@@ -375,7 +331,6 @@
 }
 
 @media (max-width: 768px) {
-  .decisionRouteGrid,
   .structuredFieldGrid {
     grid-template-columns: minmax(0, 1fr);
   }

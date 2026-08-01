@@ -294,6 +294,11 @@ function renderShell(initialEntries: Array<string | { pathname: string; state?: 
 	)
 }
 
+async function openSettings() {
+	fireEvent.click(screen.getByRole('button', { name: 'App menu' }))
+	fireEvent.click(await screen.findByRole('menuitem', { name: /Settings/i }))
+}
+
 describe('FullAppInner route remounts', () => {
 	it('uses the current server-scoped stored active profile on initial render', async () => {
 		mockViewportWidth(1280)
@@ -486,7 +491,7 @@ describe('FullAppInner route remounts', () => {
 
 		expect(await screen.findByTestId('jobs-route-seeded-token')).toHaveTextContent('token-a')
 
-		fireEvent.click(screen.getByRole('button', { name: /Settings/i }))
+		await openSettings()
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 
 		await waitFor(() => {
@@ -525,7 +530,7 @@ describe('FullAppInner route remounts', () => {
 		fireEvent.click(await screen.findByRole('button', { name: 'Transfers' }))
 		expect(await screen.findByTestId('transfers-runtime-seeded-token')).toHaveTextContent('token-a')
 
-		fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
+		await openSettings()
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 
 		await waitFor(() => {
@@ -545,7 +550,7 @@ describe('FullAppInner route remounts', () => {
 
 		expect(await screen.findByTestId('profiles-route-seeded-token')).toHaveTextContent('token-a')
 
-		fireEvent.click(screen.getByRole('button', { name: /Settings/i }))
+		await openSettings()
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 
 		await waitFor(() => {
@@ -561,7 +566,7 @@ describe('FullAppInner route remounts', () => {
 
 		expect(await screen.findByTestId('buckets-route-seeded-scope')).toHaveTextContent('token-a:profile-1')
 
-		fireEvent.click(screen.getByRole('button', { name: /Settings/i }))
+		await openSettings()
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 
 		await waitFor(() => {
@@ -577,7 +582,7 @@ describe('FullAppInner route remounts', () => {
 
 		expect(await screen.findByTestId('objects-route-seeded-scope')).toHaveTextContent('token-a:profile-1')
 
-		fireEvent.click(screen.getByRole('button', { name: /Settings/i }))
+		await openSettings()
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 
 		await waitFor(() => {
@@ -593,7 +598,7 @@ describe('FullAppInner route remounts', () => {
 
 		expect(await screen.findByTestId('uploads-route-seeded-scope')).toHaveTextContent('token-a:profile-1')
 
-		fireEvent.click(screen.getByRole('button', { name: /Settings/i }))
+		await openSettings()
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 
 		await waitFor(() => {

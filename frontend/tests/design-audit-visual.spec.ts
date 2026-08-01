@@ -35,6 +35,8 @@ async function setupObjectsAuditPage(
 test.describe('Design audit visual smoke @visual', () => {
 	test('Objects shell hierarchy remains visible in light mode', async ({ page }) => {
 		await setupObjectsAuditPage(page, 'light')
+		const listControls = await page.getByTestId('objects-list-controls-root').boundingBox()
+		expect(listControls?.y).toBeLessThanOrEqual(320)
 
 		await expect(page).toHaveScreenshot('design-audit-objects-shell-light.png', visualScreenshotOptions)
 	})
@@ -79,7 +81,10 @@ test.describe('Design audit visual smoke @visual', () => {
 		await installUploadsMobileResponsiveFixtures(page)
 		await seedUploadsMobileResponsiveStorage(page)
 		await gotoUploadsPage(page)
-		await expect(page.getByLabel('Upload prefix (optional)')).toBeVisible()
+		const prefixInput = page.getByLabel('Upload prefix (optional)')
+		await expect(prefixInput).toBeVisible()
+		const prefixBox = await prefixInput.boundingBox()
+		expect((prefixBox?.y ?? 844) + (prefixBox?.height ?? 0)).toBeLessThanOrEqual(844)
 
 		await expect(page).toHaveScreenshot('design-audit-uploads-mobile.png', visualScreenshotOptions)
 	})

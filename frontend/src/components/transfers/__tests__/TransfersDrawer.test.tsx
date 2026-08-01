@@ -64,10 +64,11 @@ describe('TransfersDrawer', () => {
 		)
 	})
 
-	it('disables Clear all when only commit uploads remain visible', () => {
+	it('hides unavailable clear actions when only commit uploads remain visible', () => {
 		render(<TransfersDrawer {...buildProps()} />)
 
-		expect(screen.getByRole('button', { name: 'Clear all' })).toBeDisabled()
+		expect(screen.queryByRole('button', { name: 'Clear done' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument()
 		expect(screen.getByText('Committing')).toBeInTheDocument()
 		expect(screen.getByRole('list', { name: 'Upload transfers' })).toBeInTheDocument()
 		expect(screen.getByRole('listitem', { name: /Upload Upload: one file, Committing/i })).toBeInTheDocument()

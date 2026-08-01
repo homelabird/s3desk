@@ -71,7 +71,7 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 		await page.getByRole('button', { name: 'Clear selection' }).click()
 
 		await expect(page.getByRole('button', { name: /^Queue upload/ })).toHaveCount(0)
-		await expect(page.getByText('No files or folders selected.')).toBeVisible()
+		await expect(page.getByText('Add files or a folder first.')).toBeVisible()
 	})
 
 	test('queueing a mobile upload exposes the queued file in Transfers', async ({ page }) => {

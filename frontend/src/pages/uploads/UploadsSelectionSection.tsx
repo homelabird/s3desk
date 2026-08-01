@@ -87,14 +87,7 @@ export function UploadsSelectionSection(props: Props) {
 							<Typography.Text type="secondary">+ {remainingPreviewCount.toLocaleString()} more item(s) selected</Typography.Text>
 						) : null}
 					</div>
-				) : (
-					<div className={styles.emptyPreview}>
-						<Typography.Text strong>No files or folders selected.</Typography.Text>
-						<Typography.Text type="secondary">
-							Choose files or a folder to preview what will be uploaded.
-						</Typography.Text>
-					</div>
-				)}
+				) : null}
 			</div>
 		</PageSection>
 	)

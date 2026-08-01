@@ -52,7 +52,11 @@ export function TokenLoginPanel(props: TokenLoginPanelProps) {
 			<BrandLockup titleAs="h1" subtitle={props.subtitle} variant="hero" className={styles.brand} />
 
 			<div className={styles.card}>
-				<Alert type={props.hintVariant === 'stored-token' ? 'warning' : 'info'} showIcon title={hint} />
+				{props.hintVariant === 'stored-token' ? (
+					<Alert type="warning" showIcon title={hint} />
+				) : (
+					<Typography.Text type="secondary" className={styles.hint}>{hint}</Typography.Text>
+				)}
 				{visibleError ? <Alert id={errorId} type="error" showIcon title={visibleError} /> : null}
 
 				<form
@@ -82,7 +86,7 @@ export function TokenLoginPanel(props: TokenLoginPanelProps) {
 						<Button type="primary" htmlType="submit" loading={props.submitting} disabled={!token.trim() || props.submitting}>
 							Login
 						</Button>
-						{props.onClearSavedToken ? (
+						{props.initialToken && props.onClearSavedToken ? (
 							<Button onClick={props.onClearSavedToken} disabled={props.submitting}>
 								Clear stored token
 							</Button>

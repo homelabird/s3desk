@@ -90,25 +90,22 @@ type DesktopToolbarLayoutProps = {
 	primaryActions: ReactNode
 	selectionActions: ReactNode
 	utilityActions: ReactNode
-	showSecondaryRow: boolean
 }
 
 function DesktopToolbarLayout(props: DesktopToolbarLayoutProps) {
 	return (
 		<div className={styles.toolbarDesktopStack} data-testid="objects-toolbar-desktop-stack">
 			<div className={styles.toolbarDesktopPrimaryRow} data-testid="objects-toolbar-desktop-primary-row">
-				<div className={styles.toolbarGroup}>{props.bucketPicker}</div>
-				<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopPrimaryActions}`}>{props.primaryActions}</div>
-			</div>
-			{props.showSecondaryRow ? (
-				<div className={styles.toolbarDesktopSecondaryRow} data-testid="objects-toolbar-desktop-secondary-row">
-					<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopNavGroup}`}>{props.navButtons}</div>
-					<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopUtilityGroup}`}>
-						{props.selectionActions}
-						{props.utilityActions}
-					</div>
+				<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopNavGroup}`}>
+					{props.bucketPicker}
+					{props.navButtons}
 				</div>
-			) : null}
+				<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopPrimaryActions}`}>
+					{props.selectionActions}
+					{props.primaryActions}
+					{props.utilityActions}
+				</div>
+			</div>
 		</div>
 	)
 }
@@ -283,7 +280,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				primaryActions={primaryActions}
 				selectionActions={selectionActions}
 				utilityActions={utilityActions}
-				showSecondaryRow={Boolean(props.isAdvanced || showSelectionPrimaryActions || props.hasProfile)}
 			/>
 		)
 	}

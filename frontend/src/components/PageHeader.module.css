@@ -3,14 +3,10 @@
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
-	gap: 20px;
+	gap: 16px;
 	flex-wrap: wrap;
-	padding: 20px 24px;
-	border: 1px solid var(--s3d-color-border-strong);
-	border-radius: var(--s3d-radius-lg);
-	background: var(--s3d-gradient-page-header);
-	box-shadow: var(--s3d-shadow-sm);
-	overflow: hidden;
+	padding: 4px 0 14px;
+	border-bottom: 1px solid var(--s3d-color-border-secondary);
 }
 
 .copy,
@@ -27,14 +23,10 @@
 .eyebrow {
 	display: inline-flex;
 	width: fit-content;
-	margin-bottom: 10px;
-	padding: 3px 8px;
-	border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 22%, var(--s3d-color-border));
-	border-radius: 999px;
-	background: var(--s3d-color-primary-bg);
+	margin-bottom: 6px;
 	font-size: 11px;
 	font-weight: 800;
-	letter-spacing: 0.14em;
+	letter-spacing: 0.1em;
 	text-transform: uppercase;
 	color: var(--s3d-color-primary);
 }
@@ -46,10 +38,10 @@
 
 .subtitle {
 	max-width: 720px;
-	margin: 10px 0 0;
+	margin: 6px 0 0;
 	color: var(--s3d-color-text-secondary);
 	font-size: 14px;
-	line-height: 1.6;
+	line-height: 1.5;
 }
 
 .actions {
@@ -66,9 +58,8 @@
 
 @media (max-width: 768px) {
 	.header {
-		gap: 16px;
-		padding: 18px 16px;
-		border-radius: var(--s3d-radius-sm);
+		gap: 12px;
+		padding: 2px 0 12px;
 	}
 
 	.actions {
@@ -79,14 +70,13 @@
 
 @media (max-width: 640px) {
 	.header {
-		gap: 12px;
-		padding: 16px;
+		gap: 10px;
 	}
 
 	.eyebrow {
-		margin-bottom: 6px;
+		margin-bottom: 4px;
 		font-size: 10px;
-		letter-spacing: 0.12em;
+		letter-spacing: 0.08em;
 	}
 
 	.title {
@@ -95,7 +85,7 @@
 	}
 
 	.subtitle {
-		margin-top: 8px;
+		margin-top: 4px;
 		font-size: 13px;
 		line-height: 1.45;
 	}

@@ -2,7 +2,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   min-height: 0;
 }
 
@@ -10,7 +10,7 @@
 .treeStack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -40,8 +40,7 @@
   width: 100%;
 }
 
-.toolbarDesktopPrimaryRow,
-.toolbarDesktopSecondaryRow {
+.toolbarDesktopPrimaryRow {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -49,11 +48,6 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.toolbarDesktopSecondaryRow {
-  padding-top: 6px;
-  border-top: 1px solid color-mix(in srgb, var(--s3d-color-border) 82%, transparent);
 }
 
 .toolbarColumn {
@@ -70,16 +64,14 @@
 }
 
 .toolbarDesktopPrimaryActions,
-.toolbarDesktopNavGroup,
-.toolbarDesktopUtilityGroup {
+.toolbarDesktopNavGroup {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.toolbarDesktopPrimaryActions,
-.toolbarDesktopUtilityGroup {
+.toolbarDesktopPrimaryActions {
   justify-content: flex-end;
 }
 

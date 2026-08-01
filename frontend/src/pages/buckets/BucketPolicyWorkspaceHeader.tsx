@@ -49,37 +49,13 @@ export function BucketPolicyWorkspaceHeader(props: {
         </div>
       </div>
 
-      <div className={styles.decisionRouteGrid}>
-        <div
-          className={`${styles.decisionRoute} ${styles.decisionRoutePrimary}`}
-          data-testid="bucket-policy-recommended-route"
-        >
-          <Tag className={styles.routeTagPrimary}>Recommended path</Tag>
-          <Typography.Text strong>{guide.recommendedTitle}</Typography.Text>
-          <Typography.Text type="secondary">
-            {guide.recommendedDescription}
-          </Typography.Text>
-          <ul className={styles.decisionRouteList}>
-            {guide.recommendedItems.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-        <div
-          className={`${styles.decisionRoute} ${styles.decisionRouteAdvanced}`}
-          data-testid="bucket-policy-advanced-route"
-        >
-          <Tag className={styles.routeTagAdvanced}>Advanced path</Tag>
-          <Typography.Text strong>{guide.advancedTitle}</Typography.Text>
-          <Typography.Text type="secondary">
-            {guide.advancedDescription}
-          </Typography.Text>
-          <ul className={styles.decisionRouteList}>
-            {guide.advancedItems.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
+      <div className={styles.decisionRouteSummary}>
+        <Typography.Text>
+          <strong>{guide.recommendedTitle}.</strong> {guide.recommendedDescription}
+        </Typography.Text>
+        <Typography.Text type="secondary">
+          <strong>{guide.advancedTitle}.</strong> {guide.advancedDescription}
+        </Typography.Text>
       </div>
 
       {props.controlsShortcut ? (

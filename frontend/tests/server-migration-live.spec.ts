@@ -21,10 +21,11 @@ test.describe('Live server migration flow', () => {
 
 		await seedStorage(page)
 		await gotoProfilesPage(page, {
-			ready: (scope) => scope.getByRole('button', { name: /Settings/i }),
+			ready: (scope) => scope.getByRole('button', { name: 'App menu' }),
 		})
 
-		await page.getByRole('button', { name: /Settings/i }).click()
+		await page.getByRole('button', { name: 'App menu' }).click()
+		await page.getByRole('menuitem', { name: /Settings/i }).click()
 		const settings = page.getByRole('dialog', { name: 'Settings' })
 		await expect(settings).toBeVisible()
 		await settings.getByRole('tab', { name: 'Support' }).click()

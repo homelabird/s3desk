@@ -132,7 +132,8 @@ describe('BucketsPage route side effects', () => {
 		renderBucketsPage()
 
 		const bucketList = await screen.findByTestId('buckets-list-compact')
-		fireEvent.click(await within(bucketList).findByRole('button', { name: /delete/i }))
+		fireEvent.click(await within(bucketList).findByRole('button', { name: /Manage bucket/i }))
+		fireEvent.click(await screen.findByRole('menuitem', { name: /Delete bucket/i }))
 		await waitFor(() => expect(deleteBucket).toHaveBeenCalledWith('profile-1', 'primary-bucket'))
 
 		fireEvent.click(await screen.findByRole('button', { name: 'Open Objects' }))
@@ -156,7 +157,8 @@ describe('BucketsPage route side effects', () => {
 		renderBucketsPage()
 
 		const bucketList = await screen.findByTestId('buckets-list-compact')
-		fireEvent.click(await within(bucketList).findByRole('button', { name: /delete/i }))
+		fireEvent.click(await within(bucketList).findByRole('button', { name: /Manage bucket/i }))
+		fireEvent.click(await screen.findByRole('menuitem', { name: /Delete bucket/i }))
 		await waitFor(() => expect(deleteBucket).toHaveBeenCalledWith('profile-1', 'primary-bucket'))
 
 		fireEvent.click(await screen.findByRole('button', { name: 'Delete all objects (job)' }))

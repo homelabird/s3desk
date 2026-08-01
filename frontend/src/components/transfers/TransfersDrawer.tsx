@@ -36,6 +36,7 @@ export type TransfersDrawerProps = {
 export function TransfersDrawer(props: TransfersDrawerProps) {
 	const clearableUploadCount = props.uploadTasks.filter((task) => task.status !== 'commit').length
 	const hasClearableTransfers = props.downloadTasks.length + clearableUploadCount > 0
+	const hasCompletedTransfers = props.tab === 'downloads' ? props.hasCompletedDownloads : props.hasCompletedUploads
 
 	return (
 		<OverlaySheet
@@ -50,23 +51,23 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 			placement="bottom"
 			height={440}
 			extra={
-				<Space>
-					<Button
-						size="small"
-						onClick={props.tab === 'downloads' ? props.onClearCompletedDownloads : props.onClearCompletedUploads}
-						disabled={props.tab === 'downloads' ? !props.hasCompletedDownloads : !props.hasCompletedUploads}
-					>
-						Clear done
-					</Button>
-					<Button
-						size="small"
-						danger
-						onClick={props.onClearAll}
-						disabled={!hasClearableTransfers}
-					>
-						Clear all
-					</Button>
-				</Space>
+				hasCompletedTransfers || hasClearableTransfers ? (
+					<Space>
+						{hasCompletedTransfers ? (
+							<Button
+								size="small"
+								onClick={props.tab === 'downloads' ? props.onClearCompletedDownloads : props.onClearCompletedUploads}
+							>
+								Clear done
+							</Button>
+						) : null}
+						{hasClearableTransfers ? (
+							<Button size="small" danger onClick={props.onClearAll}>
+								Clear all
+							</Button>
+						) : null}
+					</Space>
+				) : null
 			}
 		>
 			<AppTabs

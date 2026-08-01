@@ -194,7 +194,7 @@ describe('FullAppInner header', () => {
 		expect(screen.getByRole('button', { name: 'App menu' })).toBeInTheDocument()
 	})
 
-	it('keeps inline settings and logout actions on desktop', async () => {
+	it('keeps low-frequency settings and logout actions in the desktop app menu', async () => {
 		mockViewportWidth(1280)
 		mockShellApi()
 
@@ -206,31 +206,41 @@ describe('FullAppInner header', () => {
 		expect(screen.queryByRole('button', { name: 'Backup' })).not.toBeInTheDocument()
 		expect(screen.getByText('Profile')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
-		const settingsButton = screen.getByRole('button', { name: /Settings/i })
-		expect(settingsButton).toHaveAttribute('aria-haspopup', 'dialog')
-		expect(settingsButton).toHaveAttribute('aria-expanded', 'false')
-		expect(settingsButton).toHaveAttribute('aria-controls', 'app-settings-drawer')
-		expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: /Settings/i })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: /Logout/i })).not.toBeInTheDocument()
 		expect(screen.getByRole('link', { name: 'Open objects workspace' })).toHaveAttribute('href', '/objects')
-
 		const sider = document.querySelector('.ant-layout-sider')
 		expect(sider).toHaveClass('ant-layout-sider-light')
+		const appMenuButton = screen.getByRole('button', { name: 'App menu' })
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }))
+			fireEvent.click(appMenuButton)
+		})
+
+		expect(appMenuButton).toHaveAttribute('aria-expanded', 'true')
+		await screen.findByRole('menuitem', { name: /Settings/i })
+		expect(screen.getByRole('menuitem', { name: /Logout/i })).toBeInTheDocument()
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole('menuitem', { name: /Dark mode/i }))
 		})
 		expect(sider).toHaveClass('ant-layout-sider-dark')
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }))
+			fireEvent.click(appMenuButton)
+		})
+		await act(async () => {
+			fireEvent.click(await screen.findByRole('menuitem', { name: /Light mode/i }))
 		})
 		expect(sider).toHaveClass('ant-layout-sider-light')
 
 		await act(async () => {
-			fireEvent.click(settingsButton)
+			fireEvent.click(appMenuButton)
+		})
+		await act(async () => {
+			fireEvent.click(await screen.findByRole('menuitem', { name: /Settings/i }))
 		})
 
-		expect(settingsButton).toHaveAttribute('aria-expanded', 'true')
-		expect(await screen.findByRole('dialog', { name: 'Settings' })).toHaveAttribute('id', 'app-settings-drawer')
+		expect(await screen.findByRole('dialog', { name: 'Settings' }, { timeout: 5_000 })).toHaveAttribute('id', 'app-settings-drawer')
 	})
 })

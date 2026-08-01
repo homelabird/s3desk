@@ -42,7 +42,8 @@ test('@check-smoke login gate opens settings after successful auth', async ({ pa
 	await page.getByRole('button', { name: 'Login' }).click()
 	await expect(page.getByText('No profiles yet')).toBeVisible({ timeout: 10_000 })
 
-	await page.getByRole('button', { name: /Settings/ }).click()
+	await page.getByRole('button', { name: 'App menu' }).click()
+	await page.getByRole('menuitem', { name: /Settings/ }).click()
 	const drawer = dialogByName(page, 'Settings')
 	await expect(drawer).toBeVisible()
 	const tokenInput = drawer.getByPlaceholder('Must match API_TOKEN')

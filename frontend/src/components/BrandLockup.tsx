@@ -10,8 +10,6 @@ type Props = {
 	className?: string
 }
 
-const mascotSrc = '/s3desk-icon.png'
-
 export function BrandLockup(props: Props) {
 	const TitleTag = props.titleAs ?? 'div'
 	const variantClassName =
@@ -25,9 +23,6 @@ export function BrandLockup(props: Props) {
 
 	return (
 		<div className={[styles.root, variantClassName, props.className].filter(Boolean).join(' ')}>
-			<span className={styles.mediaWrap} aria-hidden="true">
-				<img src={mascotSrc} alt="" className={styles.media} />
-			</span>
 			<div className={styles.copy}>
 				<TitleTag className={styles.title}>{props.title ?? 'S3Desk'}</TitleTag>
 				{props.subtitle ? <span className={styles.subtitle}>{props.subtitle}</span> : null}
