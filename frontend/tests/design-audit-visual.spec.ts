@@ -35,7 +35,7 @@ async function setupObjectsAuditPage(
 test.describe('Design audit visual smoke @visual', () => {
 	test('Objects shell hierarchy remains visible in light mode', async ({ page }) => {
 		await setupObjectsAuditPage(page, 'light')
-		const listControls = await page.getByTestId('objects-list-controls-root').boundingBox()
+		const listControls = await page.getByTestId('objects-list-controls-root').boundingBox() // e2e-geometry-allow keeps primary content above the desktop fold
 		expect(listControls?.y).toBeLessThanOrEqual(320)
 
 		await expect(page).toHaveScreenshot('design-audit-objects-shell-light.png', visualScreenshotOptions)
@@ -83,7 +83,7 @@ test.describe('Design audit visual smoke @visual', () => {
 		await gotoUploadsPage(page)
 		const prefixInput = page.getByLabel('Upload prefix (optional)')
 		await expect(prefixInput).toBeVisible()
-		const prefixBox = await prefixInput.boundingBox()
+		const prefixBox = await prefixInput.boundingBox() // e2e-geometry-allow proves the upload target remains in the first mobile viewport
 		expect((prefixBox?.y ?? 844) + (prefixBox?.height ?? 0)).toBeLessThanOrEqual(844)
 
 		await expect(page).toHaveScreenshot('design-audit-uploads-mobile.png', visualScreenshotOptions)

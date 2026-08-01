@@ -68,7 +68,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		const drawer = dialogByName(page, 'Settings')
 		await expect(drawer).toBeVisible()
 		await drawer.getByRole('tab', { name: 'Transfers' }).click()
-		await expect(drawer.getByText('S3Desk uses automatic download routing and upload tuning by default.')).toBeVisible()
+		await expect(drawer.getByText('Defaults work for most connections.')).toBeVisible()
 		await openTransferAdvancedOptions(drawer, advancedOptionsName, proxySwitchName)
 		await expect(drawer.getByText(proxySwitchName)).toBeVisible()
 		await expectMinTouchHeight(drawer.getByRole('switch', { name: proxySwitchName }))
@@ -121,7 +121,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await page.keyboard.press('End')
 
 		await expect(drawer.getByRole('tab', { name: 'Support' })).toHaveAttribute('aria-selected', 'true')
-		const recoveryTools = drawer.getByRole('button', { name: 'Browser recovery tools' })
+		const recoveryTools = drawer.getByRole('button', { name: /Browser recovery/ })
 		await expect(recoveryTools).toBeVisible()
 		await recoveryTools.click()
 		await expect(drawer.getByRole('button', { name: 'Clear saved layout' })).toBeVisible()

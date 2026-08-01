@@ -94,3 +94,32 @@
 		gap: 8px;
 	}
 }
+
+@media (max-width: 480px) {
+	.header {
+		gap: 8px;
+		padding-block: 0 10px;
+	}
+
+	.eyebrow {
+		display: none;
+	}
+
+	.title {
+		font-size: 24px !important;
+	}
+
+	.subtitle {
+		display: -webkit-box;
+		overflow: hidden;
+		margin-top: 2px;
+		font-size: 12px;
+		line-height: 1.4;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+	}
+
+	.actions {
+		gap: 6px;
+	}
+}

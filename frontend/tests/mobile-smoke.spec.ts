@@ -117,7 +117,22 @@ async function stubCoreApi(page: Page, overrides?: StubCoreApiOptions) {
 			prefix: '',
 			items: [],
 		}),
-		jsonFixture('GET', '/api/v1/jobs', { items: [], nextCursor: null }),
+		jsonFixture('GET', '/api/v1/jobs', {
+			items: [
+				{
+					id: 'mobile-job',
+					type: 'transfer_upload',
+					status: 'queued',
+					payload: { bucket: seed.bucket },
+					progress: null,
+					createdAt: now,
+					startedAt: null,
+					finishedAt: null,
+					error: null,
+				},
+			],
+			nextCursor: null,
+		}),
 	], { status: 200, json: {} })
 }
 

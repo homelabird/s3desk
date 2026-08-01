@@ -209,7 +209,7 @@ function profileCard(page: Page, profileName: string) {
 }
 
 async function expectWithinViewport(page: Page, locator: Locator) {
-	const box = await locator.boundingBox()
+	const box = await locator.boundingBox() // e2e-geometry-allow validates rendered mobile controls stay within the viewport
 	expect(box).not.toBeNull()
 	const viewportWidth = page.viewportSize()?.width ?? 0
 	expect(box!.x).toBeGreaterThanOrEqual(0)
@@ -306,12 +306,12 @@ test.describe('Workflow visual regression @visual', () => {
 	test('mobile Login token panel remains stable', async ({ page }) => {
 		await setupLoginVisualPage(page)
 		const horizontalMetrics = await page.evaluate(() => ({
-			clientWidth: document.documentElement.clientWidth,
-			scrollWidth: document.documentElement.scrollWidth,
+			clientWidth: document.documentElement.clientWidth, // e2e-geometry-allow compares the mobile layout viewport
+			scrollWidth: document.documentElement.scrollWidth, // e2e-geometry-allow detects page-level horizontal overflow
 			scrollX: window.scrollX,
 		}))
 		expect(horizontalMetrics.scrollX).toBe(0)
-		expect(horizontalMetrics.scrollWidth).toBeLessThanOrEqual(horizontalMetrics.clientWidth)
+		expect(horizontalMetrics.scrollWidth).toBeLessThanOrEqual(horizontalMetrics.clientWidth) // e2e-geometry-allow asserts no mobile page overflow
 		await expectWithinViewport(page, page.getByRole('button', { name: /Dark mode|Light mode/ }))
 		await expectWithinViewport(page, page.getByRole('heading', { name: 'S3Desk' }))
 		await expectWithinViewport(page, page.getByPlaceholder('API_TOKEN'))

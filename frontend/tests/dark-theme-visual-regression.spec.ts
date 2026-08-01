@@ -46,9 +46,9 @@ test.describe('Dark theme visual regression @visual', () => {
 				const keyCell = cells.item(0)
 				const nextCell = cells.item(1)
 				const keyText = keyCell.querySelector('code')
-				const keyCellBox = keyCell.getBoundingClientRect()
-				const nextCellBox = nextCell.getBoundingClientRect()
-				const keyTextBox = keyText?.getBoundingClientRect()
+				const keyCellBox = keyCell.getBoundingClientRect() // e2e-geometry-allow verifies long keys stay inside their mobile table cell
+				const nextCellBox = nextCell.getBoundingClientRect() // e2e-geometry-allow compares the adjacent column boundary
+				const keyTextBox = keyText?.getBoundingClientRect() // e2e-geometry-allow measures rendered key text rather than CSS intent
 				return {
 					keyCellRight: keyCellBox.right,
 					keyTextRight: keyTextBox?.right ?? 0,

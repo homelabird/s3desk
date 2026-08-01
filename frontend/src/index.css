@@ -446,6 +446,29 @@ body::after {
   border-color: var(--s3d-color-error-border) !important;
 }
 
+@media (max-width: 480px) {
+  .ant-alert-with-description {
+    flex-wrap: wrap;
+    padding: 14px 12px;
+  }
+
+  .ant-alert-with-description .ant-alert-section {
+    min-width: 0;
+  }
+
+  .ant-alert-with-description .ant-alert-actions {
+    flex-basis: 100%;
+    margin-inline-start: 34px;
+    padding-top: 8px;
+  }
+
+  .ant-alert-with-description .ant-alert-actions .ant-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 .skip-link {
   position: absolute;
   top: 8px;

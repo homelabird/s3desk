@@ -166,7 +166,7 @@
 
 @media (max-width: 768px) {
 	.pageStack {
-		gap: 18px;
+		gap: 12px;
 	}
 
 	.summaryCard,
@@ -192,7 +192,7 @@
 
 @media (max-width: 360px) {
 	.pageStack {
-		gap: 16px;
+		gap: 10px;
 	}
 
 	.headerActions {

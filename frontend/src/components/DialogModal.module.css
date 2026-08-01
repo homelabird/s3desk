@@ -20,7 +20,7 @@
 	flex-direction: column;
 	border: 1px solid var(--s3d-color-border-strong);
 	border-radius: 16px;
-	background: var(--s3d-color-bg-elevated, var(--s3d-color-bg));
+	background: var(--s3d-color-bg-card);
 	box-shadow: var(--s3d-shadow-md);
 	overflow: hidden;
 }
@@ -32,7 +32,7 @@
 	gap: 12px;
 	padding: 18px 20px 14px;
 	border-bottom: 1px solid var(--s3d-color-border);
-	background: var(--s3d-color-bg-elevated, var(--s3d-color-bg));
+	background: var(--s3d-color-bg-card);
 }
 
 .titleBlock {
