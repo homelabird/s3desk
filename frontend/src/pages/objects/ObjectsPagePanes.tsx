@@ -15,6 +15,8 @@ export function ObjectsPagePanes({
 	listProps,
 	detailsProps,
 }: ObjectsPagePanesProps) {
+	if (!treeProps.hasBucket) return null
+
 	return (
 		<ObjectsLayout ref={layoutRef} {...layoutProps}>
 			<ObjectsTreePaneHost treeProps={treeProps} />

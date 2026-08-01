@@ -8,8 +8,6 @@ import {
 	downloadToBrowserHint,
 	newFolderShortcutHint,
 	offlineNetworkConnectionHint,
-	selectBucketFirstHint,
-	selectProfileFirstHint,
 	uploadFilesOrFoldersHint,
 	uploadsUnsupportedHint,
 } from '../../../lib/actionHints'
@@ -70,13 +68,15 @@ function buildProps(overrides: Partial<Parameters<typeof ObjectsToolbar>[0]> = {
 }
 
 describe('ObjectsToolbar', () => {
-	it('uses shared prerequisite and unsupported hints for upload tooltip copy', () => {
+	it('hides unavailable desktop actions until a bucket is selected', () => {
 		const { rerender } = render(<ObjectsToolbar {...buildProps({ hasProfile: false, bucket: '' })} />)
 
-		expect(screen.getByTitle(selectProfileFirstHint())).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Upload' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Object tools' })).not.toBeInTheDocument()
 
 		rerender(<ObjectsToolbar {...buildProps({ bucket: '' })} />)
-		expect(screen.getByTitle(selectBucketFirstHint())).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Upload' })).not.toBeInTheDocument()
 
 		rerender(<ObjectsToolbar {...buildProps({ isOffline: true })} />)
 		expect(screen.getByTitle(offlineNetworkConnectionHint())).toBeInTheDocument()

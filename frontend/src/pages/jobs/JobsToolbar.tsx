@@ -8,7 +8,6 @@ import { MenuPopover } from '../../components/MenuPopover'
 import { NativeSelect } from '../../components/NativeSelect'
 import { OverlaySheet } from '../../components/OverlaySheet'
 import { PageHeader } from '../../components/PageHeader'
-import { PageSection } from '../../components/PageSection'
 import { PopoverSurface } from '../../components/PopoverSurface'
 import styles from './JobsToolbar.module.css'
 import type { ColumnKey, ColumnOption, ToggleableColumnKey } from './useJobsColumnsVisibility'
@@ -79,11 +78,8 @@ export function JobsToolbar(props: JobsToolbarProps) {
 	)
 	const healthItems = [
 		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active', filter: 'active' },
-		{ key: 'queued', label: 'Queued', value: props.jobsStatusSummary.queued, tone: 'muted', filter: 'queued' },
-		{ key: 'running', label: 'Running', value: props.jobsStatusSummary.running, tone: 'active', filter: 'running' },
 		{ key: 'failed', label: 'Failed', value: props.jobsStatusSummary.failed, tone: 'danger', filter: 'failed' },
 		{ key: 'succeeded', label: 'Succeeded', value: props.jobsStatusSummary.succeeded, tone: 'success', filter: 'succeeded' },
-		{ key: 'canceled', label: 'Canceled', value: props.jobsStatusSummary.canceled, tone: 'muted', filter: 'canceled' },
 	] as const
 	const advancedFiltersDirty =
 		props.statusFilter !== 'all' || props.typeFilterNormalized.trim().length > 0 || props.errorCodeFilterNormalized.trim().length > 0
@@ -103,6 +99,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 		!props.bucketLookupErrorDescription &&
 		props.eventsConnected &&
 		!failedJobsAvailable
+	const showQueueControls = props.jobsCount > 0 || props.filtersDirty
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -179,13 +176,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 	return (
 		<>
 			<PageHeader
-				eyebrow="Operations"
 				title="Activity"
-				subtitle={
-					props.activeProfileName
-						? `${props.activeProfileName} profile is active. Review background work, failures, and recent queue history.`
-						: 'Review background work, failures, and recent queue history.'
-				}
 				actions={
 					<Space wrap className={styles.headerActions}>
 						<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
@@ -213,31 +204,9 @@ export function JobsToolbar(props: JobsToolbarProps) {
 			/>
 
 			{troubleshootingClean ? null : (
-				<PageSection
-					title="Needs attention"
-					description="Only active recovery signals are shown here."
-				>
-					<div className={styles.troubleshootingPanel}>
-						{!props.eventsConnected || props.isOffline ? (
-							<div className={styles.realtimeStatusRow}>
-								<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
-								<Typography.Text type="secondary">
-									{props.eventsConnected
-										? 'Live job updates are connected.'
-										: props.isOffline
-											? 'Network is offline; retry when connectivity returns.'
-											: realtimePaused
-												? 'Auto-retry paused.'
-												: props.eventsRetryCount > 0
-													? `Reconnecting attempt ${props.eventsRetryCount}.`
-													: 'Reconnecting.'}
-								</Typography.Text>
-							</div>
-						) : null}
-
-						<div className={styles.alertStack}>
-							{failedJobsAvailable ? (
-								<Alert
+				<div className={styles.alertStack} aria-label="Activity alerts">
+					{failedJobsAvailable ? (
+						<Alert
 									type="error"
 									showIcon
 									title={`${props.jobsStatusSummary.failed.toLocaleString()} failed job${props.jobsStatusSummary.failed === 1 ? '' : 's'} need review`}
@@ -251,27 +220,27 @@ export function JobsToolbar(props: JobsToolbarProps) {
 											Show failed jobs
 										</Button>
 									}
-								/>
-							) : null}
-							{props.isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
-							{!props.uploadSupported ? (
-								<Alert
+						/>
+					) : null}
+					{props.isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
+					{!props.uploadSupported ? (
+						<Alert
 									type="info"
 									showIcon
 									title="Upload actions are disabled for this provider"
 									description={props.uploadDisabledReason ?? uploadsUnsupportedHint()}
-								/>
-							) : null}
-							{props.bucketLookupErrorDescription ? (
-								<Alert
+						/>
+					) : null}
+					{props.bucketLookupErrorDescription ? (
+						<Alert
 									type="warning"
 									showIcon
 									title="Bucket lookup unavailable"
-									description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually in Upload, Download, and Delete dialogs.`}
-								/>
-							) : null}
-							{!props.eventsConnected && !props.isOffline ? (
-								<Alert
+									description="Bucket suggestions are unavailable. Type a bucket name manually when creating a job."
+						/>
+					) : null}
+					{!props.eventsConnected && !props.isOffline ? (
+						<Alert
 									type="warning"
 									showIcon
 									title="Realtime updates disconnected"
@@ -289,31 +258,17 @@ export function JobsToolbar(props: JobsToolbarProps) {
 											</Button>
 										) : null
 									}
-								/>
-							) : null}
-						</div>
-					</div>
-				</PageSection>
+						/>
+					) : null}
+				</div>
 			)}
 
-			<PageSection
-				title="Queue health"
-				description={
-					props.filtersDirty
-						? 'Current loaded jobs after filters. Reset filters to return to the broader queue view.'
-						: 'Current loaded jobs split by status so active and failed work is visible at a glance.'
-				}
-				actions={
-					<Typography.Text type="secondary" className={styles.sectionMeta}>
-						{props.jobsStatusSummary.total
-							? `${props.jobsStatusSummary.total.toLocaleString()} loaded`
-							: 'No jobs loaded yet'}
-					</Typography.Text>
-				}
-			>
-				<div className={styles.healthGrid}>
-					{healthItems.map((item) => (
-						<button
+			{showQueueControls ? (
+				<div className={styles.queueTools} aria-label="Activity filters">
+					{props.jobsStatusSummary.total > 0 ? (
+						<div className={styles.healthGrid}>
+							{healthItems.map((item) => (
+								<button
 							key={item.key}
 							type="button"
 							data-testid={`jobs-health-${item.key}`}
@@ -325,20 +280,10 @@ export function JobsToolbar(props: JobsToolbarProps) {
 								{item.label}
 							</Typography.Text>
 							<Typography.Text className={styles.healthValue}>{item.value.toLocaleString()}</Typography.Text>
-						</button>
-					))}
-				</div>
-			</PageSection>
-
-			<PageSection
-				title="Filters & layout"
-				description="Search loaded jobs by id, payload, summary, or errors. You can also narrow the queue by status, job type, or error code, then adjust visible columns. Use Objects for copy, move, and indexing workflows."
-				actions={
-					<Typography.Text type="secondary" className={styles.sectionMeta}>
-						{props.jobsCount ? `${props.jobsCount.toLocaleString()} jobs loaded` : 'No jobs loaded yet'}
-					</Typography.Text>
-				}
-			>
+								</button>
+							))}
+						</div>
+					) : null}
 				<div className={styles.filtersRow}>
 					<DatalistInput
 						value={props.searchFilterNormalized}
@@ -398,9 +343,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							</PopoverSurface>
 						</>
 					)}
-					<Button onClick={props.onResetFilters} disabled={!props.filtersDirty}>
-						Reset filters
-					</Button>
+					{props.filtersDirty ? <Button onClick={props.onResetFilters}>Reset filters</Button> : null}
 					<PopoverSurface
 						key={`columns:${props.scopeKey}`}
 						align="end"
@@ -479,7 +422,8 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						<div className={styles.mobileFiltersStack}>{advancedFilterFields}</div>
 					</OverlaySheet>
 				) : null}
-			</PageSection>
+			</div>
+			) : null}
 		</>
 	)
 }

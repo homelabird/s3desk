@@ -232,6 +232,15 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 }
 
 describe('ObjectsPagePanes', () => {
+	it('hides empty workspace panes until a bucket is selected', () => {
+		const props = buildProps()
+		const { container } = render(
+			<ObjectsPagePanes {...props} treeProps={{ ...props.treeProps, hasBucket: false }} />,
+		)
+
+		expect(container).toBeEmptyDOMElement()
+	})
+
 	beforeEach(() => {
 		vi.useFakeTimers()
 		suspendTreeSection = false

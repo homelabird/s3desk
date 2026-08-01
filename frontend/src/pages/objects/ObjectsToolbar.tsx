@@ -237,7 +237,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	) : null
 
 	if (props.isDesktop) {
-		const navButtons = props.isAdvanced ? (
+		const navButtons = props.bucket && props.isAdvanced ? (
 			<>
 				<Button
 					size={navButtonSize}
@@ -265,13 +265,13 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				/>
 			</>
 		) : null
-		const primaryActions = (
+		const primaryActions = props.bucket ? (
 			<>
 				{uploadButtonDesktop}
 				{newFolderButton}
 			</>
-		)
-		const utilityActions = moreButton
+		) : null
+		const utilityActions = props.bucket ? moreButton : null
 
 		return (
 			<DesktopToolbarLayout

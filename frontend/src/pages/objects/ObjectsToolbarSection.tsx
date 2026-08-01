@@ -3,6 +3,7 @@ import { Alert, Typography } from 'antd'
 import type { ObjectsToolbarProps } from './ObjectsToolbar'
 import { ObjectsToolbar } from './ObjectsToolbar'
 import { AppTabs } from '../../components/AppTabs'
+import { LinkButton } from '../../components/LinkButton'
 import { ProfileRequiredCallout } from '../../components/ProfileRequiredCallout'
 import { failedToLoadBucketsTitle } from '../../lib/actionHints'
 import styles from './ObjectsShell.module.css'
@@ -44,21 +45,24 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 	})
 
 	const activeKey = props.activeTabId || props.tabs[0]?.id
+	const hasProfile = Boolean(props.profileId)
+	const hasBucket = Boolean(props.toolbarProps.bucket)
 
 	return (
 		<div className={styles.toolbarSectionStack} data-testid="objects-toolbar-section" data-has-tabs={hasTabs ? 'true' : 'false'}>
 			<ProfileRequiredCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to start browsing" />
-			{props.bucketsErrorMessage ? (
+			{hasProfile && props.bucketsErrorMessage ? (
 				<Alert
 					type="error"
 					showIcon
 					title={failedToLoadBucketsTitle()}
-					description={props.bucketsErrorMessage}
+					description="The bucket list could not be loaded for this profile."
+					action={<LinkButton to="/profiles">Check profile</LinkButton>}
 					className={styles.pageHeaderAlert}
 				/>
 			) : null}
 
-			{hasTabs ? (
+			{hasProfile && hasTabs ? (
 				<div className={styles.toolbarTabsWrap} data-testid="objects-toolbar-tabs">
 					<AppTabs
 						type="editable-card"
@@ -76,7 +80,12 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 				</div>
 			) : null}
 
-			<ObjectsToolbar {...props.toolbarProps} />
+			{hasProfile ? <ObjectsToolbar {...props.toolbarProps} /> : null}
+			{hasProfile && !hasBucket && !props.bucketsErrorMessage ? (
+				<Typography.Text type="secondary" className={styles.toolbarEmptyHint}>
+					Choose a bucket to browse objects.
+				</Typography.Text>
+			) : null}
 		</div>
 	)
 }

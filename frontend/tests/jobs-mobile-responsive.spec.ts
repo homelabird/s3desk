@@ -30,8 +30,6 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await gotoJobsPage(page)
 
 		await expect(page.getByTestId('jobs-health-active')).toContainText('2')
-		await expect(page.getByTestId('jobs-health-queued')).toContainText('1')
-		await expect(page.getByTestId('jobs-health-running')).toContainText('1')
 		await expect(page.getByText('job-queued')).toBeVisible()
 		await expect(page.getByText('job-running')).toBeVisible()
 
@@ -56,8 +54,8 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await page.setViewportSize({ width: 320, height: 740 })
 		await gotoJobsPage(page)
 
-		await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible()
-		await expect(page.getByRole('heading', { name: 'Queue health' })).toBeVisible()
+		await expect(page.getByLabel('Activity alerts')).toBeVisible()
+		await expect(page.getByLabel('Activity filters')).toBeVisible()
 		await expect(page.getByText('Realtime updates disconnected')).toBeVisible()
 		await expectMinTouchHeight(page.getByRole('button', { name: 'Upload from device' }))
 		const newJobButton = page.getByRole('button', { name: 'More job actions' })
@@ -82,7 +80,6 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(trigger).toHaveAttribute('aria-expanded', 'false')
 		await expect(trigger).toHaveAttribute('aria-controls', 'jobs-mobile-filters-sheet-panel')
 		await expectMinTouchHeight(trigger)
-		await expectMinTouchHeight(page.getByRole('button', { name: 'Reset filters' }))
 		await expectMinTouchHeight(page.getByTestId('jobs-columns-trigger'))
 		await expectMinTouchHeight(page.getByRole('button', { name: 'Refresh' }))
 

@@ -94,13 +94,12 @@ describe('JobsToolbar', () => {
 		expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument()
 		expect(screen.queryByRole('heading', { name: 'Launch work' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('heading', { name: 'Troubleshooting' })).not.toBeInTheDocument()
-		expect(screen.getByRole('heading', { name: 'Needs attention' })).toBeInTheDocument()
-		expect(screen.getByRole('heading', { name: 'Queue health' })).toBeInTheDocument()
+		expect(screen.getByLabelText('Activity alerts')).toBeInTheDocument()
+		expect(screen.getByLabelText('Activity filters')).toBeInTheDocument()
 		expect(screen.getByText('Active')).toBeInTheDocument()
 		expect(screen.getByText('3')).toBeInTheDocument()
 		expect(screen.getByText('Succeeded')).toBeInTheDocument()
 		expect(screen.getByText('10')).toBeInTheDocument()
-		expect(screen.getByText('15 loaded')).toBeInTheDocument()
 		expect(screen.getByRole('combobox', { name: 'Search jobs' })).toBeInTheDocument()
 		expect(screen.getByRole('combobox', { name: 'Job status filter' })).toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job type filter' })).not.toBeInTheDocument()
@@ -457,7 +456,7 @@ describe('JobsToolbar', () => {
 		)
 
 		expect(screen.getByText('Bucket lookup unavailable')).toBeInTheDocument()
-		expect(screen.getByText(/You can still type a bucket name manually/i)).toBeInTheDocument()
+		expect(screen.getByText(/Type a bucket name manually/i)).toBeInTheDocument()
 	})
 
 	it('uses the shared uploads-unsupported hint when no provider reason is supplied', () => {
@@ -560,7 +559,8 @@ describe('JobsToolbar', () => {
 		)
 
 		expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument()
-		expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument()
+		expect(screen.queryByLabelText('Activity alerts')).not.toBeInTheDocument()
+		expect(screen.queryByLabelText('Activity filters')).not.toBeInTheDocument()
 		expect(screen.queryByText('No active troubleshooting warnings.')).not.toBeInTheDocument()
 	})
 })

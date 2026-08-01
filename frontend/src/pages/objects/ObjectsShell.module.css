@@ -95,6 +95,10 @@
   display: inline-flex;
 }
 
+.toolbarEmptyHint {
+  padding-inline: 2px;
+}
+
 .objectsOverlayBackdrop {
   position: fixed;
   inset: 0;

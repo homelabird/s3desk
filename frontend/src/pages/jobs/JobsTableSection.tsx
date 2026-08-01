@@ -82,12 +82,11 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 			{jobsError ? <Alert type="error" showIcon title="Failed to load jobs" description={formatErr(jobsError)} /> : null}
 
 			<PageSection
-				title="Queue history"
-				description="Recent jobs stay searchable here. Desktop keeps the full virtualized table, while smaller screens collapse the list into action-oriented cards. Use Objects when you need copy, move, or indexing workflows."
+				title="History"
 				actions={
-					<Typography.Text type="secondary">
-						{sortedJobs.length ? `${sortedJobs.length.toLocaleString()} visible` : 'No visible jobs'}
-					</Typography.Text>
+					sortedJobs.length ? (
+						<Typography.Text type="secondary">{sortedJobs.length.toLocaleString()} visible</Typography.Text>
+					) : null
 				}
 				flush
 			>

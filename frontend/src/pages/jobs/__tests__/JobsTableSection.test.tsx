@@ -44,15 +44,13 @@ describe('JobsTableSection', () => {
 		)
 	}
 
-	it('keeps empty state actions focused on upload and object navigation', () => {
-		const onOpenCreateUpload = vi.fn()
-		renderJobsTableSection({ onOpenCreateUpload })
+	it('keeps the unfiltered empty state concise', () => {
+		renderJobsTableSection()
 
 		expect(screen.getByText('No activity yet.')).toBeInTheDocument()
-		expect(screen.getByText(/Start object-specific work from Objects/)).toBeInTheDocument()
-		fireEvent.click(screen.getByRole('button', { name: 'Upload from device' }))
-		expect(onOpenCreateUpload).toHaveBeenCalledTimes(1)
-		expect(screen.getByRole('link', { name: 'Open objects' })).toHaveAttribute('href', '/objects')
+		expect(screen.getByText('Uploads and other background work will appear here.')).toBeInTheDocument()
+		expect(screen.queryByRole('button')).not.toBeInTheDocument()
+		expect(screen.queryByRole('link')).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'New delete job' })).not.toBeInTheDocument()
 	})
 
