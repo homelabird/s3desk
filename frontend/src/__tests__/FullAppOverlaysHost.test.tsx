@@ -9,12 +9,14 @@ vi.mock('../components/SettingsDrawer', () => ({
 		onClose: () => void
 		apiToken: string
 		profileId: string | null
+		profileName: string | null
 	}) {
 		if (!props.open) return null
 		return (
 			<div data-testid="overlays-host-settings">
 				<span>{props.apiToken}</span>
 				<span>{props.profileId ?? 'none'}</span>
+				<span>{props.profileName ?? 'none'}</span>
 				<button type="button" onClick={props.onClose}>
 					Close settings
 				</button>
@@ -54,7 +56,7 @@ describe('FullAppOverlaysHost', () => {
 					apiToken: 'token-a',
 					setApiToken: vi.fn(),
 					profileId: 'profile-1',
-					setProfileId: vi.fn(),
+					profileName: 'Profile One',
 				}}
 				guide={{
 					open: true,
@@ -65,6 +67,7 @@ describe('FullAppOverlaysHost', () => {
 
 		expect(await screen.findByTestId('overlays-host-settings')).toHaveTextContent('token-a')
 		expect(screen.getByTestId('overlays-host-settings')).toHaveTextContent('profile-1')
+		expect(screen.getByTestId('overlays-host-settings')).toHaveTextContent('Profile One')
 		expect(await screen.findByTestId('overlays-host-guide')).toBeInTheDocument()
 
 		fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))

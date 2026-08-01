@@ -1,5 +1,4 @@
 import { Button, Collapse, Space, Tag, Typography } from 'antd'
-import { useState } from 'react'
 
 import {
 	DEFAULT_RETRY_COUNT,
@@ -34,26 +33,10 @@ function clampNumber(value: number | null, fallback: number, min: number, max: n
 }
 
 export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
-	const [retryDraft, setRetryDraft] = useState(() => ({
-		count: props.apiRetryCount,
-		delayMs: props.apiRetryDelayMs,
-	}))
-	const hasPendingRetryPolicy = retryDraft.count !== props.apiRetryCount || retryDraft.delayMs !== props.apiRetryDelayMs
-	const applyRetryPolicy = () => {
-		props.setApiRetryCount(retryDraft.count)
-		props.setApiRetryDelayMs(retryDraft.delayMs)
-	}
-	const resetRetryDraft = () => {
-		setRetryDraft({
-			count: props.apiRetryCount,
-			delayMs: props.apiRetryDelayMs,
-		})
-	}
-
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				What this affects: how long the app keeps trying after temporary server or network failures.
+				Changes save immediately.
 			</Typography.Text>
 			<FormField
 				label="Request retry attempts"
@@ -64,12 +47,9 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 					id="settings-http-retry-count"
 					min={RETRY_COUNT_MIN}
 					max={RETRY_COUNT_MAX}
-					value={retryDraft.count}
+					value={props.apiRetryCount}
 					onChange={(value) =>
-						setRetryDraft((current) => ({
-							...current,
-							count: clampNumber(value, DEFAULT_RETRY_COUNT, RETRY_COUNT_MIN, RETRY_COUNT_MAX),
-						}))
+						props.setApiRetryCount(clampNumber(value, DEFAULT_RETRY_COUNT, RETRY_COUNT_MIN, RETRY_COUNT_MAX))
 					}
 					className={styles.fullWidth}
 				/>
@@ -84,29 +64,13 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 					min={RETRY_DELAY_MIN_MS}
 					max={RETRY_DELAY_MAX_MS}
 					step={100}
-					value={retryDraft.delayMs}
+					value={props.apiRetryDelayMs}
 					onChange={(value) =>
-						setRetryDraft((current) => ({
-							...current,
-							delayMs: clampNumber(value, DEFAULT_RETRY_DELAY_MS, RETRY_DELAY_MIN_MS, RETRY_DELAY_MAX_MS),
-						}))
+						props.setApiRetryDelayMs(clampNumber(value, DEFAULT_RETRY_DELAY_MS, RETRY_DELAY_MIN_MS, RETRY_DELAY_MAX_MS))
 					}
 					className={styles.fullWidth}
 				/>
 			</FormField>
-			<div className={styles.settingsApplyBar}>
-				<Typography.Text type="secondary">
-					{hasPendingRetryPolicy ? 'Retry settings have unapplied changes.' : 'Retry settings are saved.'}
-				</Typography.Text>
-				<Space wrap>
-					<Button type="primary" onClick={applyRetryPolicy} disabled={!hasPendingRetryPolicy}>
-						Apply retry settings
-					</Button>
-					<Button onClick={resetRetryDraft} disabled={!hasPendingRetryPolicy}>
-						Discard changes
-					</Button>
-				</Space>
-			</div>
 			<Collapse
 				size="small"
 				items={[

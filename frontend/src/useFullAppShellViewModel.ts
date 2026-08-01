@@ -18,6 +18,7 @@ type UseFullAppShellViewModelArgs = {
 	meta?: MetaResponse
 	apiToken: string
 	profileId: string | null
+	profileName: string | null
 	setProfileId: (profileId: string | null) => void
 	shellScopeKey: string
 	selectedKey: string
@@ -41,6 +42,7 @@ export function useFullAppShellViewModel({
 	meta,
 	apiToken,
 	profileId,
+	profileName,
 	setProfileId,
 	shellScopeKey,
 	selectedKey,
@@ -103,7 +105,7 @@ export function useFullAppShellViewModel({
 			apiToken,
 			setApiToken,
 			profileId,
-			setProfileId,
+			profileName,
 		}),
 		[
 			settingsOpen,
@@ -114,7 +116,7 @@ export function useFullAppShellViewModel({
 			apiToken,
 			setApiToken,
 			profileId,
-			setProfileId,
+			profileName,
 		],
 	)
 

@@ -100,6 +100,7 @@ export function useFullAppController({
 		meta: metaQuery.data,
 		apiToken,
 		profileId: safeProfileId,
+		profileName: profilesQuery.data?.find((profile) => profile.id === safeProfileId)?.name ?? null,
 		setProfileId,
 		shellScopeKey,
 		selectedKey,

@@ -38,28 +38,11 @@
 	background: var(--s3d-gradient-section);
 }
 
-.settingsApplyBar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	flex-wrap: wrap;
-	padding: 10px 12px;
-	border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 24%, var(--s3d-color-border));
-	border-radius: var(--s3d-radius-lg);
-	background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
-	box-shadow: var(--s3d-shadow-sm);
-}
-
 .recoveryCard {
 	border: 1px solid color-mix(in srgb, var(--s3d-color-danger) 34%, var(--s3d-color-border));
 	border-left-width: 4px;
 	border-radius: var(--s3d-radius-lg);
 	background: color-mix(in srgb, var(--s3d-color-danger) 5%, var(--s3d-color-bg-elevated));
-}
-
-.recoveryDisclosureButton {
-	align-self: flex-start;
 }
 
 .sectionFallback {
@@ -120,15 +103,10 @@
 }
 
 @media (max-width: 360px) {
-	.settingsApplyBar {
-		align-items: stretch;
-	}
-
 	.compactFieldRow {
 		flex-direction: column;
 	}
 
-	.settingsApplyBar > *,
 	.compactFieldRow > * {
 		width: 100%;
 	}

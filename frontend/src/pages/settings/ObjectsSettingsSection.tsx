@@ -33,7 +33,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				What this affects: object list browsing cost, thumbnail behavior, and Search bucket indexing.
+				Changes save immediately.
 			</Typography.Text>
 			<FormField label="Show image thumbnails" extra="Controls thumbnails in the object list and details panel.">
 				<ToggleSwitch
@@ -45,7 +45,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 			<FormField
 				label="Object storage cost mode"
 				htmlFor="settings-objects-cost-mode"
-				extra="Conservative reduces background listing, thumbnail concurrency, and automatic indexing. Balanced is the default. Aggressive favors responsiveness over request volume."
+				extra="Conservative uses fewer requests; Aggressive prioritizes speed."
 			>
 				<Select
 					id="settings-objects-cost-mode"

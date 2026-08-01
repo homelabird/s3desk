@@ -1,5 +1,4 @@
 import { Button, Collapse, Space, Typography } from 'antd'
-import { useState } from 'react'
 
 import { FormField } from '../../components/FormField'
 import { NumberField } from '../../components/NumberField'
@@ -39,81 +38,18 @@ type TransfersSettingsSectionProps = {
 	setUploadResumeConversionEnabled: (v: boolean) => void
 }
 
-type TransferTuningDraft = {
-	downloadTaskConcurrency: number
-	uploadTaskConcurrency: number
-	uploadBatchConcurrency: number
-	uploadBatchBytesMiB: number
-	uploadChunkSizeMiB: number
-	uploadChunkConcurrency: number
-	uploadChunkThresholdMiB: number
-	uploadChunkFileConcurrency: number
-}
-
 function clampNumber(value: number | null, fallback: number, min: number, max: number): number {
 	if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
 	return Math.min(max, Math.max(min, value))
 }
 
-function createTransferTuningDraft(props: TransfersSettingsSectionProps): TransferTuningDraft {
-	return {
-		downloadTaskConcurrency: props.downloadTaskConcurrencySetting,
-		uploadTaskConcurrency: props.uploadTaskConcurrencySetting,
-		uploadBatchConcurrency: props.uploadBatchConcurrencySetting,
-		uploadBatchBytesMiB: props.uploadBatchBytesMiBSetting,
-		uploadChunkSizeMiB: props.uploadChunkSizeMiBSetting,
-		uploadChunkConcurrency: props.uploadChunkConcurrencySetting,
-		uploadChunkThresholdMiB: props.uploadChunkThresholdMiBSetting,
-		uploadChunkFileConcurrency: props.uploadChunkFileConcurrencySetting,
-	}
-}
-
-function isTransferTuningDirty(props: TransfersSettingsSectionProps, draft: TransferTuningDraft): boolean {
-	return (
-		draft.downloadTaskConcurrency !== props.downloadTaskConcurrencySetting ||
-		draft.uploadTaskConcurrency !== props.uploadTaskConcurrencySetting ||
-		draft.uploadBatchConcurrency !== props.uploadBatchConcurrencySetting ||
-		draft.uploadBatchBytesMiB !== props.uploadBatchBytesMiBSetting ||
-		draft.uploadChunkSizeMiB !== props.uploadChunkSizeMiBSetting ||
-		draft.uploadChunkConcurrency !== props.uploadChunkConcurrencySetting ||
-		draft.uploadChunkThresholdMiB !== props.uploadChunkThresholdMiBSetting ||
-		draft.uploadChunkFileConcurrency !== props.uploadChunkFileConcurrencySetting
-	)
-}
-
 export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
-	const [draft, setDraft] = useState<TransferTuningDraft>(() => createTransferTuningDraft(props))
-	const hasPendingTuning = isTransferTuningDirty(props, draft)
-	const setDraftNumber = <K extends keyof TransferTuningDraft,>(
-		key: K,
-		value: number | null,
-		fallback: number,
-		min: number,
-		max: number,
-	) => {
-		setDraft((current) => ({
-			...current,
-			[key]: clampNumber(value, fallback, min, max),
-		}))
-	}
-	const applyTuning = () => {
-		props.setDownloadTaskConcurrencySetting(draft.downloadTaskConcurrency)
-		props.setUploadTaskConcurrencySetting(draft.uploadTaskConcurrency)
-		props.setUploadBatchConcurrencySetting(draft.uploadBatchConcurrency)
-		props.setUploadBatchBytesMiBSetting(draft.uploadBatchBytesMiB)
-		props.setUploadChunkSizeMiBSetting(draft.uploadChunkSizeMiB)
-		props.setUploadChunkConcurrencySetting(draft.uploadChunkConcurrency)
-		props.setUploadChunkThresholdMiBSetting(draft.uploadChunkThresholdMiB)
-		props.setUploadChunkFileConcurrencySetting(draft.uploadChunkFileConcurrency)
-	}
-	const resetDraft = () => setDraft(createTransferTuningDraft(props))
 	const advancedSummary = 'Advanced transfer options'
 
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				S3Desk uses automatic download routing and upload tuning by default. Open advanced options only when
-				troubleshooting a browser, network, or provider limit.
+				Defaults work for most connections.
 			</Typography.Text>
 
 			<Collapse
@@ -125,7 +61,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 						children: (
 							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 								<Typography.Text type="secondary" className={styles.sectionIntro}>
-									Use the defaults unless a download route fails or a known provider limit requires tuning.
+									Changes save immediately.
 								</Typography.Text>
 								<FormField
 									label="Force server proxy for downloads and previews"
@@ -156,14 +92,10 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="transfers-download-task-concurrency"
 										min={MIN_DOWNLOAD_TASK_CONCURRENCY}
 										max={MAX_DOWNLOAD_TASK_CONCURRENCY}
-										value={draft.downloadTaskConcurrency}
+										value={props.downloadTaskConcurrencySetting}
 										onChange={(value) =>
-											setDraftNumber(
-												'downloadTaskConcurrency',
-												value,
-												DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
-												MIN_DOWNLOAD_TASK_CONCURRENCY,
-												MAX_DOWNLOAD_TASK_CONCURRENCY,
+											props.setDownloadTaskConcurrencySetting(
+												clampNumber(value, DEFAULT_DOWNLOAD_TASK_CONCURRENCY, MIN_DOWNLOAD_TASK_CONCURRENCY, MAX_DOWNLOAD_TASK_CONCURRENCY),
 											)
 										}
 										className={styles.fullWidth}
@@ -178,14 +110,10 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="transfers-upload-task-concurrency"
 										min={MIN_UPLOAD_TASK_CONCURRENCY}
 										max={MAX_UPLOAD_TASK_CONCURRENCY}
-										value={draft.uploadTaskConcurrency}
+										value={props.uploadTaskConcurrencySetting}
 										onChange={(value) =>
-											setDraftNumber(
-												'uploadTaskConcurrency',
-												value,
-												DEFAULT_UPLOAD_TASK_CONCURRENCY,
-												MIN_UPLOAD_TASK_CONCURRENCY,
-												MAX_UPLOAD_TASK_CONCURRENCY,
+											props.setUploadTaskConcurrencySetting(
+												clampNumber(value, DEFAULT_UPLOAD_TASK_CONCURRENCY, MIN_UPLOAD_TASK_CONCURRENCY, MAX_UPLOAD_TASK_CONCURRENCY),
 											)
 										}
 										className={styles.fullWidth}
@@ -200,8 +128,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="settings-upload-batch-concurrency"
 										min={1}
 										max={32}
-										value={draft.uploadBatchConcurrency}
-										onChange={(value) => setDraftNumber('uploadBatchConcurrency', value, 16, 1, 32)}
+										value={props.uploadBatchConcurrencySetting}
+										onChange={(value) => props.setUploadBatchConcurrencySetting(clampNumber(value, 16, 1, 32))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -215,8 +143,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										min={8}
 										max={256}
 										step={8}
-										value={draft.uploadBatchBytesMiB}
-										onChange={(value) => setDraftNumber('uploadBatchBytesMiB', value, 64, 8, 256)}
+										value={props.uploadBatchBytesMiBSetting}
+										onChange={(value) => props.setUploadBatchBytesMiBSetting(clampNumber(value, 64, 8, 256))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -227,42 +155,33 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 									<Space wrap>
 										<Button
 											onClick={() => {
-												setDraft((current) => ({
-													...current,
-													uploadBatchConcurrency: 8,
-													uploadBatchBytesMiB: 32,
-													uploadChunkSizeMiB: 64,
-													uploadChunkConcurrency: 4,
-													uploadChunkThresholdMiB: 128,
-												}))
+												props.setUploadBatchConcurrencySetting(8)
+												props.setUploadBatchBytesMiBSetting(32)
+												props.setUploadChunkSizeMiBSetting(64)
+												props.setUploadChunkConcurrencySetting(4)
+												props.setUploadChunkThresholdMiBSetting(128)
 											}}
 										>
 											Stable
 										</Button>
 										<Button
 											onClick={() => {
-												setDraft((current) => ({
-													...current,
-													uploadBatchConcurrency: 16,
-													uploadBatchBytesMiB: 64,
-													uploadChunkSizeMiB: 128,
-													uploadChunkConcurrency: 8,
-													uploadChunkThresholdMiB: 256,
-												}))
+												props.setUploadBatchConcurrencySetting(16)
+												props.setUploadBatchBytesMiBSetting(64)
+												props.setUploadChunkSizeMiBSetting(128)
+												props.setUploadChunkConcurrencySetting(8)
+												props.setUploadChunkThresholdMiBSetting(256)
 											}}
 										>
 											Balanced
 										</Button>
 										<Button
 											onClick={() => {
-												setDraft((current) => ({
-													...current,
-													uploadBatchConcurrency: 32,
-													uploadBatchBytesMiB: 128,
-													uploadChunkSizeMiB: 256,
-													uploadChunkConcurrency: 16,
-													uploadChunkThresholdMiB: 512,
-												}))
+												props.setUploadBatchConcurrencySetting(32)
+												props.setUploadBatchBytesMiBSetting(128)
+												props.setUploadChunkSizeMiBSetting(256)
+												props.setUploadChunkConcurrencySetting(16)
+												props.setUploadChunkThresholdMiBSetting(512)
 											}}
 										>
 											High throughput
@@ -279,8 +198,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										min={16}
 										max={512}
 										step={16}
-										value={draft.uploadChunkSizeMiB}
-										onChange={(value) => setDraftNumber('uploadChunkSizeMiB', value, 128, 16, 512)}
+										value={props.uploadChunkSizeMiBSetting}
+										onChange={(value) => props.setUploadChunkSizeMiBSetting(clampNumber(value, 128, 16, 512))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -293,8 +212,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="settings-upload-chunk-concurrency"
 										min={1}
 										max={16}
-										value={draft.uploadChunkConcurrency}
-										onChange={(value) => setDraftNumber('uploadChunkConcurrency', value, 8, 1, 16)}
+										value={props.uploadChunkConcurrencySetting}
+										onChange={(value) => props.setUploadChunkConcurrencySetting(clampNumber(value, 8, 1, 16))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -307,8 +226,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="settings-upload-file-concurrency-chunked"
 										min={1}
 										max={8}
-										value={draft.uploadChunkFileConcurrency}
-										onChange={(value) => setDraftNumber('uploadChunkFileConcurrency', value, 2, 1, 8)}
+										value={props.uploadChunkFileConcurrencySetting}
+										onChange={(value) => props.setUploadChunkFileConcurrencySetting(clampNumber(value, 2, 1, 8))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -322,8 +241,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										min={64}
 										max={2048}
 										step={64}
-										value={draft.uploadChunkThresholdMiB}
-										onChange={(value) => setDraftNumber('uploadChunkThresholdMiB', value, 256, 64, 2048)}
+										value={props.uploadChunkThresholdMiBSetting}
+										onChange={(value) => props.setUploadChunkThresholdMiBSetting(clampNumber(value, 256, 64, 2048))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -337,19 +256,6 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										ariaLabel="Resume conversion mode"
 									/>
 								</FormField>
-								<div className={styles.settingsApplyBar}>
-									<Typography.Text type="secondary">
-										{hasPendingTuning ? 'Transfer tuning has unapplied changes.' : 'Transfer tuning matches the saved values.'}
-									</Typography.Text>
-									<Space wrap>
-										<Button type="primary" onClick={applyTuning} disabled={!hasPendingTuning}>
-											Apply transfer tuning
-										</Button>
-										<Button onClick={resetDraft} disabled={!hasPendingTuning}>
-											Cancel tuning changes
-										</Button>
-									</Space>
-								</div>
 							</Space>
 						),
 					},

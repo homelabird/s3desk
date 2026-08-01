@@ -13,7 +13,7 @@ type Props = {
 	apiToken: string
 	setApiToken: (v: string) => void
 	profileId: string | null
-	setProfileId: (v: string | null) => void
+	profileName: string | null
 }
 
 export function SettingsDrawer(props: Props) {
@@ -33,7 +33,7 @@ export function SettingsDrawer(props: Props) {
 				apiToken={props.apiToken}
 				setApiToken={props.setApiToken}
 				profileId={props.profileId}
-				setProfileId={props.setProfileId}
+				profileName={props.profileName}
 			/>
 		</OverlaySheet>
 	)

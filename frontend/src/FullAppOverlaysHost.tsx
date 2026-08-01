@@ -22,7 +22,7 @@ export type FullAppOverlaysHostSettings = {
 	apiToken: string
 	setApiToken: (token: string) => void
 	profileId: string | null
-	setProfileId: (profileId: string | null) => void
+	profileName: string | null
 }
 
 export type FullAppOverlaysHostGuide = {
@@ -53,7 +53,7 @@ export function FullAppOverlaysHost({
 						apiToken={settings.apiToken}
 						setApiToken={settings.setApiToken}
 						profileId={settings.profileId}
-						setProfileId={settings.setProfileId}
+						profileName={settings.profileName}
 					/>
 				</Suspense>
 			) : null}

@@ -1,5 +1,6 @@
-import { Button, Space, Typography } from 'antd'
+import { Button, Collapse, Space, Typography } from 'antd'
 import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import {
 	DEFAULT_RETRY_COUNT,
@@ -54,7 +55,7 @@ type Props = {
 	apiToken: string
 	setApiToken: (v: string) => void
 	profileId: string | null
-	setProfileId: (v: string | null) => void
+	profileName: string | null
 }
 
 function SettingsSectionFallback() {
@@ -75,53 +76,43 @@ function RecoverySettingsSection({
 	onResetDismissedDialogs: () => void
 	onResetUiState: () => void
 }) {
-	const [recoveryToolsOpen, setRecoveryToolsOpen] = useState(false)
-
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
-			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				Use these repair tools only when this browser keeps opening with the wrong layout, filters, or hidden confirmations.
-			</Typography.Text>
-			<Button
-				className={styles.recoveryDisclosureButton}
-				aria-expanded={recoveryToolsOpen}
-				onClick={() => setRecoveryToolsOpen((open) => !open)}
-			>
-				Browser recovery tools
-			</Button>
-			{recoveryToolsOpen ? (
-				<Space orientation="vertical" size="middle" className={styles.fullWidth}>
-					<div className={styles.recoveryCard}>
-						<Space orientation="vertical" size={8} className={styles.fullWidth}>
-							<Typography.Text strong>Clear saved layout and filters</Typography.Text>
-							<Typography.Text type="secondary">
-								Clears saved view, filter, selection, and layout state from this browser. Your API token and profiles are kept.
-							</Typography.Text>
-							<Button danger onClick={onResetUiState}>
-								Clear saved layout
-							</Button>
-						</Space>
-					</div>
-					<div className={styles.recoveryCard}>
-						<Space orientation="vertical" size={8} className={styles.fullWidth}>
-							<Typography.Text strong>Restore hidden confirmations</Typography.Text>
-							<Typography.Text type="secondary">
-								{dismissedDialogCount > 0
-									? `${dismissedDialogCount} confirmation preference(s) are currently hidden.`
-									: 'No confirmation preferences are currently hidden.'}
-							</Typography.Text>
-							<Button onClick={onResetDismissedDialogs} disabled={dismissedDialogCount === 0}>
-								Restore confirmations
-							</Button>
-						</Space>
-					</div>
+			<div className={styles.recoveryCard}>
+				<Space orientation="vertical" size={8} className={styles.fullWidth}>
+					<Typography.Text strong>Clear saved layout and filters</Typography.Text>
+					<Typography.Text type="secondary">Keeps your API token and profiles.</Typography.Text>
+					<Button danger onClick={onResetUiState}>
+						Clear saved layout
+					</Button>
 				</Space>
-			) : null}
+			</div>
+			<div className={styles.recoveryCard}>
+				<Space orientation="vertical" size={8} className={styles.fullWidth}>
+					<Typography.Text strong>Restore hidden confirmations</Typography.Text>
+					<Typography.Text type="secondary">
+						{dismissedDialogCount > 0
+							? `${dismissedDialogCount} confirmation preference(s) are currently hidden.`
+							: 'No confirmation preferences are currently hidden.'}
+					</Typography.Text>
+					<Button onClick={onResetDismissedDialogs} disabled={dismissedDialogCount === 0}>
+						Restore confirmations
+					</Button>
+				</Space>
+			</div>
 		</Space>
 	)
 }
 
 export function SettingsPage(props: Props) {
+	const [searchParams, setSearchParams] = useSearchParams()
+	const settingsTab = searchParams.get('settings')
+	const activeTab = ['access', 'objects', 'transfers', 'support'].includes(settingsTab ?? '') ? settingsTab! : 'access'
+	const setActiveTab = (key: string) => {
+		const next = new URLSearchParams(searchParams)
+		next.set('settings', key)
+		setSearchParams(next, { replace: true })
+	}
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
 		'downloadLinkProxyEnabled',
 		false,
@@ -234,7 +225,8 @@ export function SettingsPage(props: Props) {
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
 			<AppTabs
 				ariaLabel="Settings sections"
-				defaultActiveKey="access"
+				activeKey={activeTab}
+				onChange={setActiveTab}
 				items={[
 					{
 						key: 'access',
@@ -245,6 +237,7 @@ export function SettingsPage(props: Props) {
 									apiToken={props.apiToken}
 									setApiToken={props.setApiToken}
 									profileId={props.profileId}
+									profileName={props.profileName}
 									apiDocsUrl={apiDocsUrl}
 									openapiUrl={openapiUrl}
 								/>
@@ -304,33 +297,50 @@ export function SettingsPage(props: Props) {
 						),
 					},
 					{
-						key: 'advanced',
+						key: 'support',
 						label: 'Support',
 						children: (
-							<Space orientation="vertical" size="large" className={styles.fullWidth}>
-								<Suspense fallback={<SettingsSectionFallback />}>
-									<ServerSettingsSection
-										api={props.api}
-										meta={props.meta}
-										scopeKey={props.shellScopeKey}
-									/>
-								</Suspense>
-								<Suspense fallback={<SettingsSectionFallback />}>
-									<NetworkSettingsSection
-										apiRetryCount={apiRetryCount}
-										setApiRetryCount={setApiRetryCount}
-										apiRetryDelayMs={apiRetryDelayMs}
-										setApiRetryDelayMs={setApiRetryDelayMs}
-										networkLog={networkLog}
-										onClearNetworkLog={() => clearNetworkLog()}
-									/>
-								</Suspense>
-								<RecoverySettingsSection
-									dismissedDialogCount={dismissedDialogCount}
-									onResetDismissedDialogs={onResetDismissedDialogs}
-									onResetUiState={onResetUiState}
-								/>
-							</Space>
+							<Collapse
+								size="small"
+								items={[
+									{
+										key: 'backup',
+										label: 'Backup and restore',
+										children: (
+											<Suspense fallback={<SettingsSectionFallback />}>
+												<ServerSettingsSection api={props.api} meta={props.meta} scopeKey={props.shellScopeKey} />
+											</Suspense>
+										),
+									},
+									{
+										key: 'network',
+										label: 'Network',
+										children: (
+											<Suspense fallback={<SettingsSectionFallback />}>
+												<NetworkSettingsSection
+													apiRetryCount={apiRetryCount}
+													setApiRetryCount={setApiRetryCount}
+													apiRetryDelayMs={apiRetryDelayMs}
+													setApiRetryDelayMs={setApiRetryDelayMs}
+													networkLog={networkLog}
+													onClearNetworkLog={() => clearNetworkLog()}
+												/>
+											</Suspense>
+										),
+									},
+									{
+										key: 'browser',
+										label: 'Browser recovery',
+										children: (
+											<RecoverySettingsSection
+												dismissedDialogCount={dismissedDialogCount}
+												onResetDismissedDialogs={onResetDismissedDialogs}
+												onResetUiState={onResetUiState}
+											/>
+										),
+									},
+								]}
+							/>
 						),
 					},
 				]}

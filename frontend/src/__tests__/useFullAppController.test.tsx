@@ -129,7 +129,7 @@ describe('useFullAppController', () => {
 				apiToken: 'token-a',
 				setApiToken,
 				profileId: 'profile-1',
-				setProfileId,
+				profileName: 'Profile One',
 			},
 			guide: {
 				open: true,

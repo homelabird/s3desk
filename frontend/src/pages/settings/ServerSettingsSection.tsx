@@ -1,4 +1,4 @@
-import { Alert, Space, Typography } from 'antd'
+import { Alert, Space } from 'antd'
 
 import type { APIClientShape } from '../../api/client'
 import type { MetaResponse } from '../../api/types'
@@ -30,21 +30,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 					description={<ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
 				/>
 			) : null}
-			<Space orientation="vertical" size={8} style={{ width: '100%' }}>
-				<Typography.Text strong>Backup and restore</Typography.Text>
-				<Typography.Text type="secondary">
-					Use these server tools only when moving, restoring, or cleaning up this S3Desk instance.
-				</Typography.Text>
-				<SidebarBackupAction
-					api={props.api}
-					meta={props.meta}
-					scopeKey={props.scopeKey}
-					variant="surface"
-				/>
-			</Space>
-			<Typography.Text type="secondary">
-				They affect local server state. Keep day-to-day browsing, uploads, and transfers in the main workspace.
-			</Typography.Text>
+			<SidebarBackupAction api={props.api} meta={props.meta} scopeKey={props.scopeKey} variant="surface" />
 		</Space>
 	)
 }

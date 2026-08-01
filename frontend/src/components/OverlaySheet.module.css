@@ -21,7 +21,7 @@
 .panel {
 	display: flex;
 	flex-direction: column;
-	background: var(--s3d-color-bg-elevated, var(--s3d-color-bg));
+	background: var(--s3d-color-bg-card);
 	box-shadow: var(--s3d-shadow-md);
 	min-width: 0;
 }
@@ -55,7 +55,7 @@
 	gap: 10px;
 	padding: 18px 20px 14px;
 	border-bottom: 1px solid var(--s3d-color-border);
-	background: var(--s3d-color-bg-elevated, var(--s3d-color-bg));
+	background: var(--s3d-color-bg-card);
 	min-width: 0;
 }
 
@@ -151,10 +151,6 @@
 
 	.headerMain {
 		flex-wrap: wrap;
-	}
-
-	.actions {
-		width: 100%;
 	}
 
 	.close {

@@ -47,13 +47,12 @@ function createClient() {
 	})
 }
 
-function renderSettingsPage(props?: Partial<ComponentProps<typeof SettingsPage>>) {
+function renderSettingsPage(props?: Partial<ComponentProps<typeof SettingsPage>>, initialEntry = '/') {
 	const setApiToken = props?.setApiToken ?? vi.fn()
-	const setProfileId = props?.setProfileId ?? vi.fn()
 
 	render(
 		<QueryClientProvider client={createClient()}>
-			<MemoryRouter>
+			<MemoryRouter initialEntries={[initialEntry]}>
 				<SettingsPage
 					api={props?.api ?? ({} as never)}
 					meta={props?.meta}
@@ -61,18 +60,18 @@ function renderSettingsPage(props?: Partial<ComponentProps<typeof SettingsPage>>
 					apiToken={props?.apiToken ?? 'current-token'}
 					setApiToken={setApiToken}
 					profileId={props?.profileId ?? 'profile-1'}
-					setProfileId={setProfileId}
+					profileName={props?.profileName ?? 'Profile One'}
 				/>
 			</MemoryRouter>
 		</QueryClientProvider>,
 	)
 
-	return { setApiToken, setProfileId }
+	return { setApiToken }
 }
 
 describe('SettingsPage', () => {
 	it('applies a trimmed API token and keeps selected profile management out of settings', async () => {
-		const { setApiToken, setProfileId } = renderSettingsPage()
+		const { setApiToken } = renderSettingsPage()
 
 		fireEvent.change(await screen.findByPlaceholderText('Must match API_TOKEN…', undefined, { timeout: 10_000 }), {
 			target: { value: '  next-token  ' },
@@ -80,9 +79,9 @@ describe('SettingsPage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
 		expect(setApiToken).toHaveBeenCalledWith('next-token')
-		expect(screen.getByLabelText('Selected Profile')).toHaveValue('profile-1')
+		expect(screen.getByLabelText('Selected Profile')).toHaveValue('Profile One')
+		expect(screen.getByText('ID: profile-1')).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
-		expect(setProfileId).not.toHaveBeenCalled()
 	}, 20_000)
 
 	it('does not apply edited API token on blur', async () => {
@@ -101,16 +100,12 @@ describe('SettingsPage', () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
-		expect(await screen.findByText(/automatic download routing and upload tuning/i)).toBeInTheDocument()
+		expect(await screen.findByText('Defaults work for most connections.')).toBeInTheDocument()
 		expect(screen.queryByRole('switch', { name: 'Force server proxy for downloads and previews' })).not.toBeInTheDocument()
 		fireEvent.click(screen.getByText('Advanced transfer options'))
 		fireEvent.click(await screen.findByRole('switch', { name: 'Force server proxy for downloads and previews' }))
 		fireEvent.change(await screen.findByLabelText('Download task concurrency'), { target: { value: '5' } })
 		fireEvent.change(screen.getByLabelText('Upload task concurrency'), { target: { value: '3' } })
-
-		expect(window.localStorage.getItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY)).not.toBe('5')
-		expect(window.localStorage.getItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY)).not.toBe('3')
-		fireEvent.click(screen.getByRole('button', { name: 'Apply transfer tuning' }))
 
 		await waitFor(() => {
 			expect(window.localStorage.getItem('downloadLinkProxyEnabled')).toBe('true')
@@ -143,7 +138,7 @@ describe('SettingsPage', () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Support' }))
-		fireEvent.click(await screen.findByRole('button', { name: 'Browser recovery tools' }))
+		fireEvent.click(await screen.findByRole('button', { name: /Browser recovery/ }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Clear saved layout' }))
 
 		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1))
@@ -169,22 +164,27 @@ describe('SettingsPage', () => {
 		expect(successSpy).toHaveBeenCalledWith('Saved layout and filters cleared. Reloading…')
 	})
 
-	it('stores retry policy only after applying diagnostics tuning', async () => {
+	it('stores retry policy immediately', async () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Support' }))
-		fireEvent.change(await screen.findByLabelText('Request retry attempts'), { target: { value: '4' } })
+		fireEvent.click(await screen.findByRole('button', { name: /Network/ }))
+		fireEvent.change(await screen.findByLabelText('Request retry attempts', undefined, { timeout: 10_000 }), {
+			target: { value: '4' },
+		})
 		fireEvent.change(screen.getByLabelText('Delay before retry (ms)'), { target: { value: '700' } })
-
-		expect(window.localStorage.getItem(RETRY_COUNT_STORAGE_KEY)).not.toBe('4')
-		expect(window.localStorage.getItem(RETRY_DELAY_STORAGE_KEY)).not.toBe('700')
-
-		fireEvent.click(screen.getByRole('button', { name: 'Apply retry settings' }))
 
 		await waitFor(() => {
 			expect(window.localStorage.getItem(RETRY_COUNT_STORAGE_KEY)).toBe('4')
 			expect(window.localStorage.getItem(RETRY_DELAY_STORAGE_KEY)).toBe('700')
 		})
+	})
+
+	it('restores the selected tab from the URL', async () => {
+		renderSettingsPage(undefined, '/?settings=objects')
+
+		expect(screen.getByRole('tab', { name: 'Objects' })).toHaveAttribute('aria-selected', 'true')
+		expect(await screen.findByText('Changes save immediately.')).toBeInTheDocument()
 	})
 
 	it('resets dismissed dialog preferences only for the current api token scope', async () => {
@@ -206,7 +206,7 @@ describe('SettingsPage', () => {
 		renderSettingsPage({ apiToken: 'token-a' })
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Support' }))
-		fireEvent.click(await screen.findByRole('button', { name: 'Browser recovery tools' }))
+		fireEvent.click(await screen.findByRole('button', { name: /Browser recovery/ }))
 		expect(await screen.findByText('2 confirmation preference(s) are currently hidden.')).toBeInTheDocument()
 
 		fireEvent.click(screen.getByRole('button', { name: 'Restore confirmations' }))

@@ -10,6 +10,7 @@ type AccessSettingsSectionProps = {
 	apiToken: string
 	setApiToken: (v: string) => void
 	profileId: string | null
+	profileName: string | null
 	apiDocsUrl: string
 	openapiUrl: string
 }
@@ -50,13 +51,9 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<div className={styles.accessCard}>
 				<div className={styles.accessCardHeader}>
-					<Typography.Text strong>Recommended first</Typography.Text>
-					<Typography.Text type="secondary">Set the browser API token and confirm the active profile before using the rest of the app.</Typography.Text>
+					<Typography.Text strong>Server access</Typography.Text>
 				</div>
-				<Typography.Text type="secondary" className={styles.sectionIntro}>
-					What this affects: browser access to this S3Desk server, the active storage profile, and API reference links.
-				</Typography.Text>
-				<FormField label="Backend API Token (X-Api-Token)" htmlFor="settings-api-token">
+				<FormField label="API token" htmlFor="settings-api-token">
 					<ApiTokenField
 						key={props.apiToken}
 						apiToken={props.apiToken}
@@ -64,21 +61,17 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 						setApiToken={props.setApiToken}
 					/>
 					<Typography.Paragraph type="secondary" className={styles.paragraphTop8}>
-						This must match the server's <Typography.Text code>API_TOKEN</Typography.Text> (or{' '}
-						<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials and is stored only for the current browser session.
+						Session only. Must match <Typography.Text code>API_TOKEN</Typography.Text>.
 					</Typography.Paragraph>
 				</FormField>
 
-				<FormField label="Selected Profile" htmlFor="settings-selected-profile" extra="Change or clear the active profile from the header profile selector or Profiles page.">
-					<Input id="settings-selected-profile" value={props.profileId ?? ''} placeholder="(none)…" readOnly />
+				<FormField label="Selected Profile" htmlFor="settings-selected-profile" extra="Change from the header or Profiles.">
+					<Input id="settings-selected-profile" value={props.profileName ?? ''} placeholder="No profile selected" readOnly />
+					{props.profileId ? <Typography.Text type="secondary">ID: {props.profileId}</Typography.Text> : null}
 				</FormField>
 			</div>
 
 			<div className={styles.accessReferenceCard}>
-				<div className={styles.accessCardHeader}>
-					<Typography.Text strong>Reference only</Typography.Text>
-					<Typography.Text type="secondary">Use these links when you need schema or endpoint details. They are not part of the main setup flow.</Typography.Text>
-				</div>
 				<Collapse
 					size="small"
 					items={[
@@ -87,7 +80,6 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 							label: 'API reference',
 							children: (
 								<Space orientation="vertical" size={4} className={styles.fullWidth}>
-									<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
 									<Space wrap>
 										<Button type="link" href={props.apiDocsUrl} target="_blank" rel="noopener noreferrer">
 											Open API Docs (new tab)
