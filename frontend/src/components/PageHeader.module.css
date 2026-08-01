@@ -13,14 +13,6 @@
 	overflow: hidden;
 }
 
-.header::before {
-	content: '';
-	position: absolute;
-	inset: 0 0 auto;
-	height: 4px;
-	background: linear-gradient(90deg, var(--s3d-color-primary), var(--s3d-color-warning-border));
-}
-
 .copy,
 .actions {
 	position: relative;
