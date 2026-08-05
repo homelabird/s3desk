@@ -105,6 +105,7 @@ func TestIsPlaceholderAPITokenRejectsDocumentedExamples(t *testing.T) {
 		"",
 		"change-me",
 		"replace-me",
+		"s3desk-demo-token-0123456789abcdef012345",
 		"replace-with-a-long-random-token",
 		"replace-me-with-a-strong-token",
 	}

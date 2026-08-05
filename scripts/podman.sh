@@ -7,8 +7,8 @@ IMAGE="${IMAGE:-s3desk:local}"
 QUICK_IMAGE="${QUICK_IMAGE:-localhost/s3desk-deploy:quick}"
 QUICK_CONTAINER="${QUICK_CONTAINER:-s3desk-quick}"
 QUICK_DATA_DIR="${QUICK_DATA_DIR:-${ROOT}/.deploy-data/quick}"
-QUICK_API_TOKEN="${QUICK_API_TOKEN:-s3desk-demo-token-0123456789abcdef012345}"
-QUICK_ENCRYPTION_KEY="${QUICK_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}"
+QUICK_API_TOKEN="${QUICK_API_TOKEN:-}"
+QUICK_ENCRYPTION_KEY="${QUICK_ENCRYPTION_KEY:-}"
 QUICK_ALLOWED_LOCAL_DIRS="${QUICK_ALLOWED_LOCAL_DIRS:-/tmp}"
 QUICK_BIND_HOST="${QUICK_BIND_HOST:-192.168.0.227}"
 QUICK_EXTERNAL_BASE_URL="${QUICK_EXTERNAL_BASE_URL:-http://${QUICK_BIND_HOST}:8080}"
@@ -40,6 +40,8 @@ Env:
   QUICK_BIND_HOST        Browser-facing host/IP added to ALLOWED_HOSTS (default: ${QUICK_BIND_HOST})
   QUICK_EXTERNAL_BASE_URL External base URL for preview (default: ${QUICK_EXTERNAL_BASE_URL})
   QUICK_BUILD_CTX        Optional staging dir to reuse for quick-build
+  QUICK_API_TOKEN        Required strong API token for quick-run/quick-restart
+  QUICK_ENCRYPTION_KEY   Required stable encryption key for quick-run/quick-restart
 
 Notes:
   This app is local-only by default, so 'run' uses '--network host'.
@@ -62,6 +64,15 @@ quick_build() {
 }
 
 quick_run() {
+  if [[ -z "${QUICK_API_TOKEN}" ]]; then
+    echo "[podman] QUICK_API_TOKEN is required for quick-run" >&2
+    exit 1
+  fi
+  if [[ -z "${QUICK_ENCRYPTION_KEY}" ]]; then
+    echo "[podman] QUICK_ENCRYPTION_KEY is required for quick-run" >&2
+    exit 1
+  fi
+
   mkdir -p "${QUICK_DATA_DIR}"
   podman rm -f "${QUICK_CONTAINER}" >/dev/null 2>&1 || true
   podman run -d \
