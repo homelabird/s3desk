@@ -494,6 +494,7 @@ func isPlaceholderAPIToken(token string) bool {
 		"api-token",
 		"s3desk",
 		"s3desk-local",
+		"s3desk-demo-token-0123456789abcdef012345",
 		"replace-me",
 		"replace-with-a-long-random-token",
 		"replace-me-with-a-strong-token":
