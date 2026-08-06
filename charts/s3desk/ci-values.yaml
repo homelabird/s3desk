@@ -1,6 +1,7 @@
 server:
   allowRemote: true
   apiToken: "ci-token"
+  encryptionKey: "ci-encryption-key-fixture"
 
 image:
   repository: s3desk
