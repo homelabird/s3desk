@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 
 import { TransfersDrawerHost } from './TransfersDrawerHost'
 import type { TransfersRuntimeUiActions, TransfersRuntimeUiState } from './useTransfersRuntimeController'

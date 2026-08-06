@@ -1,6 +1,6 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import type { NavigateFunction } from 'react-router-dom'
+import type { NavigateFunction } from 'react-router'
 
 import { APIError, type APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'

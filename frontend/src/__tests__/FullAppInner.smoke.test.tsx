@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfigProvider } from 'antd'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { APIClient } from '../api/client'

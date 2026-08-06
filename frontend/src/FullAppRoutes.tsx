@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router'
 import { Suspense, lazy, type ReactNode } from 'react'
 
 const ProfilesPage = lazy(async () => {
@@ -48,14 +48,7 @@ export function FullAppRoutes({
 			<Routes>
 				<Route
 					path="/"
-					element={
-						<ProfilesPage
-							key={`profiles:${apiToken || 'none'}`}
-							apiToken={apiToken}
-							profileId={profileId}
-							setProfileId={setProfileId}
-						/>
-					}
+					element={<Navigate to={profileId ? '/objects' : '/profiles'} replace />}
 				/>
 				<Route
 					path="/profiles"

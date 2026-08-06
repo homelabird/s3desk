@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 
 import { useAPIClient } from '../../api/useAPIClient'
 import { queryKeys } from '../../api/queryKeys'

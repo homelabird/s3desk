@@ -1,11 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Navigate, useLocation } from "react-router-dom";
 
-import { useAuth } from "./auth/useAuth";
-import {
-  readLegacyActiveProfileIdForMigration,
-  serverScopedStorageKey,
-} from "./lib/profileScopedStorage";
 import styles from "./App.module.css";
 
 const FullApp = lazy(async () => {
@@ -24,40 +18,7 @@ function LoadingScreen() {
   );
 }
 
-function readStoredString(storage: Storage, key: string): string | null {
-  try {
-    const raw = storage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "string" && parsed.trim() ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function readStoredProfileId(apiToken: string): string | null {
-  if (typeof window === "undefined") return null;
-  return (
-    readStoredString(
-      window.localStorage,
-      serverScopedStorageKey("app", apiToken, "profileId"),
-    ) ?? readLegacyActiveProfileIdForMigration(apiToken)
-  );
-}
-
 export default function App() {
-  const location = useLocation();
-  const { apiToken } = useAuth();
-
-  if (location.pathname === "/") {
-    return (
-      <Navigate
-        to={readStoredProfileId(apiToken) ? "/objects" : "/profiles"}
-        replace
-      />
-    );
-  }
-
   return (
     <Suspense fallback={<LoadingScreen />}>
       <FullApp />

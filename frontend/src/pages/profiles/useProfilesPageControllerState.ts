@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { SetURLSearchParams } from 'react-router-dom'
+import type { SetURLSearchParams } from 'react-router'
 
 import type { Profile } from '../../api/types'
 import { toProfileEditInitialValues, buildProfilesTableRows } from './profileViewModel'

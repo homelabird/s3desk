@@ -1,6 +1,7 @@
 import { ConfigProvider } from 'antd'
 import 'antd/dist/reset.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter } from 'react-router'
 import { Suspense, lazy, useMemo } from 'react'
 
 import { AntdToastAnnouncer } from './components/AntdToastAnnouncer'
@@ -33,16 +34,18 @@ export default function FullApp() {
 	const appTheme = useMemo(() => getAppTheme(mode), [mode])
 
 	return (
-		<QueryClientProvider client={queryClient}>
-			<ConfigProvider getPopupContainer={() => document.body} theme={appTheme}>
-				<AntdToastAnnouncer />
-				<FullAppInner />
-			</ConfigProvider>
-			{Devtools ? (
-				<Suspense fallback={null}>
-					<Devtools initialIsOpen={false} />
-				</Suspense>
-			) : null}
-		</QueryClientProvider>
+		<BrowserRouter>
+			<QueryClientProvider client={queryClient}>
+				<ConfigProvider getPopupContainer={() => document.body} theme={appTheme}>
+					<AntdToastAnnouncer />
+					<FullAppInner />
+				</ConfigProvider>
+				{Devtools ? (
+					<Suspense fallback={null}>
+						<Devtools initialIsOpen={false} />
+					</Suspense>
+				) : null}
+			</QueryClientProvider>
+		</BrowserRouter>
 	)
 }

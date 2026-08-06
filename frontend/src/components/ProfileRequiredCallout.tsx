@@ -1,5 +1,5 @@
 import { Alert, Grid, Space, Typography } from "antd";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 
 import { LinkButton } from "./LinkButton";
 

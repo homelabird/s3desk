@@ -1,5 +1,5 @@
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
-import { Link, type LinkProps } from 'react-router-dom'
+import { Link, type LinkProps } from 'react-router'
 
 type LinkButtonType = 'default' | 'primary' | 'dashed' | 'text' | 'link'
 type LinkButtonSize = 'small' | 'middle' | 'large'

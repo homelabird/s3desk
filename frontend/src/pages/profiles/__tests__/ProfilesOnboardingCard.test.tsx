@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ProfilesOnboardingCard } from '../ProfilesOnboardingCard'

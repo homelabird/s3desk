@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
-import type { NavigateFunction } from 'react-router-dom'
+import type { NavigateFunction } from 'react-router'
 
 import type { APIClientShape } from '../../api/client'
 import type { BucketsPageQueriesState } from './useBucketsPageQueriesState'

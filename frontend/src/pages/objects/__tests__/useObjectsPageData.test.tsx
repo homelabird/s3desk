@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useObjectsPageData } from '../useObjectsPageData'
 
-type RouteLocation = ReturnType<typeof import('react-router-dom').useLocation>
-type NavigateFn = ReturnType<typeof import('react-router-dom').useNavigate>
+type RouteLocation = ReturnType<typeof import('react-router').useLocation>
+type NavigateFn = ReturnType<typeof import('react-router').useNavigate>
 type UseObjectsPageEnvironmentArgs = Parameters<
 	typeof import('../useObjectsPageEnvironment').useObjectsPageEnvironment
 >[0]
@@ -151,7 +151,7 @@ const {
 	}),
 )
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
 	useLocation: () => readRef<RouteLocation>(routeLocationRef),
 	useNavigate: () => readRef<NavigateFn>(navigateRef),
 }))

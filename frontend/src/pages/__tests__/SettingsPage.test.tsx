@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { message } from 'antd'
 import type { ComponentProps } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { RETRY_COUNT_STORAGE_KEY, RETRY_DELAY_STORAGE_KEY } from '../../api/client'

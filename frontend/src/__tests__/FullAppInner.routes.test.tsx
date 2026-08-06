@@ -2,12 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfigProvider } from 'antd'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../pages/JobsPage', async () => {
 	const React = await import('react')
-	const { useLocation, useNavigate } = await import('react-router-dom')
+	const { useLocation, useNavigate } = await import('react-router')
 
 	return {
 		JobsPage: function JobsPageMock(props: { apiToken: string }) {

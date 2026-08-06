@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { Button, Layout } from 'antd'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import type { ReactNode } from 'react'
 
 import { APP_NAVIGATION_DRAWER_ID } from './appShellIds'
