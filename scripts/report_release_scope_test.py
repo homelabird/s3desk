@@ -29,6 +29,8 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertEqual(MODULE.release_unit_for("scripts/Caddyfile"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("scripts/deploy_helm_release.sh"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("scripts/install_backend_security_tools.sh"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("e2e/runner/Dockerfile"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("lighthouserc.js"), "frontend-e2e")
         self.assertEqual(MODULE.release_unit_for("backend/internal/api/handlers_objects.go"), "backend-api-provider-surface")
         self.assertEqual(MODULE.release_unit_for("openapi.yml"), "frontend-api-contracts")
         self.assertEqual(MODULE.release_unit_for("frontend/src/lib/profileCapabilityContext.ts"), "frontend-lib")

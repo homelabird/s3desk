@@ -1,8 +1,12 @@
 'use strict';
 
-const url = process.env.S3DESK_URL || 'https://s3desk.k8s.homelabird.com/objects';
+const url = process.env.S3DESK_URL;
 const runs = Number(process.env.LHCI_RUNS || 1);
 const preset = process.env.S3DESK_LH_PRESET || process.env.LIGHTHOUSE_PRESET;
+
+if (!url) {
+  throw new Error('S3DESK_URL is required; refusing to run Lighthouse against a default or external origin.');
+}
 
 const settings = {
   disableStorageReset: true,

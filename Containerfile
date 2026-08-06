@@ -1,8 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG RCLONE_VERSION=1.72.0
-
-FROM harbor.k8s.homelabird.com/library/node:22-alpine AS frontend
+FROM harbor.k8s.homelabird.com/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS frontend
 WORKDIR /src
 COPY openapi.yml /src/openapi.yml
 COPY frontend/package.json frontend/package-lock.json /src/frontend/
@@ -13,16 +11,16 @@ RUN npm run ci:deps:build
 COPY frontend/ /src/frontend/
 RUN npm run gen:openapi && npm run build
 
-FROM harbor.k8s.homelabird.com/library/golang:1.25.10-alpine AS backend
+FROM harbor.k8s.homelabird.com/library/golang:1.25.10-alpine@sha256:8d22e29d960bc50cd025d93d5b7c7d220b1ee9aa7a239b3c8f55a57e987e8d45 AS backend
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum /src/backend/
 RUN go mod download
 COPY backend/ /src/backend/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/s3desk-server ./cmd/server
 
-FROM harbor.k8s.homelabird.com/library/rclone/rclone:${RCLONE_VERSION} AS rclone
+FROM harbor.k8s.homelabird.com/library/rclone/rclone:1.72.0@sha256:0eb18825ac9732c21c11d654007170572bbd495352bb6dbb624f18e4f462c496 AS rclone
 
-FROM harbor.k8s.homelabird.com/library/alpine:3.21 AS runtime
+FROM harbor.k8s.homelabird.com/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS runtime
 ARG DB_BACKEND=sqlite
 RUN set -e; \
     apk add --no-cache ca-certificates ffmpeg; \

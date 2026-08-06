@@ -196,6 +196,7 @@ def release_unit_for(path: str) -> str:
         or path.startswith("charts/")
         or path.startswith("compose/")
         or path.startswith("deploy/")
+        or path == "e2e/runner/Dockerfile"
         or path.startswith("k8s/")
         or path in {".dockerignore", ".env", ".env.example", ".gitlab-ci.yml", ".golangci.yml", "Containerfile", "Containerfile.local"}
         or path in {
@@ -228,7 +229,7 @@ def release_unit_for(path: str) -> str:
         return "backend-other"
     if path.startswith("frontend/docs/"):
         return "frontend-docs"
-    if path.startswith("frontend/tests/") or path == "frontend/playwright.config.ts":
+    if path.startswith("frontend/tests/") or path in {"frontend/playwright.config.ts", "lighthouserc.js"}:
         return "frontend-e2e"
     if path.startswith("frontend/scripts/"):
         return "frontend-tooling"
