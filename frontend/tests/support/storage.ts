@@ -98,6 +98,7 @@ export async function seedLocalStorage(page: Page, values: Record<string, unknow
 		const storageScope = profileId || '__no_profile__'
 		const bucket = typeof entries.bucket === 'string' ? entries.bucket.trim() : ''
 		const prefix = typeof entries.prefix === 'string' ? entries.prefix : ''
+		// Keep scoped and legacy keys in sync so compatibility paths are covered.
 		const setObjectStateForProfile = (targetProfileId: string, name: string, value: unknown, apiToken = activeApiToken) => {
 			if (value === undefined) return
 			const profileScope = normalizeStorageScope(targetProfileId, '__no_profile__')

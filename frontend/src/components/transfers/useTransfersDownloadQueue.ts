@@ -373,21 +373,24 @@ export function useTransfersDownloadQueue({
 				return
 			}
 
+			const activeKeysByTarget = new Map<FileSystemDirectoryHandle, Set<string>>()
+			for (const current of downloadTasksRef.current) {
+				if (current.kind !== 'object_device' || !isActiveDownloadStatus(current.status)) continue
+				const activeKey = `${current.profileId}\u0000${current.bucket}\u0000${current.key}\u0000${current.targetPath}`
+				const keys = activeKeysByTarget.get(current.targetDirHandle)
+				if (keys) {
+					keys.add(activeKey)
+				} else {
+					activeKeysByTarget.set(current.targetDirHandle, new Set([activeKey]))
+				}
+			}
+
 			const seenBatchKeys = new Set<string>()
 			const queuedTasks = tasks.filter((task) => {
 				const batchKey = `${task.profileId}\u0000${task.bucket}\u0000${task.key}\u0000${task.targetPath}`
 				if (seenBatchKeys.has(batchKey)) return false
 				seenBatchKeys.add(batchKey)
-				return !downloadTasksRef.current.some(
-					(current) =>
-						current.kind === 'object_device' &&
-						current.profileId === task.profileId &&
-						current.bucket === task.bucket &&
-						current.key === task.key &&
-						current.targetPath === task.targetPath &&
-						current.targetDirHandle === task.targetDirHandle &&
-						isActiveDownloadStatus(current.status),
-				)
+				return !activeKeysByTarget.get(task.targetDirHandle)?.has(batchKey)
 			})
 			const duplicateCount = tasks.length - queuedTasks.length
 			if (queuedTasks.length === 0) {

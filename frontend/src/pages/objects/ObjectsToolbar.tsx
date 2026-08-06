@@ -85,6 +85,7 @@ function buildMenuButtonLabel(label: string, showLabels: boolean) {
 }
 
 type DesktopToolbarLayoutProps = {
+	showLabels: boolean
 	bucketPicker: ReactNode
 	navButtons: ReactNode
 	primaryActions: ReactNode
@@ -96,11 +97,18 @@ function DesktopToolbarLayout(props: DesktopToolbarLayoutProps) {
 	return (
 		<div className={styles.toolbarDesktopStack} data-testid="objects-toolbar-desktop-stack">
 			<div className={styles.toolbarDesktopPrimaryRow} data-testid="objects-toolbar-desktop-primary-row">
-				<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopNavGroup}`}>
+				<div
+					className={`${styles.toolbarGroup} ${styles.toolbarDesktopNavGroup}`}
+					data-testid="objects-toolbar-desktop-nav"
+				>
 					{props.bucketPicker}
 					{props.navButtons}
 				</div>
-				<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopPrimaryActions}`}>
+				<div
+					className={`${styles.toolbarGroup} ${styles.toolbarDesktopPrimaryActions}`}
+					data-testid="objects-toolbar-desktop-actions"
+					data-compact={props.showLabels ? 'false' : 'true'}
+				>
 					{props.selectionActions}
 					{props.primaryActions}
 					{props.utilityActions}
@@ -275,6 +283,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 
 		return (
 			<DesktopToolbarLayout
+				showLabels={props.showLabels}
 				bucketPicker={bucketPicker}
 				navButtons={navButtons}
 				primaryActions={primaryActions}

@@ -82,7 +82,7 @@ test.describe('Live objects image preview', () => {
 		const bucketName = `e2e-preview-${runId}`
 		const objectKey = `preview-${runId}.png`
 		const pngBody = Buffer.from(
-			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=',
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 			'base64',
 		)
 		let profileId: string | null = null

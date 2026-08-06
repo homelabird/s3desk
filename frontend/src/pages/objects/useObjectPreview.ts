@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import type { APIClientShape } from '../../api/client'
 import type { ObjectMeta } from '../../api/types'
@@ -38,10 +38,6 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 	const previewScopeKeyRef = useRef(previewScopeKey)
 	const previewRequestIdRef = useRef(0)
 
-	useEffect(() => {
-		previewScopeKeyRef.current = previewScopeKey
-	}, [previewScopeKey])
-
 	const setPreviewAbort = useCallback((abort: (() => void) | null) => {
 		previewAbortRef.current = abort
 	}, [])
@@ -57,7 +53,8 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		previewURLOwnedRef.current = false
 	}, [setPreviewAbort])
 
-	useEffect(() => {
+	useLayoutEffect(() => {
+		previewScopeKeyRef.current = previewScopeKey
 		cleanupPreview()
 	}, [cleanupPreview, previewScopeKey])
 

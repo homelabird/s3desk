@@ -248,7 +248,7 @@ describe("actionHints helpers", () => {
 
   it("builds the select-bucket-to-browse-objects hint from the shared wording module", () => {
     expect(selectBucketToBrowseObjectsHint()).toBe(
-      "Select a bucket to browse objects.",
+      "Choose a bucket to browse objects.",
     );
   });
 

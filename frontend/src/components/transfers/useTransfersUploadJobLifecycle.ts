@@ -49,6 +49,7 @@ export function useTransfersUploadJobLifecycle({
 	)
 
 	const finalizeUploadJob = useCallback(
+		// Finalization also invalidates object queries and publishes a refresh for completed uploads.
 		async (taskId: string, status: 'succeeded' | 'failed' | 'canceled', error?: string | null) => {
 			const current = uploadTasksRef.current.find((t) => t.id === taskId)
 			if (!current || current.status !== 'waiting_job') return

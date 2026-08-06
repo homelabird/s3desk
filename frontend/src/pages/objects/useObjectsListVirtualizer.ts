@@ -74,6 +74,7 @@ export function useObjectsListVirtualizer({
 	})
 
 	const virtualItems = rowVirtualizer.getVirtualItems()
+	// Convert outer-scroll coordinates to list-local row positions for rendering.
 	const virtualItemsForRender = useMemo(
 		() =>
 			virtualItems.map((vi) => ({

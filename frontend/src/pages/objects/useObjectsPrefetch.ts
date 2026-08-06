@@ -97,6 +97,7 @@ export function useObjectsPrefetch({
 	const prefetchQueueRef = useRef<string[]>([])
 	const prefetchInFlightRef = useRef(0)
 	const prefetchStartedRef = useRef(false)
+	// A scope change invalidates queued and in-flight work from the prior generation.
 	const prefetchGenerationRef = useRef(0)
 	const lastPrefetchScopeKeyRef = useRef<string | null>(null)
 
@@ -135,6 +136,7 @@ export function useObjectsPrefetch({
 		if (queue.length === 0) return
 		prefetchQueueRef.current = queue
 		const generation = prefetchGenerationRef.current
+		// Prefer idle time, fall back to a timeout, and cancel either during cleanup.
 		const schedule = (cb: () => void): (() => void) => {
 			const idleCallback = (window as typeof window & {
 				requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number

@@ -107,6 +107,7 @@ export async function installMockApi(page: Page, routes: MockApiRoute[]) {
 		const ctx = buildContext(route)
 		const matched = routes.find((entry) => matchesRoute(entry, ctx.method, ctx.path))
 		if (!matched) {
+			// Unmatched requests fail closed with 404 instead of reaching a live backend.
 			return ctx.notFound()
 		}
 		return matched.handle(ctx)

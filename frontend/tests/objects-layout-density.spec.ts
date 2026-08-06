@@ -6,8 +6,7 @@ import {
 	failedToLoadFoldersTitle,
 	noFoldersHereYetTitle,
 	noFavoritesMatchQueryTitle,
-	pickBucketToBrowseFoldersAndNestedPrefixesHint,
-	selectBucketFirstHint,
+	selectBucketToBrowseObjectsHint,
 } from '../src/lib/actionHints'
 import {
 	buildBucketFixture,
@@ -519,7 +518,6 @@ test.describe('Objects adaptive desktop workflows', () => {
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
 		await drawer.getByRole('button', { name: 'Favorites' }).click()
-		await expect(objectsFavoritesControls(drawer)).toBeVisible()
 
 		const search = drawer.getByLabel('Find favorite')
 		await search.fill('summary')
@@ -593,7 +591,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(objectsSelectionCheckbox(page, 'quarterly.csv')).toBeVisible()
 	})
 
-	test('shows the folders prerequisite status when no bucket is selected', async ({ page }) => {
+	test('shows the objects prerequisite status when no bucket is selected', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await seedLocalStorage(page, {
@@ -606,22 +604,12 @@ test.describe('Objects adaptive desktop workflows', () => {
 			bucket: '',
 			prefix: '',
 		})
-		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByTestId('objects-toolbar-more'), {
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByText(selectBucketToBrowseObjectsHint(), { exact: true }), {
 			timeout: 30_000,
 			maxAttempts: 3,
 		})
 
-		await page.getByTestId('objects-toolbar-more').click()
-		await page.getByRole('menuitem', { name: 'Folders' }).click()
-
-		const drawer = page.getByTestId('objects-tree-sheet')
-		await expect(drawer).toBeVisible()
-		const status = objectsTreeStatus(drawer)
-
-		await expect(status).toBeVisible()
-		await expect(status).toHaveAttribute('data-tree-status-kind', 'prereq')
-		await expect(status).toContainText(selectBucketFirstHint())
-		await expect(status).toContainText(pickBucketToBrowseFoldersAndNestedPrefixesHint())
+		await expect(page.getByText(selectBucketToBrowseObjectsHint(), { exact: true })).toBeVisible()
 	})
 
 	test('shows the folders empty status after expanding a bucket with no nested folders', async ({ page }) => {

@@ -14,9 +14,9 @@ import {
 const PROVIDER_OPTIONS: Array<{ label: string; value: ProfileFormValues['provider'] }> = [
 	{ label: 'S3 Compatible', value: 's3_compatible' },
 	{ label: 'AWS S3', value: 'aws_s3' },
-	{ label: 'OCI Object Storage', value: 'oci_object_storage' },
-	{ label: 'Azure Blob', value: 'azure_blob' },
-	{ label: 'Google Cloud Storage', value: 'gcp_gcs' },
+	{ label: 'Oracle OCI Object Storage (Native)', value: 'oci_object_storage' },
+	{ label: 'Azure Blob Storage', value: 'azure_blob' },
+	{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
 ]
 
 export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs) {
@@ -165,7 +165,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			{viewState.isAzure ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label="Account Name" htmlFor="profile-azure-account-name" required error={errors.azureAccountName}>
+						<FormField label="Storage Account Name" htmlFor="profile-azure-account-name" required error={errors.azureAccountName}>
 							<Input
 								{...profileFieldA11y('profile-azure-account-name', errors.azureAccountName)}
 								value={values.azureAccountName}

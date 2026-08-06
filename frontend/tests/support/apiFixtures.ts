@@ -193,6 +193,7 @@ export function sequenceFixture(
 		path,
 		handler: async (ctx) => {
 			attempts += 1
+			// Reuse the final response after the scripted sequence is exhausted.
 			const step = steps[Math.min(attempts - 1, steps.length - 1)]
 			if (typeof step === 'function') {
 				return step(ctx, attempts)

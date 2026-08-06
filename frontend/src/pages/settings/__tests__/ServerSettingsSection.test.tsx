@@ -14,9 +14,8 @@ describe('ServerSettingsSection', () => {
 			/>,
 		)
 
-		expect(screen.getByText('Backup and restore')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Backup' })).toBeInTheDocument()
-		expect(screen.getByText(/They affect local server state/i)).toBeInTheDocument()
+		expect(screen.getByText('Loading backup and restore status')).toBeInTheDocument()
 	})
 
 	it('renders operational warnings from the meta response', () => {

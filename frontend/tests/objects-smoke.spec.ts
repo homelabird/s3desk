@@ -87,7 +87,7 @@ test.describe('@check-smoke Objects page smoke', () => {
 		const controls = page.getByTestId('objects-list-controls-root')
 		await expect(controls).toBeVisible({ timeout: 10_000 })
 		await expect(controls.getByLabel('Search current folder')).toBeVisible({ timeout: 10_000 })
-		await expect(controls.getByLabel('Go to path')).toBeVisible({ timeout: 10_000 })
+		await expect(controls.getByLabel('Go to path')).toHaveCount(0)
 
 		const moreButton = await getToolbarMoreButton(page)
 		await moreButton.scrollIntoViewIfNeeded()
@@ -105,6 +105,7 @@ test.describe('@check-smoke Objects page smoke', () => {
 		await expect(page.getByRole('menuitem', { name: /Hide workspace tools/i })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Search bucket/i })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: /Search bucket/i })).toBeVisible()
+		await expect(controls.getByLabel('Go to path')).toBeVisible()
 		await expect
 			.poll(() => page.evaluate(() => window.localStorage.getItem('objectsUIMode')))
 			.toBe(JSON.stringify('advanced'))
