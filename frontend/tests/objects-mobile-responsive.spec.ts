@@ -46,6 +46,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 	test('renders the mobile header, location controls, and initial objects', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
+		const started = Date.now()
 		await openObjectsMobilePage(page)
 
 		await expect(page.getByTestId('objects-page-header')).toBeVisible()
@@ -54,6 +55,9 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByLabel('Search current folder')).toBeVisible()
 		await expect(objectsListRow(page, 'alpha.txt')).toBeVisible()
 		await expect(objectsListRow(page, 'preview.png')).toBeVisible()
+		const elapsed = Date.now() - started
+		test.info().annotations.push({ type: 'perf', description: `mobile_objects_page_render_ms=${elapsed}` })
+		expect(elapsed).toBeLessThan(3000)
 	})
 
 	test('exposes primary toolbar actions at mid-width mobile breakpoints', async ({ page }) => {

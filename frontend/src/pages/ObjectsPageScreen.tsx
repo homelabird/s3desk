@@ -180,6 +180,7 @@ export function ObjectsPageScreen(props: Props) {
 		viewportState,
 		refresh,
 	})
+	const hasOpenOverlay = Object.values(overlaysProps).some(Boolean)
 
 	return (
 		<div className={styles.page}>
@@ -199,38 +200,42 @@ export function ObjectsPageScreen(props: Props) {
 			</Suspense>
 
 			<ObjectsPagePanes layoutRef={paneVm.layoutRef} {...panesProps} />
-			<Suspense fallback={null}>
-				<ObjectsImageViewerModal
-					open={previewState.largePreviewOpen}
-					isMobile={!screens.md}
-					objectKey={previewState.largePreviewKey}
-					objectMeta={previewState.largePreviewMeta}
-					isMetaFetching={previewState.largePreviewMetaIsFetching}
-					thumbnail={previewState.largePreviewThumbnail}
-					preview={previewState.largePreview}
-					onLoadPreview={previewState.loadLargePreview}
-					onCancelPreview={previewState.cancelLargePreview}
-					canCancelPreview={previewState.canCancelLargePreview}
-					onClose={previewState.closeLargePreview}
-					onDownload={() => {
-						if (!previewState.largePreviewKey) return
-						const objectSize = previewState.objectByKey.get(previewState.largePreviewKey)?.size
-						const size = previewState.largePreviewMeta?.size ?? objectSize
-						onDownload(previewState.largePreviewKey, size)
-					}}
-					showPresignAction={profileCapabilities?.presignedUpload ?? false}
-					onPresign={() => {
-						if (!previewState.largePreviewKey) return
-						onPresign(previewState.largePreviewKey)
-					}}
-					isPresignLoading={
-						actions.presignMutation.isPending && actions.presignKey === previewState.largePreviewKey
-					}
-				/>
-			</Suspense>
-			<Suspense fallback={null}>
-				<ObjectsPageOverlays {...overlaysProps} />
-			</Suspense>
+			{previewState.largePreviewOpen ? (
+				<Suspense fallback={null}>
+					<ObjectsImageViewerModal
+						open={true}
+						isMobile={!screens.md}
+						objectKey={previewState.largePreviewKey}
+						objectMeta={previewState.largePreviewMeta}
+						isMetaFetching={previewState.largePreviewMetaIsFetching}
+						thumbnail={previewState.largePreviewThumbnail}
+						preview={previewState.largePreview}
+						onLoadPreview={previewState.loadLargePreview}
+						onCancelPreview={previewState.cancelLargePreview}
+						canCancelPreview={previewState.canCancelLargePreview}
+						onClose={previewState.closeLargePreview}
+						onDownload={() => {
+							if (!previewState.largePreviewKey) return
+							const objectSize = previewState.objectByKey.get(previewState.largePreviewKey)?.size
+							const size = previewState.largePreviewMeta?.size ?? objectSize
+							onDownload(previewState.largePreviewKey, size)
+						}}
+						showPresignAction={profileCapabilities?.presignedUpload ?? false}
+						onPresign={() => {
+							if (!previewState.largePreviewKey) return
+							onPresign(previewState.largePreviewKey)
+						}}
+						isPresignLoading={
+							actions.presignMutation.isPending && actions.presignKey === previewState.largePreviewKey
+						}
+					/>
+				</Suspense>
+			) : null}
+			{hasOpenOverlay ? (
+				<Suspense fallback={null}>
+					<ObjectsPageOverlays {...overlaysProps} />
+				</Suspense>
+			) : null}
 		</div>
 	)
 }

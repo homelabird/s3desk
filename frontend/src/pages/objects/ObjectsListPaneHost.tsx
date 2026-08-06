@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense } from 'react'
 
 import {
 	failedToListObjectsTitle,
@@ -17,7 +17,6 @@ import {
 	ObjectsListContent,
 	ObjectsListControls,
 } from './objectsPageLazy'
-import { scheduleIdleLoad } from './objectsPaneIdle'
 import type { ObjectsPagePanesProps } from './ObjectsPagePaneTypes'
 
 type ObjectsListPaneProps = ObjectsPagePanesProps['listProps']
@@ -58,8 +57,6 @@ function ObjectsListAlerts({ listProps }: { listProps: ObjectsListPaneProps }) {
 }
 
 export function ObjectsListPaneHost({ listProps }: { listProps: ObjectsListPaneProps }) {
-	const [listControlsReady, setListControlsReady] = useState(false)
-	const shouldDeferListControls = listProps.hasBucket
 	const controlsFallback = (
 		<div className={shellStyles.controlsSkeleton}>
 			<ShellText>{loadingControlsTitle()}</ShellText>
@@ -71,20 +68,10 @@ export function ObjectsListPaneHost({ listProps }: { listProps: ObjectsListPaneP
 		</div>
 	)
 
-	useEffect(() => {
-		if (listControlsReady) return
-		if (!shouldDeferListControls) return
-		return scheduleIdleLoad(() => setListControlsReady(true))
-	}, [listControlsReady, shouldDeferListControls])
-
-	const listControls = shouldDeferListControls ? (
-		listControlsReady ? (
-			<Suspense fallback={controlsFallback}>
-				<ObjectsListControls {...listProps.controlsProps} />
-			</Suspense>
-		) : (
-			controlsFallback
-		)
+	const listControls = listProps.hasBucket ? (
+		<Suspense fallback={controlsFallback}>
+			<ObjectsListControls {...listProps.controlsProps} />
+		</Suspense>
 	) : null
 	const listHeader =
 		listProps.controlsProps.viewMode === 'grid' ? null : (
