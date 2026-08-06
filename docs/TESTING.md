@@ -605,6 +605,32 @@ These scripts verify:
 - destination `ENCRYPTION_KEY` mismatch against the bundle fingerprint
 - partial thumbnail asset copy warnings after successful database import
 
+## Upgrade Compatibility
+
+Direct installs use the existing `DATA_DIR` when the server binary or rclone is
+replaced. The focused compatibility tests cover legacy SQLite columns and
+preservation of profile/job/upload-session records, plus rechecking a replaced
+rclone binary instead of trusting a stale compatibility cache:
+
+```bash
+cd backend && go test ./internal/db ./internal/jobs -run 'TestOpenMigratesLegacySQLiteSchemaAndPreservesRecords|TestEnsureRcloneCompatibleRechecksReplacedBinary' -count=1
+```
+
+The release container lanes run the same startup contract against legacy
+SQLite and Postgres schemas and verify the migrated records after the candidate
+container stops:
+
+```bash
+S3DESK_EXPECTED_VERSION=<tag> \
+bash scripts/run_container_legacy_db_smoke.sh <candidate-sqlite-image>
+
+S3DESK_EXPECTED_VERSION=<tag> S3DESK_POSTGRES_IMAGE=<postgres-image> \
+bash scripts/run_container_legacy_postgres_smoke.sh <candidate-postgres-image>
+```
+
+These are upgrade-compatibility checks, not disaster-recovery tests; back up
+Postgres with `pg_dump`/WAL or the managed provider's backup mechanism.
+
 Remote non-loopback stacks require `ENCRYPTION_KEY` at startup, so missing-key
 portable preflight behavior is covered by focused backend API tests rather than
 the remote compose smoke.

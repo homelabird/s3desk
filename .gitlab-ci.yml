@@ -577,7 +577,7 @@ build_s3desk_image:
         echo "Harbor already has ${repo}:${tag}; skipping build/push."
         exit 0
       fi
-    - podman build -t "$S3DESK_IMAGE" -f Containerfile .
+    - podman build --build-arg APP_VERSION="$CI_COMMIT_SHA" -t "$S3DESK_IMAGE" -f Containerfile .
     - podman push "$S3DESK_IMAGE"
 
 build_release_images:
@@ -595,8 +595,8 @@ build_release_images:
     - podman --version
     - |
       BASE_TAG="$CI_COMMIT_TAG"
-      podman build --build-arg DB_BACKEND=postgres -f Containerfile -t "s3desk-release:${BASE_TAG}" .
-      podman build --build-arg DB_BACKEND=sqlite -f Containerfile -t "s3desk-release:${BASE_TAG}-sqlite" .
+      podman build --build-arg APP_VERSION="$BASE_TAG" --build-arg DB_BACKEND=postgres -f Containerfile -t "s3desk-release:${BASE_TAG}" .
+      podman build --build-arg APP_VERSION="$BASE_TAG" --build-arg DB_BACKEND=sqlite -f Containerfile -t "s3desk-release:${BASE_TAG}-sqlite" .
       podman save -o release-postgres.tar "s3desk-release:${BASE_TAG}"
       podman save -o release-sqlite.tar "s3desk-release:${BASE_TAG}-sqlite"
   artifacts:
@@ -1216,6 +1216,7 @@ release_postgres_smoke:
       done
       curl -fsS http://127.0.0.1:18080/readyz >/dev/null
       curl -fsS -H "X-Api-Token: ${SMOKE_API_TOKEN}" http://127.0.0.1:18080/api/v1/meta >/dev/null
+    - S3DESK_EXPECTED_VERSION="${CI_COMMIT_TAG}" S3DESK_POSTGRES_IMAGE="${POSTGRES_IMAGE:-docker.io/library/postgres:15-alpine}" bash scripts/run_container_legacy_postgres_smoke.sh "s3desk-release:${CI_COMMIT_TAG}"
   after_script:
     - |
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
@@ -1241,6 +1242,17 @@ release_sqlite_smoke:
     CONTAINERS_STORAGE_DRIVER: "vfs"
     BUILDAH_ISOLATION: "chroot"
   script:
+    - |
+      if ! command -v python3 >/dev/null 2>&1; then
+        if command -v dnf >/dev/null 2>&1; then
+          dnf -y install python3
+        elif command -v microdnf >/dev/null 2>&1; then
+          microdnf install -y python3
+        else
+          echo "python3 is required for the container legacy-database migration smoke" >&2
+          exit 1
+        fi
+      fi
     - podman --version
     - podman load -i release-sqlite.tar
     - |
@@ -1265,6 +1277,7 @@ release_sqlite_smoke:
       done
       curl -fsS http://127.0.0.1:18081/readyz >/dev/null
       curl -fsS -H "X-Api-Token: ${SMOKE_API_TOKEN}" http://127.0.0.1:18081/api/v1/meta >/dev/null
+    - S3DESK_EXPECTED_VERSION="${CI_COMMIT_TAG}" bash scripts/run_container_legacy_db_smoke.sh "s3desk-release:${CI_COMMIT_TAG}-sqlite"
   after_script:
     - |
       if podman container exists s3desk-release-sqlite-smoke; then podman rm -f s3desk-release-sqlite-smoke; fi
