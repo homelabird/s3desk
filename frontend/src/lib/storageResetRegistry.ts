@@ -67,6 +67,7 @@ export const RESETTABLE_UI_STATE_KEYS = [
 	'objectsTreeExpandedByBucket',
 	'objectsDetailsOpen',
 	'objectsDetailsWidth',
+	'dismissedDialogPreferences',
 ] as const
 
 export const RESETTABLE_UI_STATE_PREFIXES = ['app:', 'objects:', 'uploads:', 'jobs:', 'transfers:'] as const

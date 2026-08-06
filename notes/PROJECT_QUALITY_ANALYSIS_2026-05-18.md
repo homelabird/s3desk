@@ -3261,6 +3261,7 @@ This pass re-ran four read-only expert sub-agents across backend/security, front
 - Added API regression coverage for cumulative extracted-byte rejection before write while preserving the existing disk-space preflight test.
 - Added `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`, and a stable `sheetId` for the mobile navigation drawer, with header smoke coverage.
 - Pinned GitLab `PODMAN_IMAGE` to the digest-backed `quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1` reference and added release-gate assertions/documentation banning the floating `stable:latest` release builder.
+- Follow-up note (2026-08-06): the historical `PODMAN_IMAGE` wording above describes the prior CI contract; current `.gitlab-ci.yml` uses literal digest-pinned `image:` fields and rejects the variable.
 - Updated `reverse_proxy_smoke_command()`, release evidence tests, checklist tests, and `LIVE_EVIDENCE_CHECKLIST_2026-05-02.md` so reverse-proxy smoke commands include all required deploy variables.
 
 ### Remaining Limitations

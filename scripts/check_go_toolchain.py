@@ -53,9 +53,11 @@ def check_containerfile(path_name: str) -> None:
 
 def check_gitlab() -> None:
     text = read_text(ROOT / ".gitlab-ci.yml")
-    image_version = require_match(r'GO_IMAGE:\s*"[^"]*golang:([0-9.]+)"', text, ".gitlab-ci.yml").group(1)
+    # Images are declared as literal job `image:` fields (they must not be
+    # overridable CI variables), so match the inlined Go image reference.
+    image_version = require_match(r'image:\s*"[^"]*golang:([0-9.]+)"', text, ".gitlab-ci.yml").group(1)
     if image_version != EXPECTED_TOOLCHAIN:
-        fail(f".gitlab-ci.yml GO_IMAGE is {image_version}, want {EXPECTED_TOOLCHAIN}")
+        fail(f".gitlab-ci.yml Go image is {image_version}, want {EXPECTED_TOOLCHAIN}")
 
 
 def check_github_workflows() -> None:

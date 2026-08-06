@@ -4,7 +4,13 @@ const apiToken = process.env.S3DESK_API_TOKEN;
 const profileId = process.env.S3DESK_PROFILE_ID;
 const bucket = process.env.S3DESK_BUCKET;
 const prefix = process.env.S3DESK_PREFIX ?? '';
-const defaultUrl = process.env.S3DESK_URL || 'https://s3desk.k8s.homelabird.com/objects';
+const s3deskUrl = process.env.S3DESK_URL;
+const defaultUrl = String(s3deskUrl || '');
+const allowTokenStorage = process.env.S3DESK_LH_ALLOW_TOKEN_STORAGE === '1';
+
+if (!s3deskUrl) {
+  throw new Error('S3DESK_URL is required; refusing to store the API token on a default or external origin.');
+}
 
 if (!apiToken) {
   throw new Error('S3DESK_API_TOKEN is required for Lighthouse auth.');
@@ -14,8 +20,15 @@ if (!profileId) {
   throw new Error('S3DESK_PROFILE_ID is required for Lighthouse auth.');
 }
 
+if (!allowTokenStorage) {
+  throw new Error('Set S3DESK_LH_ALLOW_TOKEN_STORAGE=1 to explicitly allow Lighthouse token storage.');
+}
+
 module.exports = async (browser, context) => {
   const targetUrl = (context && context.url) || defaultUrl;
+  if (new URL(targetUrl).origin !== new URL(defaultUrl).origin) {
+    throw new Error('Refusing to store the API token outside the configured S3DESK_URL origin.');
+  }
   const origin = new URL(targetUrl).origin;
   const page = await browser.newPage();
 

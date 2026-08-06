@@ -63,6 +63,15 @@ func realtimeRequestTransport(r *http.Request) string {
 	return ""
 }
 
+func isRealtimeTicketPath(r *http.Request) bool {
+	switch r.URL.Path {
+	case "/api/v1/events", "/api/v1/ws":
+		return true
+	default:
+		return false
+	}
+}
+
 func buildTooManyAttemptsAuthError(retryAfter time.Duration) *apiTokenAuthError {
 	return &apiTokenAuthError{
 		status:  http.StatusTooManyRequests,
@@ -116,7 +125,7 @@ func (svc apiTokenAuthService) prepareAuthorization(r *http.Request) apiTokenAut
 	}
 
 	prepared.transport = realtimeRequestTransport(r)
-	if prepared.transport != "" {
+	if prepared.transport != "" && isRealtimeTicketPath(r) {
 		prepared.realtimeTicket = strings.TrimSpace(r.URL.Query().Get("realtimeTicket"))
 	}
 

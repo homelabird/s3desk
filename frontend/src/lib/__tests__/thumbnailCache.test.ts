@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
 	buildThumbnailCacheKey,
+	clearPersistentThumbnailCache,
 	createThumbnailCache,
 	getPersistentThumbnailBlob,
 	setPersistentThumbnailBlob,
@@ -18,6 +19,7 @@ function installPersistentThumbnailCacheMock() {
 	}
 	;(window as typeof window & { caches?: CacheStorage }).caches = {
 		open: vi.fn().mockResolvedValue(cache),
+		delete: vi.fn(async () => true),
 	} as unknown as CacheStorage
 	return { cache, entries }
 }
@@ -74,6 +76,18 @@ describe('thumbnailCache', () => {
 		})
 
 		expect(tokenAKey).not.toBe(tokenBKey)
+		expect(tokenAKey).not.toContain('token-a')
+		expect(tokenBKey).not.toContain('token-b')
+	})
+
+	it('clears persistent thumbnails and their index', async () => {
+		installPersistentThumbnailCacheMock()
+		window.localStorage.setItem('s3desk-thumbnail-blobs-v1:index', '{}')
+
+		await clearPersistentThumbnailCache()
+
+		expect(window.localStorage.getItem('s3desk-thumbnail-blobs-v1:index')).toBeNull()
+		expect(window.caches.delete).toHaveBeenCalledWith('s3desk-thumbnail-blobs-v1')
 	})
 
 	it('expires persistent thumbnail blobs after the configured TTL', async () => {

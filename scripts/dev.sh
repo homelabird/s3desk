@@ -97,6 +97,16 @@ if [[ -z "${ALLOW_REMOTE:-}" && -n "${S3DESK_FRONTEND_HOST:-}" && "${S3DESK_FRON
   export ALLOW_REMOTE="true"
 fi
 
+if [[ "${ALLOW_REMOTE:-}" == "true" && -z "${API_TOKEN:-}" ]]; then
+  if [[ "${S3DESK_AUTO_GENERATE_TOKEN:-}" == "0" ]]; then
+    echo "[dev] ALLOW_REMOTE requires API_TOKEN when the frontend is exposed beyond localhost" >&2
+    exit 1
+  fi
+  export API_TOKEN="$(openssl rand -hex 24 2>/dev/null || head -c 48 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  echo "[dev] ALLOW_REMOTE enabled; generated API_TOKEN: ${API_TOKEN}"
+  echo "[dev] use this token to log in to the S3Desk UI (set API_TOKEN to override)"
+fi
+
 echo "[dev] starting backend on ${BACKEND_ADDR}"
 (cd "${ROOT}/backend" && ADDR="${BACKEND_ADDR}" setsid "${GO_BIN}" run ./cmd/server "$@") &
 BACK_PID=$!

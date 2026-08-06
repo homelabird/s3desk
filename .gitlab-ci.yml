@@ -46,6 +46,10 @@ default:
     - onpremise
     - k8s
   before_script:
+    # .cache/npm-global/ is never restored from cache, so at this point the
+    # prefix is empty and `npm` below still resolves to the trusted image npm.
+    # Jobs that pin npm run `npm install -g` with that trusted binary before
+    # any prefix path is used.
     - export NPM_CONFIG_PREFIX="${CI_PROJECT_DIR}/.cache/npm-global"
     - export PATH="${NPM_CONFIG_PREFIX}/bin:${PATH}"
     - mkdir -p "${NPM_CONFIG_PREFIX}"
@@ -74,12 +78,6 @@ stages:
   - deploy
 
 variables:
-  ALPINE_IMAGE: "harbor.k8s.homelabird.com/library/alpine:3.21"
-  GO_IMAGE: "harbor.k8s.homelabird.com/library/golang:1.25.10"
-  NODE_IMAGE: "harbor.k8s.homelabird.com/library/node:22-bookworm"
-  PODMAN_IMAGE: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
-  PLAYWRIGHT_IMAGE: "mcr.microsoft.com/playwright:v1.57.0-noble"
-  TRIVY_IMAGE: "aquasec/trivy:0.56.2"
   NPM_VERSION: "10.9.4"
   TRIVY_SEVERITY: "HIGH,CRITICAL"
   TRIVY_EXIT_CODE: "1"
@@ -109,9 +107,11 @@ variables:
       files:
         - frontend/package-lock.json
       prefix: "npm-cache"
+    # Only package tarballs are cached; the global npm install prefix
+    # (.cache/npm-global/) is intentionally NOT cached or trusted so a writable
+    # executable can never be restored from cache ahead of npm itself.
     paths:
       - .cache/npm/
-      - .cache/npm-global/
 
 .playwright_cache: &playwright_cache
   cache:
@@ -121,6 +121,9 @@ variables:
       prefix: "playwright-cache-v1.57.0"
     paths:
       - .cache/ms-playwright/
+    # Never let an untrusted branch publish executables into the shared cache.
+    # Playwright images include the browser; a cache miss may install it again.
+    policy: pull
   variables:
     PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
 
@@ -141,7 +144,7 @@ variables:
       - .cache/trivy
 
 .helm_tools: &helm_tools
-  image: "$ALPINE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   before_script:
     - apk add --no-cache curl tar ca-certificates bash
     - |
@@ -162,7 +165,7 @@ variables:
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
 
 .helm_k8s_tools: &helm_k8s_tools
-  image: "$ALPINE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   before_script:
     - apk add --no-cache curl tar ca-certificates bash coreutils git python3
     - |
@@ -191,7 +194,7 @@ variables:
 
 validate_release_tag:
   stage: release-validate
-  image: "$ALPINE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
@@ -202,7 +205,7 @@ validate_release_tag:
 
 release_readiness_preflight:
   stage: release-validate
-  image: "$ALPINE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   interruptible: true
   variables:
     GIT_DEPTH: "0"
@@ -396,7 +399,7 @@ helm_k8s_pvc:
 
 security_fs_scan:
   stage: audit
-  image: "$TRIVY_IMAGE"
+  image: "aquasec/trivy:0.56.2"
   <<: *trivy_cache
   interruptible: true
   needs: []
@@ -430,7 +433,7 @@ security_fs_scan:
 
 gitleaks_scan:
   stage: audit
-  image: "$ALPINE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   interruptible: true
   needs: []
   variables:
@@ -480,7 +483,7 @@ gitleaks_scan:
 
 openapi_validate:
   stage: test
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   rules:
     - changes:
@@ -492,7 +495,7 @@ openapi_validate:
 
 check:
   stage: test
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   rules:
     - if: '$RUN_FULL_CHECK == "1"'
@@ -512,7 +515,6 @@ check:
       - .cache/go-mod
       - .cache/go-build
       - .cache/npm/
-      - .cache/npm-global/
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 python3-yaml ca-certificates curl git gnupg
@@ -527,7 +529,7 @@ check:
 
 build_s3desk_image:
   stage: build
-  image: "$PODMAN_IMAGE"
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
   interruptible: true
   tags: *heavy_tags
   rules:
@@ -580,7 +582,7 @@ build_s3desk_image:
 
 build_release_images:
   stage: build
-  image: "$PODMAN_IMAGE"
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
   interruptible: true
   tags: *heavy_tags
   rules:
@@ -605,7 +607,7 @@ build_release_images:
 
 shellcheck:
   stage: test
-  image: "$ALPINE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   interruptible: true
   rules:
     - changes:
@@ -639,7 +641,7 @@ shellcheck:
 
 gofmt:
   stage: test
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   <<: *go_cache
   rules:
@@ -657,7 +659,7 @@ gofmt:
 
 go_test:
   stage: test
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   <<: *go_cache
   rules:
@@ -695,7 +697,7 @@ go_test:
 
 golangci_lint:
   stage: test
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   <<: *go_cache
   rules:
@@ -731,7 +733,7 @@ golangci_lint:
 
 govulncheck:
   stage: test
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   <<: *go_cache
   rules:
@@ -766,7 +768,7 @@ govulncheck:
 
 frontend_smoke:
   stage: smoke
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   tags: *smoke_tags
   <<: *node_cache
@@ -786,7 +788,7 @@ frontend_smoke:
 
 e2e_smoke:
   stage: smoke
-  image: "$PLAYWRIGHT_IMAGE"
+  image: "mcr.microsoft.com/playwright:v1.57.0-noble"
   interruptible: true
   tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
@@ -813,7 +815,7 @@ e2e_smoke:
 
 frontend_ci:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
   rules:
@@ -842,7 +844,7 @@ frontend_ci:
 
 frontend_deps:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
   rules:
@@ -872,7 +874,7 @@ frontend_deps:
 
 frontend_openapi_types:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
   needs:
@@ -895,7 +897,7 @@ frontend_openapi_types:
 
 frontend_inline_style_guard:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   variables:
     GIT_STRATEGY: fetch
@@ -911,7 +913,7 @@ frontend_inline_style_guard:
 
 frontend_lint:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
   needs:
@@ -933,7 +935,7 @@ frontend_lint:
 
 frontend_unit_tests:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
   needs:
@@ -958,7 +960,7 @@ frontend_unit_tests:
 
 frontend_build:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
   needs:
@@ -984,7 +986,7 @@ frontend_build:
 
 frontend_bundle_analyze:
   stage: test
-  image: "$NODE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
   needs:
@@ -1069,7 +1071,7 @@ frontend_bundle_analyze:
 
 third_party_notices:
   stage: audit
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   needs: []
   <<: *node_cache
@@ -1106,7 +1108,7 @@ third_party_notices:
 
 api_integration:
   stage: test
-  image: "$PODMAN_IMAGE"
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
   interruptible: true
   tags: *heavy_tags
   rules:
@@ -1173,7 +1175,7 @@ api_integration:
 
 release_postgres_smoke:
   stage: test
-  image: "$PODMAN_IMAGE"
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
   interruptible: true
   tags: *heavy_tags
   rules:
@@ -1226,7 +1228,7 @@ release_postgres_smoke:
 
 release_sqlite_smoke:
   stage: test
-  image: "$PODMAN_IMAGE"
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
   interruptible: true
   tags: *heavy_tags
   rules:
@@ -1269,12 +1271,14 @@ release_sqlite_smoke:
 
 e2e:
   stage: test
-  image: "$PLAYWRIGHT_IMAGE"
+  image: "mcr.microsoft.com/playwright:v1.57.0-noble"
   interruptible: true
   tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
+  # This lane is mock/smoke-only. Live credentials and live flows belong to
+  # e2e_live, which is restricted to protected refs below.
   rules:
-    - if: '$E2E_BASE_URL'
+    - if: '$E2E_BASE_URL && $E2E_LIVE != "1"'
       when: on_success
     - when: never
   script:
@@ -1302,12 +1306,16 @@ e2e:
 
 e2e_live:
   stage: test
-  image: "$PLAYWRIGHT_IMAGE"
+  image: "mcr.microsoft.com/playwright:v1.57.0-noble"
   interruptible: true
   tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
+  # Live E2E sends E2E_API_TOKEN and E2E_S3_* credentials to whatever server
+  # E2E_BASE_URL points at. Only allow it on protected refs (where variables can
+  # be marked protected in GitLab settings) so an untrusted branch cannot point
+  # this job at an attacker-controlled base URL.
   rules:
-    - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
+    - if: '$E2E_LIVE == "1" && $E2E_BASE_URL && $CI_COMMIT_REF_PROTECTED == "true"'
       when: on_success
     - when: never
   script:
@@ -1336,173 +1344,7 @@ e2e_live:
       fi
       SUMMARY_REPORT="frontend/test-results/policy-live-summary.md"
       if [ -f "$SUMMARY_SOURCE" ]; then
-        if node - "$SUMMARY_SOURCE" "$SUMMARY_REPORT" <<'NODE'
-const fs = require('node:fs')
-const path = require('node:path')
-
-function escapeCell(value) {
-	return String(value ?? '').replace(/\|/g, '\\|')
-}
-
-function isRecord(value) {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function toArray(value) {
-	return Array.isArray(value) ? value : []
-}
-
-function callHasIssue(call) {
-	const status = typeof call.status === 'number' ? call.status : 0
-	const errorsCount = typeof call.errorsCount === 'number' ? call.errorsCount : 0
-	if (status >= 400) return true
-	if (call.ok === false) return true
-	if (typeof call.errorCode === 'string' && call.errorCode.length > 0) return true
-	if (typeof call.normalizedCode === 'string' && call.normalizedCode.length > 0) return true
-	if (call.validationOk === false) return true
-	if (errorsCount > 0) return true
-	return false
-}
-
-function readEntries(sourcePath) {
-	const text = fs.readFileSync(sourcePath, 'utf8')
-	return text
-		.split(/\r?\n/)
-		.map((line) => line.trim())
-		.filter(Boolean)
-		.map((line, index) => {
-			const parsed = JSON.parse(line)
-			if (!isRecord(parsed)) {
-				throw new Error(`line ${index + 1} is not a JSON object`)
-			}
-			return parsed
-		})
-}
-
-function summarize(entries) {
-	const totals = {
-		tests: entries.length,
-		passed: 0,
-		failed: 0,
-		skipped: 0,
-		other: 0,
-		calls: 0,
-		callsWithIssues: 0,
-	}
-	const byProvider = new Map()
-	const tests = []
-	const callFindings = []
-
-	for (const entry of entries) {
-		const provider = typeof entry.provider === 'string' ? entry.provider : 'unknown'
-		const status = typeof entry.status === 'string' ? entry.status : 'unknown'
-		const title = typeof entry.test === 'string' ? entry.test : '<unknown test>'
-		const calls = toArray(entry.calls).filter(isRecord)
-		const issues = calls.filter(callHasIssue)
-
-		totals.calls += calls.length
-		totals.callsWithIssues += issues.length
-		if (status === 'passed') totals.passed += 1
-		else if (status === 'failed' || status === 'timedOut' || status === 'interrupted') totals.failed += 1
-		else if (status === 'skipped') totals.skipped += 1
-		else totals.other += 1
-
-		const providerStat = byProvider.get(provider) ?? {
-			provider,
-			tests: 0,
-			passed: 0,
-			failed: 0,
-			skipped: 0,
-			other: 0,
-			calls: 0,
-			callsWithIssues: 0,
-		}
-		providerStat.tests += 1
-		providerStat.calls += calls.length
-		providerStat.callsWithIssues += issues.length
-		if (status === 'passed') providerStat.passed += 1
-		else if (status === 'failed' || status === 'timedOut' || status === 'interrupted') providerStat.failed += 1
-		else if (status === 'skipped') providerStat.skipped += 1
-		else providerStat.other += 1
-		byProvider.set(provider, providerStat)
-
-		tests.push({ title, provider, status, calls: calls.length, callsWithIssues: issues.length })
-
-		for (const call of issues) {
-			const detail = [
-				`phase=${call.phase ?? 'unknown'}`,
-				`method=${call.method ?? 'UNKNOWN'}`,
-				`path=${call.path ?? 'unknown'}`,
-				`status=${typeof call.status === 'number' ? call.status : 'n/a'}`,
-			]
-			if (typeof call.normalizedCode === 'string') detail.push(`normalized=${call.normalizedCode}`)
-			if (typeof call.errorCode === 'string') detail.push(`error=${call.errorCode}`)
-			if (typeof call.errorsCount === 'number') detail.push(`errors=${call.errorsCount}`)
-			if (typeof call.warningsCount === 'number') detail.push(`warnings=${call.warningsCount}`)
-			callFindings.push({ title, provider, status, detail: detail.join(', ') })
-		}
-	}
-
-	return {
-		totals,
-		providers: Array.from(byProvider.values()).sort((a, b) => a.provider.localeCompare(b.provider)),
-		tests,
-		callFindings,
-	}
-}
-
-function renderMarkdown(sourcePath, summary) {
-	const generatedAt = new Date().toISOString()
-	const lines = [
-		'# Bucket Policy Live Summary',
-		'',
-		`- Generated: ${generatedAt}`,
-		`- Source: ${sourcePath}`,
-		'',
-		'## Totals',
-		'',
-		'| tests | passed | failed | skipped | other | calls | calls_with_issues |',
-		'| --- | --- | --- | --- | --- | --- | --- |',
-		`| ${summary.totals.tests} | ${summary.totals.passed} | ${summary.totals.failed} | ${summary.totals.skipped} | ${summary.totals.other} | ${summary.totals.calls} | ${summary.totals.callsWithIssues} |`,
-		'',
-		'## By Provider',
-		'',
-		'| provider | tests | passed | failed | skipped | other | calls | calls_with_issues |',
-		'| --- | --- | --- | --- | --- | --- | --- | --- |',
-	]
-
-	for (const row of summary.providers) {
-		lines.push(`| ${escapeCell(row.provider)} | ${row.tests} | ${row.passed} | ${row.failed} | ${row.skipped} | ${row.other} | ${row.calls} | ${row.callsWithIssues} |`)
-	}
-	if (summary.providers.length === 0) lines.push('| (none) | 0 | 0 | 0 | 0 | 0 | 0 | 0 |')
-
-	lines.push('', '## Tests', '', '| test | provider | status | calls | calls_with_issues |', '| --- | --- | --- | --- | --- |')
-	for (const row of summary.tests) {
-		lines.push(`| ${escapeCell(row.title)} | ${escapeCell(row.provider)} | ${escapeCell(row.status)} | ${row.calls} | ${row.callsWithIssues} |`)
-	}
-	if (summary.tests.length === 0) lines.push('| (none) | - | - | 0 | 0 |')
-
-	lines.push('', '## Call Findings', '')
-	if (summary.callFindings.length === 0) {
-		lines.push('- No call-level issues found')
-	} else {
-		for (const finding of summary.callFindings) {
-			lines.push(`- [${escapeCell(finding.status)}] ${escapeCell(finding.provider)} :: ${escapeCell(finding.title)} :: ${escapeCell(finding.detail)}`)
-		}
-	}
-	lines.push('')
-	return `${lines.join('\n')}\n`
-}
-
-const [, , sourceArg, outputArg] = process.argv
-const sourcePath = path.resolve(process.cwd(), sourceArg)
-const outputPath = path.resolve(process.cwd(), outputArg)
-const markdown = renderMarkdown(sourcePath, summarize(readEntries(sourcePath)))
-fs.mkdirSync(path.dirname(outputPath), { recursive: true })
-fs.writeFileSync(outputPath, markdown, 'utf8')
-process.stdout.write(markdown)
-NODE
-        then
+        if node scripts/render_policy_live_summary.js "$SUMMARY_SOURCE" "$SUMMARY_REPORT"; then
           echo "[policy-summary] markdown report: ${SUMMARY_REPORT}"
           echo "[policy-summary] begin markdown preview"
           sed -n '1,160p' "$SUMMARY_REPORT"
@@ -1530,7 +1372,7 @@ NODE
 
 perf_tests:
   stage: test
-  image: "$PLAYWRIGHT_IMAGE"
+  image: "mcr.microsoft.com/playwright:v1.57.0-noble"
   interruptible: true
   tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
@@ -1562,7 +1404,7 @@ perf_tests:
 
 dev_license_audit:
   stage: audit
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   needs: []
   <<: *node_cache
@@ -1594,7 +1436,7 @@ dev_license_audit:
 
 license_audit_runtime:
   stage: audit
-  image: "$GO_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
   interruptible: true
   needs:
     - job: build_release_images
@@ -1633,7 +1475,7 @@ license_audit_runtime:
 
 trivy_scan:
   stage: audit
-  image: "$TRIVY_IMAGE"
+  image: "aquasec/trivy:0.56.2"
   <<: *trivy_cache
   interruptible: true
   rules:
@@ -1660,7 +1502,7 @@ trivy_scan:
 
 publish_dockerhub:
   stage: publish
-  image: "$PODMAN_IMAGE"
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
   interruptible: true
   variables:
     STORAGE_DRIVER: "vfs"
@@ -1845,7 +1687,7 @@ publish_helm_chart:
 
 release_image_smoke:
   stage: post-publish
-  image: "$PODMAN_IMAGE"
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
   interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
@@ -1980,7 +1822,7 @@ release_image_smoke:
 
 deploy_release_compose:
   stage: deploy
-  image: "$ALPINE_IMAGE"
+  image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   interruptible: false
   needs:
     - release_image_smoke
