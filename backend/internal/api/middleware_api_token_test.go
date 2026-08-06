@@ -87,6 +87,46 @@ func TestRequireAPITokenRejectsInvalidRealtimeTicketAndSetsRetryAfter(t *testing
 	}
 }
 
+func TestRequireAPITokenRejectsRealtimeTicketOnNonRealtimePathWithoutConsumingIt(t *testing.T) {
+	t.Parallel()
+
+	tickets := newRealtimeTicketStore(5 * time.Minute)
+	ticket, err := tickets.Issue("sse", time.Now().UTC().Add(time.Minute))
+	if err != nil {
+		t.Fatalf("issue ticket: %v", err)
+	}
+
+	s := &server{
+		cfg:             config.Config{APIToken: "demo-token"},
+		realtimeTickets: tickets,
+	}
+	rejectReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta?realtimeTicket="+url.QueryEscape(ticket), nil)
+	rejectReq.Header.Set("Accept", "text/event-stream")
+	rejectReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	rejectRR := httptest.NewRecorder()
+
+	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rejectRR, rejectReq)
+
+	if rejectRR.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want %d body=%s", rejectRR.Code, http.StatusUnauthorized, rejectRR.Body.String())
+	}
+
+	acceptReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/events?realtimeTicket="+url.QueryEscape(ticket), nil)
+	acceptReq.Header.Set("Accept", "text/event-stream")
+	acceptReq.Header.Set("Origin", "http://127.0.0.1:8080")
+	acceptRR := httptest.NewRecorder()
+
+	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(acceptRR, acceptReq)
+
+	if acceptRR.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d body=%s", acceptRR.Code, http.StatusNoContent, acceptRR.Body.String())
+	}
+}
+
 func TestRequireAPITokenRejectsNullOriginWithoutConsumingRealtimeTicket(t *testing.T) {
 	t.Parallel()
 

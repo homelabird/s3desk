@@ -1,3 +1,5 @@
+import { serverStorageScope } from './profileScopedStorage'
+
 export type ThumbnailCache = {
 	get: (key: string) => string | undefined
 	set: (key: string, url: string) => void
@@ -44,7 +46,7 @@ const PERSISTENT_THUMBNAIL_EXTENSIONS = new Set([
 	'mkv',
 	'avi',
 ])
-const THUMBNAIL_CACHE_KEY_VERSION = 'v3'
+const THUMBNAIL_CACHE_KEY_VERSION = 'v4'
 
 type CacheOptions = {
 	maxEntries?: number
@@ -61,7 +63,7 @@ type PersistentThumbnailIndex = Record<string, number>
 export function buildThumbnailCacheBaseKey(args: Omit<ThumbnailCacheRequest, 'size'>): string {
 	return [
 		THUMBNAIL_CACHE_KEY_VERSION,
-		encodeURIComponent(args.apiToken),
+		serverStorageScope(args.apiToken),
 		encodeURIComponent(args.profileId),
 		encodeURIComponent(args.bucket),
 		encodeURIComponent(args.objectKey),
@@ -163,6 +165,22 @@ export async function setPersistentThumbnailBlob(
 		await prunePersistentThumbnailCache(cache, index, options)
 	} catch {
 		// ignore persistent cache failures
+	}
+}
+
+export async function clearPersistentThumbnailCache(): Promise<void> {
+	if (typeof window === 'undefined') return
+	try {
+		if (supportsPersistentThumbnailCache()) {
+			await window.caches.delete(PERSISTENT_THUMBNAIL_CACHE_NAME)
+		}
+	} catch {
+		// ignore persistent cache failures
+	}
+	try {
+		window.localStorage.removeItem(PERSISTENT_THUMBNAIL_CACHE_INDEX_KEY)
+	} catch {
+		// ignore storage failures
 	}
 }
 
