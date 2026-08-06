@@ -2,20 +2,42 @@
 # by helm_k8s_* CI smoke jobs. Configure the GitLab Runner Kubernetes executor
 # for those jobs to use serviceAccountName: gitlab-runner-helm-smoke; do not bind
 # these privileges to the namespace default service account.
+#
+# Security model: smoke jobs create a *new* namespace for each helm install and
+# tear it down afterwards. The resource-management ClusterRole below is not
+# bound cluster-wide; each smoke job binds it in its smoke namespace. Native
+# RBAC cannot limit `rolebindings create` to namespaces created by this account,
+# so an admission policy must enforce the
+# `s3desk.homelabird.com/helm-smoke=true` label boundary before this manifest is
+# used in a shared cluster.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: gitlab-runner-helm-smoke
   namespace: gitlab-runner
 ---
-apiVersion: rbac.authorization.k8s.io/v1
+# Necessary cluster-scoped privileges: create/delete throwaway smoke-test
+# namespaces and create a namespaced RoleBinding for the pinned smoke role.
+# The RoleBinding create rule is an admission-policy dependency, not a claim of
+# namespace ownership enforced by native RBAC.
 kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: gitlab-runner-namespace-admin
 rules:
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["get", "create", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings"]
+    verbs: ["create"]
+  # RBAC escalation prevention: binding a ClusterRole requires `bind` on it.
+  # Grant it only for the smoke role; admission policy must separately keep
+  # the namespaced RoleBinding inside labeled throwaway smoke namespaces.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: ["gitlab-runner-helm-smoke"]
+    verbs: ["bind"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -30,8 +52,10 @@ subjects:
     name: gitlab-runner-helm-smoke
     namespace: gitlab-runner
 ---
-# Required for helm_k8s_* jobs: allow managing namespaced release resources in
-# dynamically created smoke-test namespaces.
+# Resource management needed by helm_k8s_* jobs inside a smoke-test namespace.
+# Must only ever be bound via a namespace-scoped RoleBinding created by the
+# smoke job itself - never via a ClusterRoleBinding (see
+# scripts/helm_k8s_smoke.sh).
 # trivy:ignore:KSV053 CI smoke tests need exec/port-forward for validation.
 # trivy:ignore:KSV056 CI smoke tests need to create services for helm release.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -48,6 +72,8 @@ rules:
       - secrets
       - events
       - persistentvolumeclaims
+      # Helm creates and reconciles the chart-owned ServiceAccount.
+      - serviceaccounts
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources:
@@ -72,15 +98,45 @@ rules:
       - ingresses
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+# Native RBAC cannot scope the ClusterRole's RoleBinding create permission to
+# only namespaces created by this service account. Kubernetes 1.30+ admission
+# policy closes that boundary for the runner identity: it may create/update
+# only the pinned smoke RoleBinding inside a labeled smoke namespace.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
 metadata:
-  name: gitlab-runner-helm-smoke
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: gitlab-runner-helm-smoke
-subjects:
-  - kind: ServiceAccount
-    name: gitlab-runner-helm-smoke
-    namespace: gitlab-runner
+  name: s3desk-gitlab-runner-smoke-rolebinding
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["rolebindings"]
+        scope: Namespaced
+  matchConditions:
+    - name: smoke-runner-identity
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:gitlab-runner:gitlab-runner-helm-smoke'
+  validations:
+    - expression: >-
+        namespaceObject.metadata.labels['s3desk.homelabird.com/helm-smoke'] ==
+        'true' && object.roleRef.kind == 'ClusterRole' &&
+        object.roleRef.name == 'gitlab-runner-helm-smoke' &&
+        object.subjects.size() == 1 &&
+        object.subjects[0].kind == 'ServiceAccount' &&
+        object.subjects[0].name == 'gitlab-runner-helm-smoke' &&
+        object.subjects[0].namespace == 'gitlab-runner'
+      message: >-
+        The smoke runner may bind only gitlab-runner-helm-smoke in a labeled
+        throwaway smoke namespace.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: s3desk-gitlab-runner-smoke-rolebinding
+spec:
+  policyName: s3desk-gitlab-runner-smoke-rolebinding
+  validationActions: ["Deny"]

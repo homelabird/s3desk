@@ -10,7 +10,8 @@ fi
 
 CHART_PATH="${HELM_CHART_PATH:-charts/s3desk}"
 VALUES_FILE="${HELM_VALUES_FILE:-charts/s3desk/ci-values.yaml}"
-API_TOKEN="${S3DESK_API_TOKEN:-ci-token}"
+API_TOKEN="${S3DESK_API_TOKEN:-$(head -c 32 /dev/urandom | base64 | tr -d '\n')}"
+ENCRYPTION_KEY="${S3DESK_ENCRYPTION_KEY:-$(head -c 32 /dev/urandom | base64 | tr -d '\n')}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-180s}"
 POD_FS_GROUP="${POD_FS_GROUP:-1000}"
 USE_POSTGRES=0
@@ -139,11 +140,26 @@ setup_namespace() {
       echo "K8S_NAMESPACE '${NAMESPACE}' does not exist." >&2
       exit 1
     fi
+    # When an existing namespace is reused, the operator is responsible for
+    # having granted the smoke role inside it; do not attempt a self-binding.
   else
     if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
-      kubectl create namespace "${NAMESPACE}" >/dev/null
+      kubectl create namespace "${NAMESPACE}" \
+        --dry-run=client -o yaml |
+        kubectl label --local -f - s3desk.homelabird.com/helm-smoke=true -o yaml |
+        kubectl apply -f - >/dev/null
       CREATED_NAMESPACE=1
+    else
+      echo "Generated smoke namespace '${NAMESPACE}' already exists; refusing to bind into a pre-existing namespace." >&2
+      exit 1
     fi
+    # Scope the shared smoke role to this newly created namespace. Native RBAC
+    # cannot express "only namespaces created by this service account" for a
+    # RoleBinding create rule; admission policy must enforce that boundary.
+    kubectl -n "${NAMESPACE}" create rolebinding gitlab-runner-helm-smoke \
+      --clusterrole=gitlab-runner-helm-smoke \
+      --serviceaccount="${SERVICE_ACCOUNT_NAMESPACE:-gitlab-runner}:${SERVICE_ACCOUNT_NAME:-gitlab-runner-helm-smoke}" \
+      --dry-run=client -o yaml | kubectl create -f - >/dev/null
   fi
   kubectl config set-context ci --namespace="${NAMESPACE}" >/dev/null
 }
@@ -289,6 +305,7 @@ deploy_s3desk() {
     --values "${VALUES_FILE}"
     --set "server.allowRemote=true"
     --set-string "server.apiToken=${API_TOKEN}"
+    --set-string "server.encryptionKey=${ENCRYPTION_KEY}"
     --set "image.repository=${IMAGE_REPO}"
     --set "image.tag=${IMAGE_TAG}"
     --set "image.pullPolicy=Always"
