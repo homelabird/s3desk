@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	failedToListObjectsTitle,
 	failedToLoadFavoritesTitle,
-	loadingControlsTitle,
 	loadingFavoritesTitle,
 	loadingFoldersTitle,
 	offlineObjectActionsDisabledHint,
@@ -355,7 +354,7 @@ describe('ObjectsPagePanes', () => {
 		expect(screen.queryByTestId('objects-details-section')).not.toBeInTheDocument()
 	})
 
-	it('defers list controls until the idle tick after a bucket is available', async () => {
+	it('renders list controls immediately when a bucket is available', () => {
 		render(
 			<ObjectsPagePanes
 				{...buildProps({
@@ -366,13 +365,6 @@ describe('ObjectsPagePanes', () => {
 				})}
 			/>,
 		)
-
-		expect(screen.queryByTestId('objects-list-controls')).not.toBeInTheDocument()
-		expect(screen.getAllByText(loadingControlsTitle())).not.toHaveLength(0)
-
-		await act(async () => {
-			vi.runAllTimers()
-		})
 
 		expect(screen.getByTestId('objects-list-controls')).toBeInTheDocument()
 	})

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { installMockApi } from './support/apiFixtures'
+import { seedLocalStorage } from './support/storage'
 
 const perfBaseURL = process.env.PERF_BASE_URL?.trim()
 if (perfBaseURL) {
@@ -37,6 +38,7 @@ const profilesResponse = [
 	{
 		id: defaultStorage.profileId,
 		name: 'Playwright',
+		provider: 's3_compatible',
 		endpoint: 'http://minio:9000',
 		region: 'us-east-1',
 		forcePathStyle: true,
@@ -95,11 +97,7 @@ function buildObjectItem(idx: number): ObjectItem {
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-	}, storage)
+	await seedLocalStorage(page, storage)
 }
 
 async function setupJobsApiMocks(page: Page, jobCount: number, logsText = '[info] log line 1\n') {
@@ -184,7 +182,7 @@ test.describe('@perf jobs performance', () => {
 		const started = Date.now()
 		await page.goto('/jobs')
 		await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
-		await expect(page.getByText('200 jobs loaded', { exact: true })).toBeVisible()
+		await expect(page.getByText('200 visible', { exact: true })).toBeVisible()
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `jobs_page_render_ms=${elapsed}` })
 		expect(elapsed).toBeLessThan(2000)
@@ -196,16 +194,15 @@ test.describe('@perf jobs performance', () => {
 
 		await page.goto('/jobs')
 		await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
-		await expect(page.getByText('200 jobs loaded', { exact: true })).toBeVisible()
+		await expect(page.getByText('200 visible', { exact: true })).toBeVisible()
 
+		await page.getByRole('button', { name: 'Diagnostics' }).click()
 		const typeFilter = page.getByRole('combobox', { name: 'Job type filter' })
-		await typeFilter.click()
-		await typeFilter.fill('transfer_sync_staging_to_s3')
 		const started = Date.now()
 		const responsePromise = page.waitForResponse(
 			(response) => response.url().includes('/api/v1/jobs') && response.status() === 200,
 		)
-		await page.keyboard.press('Enter')
+		await typeFilter.fill('transfer_sync_staging_to_s3')
 		await responsePromise
 		await expect(page.getByText('100 visible', { exact: true })).toBeVisible({ timeout: 10_000 })
 		const elapsed = Date.now() - started
@@ -241,11 +238,14 @@ test.describe('@perf objects performance', () => {
 	test('objects list renders within budget', async ({ page }) => {
 		await seedStorage(page)
 		await setupObjectsApiMocks(page, 200)
+		const requestedUrls: string[] = []
+		page.on('request', (request) => requestedUrls.push(request.url()))
 
 		const started = Date.now()
 		await page.goto('/objects')
 		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
-		await expect(page.getByText('object-199.txt')).toBeVisible()
+		await expect(page.getByText('object-0.txt')).toBeVisible()
+		expect(requestedUrls.some((url) => /ObjectsPageOverlays|ObjectsImageViewerModal/.test(url))).toBe(false)
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `objects_page_render_ms=${elapsed}` })
 		expect(elapsed).toBeLessThan(3000)
