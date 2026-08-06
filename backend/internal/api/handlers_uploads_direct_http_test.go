@@ -220,7 +220,7 @@ func TestUploadDirectHTTPService_FormUploadDeletesTempObjectAfterReservationRace
 	assertUploadObjectCount(t, st, profile.ID, upload.ID, 0)
 }
 
-func TestUploadDirectHTTPService_FormUploadPromotesTempObjectAfterReservation(t *testing.T) {
+func TestUploadDirectHTTPService_FormUploadPreservesRelativePathAndPromotesTempObject(t *testing.T) {
 	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
 	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
@@ -262,6 +262,7 @@ func TestUploadDirectHTTPService_FormUploadPromotesTempObjectAfterReservation(t 
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Upload-Relative-Path", "nested/file.bin")
 	req = withProfileSecrets(req, models.ProfileSecrets{ID: profile.ID, Provider: models.ProfileProviderS3Compatible})
 	rr := httptest.NewRecorder()
 	srv := &server{cfg: config.Config{DataDir: dataDir, UploadMaxBytes: 10}, store: st}
@@ -274,8 +275,8 @@ func TestUploadDirectHTTPService_FormUploadPromotesTempObjectAfterReservation(t 
 		raw, _ := io.ReadAll(res.Body)
 		t.Fatalf("status=%d, want %d: %s", res.StatusCode, http.StatusNoContent, string(raw))
 	}
-	assertRcloneStdinTempTarget(t, stdinCalls, upload.ID, "incoming/file.bin")
-	assertRcloneMovetoTempToFinal(t, captureCalls, upload.ID, "incoming/file.bin")
+	assertRcloneStdinTempTarget(t, stdinCalls, upload.ID, "incoming/nested/file.bin")
+	assertRcloneMovetoTempToFinal(t, captureCalls, upload.ID, "incoming/nested/file.bin")
 	assertNoRcloneCommand(t, captureCalls, "deletefile")
 	assertUploadSessionBytesForAPI(t, st, profile.ID, upload.ID, 5)
 
@@ -286,8 +287,8 @@ func TestUploadDirectHTTPService_FormUploadPromotesTempObjectAfterReservation(t 
 	if len(objects) != 1 {
 		t.Fatalf("len(objects)=%d, want 1", len(objects))
 	}
-	if objects[0].ObjectKey != "incoming/file.bin" {
-		t.Fatalf("object key=%q, want incoming/file.bin", objects[0].ObjectKey)
+	if objects[0].ObjectKey != "incoming/nested/file.bin" {
+		t.Fatalf("object key=%q, want incoming/nested/file.bin", objects[0].ObjectKey)
 	}
 }
 

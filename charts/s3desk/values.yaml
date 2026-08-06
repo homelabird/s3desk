@@ -139,7 +139,7 @@ uploads:
   ttl: "24h"
   maxBytes: 0
   maxConcurrentRequests: 16
-  directStream: false
+  directStream: true
 
 backup:
   restoreMaxBytes: "4294967296"

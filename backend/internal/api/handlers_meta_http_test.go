@@ -67,6 +67,17 @@ func TestMetaHTTPService_HandleGetMeta_ReturnsConfiguredMetaResponse(t *testing.
 	if !resp.UploadDirectStream {
 		t.Fatal("expected uploadDirectStream=true")
 	}
+	for _, provider := range []models.ProfileProvider{
+		models.ProfileProviderAwsS3,
+		models.ProfileProviderS3Compatible,
+		models.ProfileProviderAzureBlob,
+		models.ProfileProviderGcpGcs,
+		models.ProfileProviderOciObjectStorage,
+	} {
+		if !resp.Capabilities.Providers[provider].DirectUpload {
+			t.Fatalf("expected directUpload=true for %q", provider)
+		}
+	}
 	if resp.TransferEngine.Name != "rclone" {
 		t.Fatalf("resp.TransferEngine.Name=%q, want rclone", resp.TransferEngine.Name)
 	}

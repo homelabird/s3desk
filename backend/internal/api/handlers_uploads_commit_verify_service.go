@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 
+	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
 
@@ -35,6 +36,25 @@ func (svc uploadCommitVerificationService) prepareImmediate(
 	}
 
 	verified, uploadErr := svc.verifyTargets(ctx, client, targets)
+	if uploadErr != nil {
+		return uploadCommitArtifacts{}, uploadErr
+	}
+	return newUploadCommitArtifactService().buildFromVerified(uploadID, us, req, verified, includeTotals, itemsTruncated), nil
+}
+
+func (svc uploadCommitVerificationService) prepareImmediateRclone(
+	ctx context.Context,
+	profileID, uploadID string,
+	us store.UploadSession,
+	req uploadCommitRequest,
+	secrets models.ProfileSecrets,
+) (uploadCommitArtifacts, *uploadHTTPError) {
+	targets, includeTotals, itemsTruncated, uploadErr := svc.buildPlan(ctx, profileID, uploadID, us, req, nil)
+	if uploadErr != nil {
+		return uploadCommitArtifacts{}, uploadErr
+	}
+
+	verified, uploadErr := svc.verifyTargetsRclone(ctx, secrets, targets)
 	if uploadErr != nil {
 		return uploadCommitArtifacts{}, uploadErr
 	}
@@ -149,6 +169,60 @@ func (svc uploadCommitVerificationService) verifyTargets(
 			Size:         actualSize,
 			ETag:         etag,
 			LastModified: lastModified,
+		})
+	}
+	return verified, nil
+}
+
+func (svc uploadCommitVerificationService) verifyTargetsRclone(
+	ctx context.Context,
+	secrets models.ProfileSecrets,
+	targets []uploadVerificationTarget,
+) ([]verifiedUploadObject, *uploadHTTPError) {
+	verified := make([]verifiedUploadObject, 0, len(targets))
+	for _, target := range targets {
+		entry, stderr, err := svc.server.rcloneStat(
+			ctx,
+			secrets,
+			rcloneRemoteObject(target.Bucket, target.Key, secrets.PreserveLeadingSlash),
+			true,
+			false,
+			"verify-upload",
+		)
+		if err != nil {
+			if rcloneIsNotFound(err, stderr) {
+				return nil, &uploadHTTPError{
+					status:  http.StatusBadRequest,
+					code:    "upload_incomplete",
+					message: "uploaded object not found",
+					details: map[string]any{"path": target.Path},
+				}
+			}
+			return nil, &uploadHTTPError{
+				status:  http.StatusBadGateway,
+				code:    "upload_failed",
+				message: "failed to verify uploaded object",
+				details: map[string]any{"path": target.Path},
+			}
+		}
+		if target.ExpectedSize != nil && *target.ExpectedSize >= 0 && entry.Size != *target.ExpectedSize {
+			return nil, &uploadHTTPError{
+				status:  http.StatusBadRequest,
+				code:    "upload_incomplete",
+				message: "uploaded object size mismatch",
+				details: map[string]any{
+					"path":         target.Path,
+					"expectedSize": *target.ExpectedSize,
+					"actualSize":   entry.Size,
+				},
+			}
+		}
+		verified = append(verified, verifiedUploadObject{
+			Path:         target.Path,
+			Key:          target.Key,
+			Size:         entry.Size,
+			ETag:         rcloneETagFromHashes(entry.Hashes),
+			LastModified: rcloneParseTime(entry.ModTime),
 		})
 	}
 	return verified, nil

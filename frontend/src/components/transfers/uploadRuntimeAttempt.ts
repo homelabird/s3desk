@@ -26,6 +26,7 @@ type ExecuteUploadAttemptArgs = {
 	resumeFilesByPath: Map<string, ResumeFileInfo>
 	resumeChunkSizeBytes: number
 	allowPerFileChunkSize: boolean
+	directMultipartUpload: boolean
 	existingChunksByPath?: Record<string, number[]>
 	uploadChunkFileConcurrency: number
 	uploadAbortByTaskIdRef: { current: Record<string, () => void> }
@@ -34,11 +35,12 @@ type ExecuteUploadAttemptArgs = {
 }
 
 export async function executeUploadAttempt(args: ExecuteUploadAttemptArgs): Promise<UploadFilesResult> {
+	const forceMultipartForm = args.mode === 'direct' && !args.directMultipartUpload
 	const chunkSizeBytes =
 		args.resumeChunkSizeBytes > 0 && !args.allowPerFileChunkSize
 			? args.resumeChunkSizeBytes
 			: args.tuning.chunkSizeBytes
-	const chunkThresholdBytes = args.tuning.chunkThresholdBytes
+	const chunkThresholdBytes = forceMultipartForm ? Number.POSITIVE_INFINITY : args.tuning.chunkThresholdBytes
 	const { shouldTrackResume, resumeFilesNext, chunkSizeByPath } = buildResumeTrackingPlan({
 		items: args.items,
 		attemptMode: args.mode,
@@ -94,6 +96,7 @@ export async function executeUploadAttempt(args: ExecuteUploadAttemptArgs): Prom
 					existingChunksByPath: args.existingChunksByPath,
 					chunkSizeBytesByPath: args.allowPerFileChunkSize ? chunkSizeByPath : undefined,
 					chunkFileConcurrency: args.uploadChunkFileConcurrency,
+					forceMultipartForm,
 				})
 
 	args.uploadAbortByTaskIdRef.current[args.taskId] = handle.abort

@@ -188,16 +188,25 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 	expect(presignedUrlHit).toBe(false)
 })
 
-test('shows upload error when presigned request fails (CORS-like failure)', async ({ page }) => {
+test('reconciles an ambiguous presigned response without proxy fallback', async ({ page }) => {
 	test.setTimeout(presignedUploadTestTimeoutMs)
 	const uploadId = 'upload-cors'
 	const presignedURL = 'https://presigned.example/upload/test'
 	let presignRequested = false
-	let presignedUploadAttempted = false
+	let presignedUploadAttempts = 0
+	let proxyUploadAttempted = false
 	let commitCalled = false
 
 	await installMockApi(page, [
 		...baseObjectRoutes(),
+		{
+			method: 'POST',
+			path: `/uploads/${uploadId}/files`,
+			handle: (ctx) => {
+				proxyUploadAttempted = true
+				return ctx.empty()
+			},
+		},
 		{
 			method: 'POST',
 			path: '/uploads',
@@ -231,7 +240,7 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 	])
 
 	await page.route(presignedURL, async (route) => {
-		presignedUploadAttempted = true
+		presignedUploadAttempts += 1
 		return route.abort('failed')
 	})
 
@@ -248,10 +257,9 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 	})
 
 	await expect.poll(() => presignRequested, { timeout: 5000 }).toBe(true)
-	await expect.poll(() => presignedUploadAttempted, { timeout: 5000 }).toBe(true)
-	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt', { triggerButtonName: /Transfers/i, timeout: 5000 })
-	await expectTransferRowState(row, /network error/i)
-	expect(commitCalled).toBe(false)
+	await expect.poll(() => presignedUploadAttempts, { timeout: 5000 }).toBe(2)
+	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
+	expect(proxyUploadAttempted).toBe(false)
 })
 
 test('uses capability matrix to skip presigned mode for unsupported providers', async ({ page }) => {

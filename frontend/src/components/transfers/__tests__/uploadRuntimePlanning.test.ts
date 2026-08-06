@@ -50,12 +50,12 @@ describe('uploadRuntimePlanning', () => {
 	})
 
 	it('falls back to direct only when direct streaming is enabled and supported', () => {
-		expect(
-			planUploadMode({
-				uploadCapability: { presignedUpload: false, directUpload: true },
-				uploadDirectStream: true,
-			}).preferredMode,
-		).toBe('direct')
+		const directPlan = planUploadMode({
+			uploadCapability: { presignedUpload: false, directUpload: true, directMultipartUpload: false },
+			uploadDirectStream: true,
+		})
+		expect(directPlan.preferredMode).toBe('direct')
+		expect(directPlan.canUseDirectMultipart).toBe(false)
 
 		expect(
 			planUploadMode({

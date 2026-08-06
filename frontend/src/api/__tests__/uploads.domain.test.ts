@@ -127,4 +127,25 @@ describe('uploadFilesWithProgress', () => {
 		expect(FakeXMLHttpRequest.requests[0]?.headers['x-upload-relative-path']).toBeUndefined()
 		expect(FakeXMLHttpRequest.requests[0]?.body instanceof FormData).toBe(true)
 	})
+
+	it('streams non-S3 direct files as one multipart request per relative path', async () => {
+		const handle = uploadFilesWithProgress(
+			{ baseUrl: 'http://example.test/api/v1', apiToken: 'playwright-token' },
+			'playwright-profile',
+			'upload-test',
+			[
+				buildItem('alpha', 'alpha.txt', 'dir-a/alpha.txt'),
+				buildItem('beta', 'beta.txt', 'dir-b/beta.txt'),
+			],
+			{ forceMultipartForm: true, concurrency: 2 },
+		)
+
+		await expect(handle.promise).resolves.toEqual({ skipped: 0 })
+		expect(FakeXMLHttpRequest.requests).toHaveLength(2)
+		expect(FakeXMLHttpRequest.requests.map((request) => request.headers['x-upload-relative-path'])).toEqual([
+			'dir-a/alpha.txt',
+			'dir-b/beta.txt',
+		])
+		expect(FakeXMLHttpRequest.requests.every((request) => request.body instanceof FormData)).toBe(true)
+	})
 })

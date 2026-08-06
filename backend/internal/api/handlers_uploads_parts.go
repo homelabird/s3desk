@@ -12,8 +12,11 @@ import (
 	"s3desk/internal/store"
 )
 
-func directMultipartFormPath(prefix string, part *multipart.Part) (string, string, bool) {
-	relPath := safeUploadPath(part)
+func directMultipartFormPath(prefix, relativePath string, part *multipart.Part) (string, string, bool) {
+	relPath := relativePath
+	if relPath == "" {
+		relPath = safeUploadPath(part)
+	}
 	if relPath == "" {
 		return "", "", true
 	}

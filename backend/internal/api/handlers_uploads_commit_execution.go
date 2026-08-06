@@ -170,6 +170,25 @@ func (svc uploadCommitExecutionService) executeImmediate(
 	return models.JobCreatedResponse{JobID: job.ID}, nil
 }
 
+func (svc uploadCommitExecutionService) executeImmediateRclone(
+	ctx context.Context,
+	profileID, uploadID string,
+	us store.UploadSession,
+	req uploadCommitRequest,
+	secrets models.ProfileSecrets,
+) (models.JobCreatedResponse, *uploadHTTPError) {
+	artifacts, uploadErr := newUploadCommitVerificationService(svc.server).prepareImmediateRclone(ctx, profileID, uploadID, us, req, secrets)
+	if uploadErr != nil {
+		return models.JobCreatedResponse{}, uploadErr
+	}
+
+	job, uploadErr := newUploadCommitFinalizeService(svc.server).finalizeImmediate(ctx, profileID, uploadID, us, artifacts.payload, artifacts.progress, artifacts.indexEntries)
+	if uploadErr != nil {
+		return models.JobCreatedResponse{}, uploadErr
+	}
+	return models.JobCreatedResponse{JobID: job.ID}, nil
+}
+
 func (svc uploadCommitExecutionService) executePresigned(
 	ctx context.Context,
 	profileID, uploadID string,
@@ -214,11 +233,7 @@ func (svc uploadCommitExecutionService) executeDirect(
 		}
 	}
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
-		return models.JobCreatedResponse{}, &uploadHTTPError{
-			status:  http.StatusBadRequest,
-			code:    "not_supported",
-			message: "direct streaming multipart uploads require an S3-compatible provider",
-		}
+		return svc.executeImmediateRclone(ctx, profileID, uploadID, us, req, secrets)
 	}
 	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote)
 	if err != nil {

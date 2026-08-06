@@ -80,6 +80,7 @@ describe('executeUploadAttempt', () => {
 			resumeFilesByPath: new Map([['folder/report.bin', { size: item.file.size, chunkSizeBytes: 32 }]]),
 			resumeChunkSizeBytes: 32,
 			allowPerFileChunkSize: false,
+			directMultipartUpload: true,
 			existingChunksByPath: { 'folder/report.bin': [0] },
 			uploadChunkFileConcurrency: 4,
 			uploadAbortByTaskIdRef,
@@ -103,6 +104,7 @@ describe('executeUploadAttempt', () => {
 			existingChunksByPath: { 'folder/report.bin': [0] },
 			chunkSizeBytesByPath: undefined,
 			chunkFileConcurrency: 4,
+			forceMultipartForm: false,
 		})
 
 		const initialTask = updateUploadTask.mock.calls[0][1](task)
@@ -154,6 +156,7 @@ describe('executeUploadAttempt', () => {
 			resumeFilesByPath: new Map([['folder/report.bin', { size: item.file.size, chunkSizeBytes: 32 }]]),
 			resumeChunkSizeBytes: 32,
 			allowPerFileChunkSize: false,
+			directMultipartUpload: true,
 			uploadChunkFileConcurrency: 4,
 			uploadAbortByTaskIdRef: { current: {} },
 			uploadEstimatorByTaskIdRef: { current: {} },
@@ -179,5 +182,50 @@ describe('executeUploadAttempt', () => {
 			resumeChunkSizeBytes: undefined,
 			resumeFiles: undefined,
 		})
+	})
+
+	it('forces non-S3 direct uploads onto multipart form streaming without resume chunks', async () => {
+		const item = uploadItem()
+		const uploadFilesWithProgress = vi.fn().mockReturnValue({
+			abort: vi.fn(),
+			promise: Promise.resolve({ skipped: 0 }),
+		})
+		const updateUploadTask = vi.fn()
+
+		await executeUploadAttempt({
+			api: { uploads: { uploadFilesWithProgress } } as never,
+			taskId: 'upload-1',
+			task: uploadTask(),
+			uploadId: 'session-1',
+			mode: 'direct',
+			items: [item],
+			tuning: {
+				batchConcurrency: 3,
+				batchBytes: 1024,
+				chunkSizeBytes: 64,
+				chunkConcurrency: 2,
+				chunkThresholdBytes: 128,
+			},
+			resumeFilesByPath: new Map(),
+			resumeChunkSizeBytes: 0,
+			allowPerFileChunkSize: false,
+			directMultipartUpload: false,
+			uploadChunkFileConcurrency: 4,
+			uploadAbortByTaskIdRef: { current: {} },
+			uploadEstimatorByTaskIdRef: { current: {} },
+			updateUploadTask,
+		})
+
+		expect(uploadFilesWithProgress).toHaveBeenCalledWith(
+			'profile-1',
+			'session-1',
+			[item],
+			expect.objectContaining({
+				chunkThresholdBytes: Number.POSITIVE_INFINITY,
+				forceMultipartForm: true,
+			}),
+		)
+		const initialTask = updateUploadTask.mock.calls[0][1](uploadTask())
+		expect(initialTask.resumeFiles).toEqual([])
 	})
 })

@@ -58,7 +58,7 @@ func main() {
 	flag.DurationVar(&cfg.UploadSessionTTL, "upload-ttl", 24*time.Hour, "upload session TTL")
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", 0, "max total bytes per upload session (0=unlimited)")
 	flag.Int64Var(&cfg.ServerRestoreMaxBytes, "server-restore-max-bytes", 4*1024*1024*1024, "max accepted backup restore bundle bytes before staging (0=unlimited)")
-	flag.BoolVar(&cfg.UploadDirectStream, "upload-direct-stream", false, "stream uploads directly to the provider (disables staging)")
+	flag.BoolVar(&cfg.UploadDirectStream, "upload-direct-stream", true, "stream uploads directly to the provider (set false to use staging)")
 	flag.IntVar(&cfg.UploadMaxConcurrentRequests, "upload-max-concurrent-requests", 16, "max concurrent upload requests (0=unlimited)")
 	flag.IntVar(&cfg.RcloneDownloadMultiThreadStreams, "rclone-download-multi-thread-streams", 16, "rclone --multi-thread-streams for API downloads (0=use rclone default)")
 	flag.IntVar(&cfg.RcloneDownloadMultiThreadCutoffMiB, "rclone-download-multi-thread-cutoff-mib", 4, "rclone --multi-thread-cutoff for API downloads, in MiB (0=use rclone default)")

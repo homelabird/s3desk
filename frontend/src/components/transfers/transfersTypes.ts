@@ -61,7 +61,10 @@ export type TransfersRuntimeSnapshot = Pick<
 	'isOpen' | 'tab' | 'activeDownloadCount' | 'activeUploadCount' | 'activeTransferCount' | 'downloadTasks' | 'uploadTasks'
 >
 
-export type UploadCapabilityByProfileId = Record<string, { presignedUpload: boolean; directUpload: boolean }>
+export type UploadCapabilityByProfileId = Record<
+	string,
+	{ presignedUpload: boolean; directUpload: boolean; directMultipartUpload?: boolean }
+>
 
 export type TransfersRuntimeNotifications = {
 	info: (content: string) => void

@@ -60,8 +60,8 @@ export function buildProfileCapabilityContext({
 export function buildUploadCapabilityByProfileId(
 	profiles: Profile[] | null | undefined,
 	meta: MetaResponse | null | undefined,
-): Record<string, { presignedUpload: boolean; directUpload: boolean }> {
-	const out: Record<string, { presignedUpload: boolean; directUpload: boolean }> = {}
+): Record<string, { presignedUpload: boolean; directUpload: boolean; directMultipartUpload: boolean }> {
+	const out: Record<string, { presignedUpload: boolean; directUpload: boolean; directMultipartUpload: boolean }> = {}
 	const providerMatrix = meta?.capabilities?.providers
 	for (const profile of profiles ?? []) {
 		if (!profile.provider) continue
@@ -69,6 +69,7 @@ export function buildUploadCapabilityByProfileId(
 		out[profile.id] = {
 			presignedUpload: capability.presignedUpload,
 			directUpload: capability.directUpload,
+			directMultipartUpload: capability.presignedMultipartUpload,
 		}
 	}
 	return out

@@ -18,14 +18,12 @@ const {
 	executeUploadAttemptMock,
 	maybeReportNetworkErrorMock,
 	resolveExistingResumeChunksMock,
-	runUploadAttemptWithNetworkFallbackMock,
 } = vi.hoisted(() => ({
 	commitUploadAndTrackJobMock: vi.fn(),
 	createUploadSessionWithFallbackMock: vi.fn(),
 	executeUploadAttemptMock: vi.fn(),
 	maybeReportNetworkErrorMock: vi.fn(),
 	resolveExistingResumeChunksMock: vi.fn(),
-	runUploadAttemptWithNetworkFallbackMock: vi.fn(),
 }))
 
 vi.mock('../uploadRuntimeSession', async () => {
@@ -38,10 +36,6 @@ vi.mock('../uploadRuntimeSession', async () => {
 
 vi.mock('../uploadRuntimeAttempt', () => ({
 	executeUploadAttempt: (...args: unknown[]) => executeUploadAttemptMock(...args),
-}))
-
-vi.mock('../uploadRuntimeFallback', () => ({
-	runUploadAttemptWithNetworkFallback: (...args: unknown[]) => runUploadAttemptWithNetworkFallbackMock(...args),
 }))
 
 vi.mock('../uploadRuntimeResume', () => ({
@@ -142,15 +136,11 @@ describe('runUploadTask', () => {
 		executeUploadAttemptMock.mockReset()
 		maybeReportNetworkErrorMock.mockReset()
 		resolveExistingResumeChunksMock.mockReset()
-		runUploadAttemptWithNetworkFallbackMock.mockReset()
 
 		createUploadSessionWithFallbackMock.mockResolvedValue({
 			uploadId: 'session-1',
 			mode: 'staging',
 			maxBytes: null,
-		})
-		runUploadAttemptWithNetworkFallbackMock.mockImplementation(async (args) => {
-			return args.runUploadAttempt(args.sessionMode, args.uploadId)
 		})
 		executeUploadAttemptMock.mockResolvedValue({ skipped: 0 })
 		resolveExistingResumeChunksMock.mockResolvedValue({ ok: true, available: false })
@@ -179,12 +169,6 @@ describe('runUploadTask', () => {
 			fallbackMode: 'staging',
 			canUsePresigned: false,
 		}))
-		expect(runUploadAttemptWithNetworkFallbackMock).toHaveBeenCalledWith(expect.objectContaining({
-			uploadId: 'session-1',
-			sessionMode: 'staging',
-			fallbackMode: 'staging',
-			task: args.task,
-		}))
 		expect(executeUploadAttemptMock).toHaveBeenCalledWith(expect.objectContaining({
 			taskId: args.task.id,
 			task: args.task,
@@ -193,6 +177,7 @@ describe('runUploadTask', () => {
 			items: args.items,
 			resumeChunkSizeBytes: 0,
 			allowPerFileChunkSize: false,
+			directMultipartUpload: false,
 		}))
 		expect(args.notifications.warning).toHaveBeenCalledWith('Skipped 2 file(s) with invalid paths.')
 		expect(commitUploadAndTrackJobMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -264,10 +249,6 @@ describe('runUploadTask', () => {
 			items: args.items,
 		}))
 		expect(createUploadSessionWithFallbackMock).not.toHaveBeenCalled()
-		expect(runUploadAttemptWithNetworkFallbackMock).toHaveBeenCalledWith(expect.objectContaining({
-			uploadId: 'resume-session-1',
-			sessionMode: 'staging',
-		}))
 		expect(executeUploadAttemptMock).toHaveBeenCalledWith(expect.objectContaining({
 			uploadId: 'resume-session-1',
 			existingChunksByPath,

@@ -108,6 +108,32 @@ const uploadPresignedBlob = (args: {
 	return { promise, abort: () => xhr.abort() }
 }
 
+const uploadPresignedBlobWithRetry = (
+	args: Parameters<typeof uploadPresignedBlob>[0],
+	maxNetworkRetries = 1,
+): ReturnType<typeof uploadPresignedBlob> => {
+	let active: ReturnType<typeof uploadPresignedBlob> | undefined
+	let aborted = false
+	const promise = (async () => {
+		for (let attempt = 0; ; attempt += 1) {
+			if (aborted) throw new RequestAbortedError()
+			active = uploadPresignedBlob(args)
+			try {
+				return await active.promise
+			} catch (error) {
+				if (!(error instanceof PresignedUploadNetworkError) || attempt >= maxNetworkRetries) throw error
+			}
+		}
+	})()
+	return {
+		promise,
+		abort: () => {
+			aborted = true
+			active?.abort()
+		},
+	}
+}
+
 export const uploadPresignedFilesWithProgress = (args: {
 	api: APIClientShape
 	profileId: string
@@ -194,7 +220,7 @@ export const uploadPresignedFilesWithProgress = (args: {
 			throw new Error('unexpected presigned response for single upload')
 		}
 		const key = `single:${info.index}`
-		const handle = uploadPresignedBlob({
+		const handle = uploadPresignedBlobWithRetry({
 			url: presigned.url,
 			method: presigned.method,
 			headers: presigned.headers,
@@ -202,7 +228,14 @@ export const uploadPresignedFilesWithProgress = (args: {
 			onProgress: (loaded) => updateLoaded(key, loaded),
 		})
 		aborters.push(handle.abort)
-		await handle.promise
+		try {
+			await handle.promise
+		} catch (error) {
+			// A single PUT can have reached object storage even when its browser response
+			// is lost. Let commit's HEAD/size verification decide instead of re-uploading
+			// the file through the web server.
+			if (!(error instanceof PresignedUploadNetworkError)) throw error
+		}
 		updateLoaded(key, info.size)
 	}
 
@@ -242,7 +275,7 @@ export const uploadPresignedFilesWithProgress = (args: {
 				const end = Math.min(info.size, start + partSizeBytes)
 				const blob = info.item.file.slice(start, end)
 				const key = `multi:${info.index}:${partNumber}`
-				const handle = uploadPresignedBlob({
+				const handle = uploadPresignedBlobWithRetry({
 					url: part.url,
 					method: part.method,
 					headers: part.headers,

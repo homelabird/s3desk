@@ -17,6 +17,7 @@ export function planUploadMode(args: {
 }) {
 	const canUsePresigned = args.uploadCapability ? args.uploadCapability.presignedUpload : true
 	const canUseDirect = args.uploadCapability ? args.uploadCapability.directUpload : !!args.uploadDirectStream
+	const canUseDirectMultipart = args.uploadCapability?.directMultipartUpload ?? canUsePresigned
 	const directModePreferred = !!args.uploadDirectStream && canUseDirect
 	const fallbackMode: UploadFallbackMode = directModePreferred ? 'direct' : 'staging'
 	const preferredMode: UploadRuntimeMode = canUsePresigned ? 'presigned' : fallbackMode
@@ -24,6 +25,7 @@ export function planUploadMode(args: {
 	return {
 		canUsePresigned,
 		canUseDirect,
+		canUseDirectMultipart,
 		directModePreferred,
 		fallbackMode,
 		preferredMode,
