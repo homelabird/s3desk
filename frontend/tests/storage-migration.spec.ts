@@ -98,7 +98,7 @@ test.describe('profile-scoped storage migration', () => {
 		await gotoUploadsPage(page)
 
 		await expect(page.getByLabel('Upload prefix (optional)')).toHaveValue('legacy/photos')
-		await expect(page.locator('strong').filter({ hasText: 's3://uploads-mobile-bucket/legacy/photos' }).first()).toBeVisible()
+		await expect(page.getByText('s3://uploads-mobile-bucket/legacy/photos', { exact: true })).toBeVisible()
 		await expectProfileStorageValueMigrated(page, {
 			apiToken: 'uploads-mobile-token',
 			name: 'bucket',

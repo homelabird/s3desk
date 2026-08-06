@@ -68,6 +68,7 @@ func rejectSymlinkComponentsBelowRoot(root, path string) error {
 			continue
 		}
 		current = filepath.Join(current, part)
+		// Lstat rejects symlink escapes without following links; a missing leaf remains creatable.
 		info, err := os.Lstat(current)
 		if err != nil {
 			if os.IsNotExist(err) {

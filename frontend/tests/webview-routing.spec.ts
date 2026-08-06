@@ -20,7 +20,7 @@ test.describe('webview routing', () => {
 		await expect(page).toHaveURL(/\/profiles$/)
 		await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'New Profile' })).toBeVisible()
-		await expect(page.getByText('Available Profile')).toBeVisible()
+		await expect(page.getByTestId('profiles-table-desktop').getByText('Available Profile', { exact: true })).toBeVisible()
 	})
 
 	test('WV-001 redirects `/` to `/objects` when a stored profile exists', async ({ page }) => {

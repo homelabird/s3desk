@@ -73,7 +73,7 @@ function chunkGroupForModule(id: string): string | undefined {
 	}
 	if (id.includes('/node_modules/@tanstack/')) return 'vendor-tanstack'
 	if (id.includes('/node_modules/react-dom/')) return 'vendor-react-dom'
-	if (id.includes('/node_modules/react-router-dom/') || id.includes('/node_modules/react-router/')) return 'vendor-react-router'
+	if (id.includes('/node_modules/react-router/')) return 'vendor-react-router'
 	if (id.includes('/node_modules/react/') || id.includes('/node_modules/scheduler/')) return 'vendor-react'
 	if (id.includes('/node_modules/dayjs/') || id.includes('/node_modules/yaml/')) return 'vendor-data'
 	return 'vendor-misc'

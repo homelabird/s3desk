@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../FullApp", () => ({
@@ -10,7 +9,6 @@ vi.mock("../FullApp", () => ({
 
 import App from "../App";
 import { AuthProvider } from "../auth/AuthProvider";
-import { serverScopedStorageKey } from "../lib/profileScopedStorage";
 
 afterEach(() => {
   window.localStorage.clear();
@@ -18,95 +16,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderAppAtRoot() {
+function renderApp() {
   render(
     <AuthProvider>
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>
+      <App />
     </AuthProvider>,
   );
 }
 
-function renderAppAtPath(pathname: string) {
-  render(
-    <AuthProvider>
-      <MemoryRouter initialEntries={[pathname]}>
-        <App />
-      </MemoryRouter>
-    </AuthProvider>,
-  );
-}
-
-describe("App root routing", () => {
-  it("redirects to the full app when the current server has a scoped active profile", async () => {
-    window.sessionStorage.setItem("apiToken", JSON.stringify("token-a"));
-    window.localStorage.setItem(
-      serverScopedStorageKey("app", "token-a", "profileId"),
-      JSON.stringify("profile-1"),
-    );
-
-    renderAppAtRoot();
-
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
-  });
-
-  it("redirects to the full app when only another server has a scoped active profile", async () => {
-    window.sessionStorage.setItem("apiToken", JSON.stringify("token-a"));
-    window.localStorage.setItem(
-      serverScopedStorageKey("app", "token-b", "profileId"),
-      JSON.stringify("profile-2"),
-    );
-
-    renderAppAtRoot();
-
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
-  });
-
-  it("falls back to the legacy global profile id for migration", async () => {
-    window.localStorage.setItem("apiToken", JSON.stringify("legacy-token"));
-    window.localStorage.setItem("profileId", JSON.stringify("profile-legacy"));
-
-    renderAppAtRoot();
-
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
-  });
-
-  it("falls back to the legacy global profile id when the legacy token exists only in sessionStorage", async () => {
-    window.sessionStorage.setItem("apiToken", JSON.stringify("legacy-token"));
-    window.localStorage.setItem("profileId", JSON.stringify("profile-legacy"));
-
-    renderAppAtRoot();
-
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
-  });
-
-  it("still uses the matching legacy global profile id when another server already has a scoped profile key", async () => {
-    window.sessionStorage.setItem("apiToken", JSON.stringify("token-a"));
-    window.localStorage.setItem("apiToken", JSON.stringify("token-a"));
-    window.localStorage.setItem("profileId", JSON.stringify("profile-legacy"));
-    window.localStorage.setItem(
-      serverScopedStorageKey("app", "token-b", "profileId"),
-      JSON.stringify("profile-other-server"),
-    );
-
-    renderAppAtRoot();
-
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
-  });
-
-  it("ignores the legacy global profile id when the current server token does not match the legacy token", async () => {
-    window.sessionStorage.setItem("apiToken", JSON.stringify("token-b"));
-    window.localStorage.setItem("apiToken", JSON.stringify("token-a"));
-    window.localStorage.setItem("profileId", JSON.stringify("profile-legacy"));
-
-    renderAppAtRoot();
-
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
-  });
-
-  it("routes unknown direct URLs into the full app shell", async () => {
-    renderAppAtPath("/legacy-entry");
+describe("App bootstrap", () => {
+  it("loads the lazy full app shell", async () => {
+    renderApp();
 
     expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
   });

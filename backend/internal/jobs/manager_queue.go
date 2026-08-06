@@ -29,6 +29,7 @@ func (m *Manager) Enqueue(jobID string) error {
 }
 
 func (m *Manager) enqueueBlocking(ctx context.Context, ids []string) {
+	// sync.Cond does not observe ctx, so cancellation must wake waiters.
 	stopWake := context.AfterFunc(ctx, func() {
 		m.queueMu.Lock()
 		m.queueCond.Broadcast()

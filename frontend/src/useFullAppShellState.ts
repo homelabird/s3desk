@@ -2,7 +2,7 @@ import { LogoutOutlined, MoonOutlined, SettingOutlined, SunOutlined } from '@ant
 import { useQueryClient } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
 import { createElement, useCallback, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router'
 
 import { confirmDangerAction } from './lib/confirmDangerAction'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'

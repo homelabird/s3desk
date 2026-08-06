@@ -166,6 +166,58 @@ describe('useTransfersDownloadQueue', () => {
 		expect(openTransfers).toHaveBeenCalledWith('downloads')
 	})
 
+	it('keeps the same object key independent across target directories', async () => {
+		const openTransfers = vi.fn()
+		const firstTarget = createDirectoryHandle('first')
+		const secondTarget = createDirectoryHandle('second')
+
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
+			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
+			const downloadEstimatorByTaskIdRef = useRef({})
+			const updateDownloadTask = (taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
+				setDownloadTasks((prev) => prev.map((task) => (task.id === taskId ? updater(task) : task)))
+			}
+
+			return {
+				downloadTasks,
+				...useTransfersDownloadQueue({
+					api: createApiStub(),
+					downloadLinkProxyEnabled: false,
+					downloadConcurrency: 0,
+					downloadTasks,
+					setDownloadTasks,
+					downloadAbortByTaskIdRef,
+					downloadEstimatorByTaskIdRef,
+					updateDownloadTask,
+					openTransfers,
+				}),
+			}
+		})
+
+		const baseArgs = {
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			items: [{ key: 'folder/alpha.txt', size: 10 }],
+			prefix: 'folder/',
+		}
+		act(() => {
+			result.current.queueDownloadObjectsToDevice({ ...baseArgs, targetDirHandle: firstTarget })
+		})
+		await waitFor(() => expect(result.current.downloadTasks).toHaveLength(1))
+
+		act(() => {
+			result.current.queueDownloadObjectsToDevice({ ...baseArgs, targetDirHandle: secondTarget })
+		})
+		await waitFor(() => expect(result.current.downloadTasks).toHaveLength(2))
+		expect(result.current.downloadTasks).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ targetDirHandle: firstTarget }),
+				expect.objectContaining({ targetDirHandle: secondTarget }),
+			]),
+		)
+	})
+
 	it('uses the shared directory-picker fallback when device downloads are unavailable', async () => {
 		devicePickerSupportRef.current = { ok: false }
 		const openTransfers = vi.fn()

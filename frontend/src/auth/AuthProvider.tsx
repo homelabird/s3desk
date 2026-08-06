@@ -11,6 +11,7 @@ export function AuthProvider(props: { children: ReactNode }) {
 	const setApiToken = useCallback(
 		(next: string | ((prev: string) => string)) => {
 			const nextToken = typeof next === 'function' ? next(apiToken) : next
+			// Token changes must not carry cached data or transfer UI state across accounts.
 			if (nextToken !== apiToken) {
 				void clearPersistentThumbnailCache()
 				if (apiToken) {

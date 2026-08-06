@@ -131,11 +131,11 @@ func (svc jobListHTTPService) handleListJobs(w http.ResponseWriter, r *http.Requ
 
 	var prepErr *jobListPreparationError
 	if errors.As(err, &prepErr) {
-		resp := buildJobSubmissionHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+		resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 		writeJSON(w, prepErr.status, resp)
 		return
 	}
 
-	respErr := buildJobSubmissionHTTPErrorResponse("internal_error", "failed to list jobs", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to list jobs", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }

@@ -25,6 +25,7 @@ spec:
 {{- with .Values.networkPolicy.ingress.extra }}
 {{- toYaml . | nindent 4 }}
 {{- end }}
+    # Empty ingress with same-namespace access disabled is an explicit deny-all policy.
     {{- if and (not .Values.networkPolicy.ingress.allowSameNamespace) (eq (len .Values.networkPolicy.ingress.extra) 0) }}
     []
     {{- end }}

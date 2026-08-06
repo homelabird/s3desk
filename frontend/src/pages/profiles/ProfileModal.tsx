@@ -8,8 +8,10 @@ import { ConfirmDangerDialog } from '../../lib/ConfirmDangerDialog'
 import { runIfActionIdle } from '../../lib/pendingActionGuard'
 import styles from './ProfileModal.module.css'
 import { buildProfileModalSections, renderSectionHeader } from './ProfileModalSections'
+import { ProfileProviderChecklist } from './ProfileProviderChecklist'
 import { formatConfiguredStateLabel } from './profileModalSectionShared'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
+import { buildProfileProviderChecklist } from './profileModalChecklist'
 import {
 	buildProfileModalViewState,
 	type FieldErrors,
@@ -172,6 +174,12 @@ function ProfileModalSession(props: {
 		setField,
 		viewState,
 	})
+	const providerChecklist = buildProfileProviderChecklist({
+		values,
+		errors,
+		editMode: props.editMode,
+		viewState,
+	})
 	const modalBody = (
 		<form
 			onSubmit={(event) => {
@@ -192,6 +200,7 @@ function ProfileModalSession(props: {
 					</div>
 					<div className={styles.staticSectionBody}>{sections.credentials.content}</div>
 				</section>
+				<ProfileProviderChecklist checklist={providerChecklist} />
 				<div className={styles.optionalSections}>
 					{sections.optionalSections.map((section) => {
 						const key = section.key as SectionKey

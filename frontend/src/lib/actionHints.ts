@@ -159,7 +159,7 @@ export function selectBucketTitle(): string {
 }
 
 export function selectBucketToBrowseObjectsHint(): string {
-	return 'Select a bucket to browse objects.'
+	return 'Choose a bucket to browse objects.'
 }
 
 export function goToBucketsLabel(): string {

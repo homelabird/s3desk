@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { addFilesOrFolderFirstSentenceHint } from '../src/lib/actionHints'
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
 import { addUploadSourceFromDevice, gotoUploadsPage, openTransfersDialog } from './support/ui'
 
@@ -65,7 +66,7 @@ test.describe('Uploads header actions', () => {
 		await page.getByRole('button', { name: 'Clear selection' }).click()
 
 		await expect(page.getByRole('button', { name: /^Queue upload/ })).toHaveCount(0)
-		await expect(page.getByText('No files or folders selected.')).toBeVisible()
+		await expect(page.getByText(addFilesOrFolderFirstSentenceHint())).toBeVisible()
 	})
 
 	test('opens transfers drawer from header action', async ({ page }) => {

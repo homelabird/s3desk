@@ -36,14 +36,6 @@ func newUploadPresignHTTPService(s *server) uploadPresignHTTPService {
 	return uploadPresignHTTPService{server: s}
 }
 
-func buildUploadPresignHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc uploadPresignHTTPService) preparePresign(r *http.Request) uploadPresignPreparedRequest {
 	profileID := r.Header.Get("X-Profile-Id")
 	uploadID := uploadIDFromRequest(r)
@@ -380,7 +372,7 @@ func (svc uploadPresignHTTPService) handlePresignUpload(w http.ResponseWriter, r
 
 	resp, uploadErr, decodeErr := svc.executePresign(r)
 	if uploadErr != nil {
-		errResp := buildUploadPresignHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &errResp)
 		return
 	}

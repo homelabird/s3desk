@@ -482,7 +482,7 @@ func TestAWSAdapterGetLifecycle(t *testing.T) {
 				{
 					ID:     stringPtr("expire-logs"),
 					Status: s3types.ExpirationStatusEnabled,
-					Filter: &s3types.LifecycleRuleFilterMemberPrefix{Value: "logs/"},
+					Filter: &s3types.LifecycleRuleFilter{Prefix: stringPtr("logs/")},
 					Expiration: &s3types.LifecycleExpiration{
 						Days: int32Ptr(30),
 					},
@@ -543,8 +543,7 @@ func TestAWSAdapterPutLifecycle(t *testing.T) {
 	if rule.ID == nil || *rule.ID != "expire-logs" {
 		t.Fatalf("rule.ID=%v, want expire-logs", rule.ID)
 	}
-	prefixFilter, ok := rule.Filter.(*s3types.LifecycleRuleFilterMemberPrefix)
-	if !ok || prefixFilter.Value != "logs/" {
+	if rule.Filter == nil || rule.Filter.Prefix == nil || *rule.Filter.Prefix != "logs/" {
 		t.Fatalf("rule.Filter=%T %+v, want prefix logs/", rule.Filter, rule.Filter)
 	}
 	if rule.Expiration == nil || rule.Expiration.Days == nil || *rule.Expiration.Days != 30 {

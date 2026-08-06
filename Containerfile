@@ -12,11 +12,12 @@ COPY frontend/ /src/frontend/
 RUN npm run gen:openapi && npm run build
 
 FROM harbor.k8s.homelabird.com/library/golang:1.25.10-alpine@sha256:8d22e29d960bc50cd025d93d5b7c7d220b1ee9aa7a239b3c8f55a57e987e8d45 AS backend
+ARG APP_VERSION=0.1.0
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum /src/backend/
 RUN go mod download
 COPY backend/ /src/backend/
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/s3desk-server ./cmd/server
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X s3desk/internal/version.Version=${APP_VERSION}" -o /out/s3desk-server ./cmd/server
 
 FROM harbor.k8s.homelabird.com/library/rclone/rclone:1.72.0@sha256:0eb18825ac9732c21c11d654007170572bbd495352bb6dbb624f18e4f462c496 AS rclone
 

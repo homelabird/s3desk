@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test'
 
 const isLive = process.env.E2E_LIVE === '1'
 const expectedOperations = [
-	{ path: '/api/v1/meta', summary: 'Server metadata' },
-	{ path: '/api/v1/profiles', summary: 'List profiles' },
+	{ path: '/meta', summary: 'Server metadata' },
+	{ path: '/profiles', summary: 'List profiles' },
 ]
 
 test.describe('Docs smoke', () => {

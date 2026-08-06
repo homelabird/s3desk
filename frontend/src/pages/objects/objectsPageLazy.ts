@@ -1,5 +1,6 @@
 import { lazy } from 'react'
 
+// Keep overlay and preview chunks out of the initial route until their UI opens.
 export const ObjectsPageHeader = lazy(async () => {
 	const m = await import('./ObjectsPageHeader')
 	return { default: m.ObjectsPageHeader }

@@ -8,7 +8,7 @@ import urllib.request
 import urllib.parse
 
 
-API_TOKEN = os.environ.get("API_TOKEN", "s3desk-demo-token-0123456789abcdef012345")
+API_TOKEN = os.environ.get("API_TOKEN", "s3desk-demo-local-only-token-0123456789abcdef012345")
 
 
 def _normalize_url(raw: str | None) -> str:

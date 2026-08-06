@@ -20,6 +20,7 @@ import {
 	queueSelectedUpload,
 	transferUploadRow,
 } from './support/ui'
+import { readServerScopedLocalStorage } from './support/storage'
 
 const isLive = process.env.E2E_LIVE === '1'
 
@@ -29,7 +30,6 @@ const s3Region = process.env.E2E_S3_REGION ?? 'us-east-1'
 const s3AccessKey = process.env.E2E_S3_ACCESS_KEY ?? 'minioadmin'
 const s3SecretKey = process.env.E2E_S3_SECRET_KEY ?? 'minioadmin'
 const forcePathStyle = process.env.E2E_S3_FORCE_PATH_STYLE !== 'false'
-const tlsSkipVerify = process.env.E2E_S3_TLS_SKIP_VERIFY !== 'false'
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
 const uploadFixture = path.join(testDir, 'fixtures', 'upload-folder', 'dir-a', 'alpha.txt')
@@ -106,23 +106,19 @@ test.describe('Live UI flow', () => {
 			await profileModal.getByLabel('Secret').fill(s3SecretKey)
 			const forcePathSwitch = profileModal.getByRole('switch', { name: 'Force Path Style' })
 			if (!(await forcePathSwitch.isVisible().catch(() => false))) {
-				await profileModal.getByRole('button', { name: /Compatibility Options/ }).click()
+				await profileModal.locator('summary').filter({ hasText: 'Options' }).click()
 			}
 			await setSwitch(profileModal, 'Force Path Style', forcePathStyle)
-			await setSwitch(profileModal, 'TLS Insecure Skip Verify', tlsSkipVerify)
 			await profileModal.getByRole('button', { name: 'Create', exact: true }).click()
 
 			const createdProfileRow = namedTableRow(page, profileName)
 			await expect(createdProfileRow).toBeVisible({ timeout: 30_000 })
-			const useButton = createdProfileRow.getByRole('button', { name: 'Use' })
-			if (await useButton.isVisible().catch(() => false)) {
-				await useButton.click()
-			}
-			await page.waitForFunction(() => {
-				const value = window.localStorage.getItem('profileId')
-				return value && JSON.parse(value)
-			})
-			profileId = await page.evaluate(() => JSON.parse(window.localStorage.getItem('profileId') ?? 'null'))
+			const useProfileButton = createdProfileRow.getByRole('button', { name: /^Use(?: profile)?$/ })
+			if (await useProfileButton.count()) await useProfileButton.click()
+			await expect
+				.poll(() => readServerScopedLocalStorage(page, { namespace: 'app', apiToken, name: 'profileId' }, null))
+				.toBeTruthy()
+			profileId = await readServerScopedLocalStorage(page, { namespace: 'app', apiToken, name: 'profileId' }, null)
 
 			await gotoBucketsPage(page)
 			await page.getByRole('button', { name: 'New Bucket' }).click()

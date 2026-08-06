@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Grid } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 
 import { useAPIClient } from '../../api/useAPIClient'
 import type { BucketsPageControllerState } from './buildBucketsPageControllerState'

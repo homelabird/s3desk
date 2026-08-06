@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import type { SetURLSearchParams } from 'react-router-dom'
+import type { SetURLSearchParams } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Profile } from '../../../api/types'

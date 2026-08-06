@@ -221,15 +221,17 @@ func (p awsLifecycleRulePayload) toS3(ruleIndex int) (s3types.LifecycleRule, err
 			return s3types.LifecycleRule{}, err
 		}
 		if allObjects {
-			rule.Filter = &s3types.LifecycleRuleFilterMemberPrefix{Value: ""}
+			emptyPrefix := ""
+			rule.Filter = &s3types.LifecycleRuleFilter{Prefix: &emptyPrefix}
 		} else {
 			rule.Filter = filter
 		}
 	case strings.TrimSpace(p.Prefix) != "":
 		prefix := strings.TrimSpace(p.Prefix)
-		rule.Filter = &s3types.LifecycleRuleFilterMemberPrefix{Value: prefix}
+		rule.Filter = &s3types.LifecycleRuleFilter{Prefix: &prefix}
 	default:
-		rule.Filter = &s3types.LifecycleRuleFilterMemberPrefix{Value: ""}
+		emptyPrefix := ""
+		rule.Filter = &s3types.LifecycleRuleFilter{Prefix: &emptyPrefix}
 	}
 
 	if p.Expiration != nil {
@@ -291,18 +293,17 @@ func awsLifecycleRuleFromS3(rule s3types.LifecycleRule, ruleIndex int) (awsLifec
 	if rule.ID != nil {
 		payload.ID = strings.TrimSpace(*rule.ID)
 	}
-	switch filter := rule.Filter.(type) {
-	case nil:
-	case *s3types.LifecycleRuleFilterMemberPrefix:
-		if strings.TrimSpace(filter.Value) != "" {
-			payload.Prefix = strings.TrimSpace(filter.Value)
+	if rule.Filter != nil {
+		if rule.Filter.Prefix != nil && strings.TrimSpace(*rule.Filter.Prefix) != "" {
+			prefix := strings.TrimSpace(*rule.Filter.Prefix)
+			payload.Prefix = prefix
+		} else {
+			filterPayload, err := awsLifecycleFilterFromS3(rule.Filter, ruleIndex)
+			if err != nil {
+				return awsLifecycleRulePayload{}, err
+			}
+			payload.Filter = filterPayload
 		}
-	default:
-		filterPayload, err := awsLifecycleFilterFromS3(rule.Filter, ruleIndex)
-		if err != nil {
-			return awsLifecycleRulePayload{}, err
-		}
-		payload.Filter = filterPayload
 	}
 	if rule.Expiration != nil {
 		payload.Expiration = awsLifecycleExpirationFromS3(*rule.Expiration)
@@ -328,7 +329,7 @@ func awsLifecycleRuleFromS3(rule s3types.LifecycleRule, ruleIndex int) (awsLifec
 	return payload, nil
 }
 
-func (p *awsLifecycleFilterPayload) toS3(ruleIndex int) (s3types.LifecycleRuleFilter, bool, error) {
+func (p *awsLifecycleFilterPayload) toS3(ruleIndex int) (*s3types.LifecycleRuleFilter, bool, error) {
 	if p == nil {
 		return nil, true, nil
 	}
@@ -358,48 +359,48 @@ func (p *awsLifecycleFilterPayload) toS3(ruleIndex int) (s3types.LifecycleRuleFi
 
 	switch {
 	case strings.TrimSpace(p.Prefix) != "":
-		return &s3types.LifecycleRuleFilterMemberPrefix{Value: strings.TrimSpace(p.Prefix)}, false, nil
+		prefix := strings.TrimSpace(p.Prefix)
+		return &s3types.LifecycleRuleFilter{Prefix: &prefix}, false, nil
 	case p.Tag != nil:
 		tag, err := p.Tag.toS3(ruleIndex, "filter.tag")
 		if err != nil {
 			return nil, false, err
 		}
-		return &s3types.LifecycleRuleFilterMemberTag{Value: tag}, false, nil
+		return &s3types.LifecycleRuleFilter{Tag: &tag}, false, nil
 	case p.And != nil:
 		and, err := p.And.toS3(ruleIndex)
 		if err != nil {
 			return nil, false, err
 		}
-		return &s3types.LifecycleRuleFilterMemberAnd{Value: and}, false, nil
+		return &s3types.LifecycleRuleFilter{And: &and}, false, nil
 	case p.ObjectSizeGreaterThan != nil:
-		return &s3types.LifecycleRuleFilterMemberObjectSizeGreaterThan{Value: *p.ObjectSizeGreaterThan}, false, nil
+		return &s3types.LifecycleRuleFilter{ObjectSizeGreaterThan: p.ObjectSizeGreaterThan}, false, nil
 	default:
-		return &s3types.LifecycleRuleFilterMemberObjectSizeLessThan{Value: *p.ObjectSizeLessThan}, false, nil
+		return &s3types.LifecycleRuleFilter{ObjectSizeLessThan: p.ObjectSizeLessThan}, false, nil
 	}
 }
 
-func awsLifecycleFilterFromS3(filter s3types.LifecycleRuleFilter, ruleIndex int) (*awsLifecycleFilterPayload, error) {
-	switch value := filter.(type) {
-	case *s3types.LifecycleRuleFilterMemberPrefix:
-		if strings.TrimSpace(value.Value) == "" {
-			return nil, nil
-		}
-		return &awsLifecycleFilterPayload{Prefix: strings.TrimSpace(value.Value)}, nil
-	case *s3types.LifecycleRuleFilterMemberTag:
-		tag := awsLifecycleTagFromS3(value.Value)
-		return &awsLifecycleFilterPayload{Tag: &tag}, nil
-	case *s3types.LifecycleRuleFilterMemberAnd:
-		and := awsLifecycleAndFromS3(value.Value)
-		return &awsLifecycleFilterPayload{And: &and}, nil
-	case *s3types.LifecycleRuleFilterMemberObjectSizeGreaterThan:
-		size := value.Value
-		return &awsLifecycleFilterPayload{ObjectSizeGreaterThan: &size}, nil
-	case *s3types.LifecycleRuleFilterMemberObjectSizeLessThan:
-		size := value.Value
-		return &awsLifecycleFilterPayload{ObjectSizeLessThan: &size}, nil
-	default:
-		return nil, lifecycleFieldError(ruleIndex, "filter", "encountered an unsupported AWS lifecycle filter type", nil)
+func awsLifecycleFilterFromS3(filter *s3types.LifecycleRuleFilter, ruleIndex int) (*awsLifecycleFilterPayload, error) {
+	if filter == nil || filter.Prefix != nil {
+		return nil, nil
 	}
+	if filter.Tag != nil {
+		tag := awsLifecycleTagFromS3(*filter.Tag)
+		return &awsLifecycleFilterPayload{Tag: &tag}, nil
+	}
+	if filter.And != nil {
+		and := awsLifecycleAndFromS3(*filter.And)
+		return &awsLifecycleFilterPayload{And: &and}, nil
+	}
+	if filter.ObjectSizeGreaterThan != nil {
+		size := *filter.ObjectSizeGreaterThan
+		return &awsLifecycleFilterPayload{ObjectSizeGreaterThan: &size}, nil
+	}
+	if filter.ObjectSizeLessThan != nil {
+		size := *filter.ObjectSizeLessThan
+		return &awsLifecycleFilterPayload{ObjectSizeLessThan: &size}, nil
+	}
+	return nil, lifecycleFieldError(ruleIndex, "filter", "encountered an unsupported AWS lifecycle filter type", nil)
 }
 
 func (p *awsLifecycleAndPayload) toS3(ruleIndex int) (s3types.LifecycleRuleAndOperator, error) {

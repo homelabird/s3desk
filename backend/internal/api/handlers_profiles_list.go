@@ -25,7 +25,7 @@ func (svc profileListHTTPService) executeList(r *http.Request) ([]models.Profile
 func (svc profileListHTTPService) handleListProfiles(w http.ResponseWriter, r *http.Request) {
 	profiles, err := svc.executeList(r)
 	if err != nil {
-		resp := buildJobSubmissionHTTPErrorResponse("internal_error", "failed to list profiles", nil)
+		resp := buildAPIErrorResponse("internal_error", "failed to list profiles", nil)
 		writeJSON(w, http.StatusInternalServerError, resp)
 		return
 	}

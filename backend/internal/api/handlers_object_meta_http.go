@@ -31,14 +31,6 @@ func newObjectMetaHTTPError(status int, code, message string, details map[string
 	return &objectMetaHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectMetaHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectMetaFromEntry(key string, entry rcloneListEntry) models.ObjectMeta {
 	meta := models.ObjectMeta{
 		Key:         key,
@@ -114,10 +106,10 @@ func (svc objectMetaHTTPService) handleGetObjectMeta(w http.ResponseWriter, r *h
 		return
 	}
 	if httpErr, ok := err.(*objectMetaHTTPError); ok {
-		resp := buildObjectMetaHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildObjectMetaHTTPErrorResponse("internal_error", "failed to get object metadata", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to get object metadata", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

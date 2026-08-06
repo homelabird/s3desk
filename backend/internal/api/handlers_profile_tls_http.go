@@ -35,20 +35,6 @@ func newProfileTLSHTTPError(status int, code, message string, details map[string
 	}
 }
 
-func buildProfileTLSHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func newProfileTLSHTTPService(s *server) profileTLSHTTPService {
 	return profileTLSHTTPService{server: s}
 }
@@ -236,11 +222,11 @@ func (svc profileTLSHTTPService) handleGetProfileTLS(w http.ResponseWriter, r *h
 		return
 	}
 	if apiErr := (*profileTLSHTTPError)(nil); errors.As(err, &apiErr) {
-		resp := buildProfileTLSHTTPErrorResponse(apiErr.code, apiErr.message, apiErr.details)
+		resp := buildAPIErrorResponse(apiErr.code, apiErr.message, apiErr.details)
 		writeJSON(w, apiErr.status, resp)
 		return
 	}
-	resp := buildProfileTLSHTTPErrorResponse("internal_error", "failed to handle tls config request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to handle tls config request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -251,11 +237,11 @@ func (svc profileTLSHTTPService) handlePutProfileTLS(w http.ResponseWriter, r *h
 		return
 	}
 	if apiErr := (*profileTLSHTTPError)(nil); errors.As(err, &apiErr) {
-		resp := buildProfileTLSHTTPErrorResponse(apiErr.code, apiErr.message, apiErr.details)
+		resp := buildAPIErrorResponse(apiErr.code, apiErr.message, apiErr.details)
 		writeJSON(w, apiErr.status, resp)
 		return
 	}
-	resp := buildProfileTLSHTTPErrorResponse("internal_error", "failed to handle tls config request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to handle tls config request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -266,11 +252,11 @@ func (svc profileTLSHTTPService) handleDeleteProfileTLS(w http.ResponseWriter, r
 		return
 	}
 	if apiErr := (*profileTLSHTTPError)(nil); errors.As(err, &apiErr) {
-		resp := buildProfileTLSHTTPErrorResponse(apiErr.code, apiErr.message, apiErr.details)
+		resp := buildAPIErrorResponse(apiErr.code, apiErr.message, apiErr.details)
 		writeJSON(w, apiErr.status, resp)
 		return
 	}
-	resp := buildProfileTLSHTTPErrorResponse("internal_error", "failed to handle tls config request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to handle tls config request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 

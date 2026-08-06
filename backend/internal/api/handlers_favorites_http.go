@@ -35,14 +35,6 @@ func newObjectFavoritesHTTPError(status int, code, message string, details map[s
 	return &objectFavoritesHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectFavoritesHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectFavoritesRcloneErrorContext() rcloneAPIErrorContext {
 	return rcloneAPIErrorContext{
 		MissingMessage: "rclone is required to list favorites (install it or set RCLONE_PATH)",
@@ -284,11 +276,11 @@ func (svc objectFavoritesHTTPService) handleListObjectFavorites(w http.ResponseW
 		return
 	}
 	if httpErr, ok := err.(*objectFavoritesHTTPError); ok {
-		respErr := buildObjectFavoritesHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectFavoritesHTTPErrorResponse("internal_error", "failed to list favorites", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to list favorites", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }
 
@@ -299,11 +291,11 @@ func (svc objectFavoritesHTTPService) handleCreateObjectFavorite(w http.Response
 		return
 	}
 	if httpErr, ok := err.(*objectFavoritesHTTPError); ok {
-		respErr := buildObjectFavoritesHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectFavoritesHTTPErrorResponse("internal_error", "failed to create favorite", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to create favorite", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }
 
@@ -314,10 +306,10 @@ func (svc objectFavoritesHTTPService) handleDeleteObjectFavorite(w http.Response
 		return
 	}
 	if httpErr, ok := err.(*objectFavoritesHTTPError); ok {
-		respErr := buildObjectFavoritesHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	resp := buildObjectFavoritesHTTPErrorResponse("internal_error", "failed to delete favorite", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to delete favorite", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

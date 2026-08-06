@@ -228,6 +228,37 @@ Minimum backup-portable evidence:
 
 Use [BACKUP_PORTABLE_SMOKE_TEMPLATE.md](release/evidence/BACKUP_PORTABLE_SMOKE_TEMPLATE.md) and run the documented portable smoke scripts before filling the evidence file.
 
+## Upgrade Compatibility Gate
+
+Every S3Desk upgrade must preserve persistent records (the SQLite `DATA_DIR` or
+the Postgres database) and re-check the bundled or locally installed rclone
+binary. The direct-install compatibility tests run in the normal backend test
+lane:
+
+```bash
+cd backend && go test ./internal/db ./internal/jobs -run 'TestOpenMigratesLegacySQLiteSchemaAndPreservesRecords|TestEnsureRcloneCompatibleRechecksReplacedBinary' -count=1
+```
+
+The release image lanes cover both supported container database backends. The
+SQLite lane mounts a legacy SQLite fixture into `/data`; the Postgres lane seeds
+legacy tables before starting the candidate image. Both verify profiles/jobs,
+schema migrations, and rclone compatibility through the API, then verify the
+records in the backing database:
+
+```bash
+S3DESK_EXPECTED_VERSION=<tag> \
+bash scripts/run_container_legacy_db_smoke.sh <candidate-sqlite-image>
+
+S3DESK_EXPECTED_VERSION=<tag> S3DESK_POSTGRES_IMAGE=<postgres-image> \
+bash scripts/run_container_legacy_postgres_smoke.sh <candidate-postgres-image>
+```
+
+Back up the persistent volume before an operator upgrade. Keep one S3Desk
+process per SQLite `DATA_DIR`; Postgres deployments must back up Postgres
+separately. These upgrade lanes do not replace `pg_dump`/WAL or managed
+provider disaster-recovery validation; keep the `DATA_DIR` volume for
+thumbnails, artifacts, and staged restores.
+
 ## Release Notes Requirements
 
 Every release note set must include:

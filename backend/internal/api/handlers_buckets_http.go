@@ -44,14 +44,6 @@ func newBucketHTTPError(status int, code, message string, details map[string]any
 	return &bucketHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func bucketOperationMetricName(op bucketHTTPOperation) string {
 	switch op {
 	case bucketHTTPOperationList:
@@ -322,7 +314,7 @@ func (svc bucketHTTPService) handleListBuckets(w http.ResponseWriter, r *http.Re
 
 	var httpErr *bucketHTTPError
 	if errors.As(err, &httpErr) {
-		resp := buildBucketHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		if httpErr.code == "bucket_defaults_apply_failed" {
 			if applyCode, ok := httpErr.details["applyErrorCode"].(string); ok && applyCode != "" {
 				if normalized, ok := normalizedErrorFromCode(applyCode); ok {
@@ -334,7 +326,7 @@ func (svc bucketHTTPService) handleListBuckets(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	respErr := buildBucketHTTPErrorResponse("internal_error", "failed to handle bucket request", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to handle bucket request", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }
 
@@ -353,7 +345,7 @@ func (svc bucketHTTPService) handleCreateBucket(w http.ResponseWriter, r *http.R
 
 	var httpErr *bucketHTTPError
 	if errors.As(err, &httpErr) {
-		respErr := buildBucketHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		if httpErr.code == "bucket_defaults_apply_failed" {
 			if applyCode, ok := httpErr.details["applyErrorCode"].(string); ok && applyCode != "" {
 				if normalized, ok := normalizedErrorFromCode(applyCode); ok {
@@ -365,7 +357,7 @@ func (svc bucketHTTPService) handleCreateBucket(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	respErr := buildBucketHTTPErrorResponse("internal_error", "failed to handle bucket request", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to handle bucket request", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }
 
@@ -384,7 +376,7 @@ func (svc bucketHTTPService) handleDeleteBucket(w http.ResponseWriter, r *http.R
 
 	var httpErr *bucketHTTPError
 	if errors.As(err, &httpErr) {
-		resp := buildBucketHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		if httpErr.code == "bucket_defaults_apply_failed" {
 			if applyCode, ok := httpErr.details["applyErrorCode"].(string); ok && applyCode != "" {
 				if normalized, ok := normalizedErrorFromCode(applyCode); ok {
@@ -396,6 +388,6 @@ func (svc bucketHTTPService) handleDeleteBucket(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	resp := buildBucketHTTPErrorResponse("internal_error", "failed to handle bucket request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to handle bucket request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

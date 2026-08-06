@@ -32,14 +32,6 @@ func newBucketPublicExposureHTTPError(status int, code, message string, details 
 	return &bucketPublicExposureHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketPublicExposureHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketPublicExposureHTTPService) prepareBucketPublicExposure(r *http.Request) (models.ProfileSecrets, string, error) {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -113,11 +105,11 @@ func (svc bucketPublicExposureHTTPService) handleGetBucketPublicExposure(w http.
 		return
 	}
 	if httpErr, ok := err.(*bucketPublicExposureHTTPError); ok {
-		resp := buildBucketPublicExposureHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketPublicExposureHTTPErrorResponse("internal_error", "failed to process bucket public exposure request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket public exposure request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -140,10 +132,10 @@ func (svc bucketPublicExposureHTTPService) handlePutBucketPublicExposure(w http.
 		return
 	}
 	if httpErr, ok := err.(*bucketPublicExposureHTTPError); ok {
-		resp := buildBucketPublicExposureHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketPublicExposureHTTPErrorResponse("internal_error", "failed to process bucket public exposure request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket public exposure request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

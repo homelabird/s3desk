@@ -84,6 +84,7 @@ cleanup() {
   if [[ -n "${KUBECONFIG_PATH}" ]]; then
     rm -f "${KUBECONFIG_PATH}"
   fi
+  # KEEP_NAMESPACE=1 preserves the release for debugging; otherwise remove only run-created namespaces.
   if [[ "${KEEP_NAMESPACE:-0}" == "1" ]]; then
     return
   fi

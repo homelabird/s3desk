@@ -548,12 +548,16 @@ export async function openJobsDownloadDrawer(
 	page: Page,
 	options: {
 		triggerButtonName?: string | RegExp
+		menuItemName?: string | RegExp
 		timeout?: number
 	} = {},
 ): Promise<Locator> {
-	const trigger = page.getByRole('button', { name: options.triggerButtonName ?? /^Download/ }).first()
+	const trigger = page.getByRole('button', { name: options.triggerButtonName ?? 'More job actions' }).first()
 	await trigger.scrollIntoViewIfNeeded()
 	await trigger.click()
+	const menuItem = page.getByRole('menuitem', { name: options.menuItemName ?? /Download to device/ })
+	await expect(menuItem).toBeVisible({ timeout: options.timeout })
+	await menuItem.click()
 	const drawer = page.getByRole('dialog', { name: 'Download folder (S3 → device)' })
 	await expect(drawer).toBeVisible({ timeout: options.timeout })
 	return drawer

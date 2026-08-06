@@ -56,10 +56,6 @@ func newUploadMultipartHTTPService(s *server) uploadMultipartHTTPService {
 	return uploadMultipartHTTPService{server: s}
 }
 
-func buildUploadMultipartHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	return buildUploadFilesHTTPErrorResponse(code, message, details)
-}
-
 func (svc uploadMultipartHTTPService) prepareSession(r *http.Request) uploadMultipartSessionPreparedRequest {
 	profileID := r.Header.Get("X-Profile-Id")
 	uploadID := chi.URLParam(r, "uploadId")
@@ -344,7 +340,7 @@ func (svc uploadMultipartHTTPService) executeGetUploadChunks(r *http.Request) (*
 func (svc uploadMultipartHTTPService) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	status, uploadErr, decodeErr := svc.executeCompleteMultipartUpload(r)
 	if uploadErr != nil {
-		resp := buildUploadMultipartHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		resp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &resp)
 		return
 	}
@@ -358,7 +354,7 @@ func (svc uploadMultipartHTTPService) handleCompleteMultipartUpload(w http.Respo
 func (svc uploadMultipartHTTPService) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	status, uploadErr, decodeErr := svc.executeAbortMultipartUpload(r)
 	if uploadErr != nil {
-		resp := buildUploadMultipartHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		resp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &resp)
 		return
 	}
@@ -372,7 +368,7 @@ func (svc uploadMultipartHTTPService) handleAbortMultipartUpload(w http.Response
 func (svc uploadMultipartHTTPService) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
 	resp, uploadErr := svc.executeGetUploadChunks(r)
 	if uploadErr != nil {
-		resp := buildUploadMultipartHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		resp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &resp)
 		return
 	}

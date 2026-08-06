@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 
 import { useAPIClient } from './api/useAPIClient'
 import { useAuth } from './auth/useAuth'

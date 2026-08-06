@@ -99,20 +99,6 @@ func newProfileExportPreparationError(status int, code, message string, details 
 	}
 }
 
-func buildProfileExportHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc profileExportHTTPService) prepareExportProfile(r *http.Request) profileExportPreparedRequest {
 	profileID := chi.URLParam(r, "profileId")
 	if profileID == "" {
@@ -312,11 +298,11 @@ func (svc profileExportHTTPService) handleExportProfile(w http.ResponseWriter, r
 	if err != nil {
 		var prepErr *profileExportPreparationError
 		if errors.As(err, &prepErr) {
-			resp := buildProfileExportHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, &resp)
 			return
 		}
-		resp := buildProfileExportHTTPErrorResponse("internal_error", "failed to export profile", nil)
+		resp := buildAPIErrorResponse("internal_error", "failed to export profile", nil)
 		writeJSON(w, http.StatusInternalServerError, &resp)
 		return
 	}

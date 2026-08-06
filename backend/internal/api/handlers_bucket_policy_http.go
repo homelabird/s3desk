@@ -36,14 +36,6 @@ func newBucketPolicyHTTPError(status int, code, message string, details map[stri
 	return &bucketPolicyHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketPolicyHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketPolicyHTTPService) prepareBucketPolicy(r *http.Request) (models.ProfileSecrets, string, error) {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -230,12 +222,12 @@ func (svc bucketPolicyHTTPService) handleGetBucketPolicy(w http.ResponseWriter, 
 
 	var httpErr *bucketPolicyHTTPError
 	if errors.As(err, &httpErr) {
-		resp := buildBucketPolicyHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
 
-	respErr := buildBucketPolicyHTTPErrorResponse("internal_error", "failed to handle bucket policy request", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to handle bucket policy request", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }
 
@@ -260,12 +252,12 @@ func (svc bucketPolicyHTTPService) handlePutBucketPolicy(w http.ResponseWriter, 
 
 	var httpErr *bucketPolicyHTTPError
 	if errors.As(err, &httpErr) {
-		resp := buildBucketPolicyHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
 
-	resp := buildBucketPolicyHTTPErrorResponse("internal_error", "failed to handle bucket policy request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to handle bucket policy request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -290,11 +282,11 @@ func (svc bucketPolicyHTTPService) handleDeleteBucketPolicy(w http.ResponseWrite
 
 	var httpErr *bucketPolicyHTTPError
 	if errors.As(err, &httpErr) {
-		resp := buildBucketPolicyHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
 
-	resp := buildBucketPolicyHTTPErrorResponse("internal_error", "failed to handle bucket policy request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to handle bucket policy request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

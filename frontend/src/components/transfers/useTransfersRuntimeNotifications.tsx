@@ -1,6 +1,6 @@
 import { Button, Space, Typography } from 'antd'
 import { useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 
 import { transfersFeedback, transfersFeedbackCopy } from './transfersFeedback'
 import type { TransfersRuntimeNotifications } from './transfersTypes'

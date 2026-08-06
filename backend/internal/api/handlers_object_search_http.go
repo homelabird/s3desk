@@ -34,14 +34,6 @@ func newObjectSearchHTTPError(status int, code, message string, details map[stri
 	return &objectSearchHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectSearchHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc objectSearchHTTPService) prepareSearchObjects(r *http.Request) (string, store.SearchObjectIndexInput, error) {
 	profileID := strings.TrimSpace(r.Header.Get("X-Profile-Id"))
 	if profileID == "" {
@@ -150,10 +142,10 @@ func (svc objectSearchHTTPService) handleSearchObjects(w http.ResponseWriter, r 
 		return
 	}
 	if httpErr, ok := err.(*objectSearchHTTPError); ok {
-		respErr := buildObjectSearchHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectSearchHTTPErrorResponse("internal_error", "failed to search object index", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to search object index", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }

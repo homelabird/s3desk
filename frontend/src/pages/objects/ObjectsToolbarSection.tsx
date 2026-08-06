@@ -5,7 +5,7 @@ import { ObjectsToolbar } from './ObjectsToolbar'
 import { AppTabs } from '../../components/AppTabs'
 import { LinkButton } from '../../components/LinkButton'
 import { ProfileRequiredCallout } from '../../components/ProfileRequiredCallout'
-import { failedToLoadBucketsTitle } from '../../lib/actionHints'
+import { failedToLoadBucketsTitle, selectBucketToBrowseObjectsHint } from '../../lib/actionHints'
 import styles from './ObjectsShell.module.css'
 
 type LocationTab = {
@@ -83,7 +83,7 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 			{hasProfile ? <ObjectsToolbar {...props.toolbarProps} /> : null}
 			{hasProfile && !hasBucket && !props.bucketsErrorMessage ? (
 				<Typography.Text type="secondary" className={styles.toolbarEmptyHint}>
-					Choose a bucket to browse objects.
+					{selectBucketToBrowseObjectsHint()}
 				</Typography.Text>
 			) : null}
 		</div>

@@ -9,7 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { message } from "antd";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { APIClient, APIError } from "../../api/client";

@@ -29,7 +29,11 @@ test.describe('Live server migration flow', () => {
 		const settings = page.getByRole('dialog', { name: 'Settings' })
 		await expect(settings).toBeVisible()
 		await settings.getByRole('tab', { name: 'Support' }).click()
-		await settings.getByRole('button', { name: 'Backup' }).click()
+		const backupSection = settings.getByRole('button', { name: /Backup and restore/ })
+		if (await backupSection.getAttribute('aria-expanded') !== 'true') {
+			await backupSection.click()
+		}
+		await settings.getByRole('button', { name: 'Backup', exact: true }).click()
 		const drawer = page.getByRole('dialog', { name: 'Backup and restore' })
 		await expect(drawer).toBeVisible({ timeout: 30_000 })
 		await expect(drawer.getByRole('button', { name: 'Download backup' })).toBeVisible()
@@ -43,6 +47,7 @@ test.describe('Live server migration flow', () => {
 		const archivePath = testInfo.outputPath(download.suggestedFilename() || 's3desk-full-backup-encrypted.tar.gz')
 		await download.saveAs(archivePath)
 
+		await drawer.getByRole('button', { name: 'Stage restore', exact: true }).click()
 		await drawer.getByPlaceholder('Bundle password (optional)', { exact: true }).fill(backupPassword)
 
 		const restoreInput = drawer.getByTestId('sidebar-restore-input')

@@ -34,14 +34,6 @@ func newObjectListHTTPError(status int, code, message string, details map[string
 	return &objectListHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectListHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectListRcloneErrorContext() rcloneAPIErrorContext {
 	return rcloneAPIErrorContext{
 		MissingMessage: "rclone is required to list objects (install it or set RCLONE_PATH)",
@@ -217,10 +209,10 @@ func (svc objectListHTTPService) handleListObjects(w http.ResponseWriter, r *htt
 		return
 	}
 	if httpErr, ok := err.(*objectListHTTPError); ok {
-		respErr := buildObjectListHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectListHTTPErrorResponse("internal_error", "failed to list objects", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to list objects", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }

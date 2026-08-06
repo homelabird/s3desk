@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Button, Space, Typography } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 
 import type { APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'

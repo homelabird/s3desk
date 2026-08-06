@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
-import { MemoryRouter, type InitialEntry } from 'react-router-dom'
+import { MemoryRouter, type InitialEntry } from 'react-router'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'

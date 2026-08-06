@@ -32,14 +32,6 @@ func newBucketLifecycleHTTPError(status int, code, message string, details map[s
 	return &bucketLifecycleHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketLifecycleHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketLifecycleHTTPService) prepareBucketLifecycle(r *http.Request) (models.ProfileSecrets, string, error) {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -114,11 +106,11 @@ func (svc bucketLifecycleHTTPService) handleGetBucketLifecycle(w http.ResponseWr
 		return
 	}
 	if httpErr, ok := err.(*bucketLifecycleHTTPError); ok {
-		resp := buildBucketLifecycleHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketLifecycleHTTPErrorResponse("internal_error", "failed to process bucket lifecycle request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket lifecycle request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -142,10 +134,10 @@ func (svc bucketLifecycleHTTPService) handlePutBucketLifecycle(w http.ResponseWr
 		return
 	}
 	if httpErr, ok := err.(*bucketLifecycleHTTPError); ok {
-		resp := buildBucketLifecycleHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketLifecycleHTTPErrorResponse("internal_error", "failed to process bucket lifecycle request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket lifecycle request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

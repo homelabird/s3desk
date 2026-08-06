@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Grid, theme } from 'antd'
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 
 import { useAPIClient } from '../../api/useAPIClient'
 import { useTransfers } from '../../components/useTransfers'

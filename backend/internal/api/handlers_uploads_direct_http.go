@@ -153,7 +153,7 @@ func (svc uploadDirectHTTPService) handleDirectMultipartChunkUpload(w http.Respo
 		w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
 	}
 	if uploadErr != nil {
-		errResp := buildUploadFilesHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &errResp)
 		return
 	}
@@ -166,7 +166,7 @@ func (svc uploadDirectHTTPService) handleDirectMultipartFormUpload(w http.Respon
 		w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
 	}
 	if uploadErr != nil {
-		errResp := buildUploadFilesHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &errResp)
 		return
 	}

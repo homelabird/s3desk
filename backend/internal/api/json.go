@@ -32,7 +32,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, status int, code, message string, details map[string]any) {
+func buildAPIErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
 	resp := models.ErrorResponse{
 		Error: models.APIError{
 			Code:    code,
@@ -40,14 +40,16 @@ func writeError(w http.ResponseWriter, status int, code, message string, details
 			Details: details,
 		},
 	}
-
-	// If this is a stable, provider-agnostic code, surface it in `normalizedError` as well.
-	// This keeps UX logic consistent even for non-rclone errors (e.g., preflight invalid_config).
-	if resp.Error.NormalizedError == nil {
-		if norm, ok := normalizedErrorFromCode(code); ok {
-			resp.Error.NormalizedError = norm
-		}
+	// Keep provider-specific codes aligned with the normalized client error taxonomy.
+	if norm, ok := normalizedErrorFromCode(code); ok {
+		resp.Error.NormalizedError = norm
 	}
+	return resp
+}
+
+func writeError(w http.ResponseWriter, status int, code, message string, details map[string]any) {
+	resp := buildAPIErrorResponse(code, message, details)
+
 	// Hint clients when backoff makes sense (e.g., rate limiting).
 	if resp.Error.NormalizedError != nil && resp.Error.NormalizedError.Code == models.NormalizedErrorRateLimited {
 		if w.Header().Get("Retry-After") == "" {

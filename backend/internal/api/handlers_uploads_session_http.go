@@ -35,14 +35,6 @@ func newUploadSessionHTTPService(s *server) uploadSessionHTTPService {
 	return uploadSessionHTTPService{server: s}
 }
 
-func buildUploadSessionHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc uploadSessionHTTPService) defaultCreateMode() string {
 	if svc.server.cfg.UploadDirectStream {
 		return uploadModeDirect
@@ -216,7 +208,7 @@ func (svc uploadSessionHTTPService) executeDelete(r *http.Request) *uploadHTTPEr
 func (svc uploadSessionHTTPService) handleCreateUploadSession(w http.ResponseWriter, r *http.Request) {
 	resp, uploadErr, decodeErr := svc.executeCreate(r)
 	if uploadErr != nil {
-		errResp := buildUploadSessionHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &errResp)
 		return
 	}
@@ -230,7 +222,7 @@ func (svc uploadSessionHTTPService) handleCreateUploadSession(w http.ResponseWri
 func (svc uploadSessionHTTPService) handleDeleteUploadSession(w http.ResponseWriter, r *http.Request) {
 	uploadErr := svc.executeDelete(r)
 	if uploadErr != nil {
-		errResp := buildUploadSessionHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &errResp)
 		return
 	}

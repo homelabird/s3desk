@@ -138,10 +138,10 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 
 					{values.gcpAnonymous ? (
 						<Typography.Text type="secondary" className={styles.sectionNote}>
-							Only when the endpoint allows public access. Project Number is still required.
+							Anonymous mode only works when the endpoint allows unauthenticated access.
 						</Typography.Text>
 					) : (
-						<FormField label="Service Account Key" htmlFor="profile-gcp-service-account-json" required={!editMode} error={errors.gcpServiceAccountJson}>
+						<FormField label="Service Account JSON" htmlFor="profile-gcp-service-account-json" required={!editMode} error={errors.gcpServiceAccountJson}>
 							<Input.TextArea
 								{...profileFieldA11y('profile-gcp-service-account-json', errors.gcpServiceAccountJson)}
 								className={styles.compactTextArea}

@@ -57,6 +57,7 @@ func (s *realtimeTicketStore) Consume(token, transport string, now time.Time) bo
 	if !ok {
 		return false
 	}
+	// Consume before validation so an invalid or expired ticket cannot be replayed.
 	delete(s.entries, token)
 	if entry.transport != transport {
 		return false

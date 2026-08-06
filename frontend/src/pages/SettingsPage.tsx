@@ -1,6 +1,6 @@
 import { Button, Collapse, Space, Typography } from 'antd'
 import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 
 import {
 	DEFAULT_RETRY_COUNT,

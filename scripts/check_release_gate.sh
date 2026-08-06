@@ -34,6 +34,8 @@ ENV_DEFAULTS="${ROOT}/.env"
 ENV_EXAMPLE="${ROOT}/.env.example"
 DEMO_COMPOSE="${ROOT}/compose/demo/compose.yml"
 PORTABLE_SMOKE_COMPOSE="${ROOT}/compose/test/portable-smoke.yml"
+UPGRADE_COMPATIBILITY_SCRIPT="${ROOT}/scripts/run_container_legacy_db_smoke.sh"
+POSTGRES_UPGRADE_COMPATIBILITY_SCRIPT="${ROOT}/scripts/run_container_legacy_postgres_smoke.sh"
 GO_TOOLCHAIN_CHECK="${ROOT}/scripts/check_go_toolchain.py"
 RELEASE_SCOPE_CHECK="${ROOT}/scripts/report_release_scope.py"
 RELEASE_SCOPE_CHECK_TEST="${ROOT}/scripts/report_release_scope_test.py"
@@ -185,6 +187,14 @@ if [[ ! -f "${DEMO_COMPOSE}" ]]; then
 fi
 if [[ ! -f "${PORTABLE_SMOKE_COMPOSE}" ]]; then
   echo "[release-gate] compose/test/portable-smoke.yml not found" >&2
+  exit 1
+fi
+if [[ ! -f "${UPGRADE_COMPATIBILITY_SCRIPT}" ]]; then
+  echo "[release-gate] scripts/run_container_legacy_db_smoke.sh not found" >&2
+  exit 1
+fi
+if [[ ! -f "${POSTGRES_UPGRADE_COMPATIBILITY_SCRIPT}" ]]; then
+  echo "[release-gate] scripts/run_container_legacy_postgres_smoke.sh not found" >&2
   exit 1
 fi
 if [[ ! -f "${GO_TOOLCHAIN_CHECK}" ]]; then
@@ -356,11 +366,16 @@ require_no_text "${PORTABLE_SMOKE_COMPOSE}" "docker.io/minio/mc:latest" "floatin
 require_no_text "${GITLAB_CI}" "quay.io/podman/stable:latest" "floating GitLab Podman release image"
 require_no_text "${GITLAB_CI}" "PODMAN_IMAGE" "overridable GitLab Podman image variable"
 require_text "${GITLAB_CI}" 'image: "quay.io/podman/stable@sha256:' "digest-pinned GitLab Podman release image"
+require_text "${GITLAB_CI}" "--build-arg APP_VERSION" "release image version build argument"
+require_text "${GITLAB_CI}" "run_container_legacy_db_smoke.sh" "SQLite upgrade compatibility CI lane"
+require_text "${GITLAB_CI}" "run_container_legacy_postgres_smoke.sh" "Postgres upgrade compatibility CI lane"
+require_text "${GITLAB_CI}" "S3DESK_EXPECTED_VERSION" "upgrade smoke version assertion"
 require_text "${GITLAB_CI}" 'E2E_BASE_URL && $E2E_LIVE != "1"' "non-live E2E lane guard"
 require_text "${GITLAB_CI}" 'E2E_LIVE == "1" && $E2E_BASE_URL && $CI_COMMIT_REF_PROTECTED == "true"' "protected live E2E lane guard"
 require_text "${CONTAINERFILE}" "node:22-alpine@sha256:" "digest-pinned production Node image"
 require_text "${CONTAINERFILE}" "golang:1.25.10-alpine@sha256:" "digest-pinned production Go image"
 require_text "${CONTAINERFILE}" "rclone/rclone:1.72.0@sha256:" "digest-pinned production rclone image"
+require_text "${CONTAINERFILE}" "-X s3desk/internal/version.Version" "release binary version linker injection"
 require_text "${CONTAINERFILE}" "alpine:3.21@sha256:" "digest-pinned production Alpine image"
 require_text "${E2E_RUNNER_DOCKERFILE}" "python:3.12-slim@sha256:" "digest-pinned E2E runner image"
 require_text "${K8S_RBAC_MANIFEST}" "kind: ValidatingAdmissionPolicy" "smoke RoleBinding admission policy"
@@ -419,6 +434,9 @@ require_text "${RELEASE_GATE}" "provider-live, reverse-proxy, or backup-portable
 require_text "${RELEASE_GATE}" "Backup Portable Smoke Gate" "backup-portable release gate section"
 require_text "${RELEASE_GATE}" "BACKUP_PORTABLE_SMOKE_TEMPLATE.md" "backup-portable release gate template documentation"
 require_text "${RELEASE_GATE}" "each portable smoke script in \`## Smoke Results\` records a pass/success result" "backup-portable release gate per-script evidence documentation"
+require_text "${RELEASE_GATE}" "## Upgrade Compatibility Gate" "upgrade compatibility release gate section"
+require_text "${RELEASE_GATE}" "run_container_legacy_db_smoke.sh" "container upgrade compatibility command"
+require_text "${RELEASE_GATE}" "run_container_legacy_postgres_smoke.sh" "Postgres container upgrade compatibility command"
 require_text "${RELEASE_GATE}" "exits non-zero until required provider/reverse-proxy/backup-portable evidence is present" "release readiness evidence-blocker warning"
 require_text "${RELEASE_GATE}" "does not replace \`./scripts/check.sh full\`, clean-snapshot verification, or the browser lanes" "release readiness scope warning"
 require_text "${RELEASE_GATE}" "GitLab tag publish safeguard" "GitLab publish readiness gate documentation"
@@ -530,6 +548,9 @@ require_text "${TESTING_DOC}" "publish_dockerhub\` -> \`release_image_smoke\` ->
 require_text "${TESTING_DOC}" "bash scripts/run_portable_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_smoke.sh && bash scripts/run_portable_sqlite_to_postgres_smoke.sh" "canonical backup-portable smoke testing command"
 require_text "${TESTING_DOC}" "Evidence \`## Smoke Results\` must use the exact \`bash scripts/...\` labels" "canonical backup-portable smoke result labels"
 require_no_text "${TESTING_DOC}" "./scripts/run_portable_" "non-canonical portable smoke script invocation in testing docs"
+require_text "${TESTING_DOC}" "## Upgrade Compatibility" "upgrade compatibility testing section"
+require_text "${TESTING_DOC}" "run_container_legacy_db_smoke.sh" "container upgrade compatibility testing command"
+require_text "${TESTING_DOC}" "run_container_legacy_postgres_smoke.sh" "Postgres container upgrade compatibility testing command"
 require_text "${TESTING_DOC}" "fail before remote mutation when reverse-proxy smoke inputs are missing" "deploy pre-mutation env preflight testing documentation"
 require_text "${TESTING_DOC}" "helm upgrade --install --dry-run=client" "Helm deploy dry-run testing documentation"
 require_text "${TESTING_DOC}" "\`Signed proxy URL root\` that matches \`Expected external base URL\`" "release evidence signed root testing documentation"

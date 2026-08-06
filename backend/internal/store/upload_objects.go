@@ -52,6 +52,7 @@ func (s *Store) UpsertUploadObjectWithByteLimitReservation(ctx context.Context, 
 	}
 
 	var reservation UploadObjectReservation
+	// Keep byte reservation and object upsert atomic; prior state enables rollback after external failure.
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockUploadSessionBytes(tx, obj.ProfileID, obj.UploadID); err != nil {
 			return err

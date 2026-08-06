@@ -34,14 +34,6 @@ func newBucketPolicyValidateHTTPError(status int, code, message string, details 
 	return &bucketPolicyValidateHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketPolicyValidateHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketPolicyValidateHTTPService) prepareValidateBucketPolicy(r *http.Request) (models.ProfileSecrets, string, models.BucketPolicyPutRequest, error) {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -102,11 +94,11 @@ func (svc bucketPolicyValidateHTTPService) handleValidateBucketPolicy(w http.Res
 	if err != nil {
 		var reqErr *bucketPolicyValidateHTTPError
 		if errors.As(err, &reqErr) {
-			respErr := buildBucketPolicyValidateHTTPErrorResponse(reqErr.code, reqErr.message, reqErr.details)
+			respErr := buildAPIErrorResponse(reqErr.code, reqErr.message, reqErr.details)
 			writeJSON(w, reqErr.status, &respErr)
 			return
 		}
-		respErr := buildBucketPolicyValidateHTTPErrorResponse(
+		respErr := buildAPIErrorResponse(
 			"internal_error",
 			"failed to validate bucket policy",
 			map[string]any{"error": err.Error()},

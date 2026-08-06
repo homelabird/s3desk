@@ -37,14 +37,6 @@ func newObjectDownloadURLHTTPError(status int, code, message string, details map
 	return &objectDownloadURLHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectDownloadURLHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectDownloadURLResponse(url string, expires time.Duration, now time.Time) models.PresignedURLResponse {
 	return models.PresignedURLResponse{
 		URL:       url,
@@ -197,10 +189,10 @@ func (svc objectDownloadURLHTTPService) handleGetObjectDownloadURL(w http.Respon
 		return
 	}
 	if httpErr, ok := err.(*objectDownloadURLHTTPError); ok {
-		respErr := buildObjectDownloadURLHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectDownloadURLHTTPErrorResponse("internal_error", "failed to generate download url", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to generate download url", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }
