@@ -266,7 +266,11 @@ GitLab tag publishing also runs:
 bash scripts/check_gitlab_publish_readiness.sh <tag>
 ```
 
-That helper validates the tag format, derives the previous tag or uses `DEPLOY_RELEASE_BASE`, then delegates to `scripts/verify_release_readiness.sh` before Docker Hub or Helm publication. The preflight covers the committed candidate diff plus GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state, so `curl` and `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs. By default it requires the exact GitHub check names `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`; if branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the script default in the same change. GitLab release-builder images must remain pinned; `PODMAN_IMAGE` must not point at `quay.io/podman/stable:latest`.
+That helper validates the tag format, derives the previous tag or uses `DEPLOY_RELEASE_BASE`, then delegates to `scripts/verify_release_readiness.sh` before Docker Hub or Helm publication. The preflight covers the committed candidate diff plus GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state, so `curl` and `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs. By default it requires the exact GitHub check names `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`; if branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the script default in the same change. GitLab release-builder images must remain digest-pinned literal `image:` references and must not be overridden through mutable image variables.
+
+### Lighthouse authentication
+
+Lighthouse must target a controlled origin explicitly. Set `S3DESK_URL`, `S3DESK_API_TOKEN`, and `S3DESK_PROFILE_ID`; set `S3DESK_LH_ALLOW_TOKEN_STORAGE=1` only for the run that intentionally places the token in the target origin's browser `localStorage`. The auth script rejects missing or cross-origin targets.
 
 The GitLab publish DAG is also checked locally:
 
