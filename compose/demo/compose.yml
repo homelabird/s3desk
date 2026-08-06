@@ -81,7 +81,7 @@ services:
       # The entrypoint appends `s3desk` so internal seed traffic still works even when
       # DEMO_ALLOWED_HOSTS is overridden by the caller.
       ALLOWED_HOSTS: "${DEMO_ALLOWED_HOSTS:-127.0.0.1,localhost,::1,s3desk}"
-      API_TOKEN: ${API_TOKEN:-s3desk-demo-token-0123456789abcdef012345}
+      API_TOKEN: ${API_TOKEN:-s3desk-demo-local-only-token-0123456789abcdef012345}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
       EXTERNAL_BASE_URL: ${DEMO_EXTERNAL_BASE_URL:-http://127.0.0.1:8080}
       DB_BACKEND: "sqlite"
@@ -121,7 +121,7 @@ services:
       MINIO_BIND_HOST: ${MINIO_BIND_HOST:-127.0.0.1}
       MINIO_API_PORT: ${MINIO_API_PORT:-9000}
       DEMO_PUBLIC_HOST: ${DEMO_PUBLIC_HOST:-}
-      API_TOKEN: ${API_TOKEN:-s3desk-demo-token-0123456789abcdef012345}
+      API_TOKEN: ${API_TOKEN:-s3desk-demo-local-only-token-0123456789abcdef012345}
       S3DESK_API_BASE: "${S3DESK_API_BASE:-}"
       DEMO_PROFILE_NAME: ${DEMO_PROFILE_NAME:-MinIO Demo}
       DEMO_BUCKET: ${DEMO_BUCKET:-demo-bucket}

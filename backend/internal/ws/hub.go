@@ -64,6 +64,7 @@ func (h *Hub) Subscribe() *Client {
 func (h *Hub) SubscribeFrom(afterSeq int64, includeLogs bool) (client *Client, backlog []Message) {
 	c := &Client{send: make(chan Message, 128), includeLogs: includeLogs}
 
+	// One lock keeps registration and replay state consistent during reconnects.
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

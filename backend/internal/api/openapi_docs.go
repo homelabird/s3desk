@@ -1,6 +1,15 @@
 package api
 
-import "net/http"
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"net/http"
+	"strings"
+)
+
+const openAPIDocsNoncePlaceholder = "__S3DESK_DOCS_NONCE__"
+
+const openAPIDocsContentSecurityPolicy = "base-uri 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; object-src 'none'; style-src 'self' 'unsafe-inline' https://unpkg.com; script-src 'self' https://unpkg.com 'nonce-"
 
 const openAPIDocsHTML = `<!doctype html>
 <html lang="en">
@@ -18,7 +27,7 @@ const openAPIDocsHTML = `<!doctype html>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-standalone-preset.js"></script>
-  <script>
+  <script nonce="__S3DESK_DOCS_NONCE__">
     window.addEventListener('load', function () {
       var specUrl = new URL('/openapi.yml', window.location.href).toString();
       SwaggerUIBundle({
@@ -34,6 +43,14 @@ const openAPIDocsHTML = `<!doctype html>
 `
 
 func serveOpenAPIDocs(w http.ResponseWriter, r *http.Request) {
+	var nonceBytes [16]byte
+	if _, err := rand.Read(nonceBytes[:]); err != nil {
+		http.Error(w, "failed to prepare API docs", http.StatusInternalServerError)
+		return
+	}
+	nonce := base64.RawStdEncoding.EncodeToString(nonceBytes[:])
+	w.Header().Set("Content-Security-Policy", openAPIDocsContentSecurityPolicy+nonce+"'")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(openAPIDocsHTML))
+	html := strings.Replace(openAPIDocsHTML, openAPIDocsNoncePlaceholder, nonce, 1)
+	_, _ = w.Write([]byte(html))
 }

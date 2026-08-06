@@ -105,6 +105,7 @@ func (svc apiTokenAuthService) prepareAuthorization(r *http.Request) apiTokenAut
 		return prepared
 	}
 
+	// Keep credentials out of URLs; query parameters are easier to leak through logs and history.
 	if queryAPIToken := strings.TrimSpace(r.URL.Query().Get("apiToken")); queryAPIToken != "" {
 		prepared.err = &apiTokenAuthError{
 			status:  http.StatusBadRequest,
@@ -124,6 +125,7 @@ func (svc apiTokenAuthService) prepareAuthorization(r *http.Request) apiTokenAut
 		return prepared
 	}
 
+	// Only realtime endpoints may consume one-shot transport tickets.
 	prepared.transport = realtimeRequestTransport(r)
 	if prepared.transport != "" && isRealtimeTicketPath(r) {
 		prepared.realtimeTicket = strings.TrimSpace(r.URL.Query().Get("realtimeTicket"))
