@@ -32,14 +32,6 @@ func newBucketProtectionHTTPError(status int, code, message string, details map[
 	return &bucketProtectionHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketProtectionHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketProtectionHTTPService) prepareBucketProtection(r *http.Request) (models.ProfileSecrets, string, error) {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -113,11 +105,11 @@ func (svc bucketProtectionHTTPService) handleGetBucketProtection(w http.Response
 		return
 	}
 	if httpErr, ok := err.(*bucketProtectionHTTPError); ok {
-		resp := buildBucketProtectionHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketProtectionHTTPErrorResponse("internal_error", "failed to process bucket protection request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket protection request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -140,10 +132,10 @@ func (svc bucketProtectionHTTPService) handlePutBucketProtection(w http.Response
 		return
 	}
 	if httpErr, ok := err.(*bucketProtectionHTTPError); ok {
-		resp := buildBucketProtectionHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketProtectionHTTPErrorResponse("internal_error", "failed to process bucket protection request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket protection request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

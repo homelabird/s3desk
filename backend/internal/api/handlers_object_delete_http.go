@@ -36,14 +36,6 @@ func newObjectDeleteHTTPError(status int, code, message string, details map[stri
 	return &objectDeleteHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectDeleteHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectDeleteRcloneErrorContext() rcloneAPIErrorContext {
 	return rcloneAPIErrorContext{
 		MissingMessage: "rclone is required to delete objects (install it or set RCLONE_PATH)",
@@ -153,10 +145,10 @@ func (svc objectDeleteHTTPService) handleDeleteObjects(w http.ResponseWriter, r 
 		return
 	}
 	if httpErr, ok := err.(*objectDeleteHTTPError); ok {
-		respErr := buildObjectDeleteHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectDeleteHTTPErrorResponse("internal_error", "failed to delete objects", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to delete objects", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }

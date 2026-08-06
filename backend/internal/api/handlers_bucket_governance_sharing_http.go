@@ -39,14 +39,6 @@ func newBucketSharingHTTPError(status int, code, message string, details map[str
 	return &bucketSharingHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketSharingHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketSharingHTTPService) prepareBucketSharing(r *http.Request) bucketSharingPreparedRequest {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -124,11 +116,11 @@ func (svc bucketSharingHTTPService) handleGetBucketSharing(w http.ResponseWriter
 		return
 	}
 	if httpErr, ok := err.(*bucketSharingHTTPError); ok {
-		resp := buildBucketSharingHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketSharingHTTPErrorResponse("internal_error", "failed to process bucket sharing request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket sharing request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -148,10 +140,10 @@ func (svc bucketSharingHTTPService) handlePutBucketSharing(w http.ResponseWriter
 		return
 	}
 	if httpErr, ok := err.(*bucketSharingHTTPError); ok {
-		resp := buildBucketSharingHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketSharingHTTPErrorResponse("internal_error", "failed to process bucket sharing request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket sharing request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

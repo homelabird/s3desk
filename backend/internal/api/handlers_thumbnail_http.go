@@ -34,14 +34,6 @@ func newObjectThumbnailHTTPError(status int, code, message string, details map[s
 	return &objectThumbnailHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectThumbnailHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectThumbnailMetaRcloneErrorContext() rcloneAPIErrorContext {
 	return rcloneAPIErrorContext{
 		MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
@@ -243,16 +235,16 @@ func (svc objectThumbnailHTTPService) handleGetObjectThumbnail(w http.ResponseWr
 		writeRcloneAPIError(w, rcloneErr, stderr, rcloneCtx, rcloneDetails)
 		return
 	case err == nil:
-		resp := buildObjectThumbnailHTTPErrorResponse("internal_error", "failed to get object thumbnail", nil)
+		resp := buildAPIErrorResponse("internal_error", "failed to get object thumbnail", nil)
 		writeJSON(w, http.StatusInternalServerError, resp)
 		return
 	default:
 		if httpErr, ok := err.(*objectThumbnailHTTPError); ok {
-			resp := buildObjectThumbnailHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+			resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 			writeJSON(w, httpErr.status, resp)
 			return
 		}
-		resp := buildObjectThumbnailHTTPErrorResponse("internal_error", "failed to get object thumbnail", nil)
+		resp := buildAPIErrorResponse("internal_error", "failed to get object thumbnail", nil)
 		writeJSON(w, http.StatusInternalServerError, resp)
 	}
 }

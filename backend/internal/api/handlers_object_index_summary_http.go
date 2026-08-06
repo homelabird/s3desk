@@ -34,14 +34,6 @@ func newObjectIndexSummaryHTTPError(status int, code, message string, details ma
 	return &objectIndexSummaryHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectIndexSummaryHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc objectIndexSummaryHTTPService) prepareGetObjectIndexSummary(r *http.Request) (string, string, string, int, error) {
 	profileID := strings.TrimSpace(r.Header.Get("X-Profile-Id"))
 	if profileID == "" {
@@ -102,10 +94,10 @@ func (svc objectIndexSummaryHTTPService) handleGetObjectIndexSummary(w http.Resp
 		return
 	}
 	if httpErr, ok := err.(*objectIndexSummaryHTTPError); ok {
-		respErr := buildObjectIndexSummaryHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectIndexSummaryHTTPErrorResponse("internal_error", "failed to summarize object index", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to summarize object index", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }

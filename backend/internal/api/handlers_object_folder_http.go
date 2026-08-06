@@ -35,14 +35,6 @@ func newObjectCreateFolderHTTPError(status int, code, message string, details ma
 	return &objectCreateFolderHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectCreateFolderHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectCreateFolderRcloneErrorContext() rcloneAPIErrorContext {
 	return rcloneAPIErrorContext{
 		MissingMessage: "rclone is required to create folders (install it or set RCLONE_PATH)",
@@ -196,10 +188,10 @@ func (svc objectCreateFolderHTTPService) handleCreateObjectFolder(w http.Respons
 		return
 	}
 	if httpErr, ok := err.(*objectCreateFolderHTTPError); ok {
-		respErr := buildObjectCreateFolderHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, respErr)
 		return
 	}
-	respErr := buildObjectCreateFolderHTTPErrorResponse("internal_error", "failed to create folder", nil)
+	respErr := buildAPIErrorResponse("internal_error", "failed to create folder", nil)
 	writeJSON(w, http.StatusInternalServerError, respErr)
 }

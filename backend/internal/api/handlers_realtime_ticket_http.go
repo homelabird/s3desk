@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"s3desk/internal/models"
 )
 
 type realtimeTicketHTTPError struct {
@@ -28,14 +26,6 @@ type realtimeTicketHTTPService struct {
 
 func newRealtimeTicketHTTPService(s *server) realtimeTicketHTTPService {
 	return realtimeTicketHTTPService{server: s}
-}
-
-func buildRealtimeTicketHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
 }
 
 func (svc realtimeTicketHTTPService) prepareCreateRealtimeTicket(w http.ResponseWriter, r *http.Request) (string, *realtimeTicketHTTPError) {
@@ -100,7 +90,7 @@ func (svc realtimeTicketHTTPService) handleCreateRealtimeTicket(w http.ResponseW
 		return
 	}
 	if err.status != 0 {
-		respErr := buildRealtimeTicketHTTPErrorResponse(err.code, err.message, err.details)
+		respErr := buildAPIErrorResponse(err.code, err.message, err.details)
 		writeJSON(w, err.status, &respErr)
 	}
 }

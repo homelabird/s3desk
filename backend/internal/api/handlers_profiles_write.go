@@ -55,20 +55,6 @@ func newProfileWriteHTTPService(s *server) profileWriteHTTPService {
 	return profileWriteHTTPService{server: s}
 }
 
-func buildProfileWriteHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc profileWriteHTTPService) prepareCreateProfile(r *http.Request) profileWritePreparedRequest {
 	var req models.ProfileCreateRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -226,11 +212,11 @@ func (svc profileWriteHTTPService) handleCreateProfile(w http.ResponseWriter, r 
 	}
 	if prepared.err != nil {
 		if prepErr := (*profileWritePreparationError)(nil); errors.As(prepared.err, &prepErr) {
-			resp := buildProfileWriteHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, resp)
 			return
 		}
-		resp := buildProfileWriteHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"internal_error",
 			"failed to create profile",
 			map[string]any{"error": prepared.err.Error()},
@@ -244,11 +230,11 @@ func (svc profileWriteHTTPService) handleCreateProfile(w http.ResponseWriter, r 
 		return
 	}
 	if prepErr := (*profileWritePreparationError)(nil); errors.As(err, &prepErr) {
-		resp := buildProfileWriteHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+		resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 		writeJSON(w, prepErr.status, resp)
 		return
 	}
-	resp := buildProfileWriteHTTPErrorResponse(
+	resp := buildAPIErrorResponse(
 		"internal_error",
 		"failed to create profile",
 		map[string]any{"error": err.Error()},
@@ -264,19 +250,19 @@ func (svc profileWriteHTTPService) handleUpdateProfile(w http.ResponseWriter, r 
 	}
 	if prepared.err != nil {
 		if prepErr := (*profileWritePreparationError)(nil); errors.As(prepared.err, &prepErr) {
-			resp := buildProfileWriteHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, resp)
 			return
 		}
 		switch {
 		case errors.Is(prepared.err, store.ErrEncryptedCredentials):
-			resp := buildProfileWriteHTTPErrorResponse("encrypted_credentials", prepared.err.Error(), nil)
+			resp := buildAPIErrorResponse("encrypted_credentials", prepared.err.Error(), nil)
 			writeJSON(w, http.StatusBadRequest, resp)
 		case errors.Is(prepared.err, store.ErrEncryptionKeyRequired):
-			resp := buildProfileWriteHTTPErrorResponse("encryption_required", prepared.err.Error(), nil)
+			resp := buildAPIErrorResponse("encryption_required", prepared.err.Error(), nil)
 			writeJSON(w, http.StatusBadRequest, resp)
 		default:
-			resp := buildProfileWriteHTTPErrorResponse(
+			resp := buildAPIErrorResponse(
 				"invalid_request",
 				"failed to update profile",
 				map[string]any{"error": prepared.err.Error()},
@@ -291,19 +277,19 @@ func (svc profileWriteHTTPService) handleUpdateProfile(w http.ResponseWriter, r 
 		return
 	}
 	if prepErr := (*profileWritePreparationError)(nil); errors.As(err, &prepErr) {
-		resp := buildProfileWriteHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+		resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 		writeJSON(w, prepErr.status, resp)
 		return
 	}
 	switch {
 	case errors.Is(err, store.ErrEncryptedCredentials):
-		resp := buildProfileWriteHTTPErrorResponse("encrypted_credentials", err.Error(), nil)
+		resp := buildAPIErrorResponse("encrypted_credentials", err.Error(), nil)
 		writeJSON(w, http.StatusBadRequest, resp)
 	case errors.Is(err, store.ErrEncryptionKeyRequired):
-		resp := buildProfileWriteHTTPErrorResponse("encryption_required", err.Error(), nil)
+		resp := buildAPIErrorResponse("encryption_required", err.Error(), nil)
 		writeJSON(w, http.StatusBadRequest, resp)
 	default:
-		resp := buildProfileWriteHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"invalid_request",
 			"failed to update profile",
 			map[string]any{"error": err.Error()},

@@ -38,14 +38,6 @@ func newBucketGovernanceSummaryHTTPError(status int, code, message string, detai
 	return &bucketGovernanceSummaryHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketGovernanceSummaryHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketGovernanceSummaryHTTPService) prepareGetBucketGovernance(r *http.Request) bucketGovernanceSummaryPreparedRequest {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -93,10 +85,10 @@ func (svc bucketGovernanceSummaryHTTPService) handleGetBucketGovernance(w http.R
 		return
 	}
 	if httpErr, ok := err.(*bucketGovernanceSummaryHTTPError); ok {
-		resp := buildBucketGovernanceSummaryHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketGovernanceSummaryHTTPErrorResponse("internal_error", "failed to load bucket governance", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to load bucket governance", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

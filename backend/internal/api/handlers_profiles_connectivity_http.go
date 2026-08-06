@@ -45,20 +45,6 @@ func newProfileConnectivityHTTPService(s *server) profileConnectivityHTTPService
 	return profileConnectivityHTTPService{server: s}
 }
 
-func buildProfileConnectivityHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func profileConnectivityFailedSpec(kind profileConnectivityKind) (failedCode, failedMessage, missingEngineMessage string) {
 	switch kind {
 	case profileConnectivityBenchmark:
@@ -126,23 +112,23 @@ func (svc profileConnectivityHTTPService) handleTestProfile(w http.ResponseWrite
 		}
 	}
 	if prepErr := (*profileConnectivityPreparationError)(nil); errors.As(err, &prepErr) {
-		respErr := buildProfileConnectivityHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+		respErr := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 		writeJSON(w, prepErr.status, respErr)
 		return
 	}
 	if errors.Is(err, jobs.ErrProfileNotFound) {
-		respErr := buildProfileConnectivityHTTPErrorResponse("not_found", "profile not found", map[string]any{"profileId": profileID})
+		respErr := buildAPIErrorResponse("not_found", "profile not found", map[string]any{"profileId": profileID})
 		writeJSON(w, http.StatusNotFound, respErr)
 		return
 	}
 	failedCode, failedMessage, missingEngineMessage := profileConnectivityFailedSpec(profileConnectivityTest)
 	if errors.Is(err, jobs.ErrRcloneNotFound) {
-		respErr := buildProfileConnectivityHTTPErrorResponse("transfer_engine_missing", missingEngineMessage, nil)
+		respErr := buildAPIErrorResponse("transfer_engine_missing", missingEngineMessage, nil)
 		writeJSON(w, http.StatusBadRequest, respErr)
 		return
 	}
 	if inc := (*jobs.RcloneIncompatibleError)(nil); errors.As(err, &inc) {
-		respErr := buildProfileConnectivityHTTPErrorResponse(
+		respErr := buildAPIErrorResponse(
 			"transfer_engine_incompatible",
 			"rclone version is incompatible",
 			map[string]any{"currentVersion": inc.CurrentVersion, "minVersion": inc.MinVersion},
@@ -150,7 +136,7 @@ func (svc profileConnectivityHTTPService) handleTestProfile(w http.ResponseWrite
 		writeJSON(w, http.StatusBadRequest, respErr)
 		return
 	}
-	respErr := buildProfileConnectivityHTTPErrorResponse(
+	respErr := buildAPIErrorResponse(
 		failedCode,
 		failedMessage,
 		map[string]any{"error": err.Error()},
@@ -169,23 +155,23 @@ func (svc profileConnectivityHTTPService) handleBenchmarkProfile(w http.Response
 		}
 	}
 	if prepErr := (*profileConnectivityPreparationError)(nil); errors.As(err, &prepErr) {
-		respErr := buildProfileConnectivityHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+		respErr := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 		writeJSON(w, prepErr.status, respErr)
 		return
 	}
 	if errors.Is(err, jobs.ErrProfileNotFound) {
-		respErr := buildProfileConnectivityHTTPErrorResponse("not_found", "profile not found", map[string]any{"profileId": profileID})
+		respErr := buildAPIErrorResponse("not_found", "profile not found", map[string]any{"profileId": profileID})
 		writeJSON(w, http.StatusNotFound, respErr)
 		return
 	}
 	failedCode, failedMessage, missingEngineMessage := profileConnectivityFailedSpec(profileConnectivityBenchmark)
 	if errors.Is(err, jobs.ErrRcloneNotFound) {
-		respErr := buildProfileConnectivityHTTPErrorResponse("transfer_engine_missing", missingEngineMessage, nil)
+		respErr := buildAPIErrorResponse("transfer_engine_missing", missingEngineMessage, nil)
 		writeJSON(w, http.StatusBadRequest, respErr)
 		return
 	}
 	if inc := (*jobs.RcloneIncompatibleError)(nil); errors.As(err, &inc) {
-		respErr := buildProfileConnectivityHTTPErrorResponse(
+		respErr := buildAPIErrorResponse(
 			"transfer_engine_incompatible",
 			"rclone version is incompatible",
 			map[string]any{"currentVersion": inc.CurrentVersion, "minVersion": inc.MinVersion},
@@ -193,7 +179,7 @@ func (svc profileConnectivityHTTPService) handleBenchmarkProfile(w http.Response
 		writeJSON(w, http.StatusBadRequest, respErr)
 		return
 	}
-	respErr := buildProfileConnectivityHTTPErrorResponse(
+	respErr := buildAPIErrorResponse(
 		failedCode,
 		failedMessage,
 		map[string]any{"error": err.Error()},

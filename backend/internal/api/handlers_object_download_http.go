@@ -31,14 +31,6 @@ func newObjectDownloadHTTPError(status int, code, message string, details map[st
 	return &objectDownloadHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildObjectDownloadHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func buildObjectDownloadRcloneErrorContext() rcloneAPIErrorContext {
 	return rcloneAPIErrorContext{
 		MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
@@ -98,16 +90,16 @@ func (svc objectDownloadHTTPService) handleDownloadObject(w http.ResponseWriter,
 		writeRcloneAPIError(w, rcloneErr, stderr, rcloneCtx, rcloneDetails)
 		return
 	case err == nil:
-		resp := buildObjectDownloadHTTPErrorResponse("internal_error", "failed to download object", nil)
+		resp := buildAPIErrorResponse("internal_error", "failed to download object", nil)
 		writeJSON(w, http.StatusInternalServerError, resp)
 		return
 	default:
 		if httpErr, ok := err.(*objectDownloadHTTPError); ok {
-			resp := buildObjectDownloadHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+			resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 			writeJSON(w, httpErr.status, resp)
 			return
 		}
-		resp := buildObjectDownloadHTTPErrorResponse("internal_error", "failed to download object", nil)
+		resp := buildAPIErrorResponse("internal_error", "failed to download object", nil)
 		writeJSON(w, http.StatusInternalServerError, resp)
 	}
 }

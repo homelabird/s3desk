@@ -72,20 +72,6 @@ func newServerBackupPreparationError(status int, code, message string, details m
 	}
 }
 
-func buildServerBackupHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc serverBackupHTTPService) currentTime() time.Time {
 	if svc.now != nil {
 		return svc.now().UTC()
@@ -255,11 +241,11 @@ func (svc serverBackupHTTPService) handleGetServerBackup(w http.ResponseWriter, 
 	if err != nil {
 		var prepErr *serverBackupPreparationError
 		if errors.As(err, &prepErr) {
-			resp := buildServerBackupHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, &resp)
 			return
 		}
-		resp := buildServerBackupHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"backup_failed",
 			"failed to create backup bundle",
 			map[string]any{"error": err.Error()},
@@ -296,7 +282,7 @@ func (svc serverBackupHTTPService) handleRestoreServerBackup(w http.ResponseWrit
 	}
 	var preflightErr serverRestorePreflightError
 	if errors.As(err, &preflightErr) {
-		resp := buildServerBackupHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"restore_preflight_failed",
 			"failed restore preflight before staging",
 			map[string]any{
@@ -309,7 +295,7 @@ func (svc serverBackupHTTPService) handleRestoreServerBackup(w http.ResponseWrit
 		writeJSON(w, http.StatusConflict, &resp)
 		return
 	}
-	resp := buildServerBackupHTTPErrorResponse(
+	resp := buildAPIErrorResponse(
 		"restore_failed",
 		"failed to restore backup bundle",
 		map[string]any{"error": err.Error()},

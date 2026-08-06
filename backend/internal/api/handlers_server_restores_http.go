@@ -36,20 +36,6 @@ func newServerRestorePreparationError(status int, code, message string, details 
 	}
 }
 
-func buildServerRestoreHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func newServerRestoreHTTPService(s *server) serverRestoreHTTPService {
 	return serverRestoreHTTPService{server: s}
 }
@@ -149,11 +135,11 @@ func (svc serverRestoreHTTPService) handleListServerRestores(w http.ResponseWrit
 	resp, err := svc.executeList()
 	if err != nil {
 		if prepErr := (*serverRestorePreparationError)(nil); errors.As(err, &prepErr) {
-			resp := buildServerRestoreHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, &resp)
 			return
 		}
-		resp := buildServerRestoreHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"restore_list_failed",
 			"failed to list staged restores",
 			map[string]any{"error": err.Error()},
@@ -168,11 +154,11 @@ func (svc serverRestoreHTTPService) handleDeleteServerRestore(w http.ResponseWri
 	err := svc.executeDelete(r)
 	if err != nil {
 		if prepErr := (*serverRestorePreparationError)(nil); errors.As(err, &prepErr) {
-			resp := buildServerRestoreHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, &resp)
 			return
 		}
-		resp := buildServerRestoreHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"restore_list_failed",
 			"failed to list staged restores",
 			map[string]any{"error": err.Error()},

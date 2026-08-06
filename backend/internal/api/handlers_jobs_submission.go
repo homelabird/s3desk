@@ -144,20 +144,6 @@ func writeJobSubmissionFailure(
 	return true
 }
 
-func buildJobSubmissionHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func normalizeJobSubmissionPayload(payload map[string]any) map[string]any {
 	if payload == nil {
 		return map[string]any{}
@@ -472,12 +458,12 @@ func (svc jobSubmissionHTTPService) handleCreateJob(
 	prepared := svc.prepareCreateSubmissionRequest(r)
 	if prepared.err != nil {
 		if prepErr := (*jobSubmissionPreparationError)(nil); errors.As(prepared.err, &prepErr) {
-			resp := buildJobSubmissionHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, resp)
 			return
 		}
 		if validationErr := (*jobSubmissionValidationError)(nil); errors.As(prepared.err, &validationErr) {
-			resp := buildJobSubmissionHTTPErrorResponse(validationErr.code, validationErr.message, validationErr.details)
+			resp := buildAPIErrorResponse(validationErr.code, validationErr.message, validationErr.details)
 			writeJSON(w, validationErr.status, resp)
 			return
 		}
@@ -490,13 +476,13 @@ func (svc jobSubmissionHTTPService) handleCreateJob(
 		return
 	}
 	if validationErr := (*jobSubmissionValidationError)(nil); errors.As(err, &validationErr) {
-		resp := buildJobSubmissionHTTPErrorResponse(validationErr.code, validationErr.message, validationErr.details)
+		resp := buildAPIErrorResponse(validationErr.code, validationErr.message, validationErr.details)
 		writeJSON(w, validationErr.status, resp)
 		return
 	}
 	if errors.Is(err, jobs.ErrJobQueueFull) && stats != nil {
 		w.Header().Set("Retry-After", "2")
-		resp := buildJobSubmissionHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"job_queue_full",
 			"job queue is full; try again later",
 			map[string]any{"queueDepth": stats.Depth, "queueCapacity": stats.Capacity},
@@ -508,7 +494,7 @@ func (svc jobSubmissionHTTPService) handleCreateJob(
 	if message == "" {
 		message = "failed to enqueue job"
 	}
-	resp := buildJobSubmissionHTTPErrorResponse("internal_error", message, nil)
+	resp := buildAPIErrorResponse("internal_error", message, nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -519,12 +505,12 @@ func (svc jobSubmissionHTTPService) handleRetryJob(
 	prepared := svc.prepareRetrySubmissionRequest(r)
 	if prepared.err != nil {
 		if prepErr := (*jobSubmissionPreparationError)(nil); errors.As(prepared.err, &prepErr) {
-			resp := buildJobSubmissionHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+			resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 			writeJSON(w, prepErr.status, resp)
 			return
 		}
 		if validationErr := (*jobSubmissionValidationError)(nil); errors.As(prepared.err, &validationErr) {
-			resp := buildJobSubmissionHTTPErrorResponse(validationErr.code, validationErr.message, validationErr.details)
+			resp := buildAPIErrorResponse(validationErr.code, validationErr.message, validationErr.details)
 			writeJSON(w, validationErr.status, resp)
 			return
 		}
@@ -537,13 +523,13 @@ func (svc jobSubmissionHTTPService) handleRetryJob(
 		return
 	}
 	if validationErr := (*jobSubmissionValidationError)(nil); errors.As(err, &validationErr) {
-		resp := buildJobSubmissionHTTPErrorResponse(validationErr.code, validationErr.message, validationErr.details)
+		resp := buildAPIErrorResponse(validationErr.code, validationErr.message, validationErr.details)
 		writeJSON(w, validationErr.status, resp)
 		return
 	}
 	if errors.Is(err, jobs.ErrJobQueueFull) && stats != nil {
 		w.Header().Set("Retry-After", "2")
-		resp := buildJobSubmissionHTTPErrorResponse(
+		resp := buildAPIErrorResponse(
 			"job_queue_full",
 			"job queue is full; try again later",
 			map[string]any{"queueDepth": stats.Depth, "queueCapacity": stats.Capacity},
@@ -555,6 +541,6 @@ func (svc jobSubmissionHTTPService) handleRetryJob(
 	if message == "" {
 		message = "failed to enqueue job"
 	}
-	resp := buildJobSubmissionHTTPErrorResponse("internal_error", message, nil)
+	resp := buildAPIErrorResponse("internal_error", message, nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }

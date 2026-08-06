@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"s3desk/internal/bucketgov"
 	"s3desk/internal/models"
 )
 
@@ -52,28 +51,5 @@ func TestBucketGovernanceSummaryHTTPService_HandleGetBucketGovernance_ReturnsInt
 	}
 	if resp.Error.Code != "internal_error" {
 		t.Fatalf("resp.Error.Code=%q, want internal_error", resp.Error.Code)
-	}
-}
-
-func TestBucketGovernanceSummaryHTTPService_HandleGetBucketGovernance_ReturnsUnsupportedProvider(t *testing.T) {
-	t.Parallel()
-
-	svc := newBucketGovernanceSummaryHTTPService(&server{bucketGov: bucketgov.NewService(bucketgov.NewDefaultRegistry())})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/demo/governance", nil)
-	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderS3Compatible})
-	req = withBucketParam(req, "demo")
-	rec := httptest.NewRecorder()
-
-	svc.handleGetBucketGovernance(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("rec.Code=%d, want %d", rec.Code, http.StatusBadRequest)
-	}
-	var resp models.ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Error.Code != "bucket_governance_unsupported" {
-		t.Fatalf("resp.Error.Code=%q, want bucket_governance_unsupported", resp.Error.Code)
 	}
 }

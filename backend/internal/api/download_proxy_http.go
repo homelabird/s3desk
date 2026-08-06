@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
 
@@ -42,14 +41,6 @@ func newDownloadProxyHTTPService(s *server) downloadProxyHTTPService {
 
 func newDownloadProxyHTTPError(status int, code, message string, details map[string]any) *downloadProxyHTTPError {
 	return &downloadProxyHTTPError{status: status, code: code, message: message, details: details}
-}
-
-func buildDownloadProxyHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
 }
 
 func buildDownloadProxyRcloneErrorContext() rcloneAPIErrorContext {
@@ -189,14 +180,14 @@ func (svc downloadProxyHTTPService) handleDownloadProxy(w http.ResponseWriter, r
 	case rcloneErr != nil:
 		writeRcloneAPIError(w, rcloneErr, rcloneStderr, rcloneCtx, rcloneDetails)
 	case err == nil:
-		resp := buildDownloadProxyHTTPErrorResponse("internal_error", "failed to proxy download", nil)
+		resp := buildAPIErrorResponse("internal_error", "failed to proxy download", nil)
 		writeJSON(w, http.StatusInternalServerError, resp)
 	default:
 		if httpErr, ok := err.(*downloadProxyHTTPError); ok {
-			resp := buildDownloadProxyHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+			resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 			writeJSON(w, httpErr.status, &resp)
 		} else {
-			resp := buildDownloadProxyHTTPErrorResponse("internal_error", "failed to proxy download", nil)
+			resp := buildAPIErrorResponse("internal_error", "failed to proxy download", nil)
 			writeJSON(w, http.StatusInternalServerError, &resp)
 		}
 	}

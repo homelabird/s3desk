@@ -45,20 +45,6 @@ func newLocalEntriesPreparationError(status int, code, message string, details m
 	}
 }
 
-func buildLocalEntriesHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func newLocalEntriesHTTPService(s *server) localEntriesHTTPService {
 	return localEntriesHTTPService{server: s}
 }
@@ -349,12 +335,12 @@ func (svc localEntriesHTTPService) handleListLocalEntries(w http.ResponseWriter,
 
 	var prepErr *localEntriesPreparationError
 	if errors.As(err, &prepErr) {
-		resp := buildLocalEntriesHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+		resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 		writeJSON(w, prepErr.status, resp)
 		return
 	}
 
-	respErr := buildLocalEntriesHTTPErrorResponse(
+	respErr := buildAPIErrorResponse(
 		"internal_error",
 		"failed to list local entries",
 		map[string]any{"error": err.Error()},

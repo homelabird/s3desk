@@ -42,20 +42,6 @@ func newProfileDeletePreparationError(status int, code, message string, details 
 	}
 }
 
-func buildProfileDeleteHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{
-		Error: models.APIError{
-			Code:    code,
-			Message: message,
-			Details: details,
-		},
-	}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func newProfileDeleteHTTPService(s *server) profileDeleteHTTPService {
 	return profileDeleteHTTPService{server: s}
 }
@@ -157,10 +143,10 @@ func (svc profileDeleteHTTPService) handleDeleteProfile(w http.ResponseWriter, r
 	}
 	var prepErr *profileDeletePreparationError
 	if errors.As(err, &prepErr) {
-		resp := buildProfileDeleteHTTPErrorResponse(prepErr.code, prepErr.message, prepErr.details)
+		resp := buildAPIErrorResponse(prepErr.code, prepErr.message, prepErr.details)
 		writeJSON(w, prepErr.status, &resp)
 		return
 	}
-	resp := buildProfileDeleteHTTPErrorResponse("internal_error", "failed to delete profile", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to delete profile", nil)
 	writeJSON(w, http.StatusInternalServerError, &resp)
 }

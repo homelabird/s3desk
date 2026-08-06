@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
 
@@ -24,14 +23,6 @@ type uploadFilesHTTPService struct {
 
 func newUploadFilesHTTPService(s *server) uploadFilesHTTPService {
 	return uploadFilesHTTPService{server: s}
-}
-
-func buildUploadFilesHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
 }
 
 func (svc uploadFilesHTTPService) prepareUpload(r *http.Request) uploadFilesPreparedRequest {
@@ -85,7 +76,7 @@ func (svc uploadFilesHTTPService) executePrepared(w http.ResponseWriter, r *http
 func (svc uploadFilesHTTPService) executeUpload(w http.ResponseWriter, r *http.Request) {
 	prepared := svc.prepareUpload(r)
 	if prepared.err != nil {
-		resp := buildUploadFilesHTTPErrorResponse(prepared.err.code, prepared.err.message, prepared.err.details)
+		resp := buildAPIErrorResponse(prepared.err.code, prepared.err.message, prepared.err.details)
 		writeJSON(w, prepared.err.status, &resp)
 		return
 	}

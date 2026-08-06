@@ -39,14 +39,6 @@ func newBucketVersioningHTTPError(status int, code, message string, details map[
 	return &bucketVersioningHTTPError{status: status, code: code, message: message, details: details}
 }
 
-func buildBucketVersioningHTTPErrorResponse(code, message string, details map[string]any) models.ErrorResponse {
-	resp := models.ErrorResponse{Error: models.APIError{Code: code, Message: message, Details: details}}
-	if norm, ok := normalizedErrorFromCode(code); ok {
-		resp.Error.NormalizedError = norm
-	}
-	return resp
-}
-
 func (svc bucketVersioningHTTPService) prepareBucketVersioning(r *http.Request) bucketVersioningPreparedRequest {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
@@ -123,11 +115,11 @@ func (svc bucketVersioningHTTPService) handleGetBucketVersioning(w http.Response
 		return
 	}
 	if httpErr, ok := err.(*bucketVersioningHTTPError); ok {
-		resp := buildBucketVersioningHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketVersioningHTTPErrorResponse("internal_error", "failed to process bucket versioning request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket versioning request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
 
@@ -151,10 +143,10 @@ func (svc bucketVersioningHTTPService) handlePutBucketVersioning(w http.Response
 		return
 	}
 	if httpErr, ok := err.(*bucketVersioningHTTPError); ok {
-		resp := buildBucketVersioningHTTPErrorResponse(httpErr.code, httpErr.message, httpErr.details)
+		resp := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
 		writeJSON(w, httpErr.status, resp)
 		return
 	}
-	resp := buildBucketVersioningHTTPErrorResponse("internal_error", "failed to process bucket versioning request", nil)
+	resp := buildAPIErrorResponse("internal_error", "failed to process bucket versioning request", nil)
 	writeJSON(w, http.StatusInternalServerError, resp)
 }
