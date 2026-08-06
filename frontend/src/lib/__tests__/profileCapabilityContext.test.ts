@@ -153,10 +153,12 @@ describe('profileCapabilityContext', () => {
 			aws: {
 				presignedUpload: true,
 				directUpload: false,
+				directMultipartUpload: true,
 			},
 			gcs: {
 				presignedUpload: false,
 				directUpload: true,
+				directMultipartUpload: false,
 			},
 		})
 	})

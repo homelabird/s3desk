@@ -109,11 +109,12 @@ export function uploadFilesWithProgress(
 		existingChunkIndices?: number[]
 		existingChunksByPath?: Record<string, number[]>
 		chunkSizeBytesByPath?: Record<string, number>
+		forceMultipartForm?: boolean
 	} = {},
 ): { promise: Promise<UploadFilesResult>; abort: () => void } {
 	const concurrency = Math.max(1, args.concurrency ?? 1)
 	const maxBatchBytes = Math.max(1, args.maxBatchBytes ?? 64 * 1024 * 1024)
-	const maxBatchItems = Math.max(1, args.maxBatchItems ?? 50)
+	const maxBatchItems = args.forceMultipartForm ? 1 : Math.max(1, args.maxBatchItems ?? 50)
 	const chunkSizeBytes = Math.max(1, args.chunkSizeBytes ?? 128 * 1024 * 1024)
 	const chunkConcurrency = Math.max(1, args.chunkConcurrency ?? 8)
 	const chunkThresholdBytes = Math.max(1, args.chunkThresholdBytes ?? 256 * 1024 * 1024)
@@ -124,6 +125,7 @@ export function uploadFilesWithProgress(
 	}
 
 	const isChunkedItem = (item: UploadFileItem) => {
+		if (args.forceMultipartForm) return false
 		const key = resolveUploadFilename(item)
 		// Browsers do not reliably preserve directory segments in multipart filenames.
 		// Route folder selections through the chunked path so X-Upload-Relative-Path
@@ -194,6 +196,9 @@ export function uploadFilesWithProgress(
 		try {
 			setSafeXHRHeader(xhr, 'X-Profile-Id', profileId)
 			setSafeXHRHeader(xhr, 'X-Api-Token', config.apiToken)
+			if (args.forceMultipartForm) {
+				setSafeXHRHeader(xhr, 'X-Upload-Relative-Path', resolveUploadFilename(batch[0]))
+			}
 		} catch (err) {
 			return rejectedTransferHandle<UploadFilesResult>(err instanceof Error ? err : new Error('invalid request headers'))
 		}

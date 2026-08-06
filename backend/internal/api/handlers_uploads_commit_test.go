@@ -70,6 +70,50 @@ func TestBuildVerifiedUploadCommitArtifactsUsesVerifiedState(t *testing.T) {
 	}
 }
 
+func TestCommitDirectNonS3UsesRcloneVerification(t *testing.T) {
+	st, _, srv, _ := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, true)
+	profile := createAzureBlobSmokeProfile(t, st)
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeDirect, "", expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+	size := int64(5)
+	if err := st.UpsertUploadObject(context.Background(), store.UploadObject{
+		UploadID:     upload.ID,
+		ProfileID:    profile.ID,
+		Path:         "nested/file.bin",
+		Bucket:       "test-bucket",
+		ObjectKey:    "incoming/nested/file.bin",
+		ExpectedSize: &size,
+	}); err != nil {
+		t.Fatalf("seed upload object: %v", err)
+	}
+
+	var calls [][]string
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		return `{"Size":5,"ModTime":"2026-08-06T12:00:00Z","Hashes":{"MD5":"abc123"}}`, "", nil
+	})
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.ID+"/commit", profile.ID, map[string]any{
+		"items": []map[string]any{{"path": "nested/file.bin", "size": size}},
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("status=%d, want %d: %s", res.StatusCode, http.StatusCreated, string(body))
+	}
+	if len(calls) != 1 || len(calls[0]) != 4 || calls[0][0] != "lsjson" || calls[0][1] != "--stat" || calls[0][2] != "--hash" {
+		t.Fatalf("rclone calls=%v, want one lsjson --stat --hash call", calls)
+	}
+	if _, ok, err := st.GetUploadSession(context.Background(), profile.ID, upload.ID); err != nil {
+		t.Fatalf("get upload session: %v", err)
+	} else if ok {
+		t.Fatal("expected committed upload session to be removed")
+	}
+}
+
 func TestBuildCompletedMultipartPartsRequiresSequentialParts(t *testing.T) {
 	part1 := int32(1)
 	part3 := int32(3)

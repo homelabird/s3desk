@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"s3desk/internal/models"
 	"s3desk/internal/store"
@@ -25,6 +26,7 @@ type uploadDirectFormPreparedRequest struct {
 	us             store.UploadSession
 	secrets        models.ProfileSecrets
 	reader         *multipart.Reader
+	relativePath   string
 	remainingBytes int64
 	maxBytes       int64
 	err            *uploadHTTPError
@@ -71,6 +73,11 @@ func (svc uploadDirectHTTPService) prepareForm(profileID, uploadID string, us st
 	if err != nil {
 		return uploadDirectFormPreparedRequest{err: newUploadBadRequestError("expected multipart/form-data", map[string]any{"error": err.Error()})}
 	}
+	rawRelativePath := strings.TrimSpace(r.Header.Get("X-Upload-Relative-Path"))
+	relativePath := sanitizeUploadPath(rawRelativePath)
+	if rawRelativePath != "" && relativePath == "" {
+		return uploadDirectFormPreparedRequest{err: newUploadBadRequestError("invalid upload path", map[string]any{"path": rawRelativePath})}
+	}
 
 	maxBytes := svc.server.cfg.UploadMaxBytes
 	remainingBytes, uploadErr := uploadRemainingBytes(maxBytes, us.Bytes)
@@ -84,6 +91,7 @@ func (svc uploadDirectHTTPService) prepareForm(profileID, uploadID string, us st
 		us:             us,
 		secrets:        secrets,
 		reader:         reader,
+		relativePath:   relativePath,
 		remainingBytes: remainingBytes,
 		maxBytes:       maxBytes,
 	}
@@ -96,6 +104,7 @@ func (svc uploadDirectHTTPService) executeForm(r *http.Request, prepared uploadD
 
 	written := 0
 	skipped := 0
+	fileParts := 0
 	remainingBytes := prepared.remainingBytes
 	for {
 		part, err := prepared.reader.NextPart()
@@ -109,8 +118,13 @@ func (svc uploadDirectHTTPService) executeForm(r *http.Request, prepared uploadD
 			_ = part.Close()
 			continue
 		}
+		if prepared.relativePath != "" && fileParts > 0 {
+			_ = part.Close()
+			return 0, 0, newUploadBadRequestError("X-Upload-Relative-Path requires exactly one file", nil)
+		}
+		fileParts += 1
 
-		used, skippedPart, uploadErr := svc.server.directMultipartFormPart(r, prepared.secrets, prepared.profileID, prepared.uploadID, prepared.us, part, &remainingBytes, prepared.maxBytes)
+		used, skippedPart, uploadErr := svc.server.directMultipartFormPart(r, prepared.secrets, prepared.profileID, prepared.uploadID, prepared.us, prepared.relativePath, part, &remainingBytes, prepared.maxBytes)
 		_ = part.Close()
 		if uploadErr != nil {
 			return 0, 0, uploadErr

@@ -331,6 +331,7 @@ export function createUploadsSubFacade(deps: SubFacadeDeps) {
 				existingChunkIndices?: number[]
 				existingChunksByPath?: Record<string, number[]>
 				chunkSizeBytesByPath?: Record<string, number>
+				forceMultipartForm?: boolean
 			} = {},
 		): { promise: Promise<UploadFilesResult>; abort: () => void } {
 			return uploadsDomain.uploadFilesWithProgress(deps.getXhrConfig(), profileId, uploadId, files, args)

@@ -10,7 +10,6 @@ import { maybeReportNetworkError } from './transferDownloadUtils'
 import type { TransfersRuntimeNotifications, UploadCapabilityByProfileId } from './transfersTypes'
 import type { UploadTuning } from './useTransfersUploadPreferences'
 import { commitUploadAndTrackJob } from './uploadRuntimeCommit'
-import { runUploadAttemptWithNetworkFallback } from './uploadRuntimeFallback'
 import {
 	buildResumeFilesByPath,
 	planResumeChunkSettings,
@@ -91,7 +90,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			uploadCapability,
 			uploadDirectStream: args.uploadDirectStream,
 		})
-		const { canUsePresigned, fallbackMode, preferredMode } = uploadModePlan
+		const { canUsePresigned, canUseDirectMultipart, fallbackMode, preferredMode } = uploadModePlan
 
 		const allowResume = task.uploadMode !== 'presigned'
 		const resumeFilesByPath = buildResumeFilesByPath({ task, items, allowResume })
@@ -166,6 +165,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				resumeFilesByPath,
 				resumeChunkSizeBytes,
 				allowPerFileChunkSize,
+				directMultipartUpload: canUseDirectMultipart,
 				existingChunksByPath: attemptExistingChunksByPath,
 				uploadChunkFileConcurrency: args.uploadChunkFileConcurrency,
 				uploadAbortByTaskIdRef: args.uploadAbortByTaskIdRef,
@@ -173,36 +173,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				updateUploadTask: args.updateUploadTask,
 			})
 
-		const result = await runUploadAttemptWithNetworkFallback({
-			api: args.api,
-			task,
-			uploadId,
-			sessionMode,
-			fallbackMode,
-			runUploadAttempt,
-			onFallbackSessionReady: (fallbackSession) => {
-				uploadId = fallbackSession.uploadId
-				sessionMode = fallbackSession.mode
-				existingChunksByPath = undefined
-			},
-			onNetworkFallback: () => {
-				estimator = new TransferEstimator({ totalBytes: task.totalBytes })
-				args.uploadEstimatorByTaskIdRef.current[taskId] = estimator
-				args.updateUploadTask(taskId, (current) => ({
-					...current,
-					status: 'staging',
-					startedAtMs: estimator.getStartedAtMs(),
-					finishedAtMs: undefined,
-					loadedBytes: 0,
-					speedBps: 0,
-					etaSeconds: 0,
-					error: undefined,
-					uploadFallbackFrom: 'presigned',
-					uploadFallbackReason: 'network_path_failed',
-				}))
-				args.notifications.info(`Presigned upload network path failed. Falling back to ${sessionMode} uploads.`)
-			},
-		})
+		const result = await runUploadAttempt(sessionMode, uploadId, existingChunksByPath)
 		if (result.skipped > 0) {
 			args.notifications.warning(`Skipped ${result.skipped} file(s) with invalid paths.`)
 		}

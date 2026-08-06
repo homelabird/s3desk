@@ -115,11 +115,12 @@ func (s *server) directMultipartFormPart(
 	secrets models.ProfileSecrets,
 	profileID, uploadID string,
 	us store.UploadSession,
+	relativePath string,
 	part *multipart.Part,
 	remainingBytes *int64,
 	maxBytes int64,
 ) (int, int, *uploadHTTPError) {
-	relPath, key, skipped := directMultipartFormPath(us.Prefix, part)
+	relPath, key, skipped := directMultipartFormPath(us.Prefix, relativePath, part)
 	if skipped {
 		return 0, 1, nil
 	}
