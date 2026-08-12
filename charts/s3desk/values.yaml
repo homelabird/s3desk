@@ -3,6 +3,11 @@ replicaCount: 1
 image:
   repository: s3desk
   tag: "latest"
+  # Release pipelines fill these with registry digests for each database variant.
+  # Empty values keep local chart development tag-based.
+  digests:
+    postgres: ""
+    sqlite: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []

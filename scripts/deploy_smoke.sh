@@ -127,7 +127,7 @@ assert_status "200" "${status}" "${body_file}" "/api/v1/meta"
 meta_status="${status}"
 rm -f "${body_file}"
 
-result="$(request_status POST -H "X-Api-Token: ${DEPLOY_API_TOKEN}" "${base_url}/api/v1/realtime-ticket?transport=ws")"
+result="$(request_status POST -H "X-Api-Token: ${DEPLOY_API_TOKEN}" -H "Origin: ${base_url}" "${base_url}/api/v1/realtime-ticket?transport=ws")"
 body_file="${result%%:*}"
 status="${result##*:}"
 assert_status "201" "${status}" "${body_file}" "/api/v1/realtime-ticket"

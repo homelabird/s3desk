@@ -27,6 +27,7 @@ E2E_S3_FORCE_PATH_STYLE="${E2E_S3_FORCE_PATH_STYLE:-true}"
 E2E_S3_TLS_SKIP_VERIFY="${E2E_S3_TLS_SKIP_VERIFY:-false}"
 E2E_GCS_ENDPOINT="${E2E_GCS_ENDPOINT:-http://127.0.0.1:${MINIO_PORT}}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-${E2E_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}}"
+UPLOAD_DIRECT_STREAM="${UPLOAD_DIRECT_STREAM:-true}"
 
 BACKEND_LOG="${BACKEND_LOG:-/tmp/s3desk_backend_live.log}"
 RCLONE_CACHE_DIR="${RCLONE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/s3desk/live-e2e}"
@@ -77,8 +78,9 @@ ensure_rclone() {
 
 find_listener_pid() {
 	local addr="${1}"
-	ss -ltnp 2>/dev/null | awk -v addr="${addr}" '
-		$4 == addr {
+	local port="${addr##*:}"
+	ss -ltnp 2>/dev/null | awk -v port=":${port}" '
+		NR > 1 && $4 ~ (port "$") {
 			if (match($0, /pid=[0-9]+/)) {
 				print substr($0, RSTART + 4, RLENGTH - 4)
 				exit
@@ -192,7 +194,7 @@ done
 echo "[live-e2e] starting backend on ${BACKEND_ADDR}"
 (
 	cd "${ROOT_DIR}/backend"
-	API_TOKEN="${API_TOKEN}" ENCRYPTION_KEY="${ENCRYPTION_KEY}" ADDR="${BACKEND_ADDR}" RCLONE_PATH="${RCLONE_PATH}" exec "${BACKEND_BIN}" >"${BACKEND_LOG}" 2>&1
+	API_TOKEN="${API_TOKEN}" ENCRYPTION_KEY="${ENCRYPTION_KEY}" UPLOAD_DIRECT_STREAM="${UPLOAD_DIRECT_STREAM}" ADDR="${BACKEND_ADDR}" RCLONE_PATH="${RCLONE_PATH}" exec "${BACKEND_BIN}" >"${BACKEND_LOG}" 2>&1
 ) &
 BACK_PID=$!
 

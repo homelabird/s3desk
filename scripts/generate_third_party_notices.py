@@ -14,8 +14,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = REPO_ROOT / "backend"
 FRONTEND_DIR = REPO_ROOT / "frontend"
 FRONTEND_LOCK = REPO_ROOT / "frontend" / "package-lock.json"
-OUTPUT = REPO_ROOT / "THIRD_PARTY_NOTICES.md"
-LICENSES_DIR = REPO_ROOT / "third_party" / "licenses"
+OUTPUT = Path(os.environ.get("THIRD_PARTY_NOTICES_OUTPUT", REPO_ROOT / "THIRD_PARTY_NOTICES.md"))
+LICENSES_DIR = Path(
+    os.environ.get("THIRD_PARTY_LICENSES_DIR", REPO_ROOT / "third_party" / "licenses")
+)
 GO_LICENSES_DIR = LICENSES_DIR / "go"
 NPM_LICENSES_DIR = LICENSES_DIR / "npm"
 EXTERNAL_LICENSES_DIR = LICENSES_DIR / "external"

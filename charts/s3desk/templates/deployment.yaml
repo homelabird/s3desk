@@ -36,7 +36,7 @@ spec:
       {{- end }}
       containers:
         - name: s3desk
-          image: "{{ .Values.image.repository }}:{{ include "s3desk.imageTag" . }}"
+          image: "{{ include "s3desk.imageRef" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

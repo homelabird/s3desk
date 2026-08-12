@@ -54,6 +54,21 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 {{- end }}
 
+{{- define "s3desk.imageRef" -}}
+{{- $backend := lower (trim (toString .Values.db.backend)) -}}
+{{- $digest := "" -}}
+{{- if eq $backend "postgres" -}}
+{{- $digest = trim (toString (.Values.image.digests.postgres | default "")) -}}
+{{- else if eq $backend "sqlite" -}}
+{{- $digest = trim (toString (.Values.image.digests.sqlite | default "")) -}}
+{{- end -}}
+{{- if $digest -}}
+{{- printf "%s@%s" .Values.image.repository $digest -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.image.repository (include "s3desk.imageTag" .) -}}
+{{- end -}}
+{{- end }}
+
 {{- define "s3desk.metricsTokenRequired" -}}
 {{- if or (.Values.server.allowRemote | default false) (.Values.monitoring.serviceMonitor.enabled | default false) (.Values.monitoring.podMonitor.enabled | default false) -}}
 true

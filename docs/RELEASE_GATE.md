@@ -46,17 +46,19 @@ The repository keeps automated enforcement for release readiness inside the stan
   - reports a candidate identity blocker when an existing tag candidate does not resolve to the checked `--head`
   - exits non-zero until required provider/reverse-proxy/backup-portable evidence is present
   - does not replace `./scripts/check.sh full`, clean-snapshot verification, or the browser lanes
-- local workflow lint: `bash ./scripts/check_github_workflows.sh`
+- local workflow lint: `bash ./scripts/check_github_workflows.sh`; the built-in validator rejects mutable GitHub Action tag/branch refs and requires 40-character commit SHAs
 - optional repo-local `actionlint` install: `bash ./scripts/install_actionlint.sh`
 - full local verification pass: `./scripts/check.sh` or `./scripts/check.sh full`
 - faster non-browser local pass: `./scripts/check.sh fast`
-- third-party notice enforcement inside `./scripts/check.sh`: regenerates `THIRD_PARTY_NOTICES.md` and `third_party/licenses/`, then fails if the generated file tree is not reproducible from the current workspace
+- third-party notice enforcement inside `./scripts/check.sh`: generates into a temporary output tree, compares it with `THIRD_PARTY_NOTICES.md` and `third_party/licenses/`, and leaves the tracked snapshot untouched
 - CI workflow: `Release Gate` (installs repo-local `actionlint`, then runs `./scripts/check.sh` on pull requests and `main`)
 - canonical release verdict: GitHub `Release Gate`; GitLab release/security jobs are parity and publish safeguards, not the source of truth for branch protection
 - backend toolchain pin: Go `1.25.10` is declared in `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub workflow `go-version` fields, and literal GitLab `image:` declarations, and `python3 scripts/check_go_toolchain.py` keeps those declarations aligned
 - backend security gate inside `./scripts/check.sh full`: `go vet`, `staticcheck`, `gosec`, and `govulncheck`
 - GitLab additive security gates: `security_fs_scan` runs Trivy filesystem/config scans and `gitleaks_scan` runs Gitleaks when tag/default-branch/schedule or relevant source changes require them
 - GitLab release-builder images are literal digest-pinned image references; they must not be overridable through `PODMAN_IMAGE` or mutable tags such as `quay.io/podman/stable:latest`.
+- GitLab publish and deploy jobs require both a release tag and `CI_COMMIT_REF_PROTECTED == "true"`; production deploy jobs declare the `production` environment tier. The actual protected-tag/environment rules remain a GitLab project setting and must be verified there before release approval.
+- Release image tar artifacts emit `release-images.sha256`; release smoke and Docker Hub publication verify it. Docker Hub publication records registry digests, and post-publish smoke pulls by digest before using local test tags. `trivy_scan` publishes CycloneDX SBOM artifacts for both database variants. These checksums/SBOMs do not replace a trusted signature or provenance attestation.
 - Security configuration contracts are also checked: Vercel must emit anti-clickjacking headers, Lighthouse auth requires an explicit controlled-origin token-storage opt-in, the regular E2E lane must reject live mode while the live lane requires a protected ref, and the GitLab runner smoke RoleBinding must have an enforcing admission-policy boundary.
 - GitLab tag publish safeguard: `release_readiness_preflight` runs `bash scripts/check_gitlab_publish_readiness.sh "$CI_COMMIT_TAG"` before Docker Hub or Helm publication; the helper delegates to `scripts/verify_release_readiness.sh` so GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state are verified as part of the publish preflight. Set `DEPLOY_RELEASE_BASE` when the previous tag cannot be derived locally. `curl` plus a masked `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs for deterministic GitHub API checks.
   - Default required GitHub checks are `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`. If branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the verifier default in the same change.
@@ -68,6 +70,7 @@ The repository keeps automated enforcement for release readiness inside the stan
 - GitLab additive quality gates:
   - `shellcheck` runs `shellcheck -x` for repository shell scripts and publishes logs under `artifacts/ci/shellcheck/`
   - `go_test` runs `go vet`, backend tests with `coverage.out`, enforces `GO_COVERAGE_MIN_TOTAL`, and publishes logs under `artifacts/ci/backend/`
+  - `go_race` runs targeted `go test -race ./internal/api ./internal/jobs` and publishes `artifacts/ci/backend/go-race.log`
   - `golangci_lint` must use the checked-in `.golangci.yml` named by `GOLANGCI_LINT_CONFIG`; a missing config is a hard failure
 - CI workflow: `Frontend E2E` runs a dedicated `Workflow Lint` job with the same repo-local `actionlint` before the browser lanes
 - CI workflow: `Frontend E2E` also runs `Bundle Budget` for bundle-affecting frontend changes
@@ -103,7 +106,7 @@ The repository keeps automated enforcement for release readiness inside the stan
   - `cd frontend && npm run test:e2e:smoke`
 - local convenience wrapper:
   - `bash ./scripts/check_ci_pair.sh`
-  - useful for workflow lint + frontend build + backend test only
+  - useful for workflow lint + frontend OpenAPI drift + frontend build + backend test only
   - not a replacement for required browser checks or release approval evidence
 - mobile responsive suite scope and local commands:
   - [frontend/docs/MOBILE_RESPONSIVE_E2E.md](../frontend/docs/MOBILE_RESPONSIVE_E2E.md)
@@ -144,7 +147,7 @@ Use the exact check names when you record release evidence:
 - `cd frontend && npm run test:e2e:visual` mirrors `Visual Regression E2E`.
 - `cd frontend && npm run test:e2e:mobile-responsive` mirrors `Mobile Responsive E2E (Required)`.
 - `bash ./scripts/license-audit.sh` mirrors `license-audit`.
-- `bash ./scripts/check_ci_pair.sh` is only a local convenience wrapper for workflow lint + frontend build + backend test.
+- `bash ./scripts/check_ci_pair.sh` is only a local convenience wrapper for workflow lint + frontend OpenAPI drift + frontend build + backend test.
 
 For the mobile suite scope, local commands, and operator-facing test entry points, use [frontend/docs/MOBILE_RESPONSIVE_E2E.md](../frontend/docs/MOBILE_RESPONSIVE_E2E.md).
 
@@ -269,8 +272,7 @@ Every release note set must include:
 
 For the current codebase, these unsupported or partial behaviors must be called out when relevant:
 
-- Azure legal hold is surfaced but remains read-only in S3Desk.
-- Azure immutability editing requires ARM credentials in addition to storage credentials.
+- Azure immutability and legal-hold editing require ARM credentials in addition to storage credentials.
 - OCI PAR edits are implemented as delete-and-recreate, not true in-place mutation.
 - OCI PAR access URIs are only fully available at creation time and must be copied then.
 - AWS typed governance does not cover Object Lock.
@@ -285,6 +287,7 @@ Release is blocked if any of the following is true:
 - provider-facing changes lack required live evidence
 - docs are stale for an operator-visible behavior change
 - release notes omit a still-relevant unsupported case
+- release artifacts lack an externally verifiable signature and provenance attestation; the repository currently provides checksum and SBOM evidence, but signing identity/attestation storage must be configured in CI before treating this boundary as closed
 
 ## Fast Approval Path
 

@@ -45,6 +45,10 @@ helm upgrade --install s3desk ./charts/s3desk \
   --set ingress.hosts[0].host=s3desk.example.com
 ```
 
+For immutable release images, set `image.digests.sqlite` or
+`image.digests.postgres` to a full `sha256:` registry digest. Release charts
+populate both variant digests automatically.
+
 Postgres-backed deployment:
 
 ```bash
@@ -81,9 +85,11 @@ helm upgrade --install s3desk ./charts/s3desk \
   --create-namespace \
   --set-string server.apiToken="${API_TOKEN}" \
   --set networkPolicy.enabled=true \
-  --set networkPolicy.policyTypes[0]=Ingress \
-  --set networkPolicy.policyTypes[1]=Egress
+  --set networkPolicy.policyTypes[0]=Ingress
 ```
+
+Add `Egress` only with the explicit destination rules shown below; enabling it
+without provider/database/proxy rules allows DNS but blocks those connections.
 
 Production ingress allow-list for NGINX Ingress Controller:
 
@@ -189,6 +195,7 @@ helm upgrade --install s3desk ./charts/s3desk \
 
 ## Operational Notes
 
+- The chart supports exactly one replica. S3Desk's job queue, realtime state, and `DATA_DIR` are single-writer; use external database backups and a separate deployment design before considering HA.
 - `server.externalBaseURL` should be set for ingress, reverse-proxy, and browser-facing download flows.
 - Istio VirtualService installs require at least one `istio.virtualService.hosts` entry and one `istio.virtualService.gateways` entry when enabled.
 - Browser-facing remote deployments (`server.allowRemote=true` with ingress or Istio enabled) require `server.encryptionKey` or `secrets.existingSecret`, `networkPolicy.enabled=true`, resource requests/limits, and the non-root/read-only security context shown in `values-production.yaml`.
@@ -197,6 +204,7 @@ helm upgrade --install s3desk ./charts/s3desk \
 - `db.backend=postgres` requires either `db.databaseUrl` or `secrets.existingSecret`.
 - The chart creates a dedicated ServiceAccount by default and disables service-account token automount unless you override it.
 - `networkPolicy` is opt-in. The default policy type is ingress-only so existing outbound DB/provider traffic is not broken by accident; `values-production.yaml` shows an NGINX controller ingress allow-list and leaves egress policy disabled until destinations are known.
+- Every rclone subprocess still uses S3Desk's short-lived guarded loopback proxy, independent of the Kubernetes `networkPolicy` setting. If `Egress` is enabled, allow DNS and the actual provider/database/proxy destinations in `networkPolicy.egress.extra`.
 - `ServiceMonitor` and `PodMonitor` are opt-in and default to the same API token Secret/key used by the app.
 - `DATA_DIR` persistence is still useful on Postgres for thumbnails, staged restores, and job artifacts.
 - In-product `Full backup` / `Cache + metadata` flows remain sqlite-only. Use portable backup/import for cross-backend migration.

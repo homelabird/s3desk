@@ -45,7 +45,7 @@ def write_frontend_e2e_workflow(path: pathlib.Path, filters: str) -> None:
                 "    runs-on: ubuntu-latest",
                 "    steps:",
                 "      - id: filter",
-                "        uses: dorny/paths-filter@v4",
+                "        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
                 "        with:",
                 "          filters: |",
                 *[f"            {line}" for line in filters.splitlines()],
@@ -67,12 +67,23 @@ class GithubWorkflowValidatorTests(unittest.TestCase):
                 MODULE.validate_workflow(path)
 
         self.assertIn("deprecated action ref", stderr.getvalue())
-        self.assertIn("actions/checkout@v6", stderr.getvalue())
+        self.assertIn("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", stderr.getvalue())
+
+    def test_rejects_mutable_action_refs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "workflow.yml"
+            write_workflow(path, "actions/checkout@v6")
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit):
+                MODULE.validate_workflow(path)
+
+        self.assertIn("must pin an external GitHub Action", stderr.getvalue())
 
     def test_allows_current_action_refs(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "workflow.yml"
-            write_workflow(path, "actions/checkout@v6")
+            write_workflow(path, "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803")
 
             MODULE.validate_workflow(path)
 

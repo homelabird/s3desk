@@ -13,6 +13,20 @@
           "type": "string",
           "minLength": 1
         },
+        "digests": {
+          "type": "object",
+          "properties": {
+            "postgres": {
+              "type": "string",
+              "pattern": "^(|sha256:[0-9a-f]{64})$"
+            },
+            "sqlite": {
+              "type": "string",
+              "pattern": "^(|sha256:[0-9a-f]{64})$"
+            }
+          },
+          "additionalProperties": true
+        },
         "pullPolicy": {
           "type": "string",
           "enum": ["Always", "IfNotPresent", "Never"]
@@ -78,7 +92,8 @@
     },
     "replicaCount": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 1
     },
     "service": {
       "type": "object",

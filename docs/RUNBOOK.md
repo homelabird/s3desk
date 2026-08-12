@@ -5,6 +5,7 @@ This runbook covers the minimum operational checks for a normal S3Desk deploymen
 ## Service Basics
 
 - S3Desk is local-first by default
+- The supported deployment topology is one S3Desk replica owning one `DATA_DIR`; increasing replicas is rejected because the job queue and realtime state are process-local.
 - Remote access should always use:
   - `ADDR=0.0.0.0:8080`
   - `ALLOW_REMOTE=true`
@@ -60,6 +61,29 @@ Runtime policy:
 - When the exception is allowed, the backend emits a structured warning event named `job.rclone_tls_skip_verify`.
 - Do not enable the exception for public provider endpoints or shared credentials.
 
+## Provider Egress
+
+Every rclone subprocess uses a short-lived authenticated loopback HTTP proxy.
+The proxy handles HTTP requests and HTTPS `CONNECT` tunnels with the same
+guarded DNS/IP dial policy used by the native HTTP clients. `HTTP_PROXY`,
+`HTTPS_PROXY`, and `ALL_PROXY` are forced for the child process and
+`NO_PROXY` is cleared, so a rclone process cannot silently bypass the guard.
+
+This application guard is separate from Kubernetes network policy:
+
+- keep `networkPolicy.policyTypes` ingress-only only when unrestricted outbound
+  provider/database traffic is an intentional deployment choice
+- when enabling `Egress`, keep DNS allowed and add explicit provider, database,
+  or outbound-proxy rules under `networkPolicy.egress.extra`
+- do not use an empty or wildcard egress rule as a permanent replacement for
+  provider/proxy destination review
+
+The proxy prevents metadata/loopback/link-local violations at the actual dial
+boundary where the resolver is rechecked. It does not prove provider
+credentials, permissions, DNS infrastructure, CNI enforcement, or live
+deployment behavior; record those separately in the provider/deployment smoke
+evidence.
+
 ## Public HTTPS with Caddy
 
 Use `./scripts/compose.sh caddy` when you want Caddy to terminate TLS in front
@@ -95,7 +119,7 @@ Minimal reverse-proxy smoke:
 ```bash
 curl -I https://s3desk.example.com/healthz
 curl -H "X-Api-Token: <token>" https://s3desk.example.com/api/v1/meta
-curl -X POST -H "X-Api-Token: <token>" \
+curl -X POST -H "X-Api-Token: <token>" -H "Origin: https://s3desk.example.com" \
   "https://s3desk.example.com/api/v1/realtime-ticket?transport=ws"
 curl -H "X-Api-Token: <token>" -H "X-Profile-Id: <profile-id>" \
   "https://s3desk.example.com/api/v1/buckets/<bucket>/objects/download-url?key=<key>&proxy=true"
@@ -125,7 +149,8 @@ Common failures:
 ## Health Checks
 
 - Liveness: `GET /healthz`
-- Readiness: `GET /readyz`
+- Readiness: `GET /readyz` (database, job manager, and writable `DATA_DIR`; it does not probe provider availability)
+- Worker diagnostics: `GET /workerz` (local peer only; returns `503 worker_unavailable` unless the in-process worker loop is running, otherwise reports queue depth/capacity)
 - Metrics: `GET /metrics` with an API token
 
 Useful endpoints:

@@ -49,6 +49,12 @@ helm template "${RELEASE_NAME}" "${CHART_PATH}" >/dev/null
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --values "${CHART_PATH}/ci-values.yaml" >/dev/null
 if helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+  --set replicaCount=2 >"${TMP_DIR}/multiple-replicas-negative.out" 2>&1; then
+  echo "[helm-check] expected unsupported multi-replica chart render to fail" >&2
+  exit 1
+fi
+grep -Eq "replicaCount|single-writer|maximum" "${TMP_DIR}/multiple-replicas-negative.out" >/dev/null
+if helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set server.allowRemote=true \
   --set secrets.autoGenerateApiToken=false \
   --set-string server.apiToken= >"${TMP_DIR}/missing-api-token-negative.out" 2>&1; then
@@ -79,6 +85,15 @@ assert_no_source_tree_image "${PRODUCTION_RENDERED}" "values-production.yaml"
 assert_secret_optional "${PRODUCTION_RENDERED}" API_TOKEN false
 assert_secret_optional "${PRODUCTION_RENDERED}" ENCRYPTION_KEY false
 assert_secret_optional "${PRODUCTION_RENDERED}" DATABASE_URL true
+DIGEST_RENDERED="${TMP_DIR}/production-digest-rendered.yaml"
+IMAGE_DIGEST="sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+  --values "${CHART_PATH}/values-production.yaml" \
+  --set-string "image.digests.sqlite=${IMAGE_DIGEST}" >"${DIGEST_RENDERED}"
+if ! grep -q "image: \"registry.example.com/s3desk@${IMAGE_DIGEST}\"" "${DIGEST_RENDERED}"; then
+  echo "[helm-check] expected sqlite image digest to render as an immutable image reference" >&2
+  exit 1
+fi
 if helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --values "${CHART_PATH}/values-production.yaml" \
   --set-string image.tag=latest >"${TMP_DIR}/production-latest-negative.out" 2>&1; then

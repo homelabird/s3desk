@@ -8,6 +8,7 @@ available in the environment.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import NoReturn
@@ -38,13 +39,14 @@ REQUIRED_FRONTEND_E2E_BROWSER_FACING_PATHS = {
     "backend/internal/**",
 }
 DEPRECATED_ACTION_REFS = {
-    "actions/checkout@v4": "actions/checkout@v6",
-    "actions/setup-go@v5": "actions/setup-go@v6",
-    "actions/setup-node@v4": "actions/setup-node@v6",
-    "actions/upload-artifact@v4": "actions/upload-artifact@v7",
-    "azure/setup-helm@v4": "azure/setup-helm@v5",
-    "dorny/paths-filter@v3": "dorny/paths-filter@v4",
+    "actions/checkout@v4": "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+    "actions/setup-go@v5": "actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+    "actions/setup-node@v4": "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
+    "actions/upload-artifact@v4": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    "azure/setup-helm@v4": "azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310",
+    "dorny/paths-filter@v3": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
 }
+IMMUTABLE_ACTION_REF = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}$")
 
 
 class WorkflowLoader(yaml.BaseLoader):
@@ -105,6 +107,11 @@ def validate_step(path: Path, job_id: str, step_index: int, step):
         replacement = DEPRECATED_ACTION_REFS.get(uses.strip().lower())
         if replacement:
             fail(f"{context}.uses uses deprecated action ref {uses!r}; use {replacement!r}")
+        if not IMMUTABLE_ACTION_REF.fullmatch(uses.strip()):
+            fail(
+                f"{context}.uses must pin an external GitHub Action to a 40-character commit SHA; "
+                f"got {uses!r}"
+            )
 
 
 def validate_job(path: Path, job_id: str, job):

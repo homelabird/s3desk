@@ -7,11 +7,11 @@
 - `ProfilesPage`는 thin shell + composition state까지 정리됐습니다.
 - `BucketsPage`도 thin route + composition state까지 정리됐습니다.
 - `Buckets` controller도 query/provider-gating, create mutation이 하위 hook으로 내려갔습니다.
-- `Buckets` controller의 scope/view-state 조립도 [useBucketsPageScopeState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/useBucketsPageScopeState.ts)로 내려갔습니다.
-- `Buckets` controller의 overlay/create/delete wiring도 [useBucketsPageFeatureState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/useBucketsPageFeatureState.ts)로 한 단계 더 내려갔습니다.
+- `Buckets` controller의 scope/view-state 조립도 [useBucketsPageScopeState.ts](../../frontend/src/pages/buckets/useBucketsPageScopeState.ts)로 내려갔습니다.
+- `Buckets` controller의 overlay/create/delete wiring도 [useBucketsPageFeatureState.ts](../../frontend/src/pages/buckets/useBucketsPageFeatureState.ts)로 한 단계 더 내려갔습니다.
 - controller return surface도 이제 `currentScopeKey + queries + shell` grouped shape로 줄었고, route shell builder도 grouped `shell`을 그대로 넘기도록 단순화됐습니다.
-- `Buckets` controller의 shell prop mapping과 loading derivation도 [buildBucketsPageControllerState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/buildBucketsPageControllerState.ts) pure builder로 내려갔고, controller hook의 feature-state passthrough 재조립도 제거돼 하위 state 조립에만 더 집중하게 됐습니다.
-- `Buckets` controller의 shell/list/dialog/loading view-prop 조립도 [buildBucketsPageShellViewProps.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/buildBucketsPageShellViewProps.ts)로 분리돼 controller builder는 `currentScopeKey`, query snapshot, shell 조합만 담당합니다.
+- `Buckets` controller의 shell prop mapping과 loading derivation도 [buildBucketsPageControllerState.ts](../../frontend/src/pages/buckets/buildBucketsPageControllerState.ts) pure builder로 내려갔고, controller hook의 feature-state passthrough 재조립도 제거돼 하위 state 조립에만 더 집중하게 됐습니다.
+- `Buckets` controller의 shell/list/dialog/loading view-prop 조립도 [buildBucketsPageShellViewProps.ts](../../frontend/src/pages/buckets/buildBucketsPageShellViewProps.ts)로 분리돼 controller builder는 `currentScopeKey`, query snapshot, shell 조합만 담당합니다.
 - 현재 남은 우선 작업은 `Buckets` 쪽보다 P2 보안/CI matrix 정리가 더 큽니다.
 
 대상:
@@ -90,5 +90,6 @@
 
 ## 결론
 
-- 지금 가장 중요한 남은 부채는 동작 불안정이 아니라 경계의 마지막 20% 정리입니다.
-- 우선순위는 `page orchestration 축소 -> upload commit 단순화 -> security matrix 확대 -> CI/문서 정합성` 순서가 맞습니다.
+- 현재 목록의 P1 구조 정리와 대부분의 P2/P3 경계 작업은 owner-local 기준으로 마무리됐습니다.
+- 남은 로컬 작업은 새 public/download surface가 생길 때 동일한 security matrix를 추가하는 정도이며, 현재 release 판단의 주된 미충족 항목은 provider·reverse-proxy·portable-backup의 candidate-bound evidence입니다.
+- local unit/integration/browser fixture green은 실제 provider, protected deployment, reverse-proxy, backup 운영 증거를 대체하지 않습니다.

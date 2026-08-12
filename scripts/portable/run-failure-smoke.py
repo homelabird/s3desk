@@ -176,7 +176,13 @@ def run_wrong_password():
     assert_true(preview_status == 400, f"wrong_password preview status={preview_status}")
     assert_true(((preview or {}).get("error") or {}).get("code") == "portable_import_failed", f"wrong_password preview error.code={preview}")
     details_error = error_details_error(preview).lower()
-    assert_true("signature mismatch" in details_error or "checksum mismatch" in details_error or "invalid" in details_error, f"wrong_password preview details.error={details_error}")
+    assert_true(
+        "signature mismatch" in details_error
+        or "checksum mismatch" in details_error
+        or "authentication failed" in details_error
+        or "invalid" in details_error,
+        f"wrong_password preview details.error={details_error}",
+    )
 
     import_status, imported = post_bundle("/server/import-portable", archive)
     assert_true(import_status == 400, f"wrong_password import status={import_status}")

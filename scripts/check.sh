@@ -65,16 +65,20 @@ resolve_go_helper_tool() {
 }
 
 third_party_notice_snapshot() {
+  local notice_file="$1"
+  local licenses_dir="$2"
   (
-    cd "${ROOT}"
-    if [[ -f "THIRD_PARTY_NOTICES.md" ]]; then
-      sed '/^Generated at /d' "THIRD_PARTY_NOTICES.md" | sha256sum | awk '{print $1 "  THIRD_PARTY_NOTICES.md"}'
+    if [[ -f "${notice_file}" ]]; then
+      sed '/^Generated at /d' "${notice_file}" | sha256sum | awk '{print $1 "  THIRD_PARTY_NOTICES.md"}'
     else
       printf 'MISSING  THIRD_PARTY_NOTICES.md\n'
     fi
 
-    if [[ -d "third_party/licenses" ]]; then
-      find "third_party/licenses" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+    if [[ -d "${licenses_dir}" ]]; then
+      find "${licenses_dir}" -type f -print0 |
+        LC_ALL=C sort -z |
+        xargs -0 -r sha256sum |
+        sed "s#${licenses_dir%/}/##"
     else
       printf 'MISSING_DIR  third_party/licenses\n'
     fi
@@ -233,14 +237,22 @@ echo "[check] frontend"
 echo "[check] third-party notices"
 third_party_notice_before="$(mktemp)"
 third_party_notice_after="$(mktemp)"
+third_party_notice_output="$(mktemp -d)"
 cleanup_third_party_notice_snapshots() {
   rm -f "${third_party_notice_before}" "${third_party_notice_after}"
+  rm -rf "${third_party_notice_output}"
 }
 trap cleanup_third_party_notice_snapshots EXIT
 
-third_party_notice_snapshot >"${third_party_notice_before}"
-python3 "${ROOT}/scripts/generate_third_party_notices.py"
-third_party_notice_snapshot >"${third_party_notice_after}"
+third_party_notice_snapshot \
+  "${ROOT}/THIRD_PARTY_NOTICES.md" \
+  "${ROOT}/third_party/licenses" >"${third_party_notice_before}"
+THIRD_PARTY_NOTICES_OUTPUT="${third_party_notice_output}/THIRD_PARTY_NOTICES.md" \
+THIRD_PARTY_LICENSES_DIR="${third_party_notice_output}/third_party/licenses" \
+  python3 "${ROOT}/scripts/generate_third_party_notices.py"
+third_party_notice_snapshot \
+  "${third_party_notice_output}/THIRD_PARTY_NOTICES.md" \
+  "${third_party_notice_output}/third_party/licenses" >"${third_party_notice_after}"
 if ! diff -u "${third_party_notice_before}" "${third_party_notice_after}"; then
   echo "[check] third-party notices are not reproducible; rerun scripts/generate_third_party_notices.py and include the generated files" >&2
   exit 1

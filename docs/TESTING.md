@@ -13,7 +13,7 @@ This document keeps only the commands most contributors need.
 - `./scripts/check.sh full`
   - full local gate
   - includes frontend browser smoke through `npm run test:e2e:smoke`
-  - verifies third-party notices by regenerating them and comparing the notice/license file tree before and after generation
+  - verifies third-party notices in a temporary output tree without rewriting the tracked notice/license snapshot
 - `./scripts/check.sh fast`
   - skips the browser smoke layer
   - keeps the existing non-browser local verification path
@@ -43,6 +43,7 @@ GitLab adds required quality gates around that minimal backend command:
 
 - `shellcheck` runs `shellcheck -x` for `scripts/**/*.sh` and stores logs in `artifacts/ci/shellcheck/`.
 - `go_test` runs `go vet`, writes `backend/coverage.out`, enforces `GO_COVERAGE_MIN_TOTAL`, and stores backend logs in `artifacts/ci/backend/`.
+- `go_race` runs the targeted race smoke `go test -race ./internal/api ./internal/jobs` and stores `artifacts/ci/backend/go-race.log`.
 - `golangci_lint` uses `GOLANGCI_LINT_CONFIG` and fails if the checked-in `.golangci.yml` is missing.
 
 ### Sandbox Notes
@@ -53,7 +54,7 @@ GitLab adds required quality gates around that minimal backend command:
 
 Use `./scripts/check.sh` when you want the full repository gate locally instead of just the minimal CI pair above.
 
-Do not treat `./scripts/check_ci_pair.sh` as a release-ready verdict. It is a convenience wrapper for workflow lint + frontend build + backend test, not a substitute for required browser lanes, bundle-budget, or the full repository gate.
+Do not treat `./scripts/check_ci_pair.sh` as a release-ready verdict. It is a convenience wrapper for workflow lint + frontend OpenAPI drift + frontend build + backend test, not a substitute for required browser lanes, bundle-budget, or the full repository gate.
 
 For dirty-worktree release scope review, generate a repeatable inventory from the repository root:
 
@@ -123,7 +124,7 @@ Use the exact GitHub check names when you describe release evidence or branch-pr
 - `cd frontend && npm run test:e2e:mobile-responsive`
   - local equivalent of the required `Mobile Responsive E2E (Required)` check
 - `./scripts/check_ci_pair.sh`
-  - convenience wrapper for workflow lint + frontend build + backend test only
+  - convenience wrapper for workflow lint + frontend OpenAPI drift + frontend build + backend test only
   - not the GitHub required-check set and not a branch-protection verdict
 
 GitHub Actions workflow syntax and basic structure can be checked locally with:
@@ -210,6 +211,7 @@ Minimal current-state pair wrapper:
 This wrapper now covers:
 
 - `bash ./scripts/check_github_workflows.sh`
+- `cd frontend && npm run check:openapi`
 - `cd frontend && npm run build`
 - `cd backend && go test ./...`
 
@@ -266,7 +268,7 @@ GitLab tag publishing also runs:
 bash scripts/check_gitlab_publish_readiness.sh <tag>
 ```
 
-That helper validates the tag format, derives the previous tag or uses `DEPLOY_RELEASE_BASE`, then delegates to `scripts/verify_release_readiness.sh` before Docker Hub or Helm publication. The preflight covers the committed candidate diff plus GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state, so `curl` and `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs. By default it requires the exact GitHub check names `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`; if branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the script default in the same change. GitLab release-builder images must remain digest-pinned literal `image:` references and must not be overridden through mutable image variables.
+That helper validates the tag format, derives the previous tag or uses `DEPLOY_RELEASE_BASE`, then delegates to `scripts/verify_release_readiness.sh` before Docker Hub or Helm publication. The preflight covers the committed candidate diff plus GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state, so `curl` and `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs. By default it requires the exact GitHub check names `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`; if branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the script default in the same change. GitLab publish/deploy jobs additionally require `CI_COMMIT_REF_PROTECTED == "true"`; release image tar files are checked with `release-images.sha256`, Docker Hub publish records immutable registry digests for post-publish smoke, and `trivy_scan` emits CycloneDX SBOM artifacts. GitLab release-builder images must remain digest-pinned literal `image:` references and must not be overridden through mutable image variables.
 
 ### Lighthouse authentication
 
@@ -661,7 +663,7 @@ podman run -d --rm \
 
 curl -k https://localhost:8443/healthz
 curl -k -H "X-Api-Token: <token>" https://localhost:8443/api/v1/meta
-curl -k -X POST -H "X-Api-Token: <token>" "https://localhost:8443/api/v1/realtime-ticket?transport=ws"
+curl -k -X POST -H "X-Api-Token: <token>" -H "Origin: https://localhost:8443" "https://localhost:8443/api/v1/realtime-ticket?transport=ws"
 curl -k -H "X-Api-Token: <token>" -H "X-Profile-Id: <profile-id>" \
   "https://localhost:8443/api/v1/buckets/<bucket>/objects/download-url?key=<key>&proxy=true"
 ```
@@ -718,3 +720,9 @@ Run the nightly live suite locally with:
 ```bash
 LIVE_E2E_SUITE=critical ./scripts/run_live_e2e_local.sh
 ```
+
+The local harness requires `BACKEND_ADDR` to be free. It checks the listener
+by port, including wildcard and IPv6 bindings, and fails before starting the
+backend if another process owns that port.
+Set `UPLOAD_DIRECT_STREAM=false` when a live fallback test must exercise the
+staging-only capability matrix; it defaults to `true` to match normal runtime.
