@@ -116,6 +116,8 @@ func New() *Metrics {
 	})
 
 	reg.MustRegister(
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
 		m.jobsQueueDepth,
 		m.jobsQueueCapacity,
 		m.jobsStartedTotal,

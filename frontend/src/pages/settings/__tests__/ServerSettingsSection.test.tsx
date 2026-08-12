@@ -56,7 +56,12 @@ describe('ServerSettingsSection', () => {
 			/>,
 		)
 
-		expect(screen.getByText(/Operational warnings/i)).toBeInTheDocument()
-		expect(screen.getByText(/ALLOW_REMOTE is enabled but ALLOWED_LOCAL_DIRS is empty/i)).toBeInTheDocument()
-	})
+			expect(screen.getByText(/Operational warnings/i)).toBeInTheDocument()
+			expect(screen.getByText(/ALLOW_REMOTE is enabled but ALLOWED_LOCAL_DIRS is empty/i)).toBeInTheDocument()
+			expect(screen.getByText('Runtime diagnostics')).toBeInTheDocument()
+			expect(screen.getByText('sqlite')).toBeInTheDocument()
+			expect(screen.getByText('rclone v1.66.0')).toBeInTheDocument()
+			expect(screen.getByText('Unlimited')).toBeInTheDocument()
+			expect(screen.getByText('Keep forever')).toBeInTheDocument()
+		})
 })

@@ -72,7 +72,7 @@ spec:
             - name: JOB_QUEUE_CAPACITY
               value: {{ .Values.jobs.queueCapacity | quote }}
             - name: JOB_LOG_MAX_BYTES
-              value: {{ .Values.jobs.logMaxBytes | quote }}
+              value: {{ int64 .Values.jobs.logMaxBytes | quote }}
             - name: JOB_LOG_MAX_LINE_BYTES
               value: {{ .Values.jobs.logMaxLineBytes | quote }}
             - name: JOB_LOG_EMIT_STDOUT
@@ -84,9 +84,9 @@ spec:
             - name: UPLOAD_TTL
               value: {{ .Values.uploads.ttl | quote }}
             - name: UPLOAD_MAX_BYTES
-              value: {{ .Values.uploads.maxBytes | quote }}
+              value: {{ int64 .Values.uploads.maxBytes | quote }}
             - name: SERVER_RESTORE_MAX_BYTES
-              value: {{ .Values.backup.restoreMaxBytes | quote }}
+              value: {{ int64 .Values.backup.restoreMaxBytes | quote }}
             - name: UPLOAD_DIRECT_STREAM
               value: {{ .Values.uploads.directStream | quote }}
             - name: UPLOAD_MAX_CONCURRENT_REQUESTS

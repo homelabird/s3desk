@@ -17,6 +17,12 @@ server:
   logFormat: "json"
   logLevel: "info"
 
+jobs:
+  # Keep one noisy job from filling the persistent volume while retaining a
+  # useful troubleshooting window. Override these for stricter audit policy.
+  logMaxBytes: 104857600
+  logRetention: "720h"
+
 ingress:
   enabled: true
   className: nginx

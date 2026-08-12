@@ -33,3 +33,21 @@ func TestObserveStorageOperationRegistersMetrics(t *testing.T) {
 		t.Fatal("expected storage_operation_duration_ms to be registered")
 	}
 }
+
+func TestRuntimeCollectorsAreRegistered(t *testing.T) {
+	m := New()
+	families, err := m.registry.Gather()
+	if err != nil {
+		t.Fatalf("gather metrics: %v", err)
+	}
+
+	found := map[string]bool{}
+	for _, family := range families {
+		found[family.GetName()] = true
+	}
+	for _, name := range []string{"go_goroutines", "process_cpu_seconds_total"} {
+		if !found[name] {
+			t.Fatalf("expected %s runtime metric", name)
+		}
+	}
+}

@@ -22,6 +22,21 @@ assert_secret_optional() {
   fi
 }
 
+assert_env_value() {
+  local rendered="$1"
+  local env_name="$2"
+  local expected="$3"
+  if ! awk -v env_name="${env_name}" -v expected="${expected}" '
+    $0 ~ "^[[:space:]]*- name: " env_name "$" { in_env = 1; next }
+    in_env && $0 ~ "^[[:space:]]*- name: " { exit 1 }
+    in_env && $0 ~ "^[[:space:]]*value: \"" expected "\"$" { found = 1; exit 0 }
+    END { exit found ? 0 : 1 }
+  ' "${rendered}"; then
+    echo "[helm-check] expected ${env_name}=${expected}" >&2
+    exit 1
+  fi
+}
+
 assert_no_latest_image() {
   local rendered="$1"
   local label="$2"
@@ -85,6 +100,8 @@ assert_no_source_tree_image "${PRODUCTION_RENDERED}" "values-production.yaml"
 assert_secret_optional "${PRODUCTION_RENDERED}" API_TOKEN false
 assert_secret_optional "${PRODUCTION_RENDERED}" ENCRYPTION_KEY false
 assert_secret_optional "${PRODUCTION_RENDERED}" DATABASE_URL true
+assert_env_value "${PRODUCTION_RENDERED}" JOB_LOG_MAX_BYTES 104857600
+assert_env_value "${PRODUCTION_RENDERED}" JOB_LOG_RETENTION 720h
 DIGEST_RENDERED="${TMP_DIR}/production-digest-rendered.yaml"
 IMAGE_DIGEST="sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \

@@ -38,10 +38,11 @@ const defaultMetaResponse = {
 	jobConcurrency: 2,
 	jobLogMaxBytes: null,
 	jobRetentionSeconds: null,
+	jobLogRetentionSeconds: null,
 	uploadSessionTTLSeconds: 3600,
 	uploadMaxBytes: null,
 	uploadDirectStream: false,
-	transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
+	transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: 'v1.66.0', path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 }
 
 async function fulfillFixtureResponse(ctx: MockApiContext, response: ApiFixtureResponse) {

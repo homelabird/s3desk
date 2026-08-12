@@ -304,8 +304,8 @@ export function SettingsPage(props: Props) {
 								size="small"
 								items={[
 									{
-										key: 'backup',
-										label: 'Backup and restore',
+									key: 'backup',
+									label: 'Server and backup',
 										children: (
 											<Suspense fallback={<SettingsSectionFallback />}>
 												<ServerSettingsSection api={props.api} meta={props.meta} scopeKey={props.shellScopeKey} />

@@ -49,7 +49,7 @@ func observeRequestMetrics(m *metrics.Metrics, method string, route string, stat
 }
 
 func writeRequestLog(status int, path string, fields map[string]any) {
-	if shouldSkipAccessLogPath(path) {
+	if status < http.StatusBadRequest && shouldSkipAccessLogPath(path) {
 		return
 	}
 	switch {

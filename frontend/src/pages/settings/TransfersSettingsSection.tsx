@@ -61,7 +61,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 						children: (
 							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 								<Typography.Text type="secondary" className={styles.sectionIntro}>
-									Changes save immediately.
+									Saved immediately in this browser.
 								</Typography.Text>
 								<FormField
 									label="Force server proxy for downloads and previews"

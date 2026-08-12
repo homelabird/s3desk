@@ -36,7 +36,7 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				Changes save immediately.
+				Saved immediately in this browser.
 			</Typography.Text>
 			<FormField
 				label="Request retry attempts"

@@ -29,7 +29,7 @@ test.describe('Live server migration flow', () => {
 		const settings = page.getByRole('dialog', { name: 'Settings' })
 		await expect(settings).toBeVisible()
 		await settings.getByRole('tab', { name: 'Support' }).click()
-		const backupSection = settings.getByRole('button', { name: /Backup and restore/ })
+		const backupSection = settings.getByRole('button', { name: /Server and backup/ })
 		if (await backupSection.getAttribute('aria-expanded') !== 'true') {
 			await backupSection.click()
 		}

@@ -92,3 +92,12 @@ func TestWriteRequestLog_SkipsHealthEndpoint(t *testing.T) {
 		t.Fatalf("output=%q, want empty", output)
 	}
 }
+
+func TestWriteRequestLog_LogsFailedProbe(t *testing.T) {
+	output := captureRequestLogOutput(t, func() {
+		writeRequestLog(http.StatusServiceUnavailable, "/readyz", map[string]any{"status": http.StatusServiceUnavailable})
+	})
+	if !strings.Contains(output, "[ERROR] http request failed") {
+		t.Fatalf("output=%q, want failed probe log", output)
+	}
+}
