@@ -1,5 +1,7 @@
 import { Badge, Button, Empty, Space, Tag, Typography } from 'antd'
 import { CloudUploadOutlined, DownloadOutlined } from '@ant-design/icons'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useMemo, useRef, type ReactNode } from 'react'
 
 import { AppTabs } from '../AppTabs'
 import { OverlaySheet } from '../OverlaySheet'
@@ -31,6 +33,69 @@ export type TransfersDrawerProps = {
 	onRetryUpload: (taskId: string) => void
 	onRemoveUpload: (taskId: string) => void
 	onOpenJobs: () => void
+}
+
+function TransferVirtualList<T extends { id: string }>(props: {
+	items: T[]
+	ariaLabel: string
+	renderItem: (item: T) => ReactNode
+}) {
+	const scrollRef = useRef<HTMLDivElement | null>(null)
+	const virtualizer = useVirtualizer({
+		count: props.items.length,
+		getScrollElement: () => scrollRef.current,
+		estimateSize: () => 190,
+		overscan: 3,
+	})
+	const measuredItems = virtualizer.getVirtualItems()
+	const virtualItems = useMemo(
+		() =>
+			measuredItems.length > 0
+				? measuredItems
+				: props.items.slice(0, 12).map((_, index) => ({
+						index,
+						key: index,
+						start: index * 190,
+						size: 190,
+						end: (index + 1) * 190,
+						lane: 0,
+					})),
+		[measuredItems, props.items],
+	)
+	const totalSize = measuredItems.length > 0 ? virtualizer.getTotalSize() : props.items.length * 190
+
+	return (
+		<div
+			ref={scrollRef}
+			role="list"
+			aria-label={props.ariaLabel}
+			style={{ position: 'relative', height: 280, overflowY: 'auto' }}
+		>
+			<div style={{ position: 'relative', height: totalSize }}>
+				{virtualItems.map((virtualItem) => {
+					const item = props.items[virtualItem.index]
+					if (!item) return null
+					return (
+						<div
+							key={item.id}
+							ref={virtualizer.measureElement}
+							data-index={virtualItem.index}
+							style={{
+								position: 'absolute',
+								top: 0,
+								left: 0,
+								width: '100%',
+								paddingBottom: 12,
+								transform: `translateY(${virtualItem.start}px)`,
+							}}
+						>
+							{props.renderItem(item)}
+						</div>
+					)
+				})}
+			</div>
+		</div>
+	)
 }
 
 export function TransfersDrawer(props: TransfersDrawerProps) {
@@ -95,18 +160,19 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 										{props.downloadSummaryText ? (
 											<Typography.Text type="secondary">{props.downloadSummaryText}</Typography.Text>
 										) : null}
-										<div role="list" aria-label="Download transfers" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-											{props.downloadTasks.map((t) => (
+										<TransferVirtualList
+											items={props.downloadTasks}
+											ariaLabel="Download transfers"
+											renderItem={(t) => (
 												<TransferDownloadRow
-													key={t.id}
 													task={t}
 													onCancel={props.onCancelDownload}
 													onRetry={props.onRetryDownload}
 													onRemove={props.onRemoveDownload}
 													onOpenJobs={props.onOpenJobs}
 												/>
-											))}
-										</div>
+											)}
+										/>
 									</div>
 								)}
 							</div>
@@ -140,18 +206,19 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 										{props.uploadSummaryText ? (
 											<Typography.Text type="secondary">{props.uploadSummaryText}</Typography.Text>
 										) : null}
-										<div role="list" aria-label="Upload transfers" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-											{props.uploadTasks.map((t) => (
+										<TransferVirtualList
+											items={props.uploadTasks}
+											ariaLabel="Upload transfers"
+											renderItem={(t) => (
 												<TransferUploadRow
-													key={t.id}
 													task={t}
 													onOpenJobs={props.onOpenJobs}
 													onCancel={props.onCancelUpload}
 													onRetry={props.onRetryUpload}
 													onRemove={props.onRemoveUpload}
 												/>
-											))}
-										</div>
+											)}
+										/>
 									</div>
 								)}
 							</div>

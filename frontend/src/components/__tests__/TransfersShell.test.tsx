@@ -1,9 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useEffect } from 'react'
+import { memo, useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TransfersButton, TransfersProvider } from '../TransfersShell'
-import { useTransfers } from '../useTransfers'
+import {
+	TransfersContexts,
+	useTransfers,
+	useTransfersCommands,
+} from '../useTransfers'
+import { transfersStub } from '../../test/transfersStub'
 
 const runtimeApi = vi.hoisted(() => ({
 	openTransfers: vi.fn(),
@@ -74,6 +79,14 @@ function TransfersControls() {
 		</>
 	)
 }
+
+const CommandConsumer = memo(function CommandConsumer(props: {
+	onRender: () => void
+}) {
+	props.onRender()
+	useTransfersCommands()
+	return null
+})
 
 describe('TransfersShell', () => {
 	beforeEach(() => {
@@ -146,5 +159,41 @@ describe('TransfersShell', () => {
 
 		expect(await screen.findByTestId('transfers-runtime-bridge')).toBeInTheDocument()
 		await waitFor(() => expect(screen.getByText('3')).toBeInTheDocument())
+	})
+
+	it('does not rerender command consumers for task progress changes', () => {
+		const onRender = vi.fn()
+		const progressValue = {
+			...transfersStub,
+			downloadTasks: [
+				{
+					id: 'download-1',
+					kind: 'object' as const,
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					key: 'alpha.txt',
+					label: 'alpha.txt',
+					status: 'running' as const,
+					createdAtMs: 1,
+					loadedBytes: 50,
+					totalBytes: 100,
+					speedBps: 10,
+					etaSeconds: 5,
+				},
+			],
+		}
+		const { rerender } = render(
+			<TransfersContexts value={transfersStub}>
+				<CommandConsumer onRender={onRender} />
+			</TransfersContexts>,
+		)
+
+		rerender(
+			<TransfersContexts value={progressValue}>
+				<CommandConsumer onRender={onRender} />
+			</TransfersContexts>,
+		)
+
+		expect(onRender).toHaveBeenCalledTimes(1)
 	})
 })

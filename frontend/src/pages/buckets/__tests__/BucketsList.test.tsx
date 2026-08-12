@@ -30,4 +30,17 @@ describe('BucketsList', () => {
 		expect(items).toHaveLength(1)
 		expect(items[0]).toHaveTextContent('primary-bucket')
 	})
+
+	it('windows large compact bucket lists', () => {
+		render(
+			<BucketsList
+				{...baseProps}
+				buckets={Array.from({ length: 1_000 }, (_, index) => ({ name: `bucket-${index}` }))}
+			/>,
+		)
+
+		expect(screen.getAllByRole('listitem')).toHaveLength(20)
+		expect(screen.getByText('bucket-0')).toBeInTheDocument()
+		expect(screen.queryByText('bucket-999')).not.toBeInTheDocument()
+	})
 })

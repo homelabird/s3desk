@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockApi, type MockApiContext, type MockApiRoute } from './support/apiFixtures'
-import { dropFileIntoObjectsUploadZone, expectTransferRowState, gotoObjectsUploadBucketPage, openTransfersUploadRow } from './support/ui'
+import { dropFileIntoObjectsUploadZone, gotoObjectsUploadBucketPage } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string

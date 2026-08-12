@@ -3,7 +3,7 @@ import { useCallback, useRef } from 'react'
 
 import { queryKeys } from '../../api/queryKeys'
 import type { APIClientShape } from '../../api/client'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { listAllObjects } from '../../lib/objects'
 import type { DeleteJobPrefill } from './jobsPageTypes'
 import { normalizePrefix as normalizeJobPrefix } from './jobUtils'
@@ -24,7 +24,7 @@ type UseJobsPageCreateFlowsArgs = {
   apiToken: string
   profileId: string | null
   queryClient: QueryClient
-  transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
   uploadSupported: boolean
   uploadDisabledReason: string | null
   createJobWithRetry: (req: {

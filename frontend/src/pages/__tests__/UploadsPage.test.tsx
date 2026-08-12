@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { APIError } from "../../api/client";
-import { TransfersContext } from "../../components/useTransfers";
+import { TransfersContexts } from "../../components/useTransfers";
 import * as uploadUtils from "../../components/transfers/transfersUploadUtils";
 import { failedToLoadBucketsTitle, goToBucketsLabel, noBucketsAvailableHint } from "../../lib/actionHints";
 import * as deviceFs from "../../lib/deviceFs";
@@ -151,7 +151,7 @@ function renderUploadsPage(
 
   render(
     <QueryClientProvider client={createClient()}>
-      <TransfersContext.Provider value={transfersValue}>
+      <TransfersContexts value={transfersValue}>
         <MemoryRouter initialEntries={["/uploads"]}>
           <Routes>
             <Route
@@ -162,7 +162,7 @@ function renderUploadsPage(
             <Route path="/buckets" element={<div>Buckets Route</div>} />
           </Routes>
         </MemoryRouter>
-      </TransfersContext.Provider>
+      </TransfersContexts>
     </QueryClientProvider>,
   );
 
@@ -292,7 +292,7 @@ describe("UploadsPage", () => {
     const client = createClient();
     const view = render(
       <QueryClientProvider client={client}>
-        <TransfersContext.Provider value={transfersValue}>
+        <TransfersContexts value={transfersValue}>
           <MemoryRouter initialEntries={["/uploads"]}>
             <Routes>
               <Route
@@ -303,7 +303,7 @@ describe("UploadsPage", () => {
               />
             </Routes>
           </MemoryRouter>
-        </TransfersContext.Provider>
+        </TransfersContexts>
       </QueryClientProvider>,
     );
 
@@ -316,7 +316,7 @@ describe("UploadsPage", () => {
 
     view.rerender(
       <QueryClientProvider client={client}>
-        <TransfersContext.Provider value={transfersValue}>
+        <TransfersContexts value={transfersValue}>
           <MemoryRouter initialEntries={["/uploads"]}>
             <Routes>
               <Route
@@ -327,7 +327,7 @@ describe("UploadsPage", () => {
               />
             </Routes>
           </MemoryRouter>
-        </TransfersContext.Provider>
+        </TransfersContexts>
       </QueryClientProvider>,
     );
 

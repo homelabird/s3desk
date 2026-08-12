@@ -403,7 +403,6 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						onClose={() => setScopedMobileFiltersOpen(false)}
 						title="Job filters"
 						placement={screens.md ? 'right' : 'bottom'}
-						height={!screens.md ? 'min(80dvh, 560px)' : undefined}
 						width={screens.md ? 520 : undefined}
 						sheetId={mobileFiltersSheetId}
 						dataTestId="jobs-mobile-filters-sheet"

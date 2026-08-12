@@ -3,6 +3,7 @@ import { Button, Grid, Space, Typography, type MenuProps } from 'antd'
 
 import type { Profile } from '../../api/types'
 import { MenuPopover } from '../../components/MenuPopover'
+import { useAppContentVirtualizer } from '../../components/useAppContentVirtualizer'
 import styles from '../ProfilesPage.module.css'
 import type { ProfileTableRowViewModel } from './profileViewModel'
 
@@ -28,6 +29,8 @@ type ProfilesTableProps = {
 export function ProfilesTable(props: ProfilesTableProps) {
 	const screens = Grid.useBreakpoint()
 	const useCompactList = !screens.lg
+	const { hostRef, items: virtualItems, measureElement, paddingBottom, paddingTop } =
+		useAppContentVirtualizer(props.rows.length, useCompactList ? 270 : 82)
 
 	const buildRowMenu = (row: ProfileTableRowViewModel): MenuProps => ({
 		items: [
@@ -87,9 +90,20 @@ export function ProfilesTable(props: ProfilesTableProps) {
 	return (
 		<div className={styles.tableWrap}>
 			{useCompactList ? (
-				<div className={styles.mobileList} data-testid="profiles-list-compact" role="list" aria-label="Profiles">
-					{props.rows.map((row) => (
-						<article key={row.profile.id} className={styles.mobileCard} role="listitem">
+				<div ref={hostRef} className={styles.mobileList} data-testid="profiles-list-compact" role="list" aria-label="Profiles">
+					<div style={{ height: paddingTop }} aria-hidden />
+					{virtualItems.map((item) => {
+						const row = props.rows[item.index]
+						if (!row) return null
+						return <article
+							key={row.profile.id}
+							ref={measureElement}
+							data-index={item.index}
+							className={styles.mobileCard}
+							role="listitem"
+							aria-posinset={item.index + 1}
+							aria-setsize={props.rows.length}
+						>
 							<div className={styles.mobileCardTop}>
 								<div className={styles.mobileCardCopy}>
 									<div className={styles.mobileTitleRow}>
@@ -151,11 +165,12 @@ export function ProfilesTable(props: ProfilesTableProps) {
 								</MenuPopover>
 							</div>
 						</article>
-					))}
+					})}
+					<div style={{ height: paddingBottom }} aria-hidden />
 				</div>
 			) : (
-				<div className={styles.desktopTable} data-testid="profiles-table-desktop">
-					<table className={styles.table}>
+				<div ref={hostRef} className={styles.desktopTable} data-testid="profiles-table-desktop">
+					<table className={styles.table} aria-rowcount={props.rows.length + 1}>
 						<caption className="sr-only">Profiles</caption>
 						<thead>
 							<tr className={styles.headRow}>
@@ -167,8 +182,17 @@ export function ProfilesTable(props: ProfilesTableProps) {
 							</tr>
 						</thead>
 						<tbody>
-							{props.rows.map((row) => (
-								<tr key={row.profile.id} className={styles.tableRow}>
+							{paddingTop > 0 ? <tr aria-hidden><td colSpan={5} style={{ height: paddingTop }} /></tr> : null}
+							{virtualItems.map((item) => {
+								const row = props.rows[item.index]
+								if (!row) return null
+								return <tr
+									key={row.profile.id}
+									ref={measureElement}
+									data-index={item.index}
+									aria-rowindex={item.index + 2}
+									className={styles.tableRow}
+								>
 									<td className={styles.td}>
 										<div className={styles.nameCell}>
 											<Typography.Text strong>{row.profile.name}</Typography.Text>
@@ -224,7 +248,8 @@ export function ProfilesTable(props: ProfilesTableProps) {
 										</div>
 									</td>
 								</tr>
-							))}
+							})}
+							{paddingBottom > 0 ? <tr aria-hidden><td colSpan={5} style={{ height: paddingBottom }} /></tr> : null}
 						</tbody>
 					</table>
 				</div>

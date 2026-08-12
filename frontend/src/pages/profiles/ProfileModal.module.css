@@ -67,7 +67,6 @@
 }
 
 .providerChecklist,
-.providerGuide,
 .switchCard {
 	padding: 12px 14px;
 	border-radius: var(--s3d-radius-lg);
@@ -111,12 +110,6 @@
 
 .providerChecklistTitleBlock :global(.ant-typography) {
 	margin-bottom: 0;
-}
-
-.providerChecklistSummary {
-	font-size: 12px;
-	line-height: 1.25;
-	color: var(--s3d-color-text-secondary) !important;
 }
 
 .sectionMetaText {
@@ -238,13 +231,6 @@
 	max-width: 44ch;
 }
 
-.sectionMeta {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
 .sectionBody {
 	display: flex;
 	flex-direction: column;
@@ -252,31 +238,10 @@
 	padding-top: 0;
 }
 
-.providerGuide {
-	display: flex;
-	padding: 0;
-	border-left: none;
-	border-radius: 0;
-	background: transparent;
-}
-
-.providerGuideText,
-.sectionSummary,
 .sectionSummaryWarning {
 	display: block;
 	font-size: 12px;
 	line-height: 1.4;
-}
-
-.providerGuideText {
-	padding: 0 2px;
-	font-size: 11px;
-	line-height: 1.35;
-	color: var(--s3d-color-text-secondary);
-}
-
-.sectionSummary {
-	padding: 0;
 }
 
 .sectionSummaryWarning {
@@ -482,13 +447,6 @@
 	font-size: 11px;
 	line-height: 1.4;
 	color: var(--s3d-color-text-secondary);
-}
-
-.disclosureMeta {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	align-items: center;
 }
 
 .checkboxRow {

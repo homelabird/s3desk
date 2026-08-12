@@ -178,4 +178,26 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		await confirmDialog.getByRole('button', { name: 'Cancel' }).click()
 		await expect(confirmDialog).toHaveCount(0)
 	})
+
+	test('switches between table and cards without creating a nested vertical scroller', async ({ page }) => {
+		const buckets = Array.from({ length: 80 }, (_, index) => ({
+			name: index === 0 ? primaryBucket : `responsive-bucket-${index}`,
+			createdAt: '2024-01-01T00:00:00Z',
+		}))
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await setupBucketsPage(page, { buckets })
+
+		await expect(page.getByTestId('buckets-table-desktop')).toBeVisible()
+		await expect(page.getByTestId('buckets-list-compact')).toHaveCount(0)
+		const appScroller = page.locator('main[data-scroll-container="app-content"]')
+		await appScroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+		await expect(page.getByTestId('buckets-table-desktop').getByText('responsive-bucket-79')).toBeVisible()
+		await appScroller.evaluate((element) => element.scrollTo({ top: 0 }))
+
+		await page.setViewportSize({ width: 390, height: 844 })
+		await expect(page.getByTestId('buckets-list-compact')).toBeVisible()
+		await expect(page.getByTestId('buckets-table-desktop')).toHaveCount(0)
+		await appScroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+		await expect(getBucketCard(page, 'responsive-bucket-79')).toBeVisible()
+	})
 })

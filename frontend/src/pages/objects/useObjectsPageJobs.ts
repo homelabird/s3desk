@@ -1,6 +1,6 @@
 import type { APIClientShape } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import type { ObjectsCostMode } from '../../lib/objectsCostMode'
 import { AUTO_INDEX_COOLDOWN_MS } from './objectsPageConstants'
 import { useObjectsIndexing } from './useObjectsIndexing'
@@ -14,7 +14,7 @@ type UseObjectsPageJobsArgs = {
 	profileId: string | null
 	bucket: string
 	prefix: string
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	createJobWithRetry: CreateJobWithRetry
 	globalSearchOpen: boolean
 	globalSearchQueryText: string

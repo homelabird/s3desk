@@ -34,6 +34,16 @@ describe('getRecoveryHint', () => {
 		expect(getRecoveryHint(err)).toBeUndefined()
 	})
 
+	it('explains how to recover from profile deletion blocked by active jobs', () => {
+		const err = new APIError({
+			status: 409,
+			code: 'conflict',
+			message: 'profile has active jobs; cancel them before deleting the profile',
+		})
+
+		expect(getRecoveryHint(err)).toContain('Cancel or wait')
+	})
+
 	it('includes normalized code and retry-after tags in API error title', () => {
 		const err = new APIError({
 			status: 429,

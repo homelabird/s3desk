@@ -1,4 +1,4 @@
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { useObjectsUploadDrop } from './useObjectsUploadDrop'
 import { useObjectsUploadPickers } from './useObjectsUploadPickers'
 
@@ -10,7 +10,7 @@ type Args = {
 	isOffline: boolean
 	uploadSupported: boolean
 	uploadDisabledReason?: string | null
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 }
 
 export function useObjectsPageUploadActions({

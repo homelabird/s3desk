@@ -1,9 +1,9 @@
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { useUploadsPageScopedStorageState } from './useUploadsPageScopedStorageState'
 import { useUploadsPageSelectionActions } from './useUploadsPageSelectionActions'
 
 type UseUploadsPageSelectionStateArgs = {
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	isOffline: boolean
 	apiToken: string
 	profileId: string | null

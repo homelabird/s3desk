@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import type { ObjectItem } from '../../api/types'
 import { getDevicePickerSupport, pickDirectory } from '../../lib/deviceFs'
 import { objectsFeedback } from './objectsFeedback'
@@ -14,7 +14,7 @@ type UseObjectDownloadsArgs = {
 	selectedKeys: Set<string>
 	selectedCount: number
 	objectByKey: Map<string, ObjectItem>
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	onZipObjects: (keys: string[]) => void
 }
 

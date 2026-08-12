@@ -47,6 +47,7 @@ vi.mock('../../../api/useAPIClient', () => ({
 
 vi.mock('../../../components/useTransfers', () => ({
 	useTransfers: () => transfersRef.current,
+	useTransfersCommands: () => transfersRef.current,
 }))
 
 vi.mock('../useJobsRealtimeEvents', () => ({

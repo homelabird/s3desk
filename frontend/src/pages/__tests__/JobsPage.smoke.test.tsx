@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { APIClient } from "../../api/client";
 import { APIClientContext } from "../../api/useAPIClient";
-import { TransfersContext } from "../../components/useTransfers";
+import { TransfersContexts } from "../../components/useTransfers";
 import { ensureDomShims } from "../../test/domShims";
 import { transfersStub } from "../../test/transfersStub";
 import { JobsPage } from "../JobsPage";
@@ -29,7 +29,7 @@ describe("JobsPage", () => {
     render(
       <QueryClientProvider client={client}>
         <APIClientContext.Provider value={new APIClient({ apiToken: "test-token" })}>
-          <TransfersContext.Provider value={transfersStub}>
+          <TransfersContexts value={transfersStub}>
             <MemoryRouter initialEntries={["/jobs"]}>
               <Routes>
                 <Route
@@ -39,7 +39,7 @@ describe("JobsPage", () => {
                 <Route path="/profiles" element={<div>Profiles Route</div>} />
               </Routes>
             </MemoryRouter>
-          </TransfersContext.Provider>
+          </TransfersContexts>
         </APIClientContext.Provider>
       </QueryClientProvider>,
     );

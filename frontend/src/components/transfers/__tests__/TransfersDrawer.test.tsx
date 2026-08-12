@@ -105,4 +105,27 @@ describe('TransfersDrawer', () => {
 		expect(screen.getByRole('list', { name: 'Download transfers' })).toBeInTheDocument()
 		expect(screen.getByRole('listitem', { name: /Download demo.csv, Downloading/i })).toBeInTheDocument()
 	})
+
+	it('windows large transfer queues', () => {
+		const uploadTasks = Array.from({ length: 200 }, (_, index) => ({
+			id: `upload-${index}`,
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			prefix: 'photos/',
+			fileCount: 1,
+			status: 'queued' as const,
+			createdAtMs: index,
+			loadedBytes: 0,
+			totalBytes: 1024,
+			speedBps: 0,
+			etaSeconds: 0,
+			label: `Upload ${index}`,
+		}))
+
+		render(<TransfersDrawer {...buildProps({ uploadTasks })} />)
+
+		expect(screen.getAllByRole('listitem')).toHaveLength(12)
+		expect(screen.getByText('Upload 0')).toBeInTheDocument()
+		expect(screen.queryByText('Upload 199')).not.toBeInTheDocument()
+	})
 })

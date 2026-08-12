@@ -93,6 +93,23 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.keyboard.press('Escape')
 	})
 
+	test('moves folders between drawer and docked pane cleanly when the viewport changes', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await openObjectsMobilePage(page)
+		await openFoldersFromMoreActions(page)
+		await expect(page.getByTestId('objects-tree-sheet')).toBeVisible()
+
+		await page.setViewportSize({ width: 1800, height: 1000 })
+		await expect(page.getByTestId('objects-tree-sheet')).toHaveCount(0)
+		await expect(page.getByTestId('objects-tree-content')).toBeVisible()
+		await expect(page.getByTestId('objects-toolbar-desktop-stack')).toBeVisible()
+		await expect(page.getByTestId('objects-toolbar-mobile-top-row')).toHaveCount(0)
+
+		await page.setViewportSize({ width: 390, height: 844 })
+		await expect(page.getByTestId('objects-tree-content')).toHaveCount(0)
+		await expect(page.getByTestId('objects-toolbar-mobile-top-row')).toBeVisible()
+	})
+
 	test('opens and dismisses object action menus on mobile rows', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await openObjectsMobilePage(page)

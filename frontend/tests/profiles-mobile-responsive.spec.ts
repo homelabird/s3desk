@@ -138,4 +138,36 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await expect(warningCard.getByRole('button', { name: 'Selected' })).toBeVisible()
 		await expect(warningCard.getByText('Needs update')).toHaveAttribute('title', 'Endpoint URL is required')
 	})
+
+	test('keeps the selected profile and outer-scroll ownership across responsive transitions', async ({ page }) => {
+		const profiles = Array.from({ length: 80 }, (_, index) => ({
+			id: index === 0 ? 'profiles-buckets-mobile-profile' : `responsive-profile-${index}`,
+			name: index === 0 ? 'Responsive Profile' : `Responsive Profile ${index}`,
+			provider: 's3_compatible',
+			endpoint: 'http://localhost:9000',
+			region: 'us-east-1',
+			forcePathStyle: true,
+			preserveLeadingSlash: false,
+			tlsInsecureSkipVerify: true,
+			createdAt: '2024-01-01T00:00:00Z',
+			updatedAt: '2024-01-01T00:00:00Z',
+		}))
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await setupProfilesPage(page, { profiles })
+
+		await expect(page.getByTestId('profiles-table-desktop')).toBeVisible()
+		await expect(page.getByTestId('profiles-list-compact')).toHaveCount(0)
+		const appScroller = page.locator('main[data-scroll-container="app-content"]')
+		await appScroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+		await expect(page.getByTestId('profiles-table-desktop').getByText('Responsive Profile 79')).toBeVisible()
+		await appScroller.evaluate((element) => element.scrollTo({ top: 0 }))
+
+		await page.setViewportSize({ width: 390, height: 844 })
+		await expect(page.getByTestId('profiles-list-compact')).toBeVisible()
+		await expect(page.getByTestId('profiles-table-desktop')).toHaveCount(0)
+		await expect(getProfileCard(page, 'Responsive Profile').getByRole('button', { name: 'Selected' })).toBeVisible()
+
+		await appScroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+		await expect(getProfileCard(page, 'Responsive Profile 79')).toBeVisible()
+	})
 })

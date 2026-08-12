@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 
 import type { APIClientShape } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import type { ObjectTypeFilter } from './objectsTypes'
 import { useObjectsDetailsActions } from './useObjectsDetailsActions'
 import { useObjectsPageDialogActions } from './useObjectsPageDialogActions'
@@ -29,7 +29,7 @@ type UseObjectsPageActionsArgs = {
 	setTypeFilter: (next: ObjectTypeFilter) => void
 	refreshTreeNode: (key: string) => Promise<void> | void
 	onOpenPrefix: (nextPrefix: string) => void
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	isOffline: boolean
 	uploadSupported: boolean
 	uploadDisabledReason?: string | null

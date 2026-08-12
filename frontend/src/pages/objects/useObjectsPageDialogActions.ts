@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 
 import type { APIClientShape } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import type { ObjectTypeFilter } from './objectsTypes'
 import { splitLines } from './objectsListUtils'
 import { useObjectsCopyMove } from './useObjectsCopyMove'
@@ -34,7 +34,7 @@ type Args = {
 	setTypeFilter: (next: ObjectTypeFilter) => void
 	refreshTreeNode: (key: string) => Promise<void> | void
 	onOpenPrefix: (nextPrefix: string) => void
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	selectedKeys: Set<string>
 	setSelectedKeys: Dispatch<SetStateAction<Set<string>>>
 }

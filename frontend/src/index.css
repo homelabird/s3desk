@@ -282,12 +282,6 @@ body::after {
   opacity: var(--s3d-page-dark-opacity);
 }
 
-:where(body, body *, body *::before, body *::after) {
-  transition-property: color, background-color, border-color, box-shadow, fill, stroke, outline-color;
-  transition-duration: var(--s3d-transition-normal);
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 .ant-typography.ant-typography-secondary {
   color: var(--s3d-color-text-secondary) !important;
 }
@@ -353,7 +347,12 @@ body::after {
 }
 
 .ant-btn {
-  transition: all var(--s3d-transition-fast) !important;
+  transition:
+    background-color var(--s3d-transition-fast),
+    border-color var(--s3d-transition-fast),
+    color var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    opacity var(--s3d-transition-fast) !important;
 }
 
 .ant-dropdown .ant-dropdown-menu-item {
@@ -467,24 +466,6 @@ body::after {
     align-items: center;
     min-height: 44px;
   }
-}
-
-.skip-link {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 8px 12px;
-  background: var(--s3d-color-primary);
-  color: #fff;
-  border-radius: 6px;
-  text-decoration: none;
-  transform: translateY(-200%);
-  transition: transform 120ms ease;
-  z-index: 1000;
-}
-
-.skip-link:focus {
-  transform: translateY(0);
 }
 
 @media (prefers-reduced-motion: reduce) {

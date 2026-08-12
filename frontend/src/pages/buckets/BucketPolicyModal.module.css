@@ -331,6 +331,26 @@
 }
 
 @media (max-width: 768px) {
+  .decisionHeader {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .decisionHeaderCopy,
+  .decisionRouteSummary {
+    gap: 4px;
+  }
+
+  .decisionRouteSummary {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .disclosure,
+  .advancedInlineCard {
+    padding: 10px 12px;
+  }
+
   .structuredFieldGrid {
     grid-template-columns: minmax(0, 1fr);
   }

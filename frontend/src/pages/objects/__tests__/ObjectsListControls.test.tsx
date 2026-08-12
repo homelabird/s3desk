@@ -86,13 +86,11 @@ describe('ObjectsListControls', () => {
 		fireEvent.change(screen.getByLabelText('Search current folder'), { target: { value: 'poster' } })
 		expect(props.onSearchDraftChange).toHaveBeenCalledWith('poster')
 
-		fireEvent.click(screen.getByRole('button', { name: 'Bookmark this location' }))
-		expect(props.onToggleBookmark).toHaveBeenCalledTimes(1)
+		expect(screen.queryByRole('button', { name: 'Bookmark this location' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Go to path' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Copy location' })).toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: 'Go to path' }))
-		expect(props.onOpenPath).toHaveBeenCalledTimes(1)
-
-		fireEvent.click(screen.getByRole('button', { name: /View$/ }))
+		fireEvent.click(screen.getByRole('button', { name: /Filters$/ }))
 		expect(props.onOpenFilters).toHaveBeenCalledTimes(1)
 
 		fireEvent.change(screen.getByLabelText('Sort objects'), { target: { value: 'size_desc' } })

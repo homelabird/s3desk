@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import type { InfiniteData } from '@tanstack/react-query'
+import { queryKeys } from '../../../api/queryKeys'
 import type { Job, JobsListResponse } from '../../../api/types'
-import { joinKeyWithPrefix, normalizePrefix, statusColor, updateJob } from '../jobUtils'
+import { jobMatchesQueryKey, joinKeyWithPrefix, normalizePrefix, statusColor, updateJob } from '../jobUtils'
 
 describe('jobUtils', () => {
 	it('formats status colors', () => {
@@ -29,5 +30,22 @@ describe('jobUtils', () => {
 	it('normalizes and joins prefixes', () => {
 		expect(normalizePrefix('foo')).toBe('foo/')
 		expect(joinKeyWithPrefix('foo/', '/bar.txt')).toBe('foo/bar.txt')
+	})
+})
+
+describe('job cache filters', () => {
+	it('rejects realtime patches from caches whose filters no longer match', () => {
+		const completedJob = {
+			id: 'job-1',
+			type: 'transfer_copy_object',
+			status: 'succeeded',
+			createdAt: '2026-08-12T00:00:00Z',
+			errorCode: null,
+			payload: {},
+		} as Job
+
+		expect(jobMatchesQueryKey(completedJob, queryKeys.jobs.list('profile-1', 'token-a', 'active', '', ''))).toBe(false)
+		expect(jobMatchesQueryKey(completedJob, queryKeys.jobs.list('profile-1', 'token-a', 'all', 'transfer_copy_object', ''))).toBe(true)
+		expect(jobMatchesQueryKey(completedJob, queryKeys.jobs.list('profile-1', 'token-a', 'all', 'transfer_move_object', ''))).toBe(false)
 	})
 })

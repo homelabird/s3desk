@@ -3,7 +3,7 @@ import { Badge, Button, type ButtonProps } from 'antd'
 import type { ReactNode } from 'react'
 import { Suspense, lazy, useEffect } from 'react'
 
-import { TransfersContext, useTransfers } from './useTransfers'
+import { TransfersContexts, useTransfersCommands, useTransfersSummary } from './useTransfers'
 import { useTransfersRuntimeController } from './transfers/useTransfersRuntimeController'
 import { useTransfersRuntimeNotifications } from './transfers/useTransfersRuntimeNotifications'
 import type {
@@ -43,14 +43,14 @@ export function TransfersProvider(props: TransfersProviderProps) {
 	})
 
 	return (
-		<TransfersContext.Provider value={controller.ctx}>
+		<TransfersContexts value={controller.ctx}>
 			{props.children}
 			{controller.uiState.isOpen ? (
 				<Suspense fallback={null}>
 					<TransfersRuntimeUiHost uiState={controller.uiState} uiActions={controller.uiActions} />
 				</Suspense>
 			) : null}
-		</TransfersContext.Provider>
+		</TransfersContexts>
 	)
 }
 
@@ -81,14 +81,15 @@ export function TransfersRuntimeBridge(props: TransfersRuntimeBridgeProps) {
 }
 
 export function TransfersButton(props: { showLabel?: boolean; ariaLabel?: string; type?: ButtonProps['type']; className?: string } = {}) {
-	const transfers = useTransfers()
+	const transfers = useTransfersCommands()
+	const summary = useTransfersSummary()
 	return (
 		<Button
 			type={props.type}
 			className={props.className}
 			aria-label={props.ariaLabel ?? 'Transfers'}
 			icon={
-				<Badge count={transfers.activeTransferCount} size="small" showZero={false}>
+				<Badge count={summary.activeTransferCount} size="small" showZero={false}>
 					<DownloadOutlined />
 				</Badge>
 			}

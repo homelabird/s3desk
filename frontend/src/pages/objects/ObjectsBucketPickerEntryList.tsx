@@ -1,4 +1,6 @@
 import { CheckCircleFilled } from '@ant-design/icons'
+import { useMemo, useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 import styles from './ObjectsBucketPicker.module.css'
 import {
@@ -44,6 +46,30 @@ export function ObjectsBucketPickerEntryList({
 	recentEntries,
 	variant,
 }: ObjectsBucketPickerEntryListProps) {
+	const allListRef = useRef<HTMLDivElement | null>(null)
+	const allVirtualizer = useVirtualizer({
+		count: allEntries.length,
+		getScrollElement: () => allListRef.current,
+		estimateSize: () => 68,
+		overscan: 5,
+	})
+	const measuredItems = allVirtualizer.getVirtualItems()
+	const allVirtualItems = useMemo(
+		() =>
+			measuredItems.length > 0
+				? measuredItems
+				: allEntries.slice(0, 20).map((_, index) => ({
+						index,
+						key: index,
+						start: index * 68,
+						size: 68,
+						end: (index + 1) * 68,
+						lane: 0,
+					})),
+		[allEntries, measuredItems],
+	)
+	const allTotalSize = measuredItems.length > 0 ? allVirtualizer.getTotalSize() : allEntries.length * 68
+
 	const renderButton = (entry: BucketPickerEntry, sectionKey: string, current = false) => (
 		<button
 			key={`${sectionKey}-${entry.value}`}
@@ -88,7 +114,28 @@ export function ObjectsBucketPickerEntryList({
 						<div className={styles.bucketPickerSectionLabel}>All buckets</div>
 						<div className={styles.bucketPickerSectionHint}>Browse the full bucket list</div>
 					</div>
-					<div className={styles.bucketPickerList}>{allEntries.map((entry) => renderButton(entry, 'all'))}</div>
+					<div ref={allListRef} className={`${styles.bucketPickerList} ${styles.bucketPickerVirtualList}`} role="list">
+						<div className={styles.bucketPickerVirtualContent} style={{ height: allTotalSize }}>
+							{allVirtualItems.map((item) => {
+								const entry = allEntries[item.index]
+								if (!entry) return null
+								return (
+									<div
+										key={entry.value}
+										ref={allVirtualizer.measureElement}
+										data-index={item.index}
+										className={styles.bucketPickerVirtualRow}
+										style={{ transform: `translateY(${item.start}px)` }}
+										role="listitem"
+										aria-posinset={item.index + 1}
+										aria-setsize={allEntries.length}
+									>
+										{renderButton(entry, 'all')}
+									</div>
+								)
+							})}
+						</div>
+					</div>
 				</div>
 			) : null}
 		</>

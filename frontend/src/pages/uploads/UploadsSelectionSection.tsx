@@ -1,5 +1,6 @@
 import { Button, Typography } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
+import { useMemo } from 'react'
 import type { UploadSelectionKind } from '../../lib/uploadSelection'
 
 import { PageSection } from '../../components/PageSection'
@@ -24,8 +25,11 @@ export function UploadsSelectionSection(props: Props) {
 	const { canOpenPicker, destinationLabel, onOpenPicker, queueDisabledReason, selectedFiles, selectionKind } = props
 
 	const selectedFileCount = selectedFiles.length
-	const selectedTotalBytes = selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0)
-	const previewFiles = buildUploadPreviewFiles(selectedFiles)
+	const selectedTotalBytes = useMemo(
+		() => selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0),
+		[selectedFiles],
+	)
+	const previewFiles = useMemo(() => buildUploadPreviewFiles(selectedFiles), [selectedFiles])
 	const remainingPreviewCount = Math.max(0, selectedFileCount - previewFiles.length)
 	const hasSelection = selectedFileCount > 0
 	const selectionTypeLabel =

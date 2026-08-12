@@ -566,8 +566,7 @@
     gap: 8px;
   }
 
-  .toolbarDesktopPrimaryRow,
-  .toolbarDesktopSecondaryRow {
+  .toolbarDesktopPrimaryRow {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
@@ -579,8 +578,7 @@
   }
 
   .toolbarDesktopPrimaryActions,
-  .toolbarDesktopNavGroup,
-  .toolbarDesktopUtilityGroup {
+  .toolbarDesktopNavGroup {
     width: 100%;
     justify-content: flex-start;
   }

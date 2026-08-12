@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { promptForFiles, promptForFolderFiles } from '../../components/transfers/transfersUploadUtils'
 import {
 	addFilesOrFolderFirstSentenceHint,
@@ -14,7 +14,7 @@ import { inferUploadSelectionKind } from '../../lib/uploadSelection'
 import { uploadsFeedback } from './uploadsFeedback'
 
 type UseUploadsPageSelectionActionsArgs = {
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	isOffline: boolean
 	profileId: string | null
 	uploadsSupported: boolean
@@ -33,7 +33,7 @@ type UseUploadsPageSelectionActionsArgs = {
 
 export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionActionsArgs) {
 	const selectedFileCount = props.selectedFiles.length
-	const selectionKind = inferUploadSelectionKind(props.selectedFiles)
+	const selectionKind = useMemo(() => inferUploadSelectionKind(props.selectedFiles), [props.selectedFiles])
 	const folderSelectionSupport = getDirectorySelectionSupport()
 	const queueDisabledReason = useMemo(() => {
 		if (props.isOffline) return offlineUploadsDisabledHint()

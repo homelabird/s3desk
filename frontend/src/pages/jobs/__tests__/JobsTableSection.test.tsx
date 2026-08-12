@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 
 import { ensureDomShims } from '../../../test/domShims'
+import type { Job } from '../../../api/types'
 import { JobsTableSection } from '../JobsTableSection'
 
 beforeAll(() => {
@@ -66,5 +67,23 @@ describe('JobsTableSection', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }))
 		expect(onResetFilters).toHaveBeenCalledTimes(1)
 		expect(screen.getByRole('button', { name: 'Retry realtime' })).toBeInTheDocument()
+	})
+
+	it('windows large mobile job histories', () => {
+		const jobs: Job[] = Array.from({ length: 200 }, (_, index) => ({
+			id: `job-${index}`,
+			type: 'transfer_sync_staging_to_s3',
+			status: 'succeeded',
+			payload: {},
+			createdAt: '2026-03-09T09:40:17Z',
+			error: null,
+			errorCode: null,
+		}))
+
+		renderJobsTableSection({ sortedJobs: jobs, isCompact: true })
+
+		expect(screen.getAllByRole('listitem')).toHaveLength(20)
+		expect(screen.getByText('job-0')).toBeInTheDocument()
+		expect(screen.queryByText('job-199')).not.toBeInTheDocument()
 	})
 })

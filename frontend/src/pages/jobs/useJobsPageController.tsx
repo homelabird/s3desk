@@ -3,7 +3,7 @@ import { Grid, theme } from 'antd'
 import { useLocation } from 'react-router'
 
 import { useAPIClient } from '../../api/useAPIClient'
-import { useTransfers } from '../../components/useTransfers'
+import { useTransfersCommands } from '../../components/useTransfers'
 import { useIsOffline } from '../../lib/useIsOffline'
 import { useJobsPageControllerState } from './useJobsPageControllerState'
 
@@ -15,7 +15,7 @@ type Props = {
 export function useJobsPageController(props: Props) {
   const api = useAPIClient()
   const queryClient = useQueryClient()
-  const transfers = useTransfers()
+  const transfers = useTransfersCommands()
   const location = useLocation()
   const screens = Grid.useBreakpoint()
   const { token } = theme.useToken()

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { collectFilesFromDirectoryHandle } from '../../lib/deviceFs'
 import { objectsFeedback } from './objectsFeedback'
 
@@ -17,7 +17,7 @@ type UseObjectsUploadFolderArgs = {
 	prefix: string
 	uploadsEnabled: boolean
 	uploadsDisabledReason?: string | null
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 }
 
 export function useObjectsUploadFolder({

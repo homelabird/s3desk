@@ -144,16 +144,6 @@
 	font-size: 13px;
 }
 
-.emptyPreview {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 18px;
-	border: 1px dashed var(--s3d-color-border-dashed);
-	border-radius: var(--s3d-radius-lg);
-	background: color-mix(in srgb, var(--s3d-color-bg-subtle) 76%, var(--s3d-color-bg-card));
-}
-
 @media (max-width: 992px) {
 	.controlsGrid {
 		grid-template-columns: minmax(0, 1fr);
@@ -169,8 +159,7 @@
 		gap: 12px;
 	}
 
-	.summaryCard,
-	.emptyPreview {
+	.summaryCard {
 		border-radius: var(--s3d-radius-sm);
 	}
 

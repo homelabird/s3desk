@@ -99,7 +99,12 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 						) : sortedJobs.length === 0 ? (
 							<div className={styles.emptyState}>{emptyState}</div>
 						) : (
-							<JobsMobileList jobs={sortedJobs} getJobSummary={getJobSummary} renderJobActions={renderJobActions} />
+							<JobsMobileList
+								jobs={sortedJobs}
+								height={tableScrollY}
+								getJobSummary={getJobSummary}
+								renderJobActions={renderJobActions}
+							/>
 						)
 					) : (
 						<JobsDesktopTable

@@ -157,7 +157,7 @@ export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>)
 												{indicator ? (
 													<>
 														<span className={styles.sortIndicator} aria-hidden="true">{indicator}</span>
-														<span className={styles.visuallyHidden}>
+												<span className="sr-only">
 															{props.sort?.direction === 'asc' ? 'sorted ascending' : 'sorted descending'}
 														</span>
 													</>

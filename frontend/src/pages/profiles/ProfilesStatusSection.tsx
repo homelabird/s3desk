@@ -32,6 +32,9 @@ type Props = {
 }
 
 export function ProfilesStatusSection(props: Props) {
+	const visibleAttentionProfiles = props.profilesNeedingAttention.slice(0, 5)
+	const hiddenAttentionCount = props.profilesNeedingAttention.length - visibleAttentionProfiles.length
+
 	return (
 		<>
 			{props.profilesError ? (
@@ -58,7 +61,7 @@ export function ProfilesStatusSection(props: Props) {
 								Open next profile to fix
 							</Button>
 							<Space orientation="vertical" size={4} className={styles.fullWidth}>
-								{props.profilesNeedingAttention.map((profile) => (
+								{visibleAttentionProfiles.map((profile) => (
 									<Space key={profile.id} align="start" className={styles.fullWidth}>
 										<Typography.Text className={styles.fullWidth}>
 											<strong>{profile.name}</strong>: {profile.validation?.issues?.[0]?.message ?? 'Update required'}
@@ -68,6 +71,11 @@ export function ProfilesStatusSection(props: Props) {
 										</Button>
 									</Space>
 								))}
+								{hiddenAttentionCount > 0 ? (
+									<Typography.Text type="secondary">
+										+{hiddenAttentionCount.toLocaleString()} more. Use the profile table below to review the remaining entries.
+									</Typography.Text>
+								) : null}
 							</Space>
 						</Space>
 					}

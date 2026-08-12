@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { objectsFeedback } from './objectsFeedback'
 import { hasInternalObjectsDndPayload, resolveObjectsDropIntent } from './objectsDropIntent'
 
@@ -12,7 +12,7 @@ type UseObjectsUploadDropArgs = {
 	isOffline: boolean
 	uploadsEnabled: boolean
 	uploadsDisabledReason?: string | null
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 }
 
 type WebKitEntry = {

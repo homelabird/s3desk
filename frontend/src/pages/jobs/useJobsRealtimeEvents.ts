@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildApiHttpUrl, buildApiWsUrl } from '../../api/baseUrl'
 import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../../api/types'
-import { updateJob } from './jobUtils'
+import { jobMatchesQueryKey, removeJob, updateJob } from './jobUtils'
 
 const eventsRetryThreshold = 3
 
@@ -13,6 +13,7 @@ type UseJobsRealtimeEventsArgs = {
 	profileId: string | null
 	queryClient: QueryClient
 	onJobsDeleted?: (jobIds: string[]) => void
+	onJobCompleted?: (job: Job | null, jobId: string) => void
 }
 
 type EventsTransport = 'ws' | 'sse' | null
@@ -33,6 +34,7 @@ export function useJobsRealtimeEvents({
 	profileId,
 	queryClient,
 	onJobsDeleted,
+	onJobCompleted,
 }: UseJobsRealtimeEventsArgs): JobsRealtimeEventsState {
 	const [eventsConnected, setEventsConnected] = useState(false)
 	const [eventsTransport, setEventsTransport] = useState<EventsTransport>(null)
@@ -195,17 +197,16 @@ export function useJobsRealtimeEvents({
 						error: payload.error ?? job.error,
 						errorCode: payload.errorCode ?? job.errorCode,
 					})
-					queryClient.setQueriesData(
-						{ queryKey: jobsQueryKey, exact: false },
-						(old: InfiniteData<JobsListResponse, string | undefined> | undefined) =>
-							updateJob(old, msg.jobId!, applyJobPatch),
-					)
+					const cachedJob = findCachedJob(queryClient, jobsQueryKey, profileId, msg.jobId!, apiToken)
+					patchJobListQueries(queryClient, jobsQueryKey, msg.jobId!, applyJobPatch)
 					queryClient.setQueryData(
 						queryKeys.jobs.detail(profileId, msg.jobId, apiToken),
 						(old: Job | undefined) => (old ? applyJobPatch(old) : old),
 					)
 					if (msg.type === 'job.completed') {
 						queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(profileId, msg.jobId, apiToken), exact: true }).catch(() => {})
+						const completedJob = cachedJob ? applyJobPatch(cachedJob) : null
+						if (completedJob?.status === 'succeeded') onJobCompleted?.(completedJob, msg.jobId)
 					}
 				}
 			} catch {
@@ -340,7 +341,7 @@ export function useJobsRealtimeEvents({
 			}
 			closeEventSource()
 		}
-	}, [apiToken, currentScopeKey, eventsManualRetryToken, onJobsDeleted, profileId, queryClient])
+	}, [apiToken, currentScopeKey, eventsManualRetryToken, onJobCompleted, onJobsDeleted, profileId, queryClient])
 
 	return {
 		eventsConnected: profileId ? eventsConnected : false,
@@ -348,6 +349,54 @@ export function useJobsRealtimeEvents({
 		eventsRetryCount: profileId ? eventsRetryCount : 0,
 		eventsRetryThreshold,
 		retryRealtime,
+	}
+}
+
+function findCachedJob(
+	queryClient: QueryClient,
+	jobsQueryKey: readonly unknown[],
+	profileId: string,
+	jobId: string,
+	apiToken: string,
+): Job | null {
+	if (typeof queryClient.getQueryData === 'function') {
+		const detail = queryClient.getQueryData<Job>(queryKeys.jobs.detail(profileId, jobId, apiToken))
+		if (detail?.id === jobId) return detail
+	}
+	if (typeof queryClient.getQueriesData !== 'function') return null
+	const cached = queryClient.getQueriesData<InfiniteData<JobsListResponse, string | undefined>>({
+		queryKey: jobsQueryKey,
+		exact: false,
+	})
+	for (const [, data] of cached) {
+		for (const page of data?.pages ?? []) {
+			const job = page.items.find((item) => item.id === jobId)
+			if (job) return job
+		}
+	}
+	return null
+}
+
+function patchJobListQueries(queryClient: QueryClient, jobsQueryKey: readonly unknown[], jobId: string, patch: (job: Job) => Job) {
+	if (typeof queryClient.getQueriesData !== 'function') {
+		queryClient.setQueriesData(
+			{ queryKey: jobsQueryKey, exact: false },
+			(old: InfiniteData<JobsListResponse, string | undefined> | undefined) => updateJob(old, jobId, patch),
+		)
+		return
+	}
+
+	const cached = queryClient.getQueriesData<InfiniteData<JobsListResponse, string | undefined>>({
+		queryKey: jobsQueryKey,
+		exact: false,
+	})
+	for (const [queryKey, data] of cached) {
+		queryClient.setQueryData(queryKey, (old: InfiniteData<JobsListResponse, string | undefined> | undefined) => {
+			const existing = data?.pages.flatMap((page) => page.items).find((job) => job.id === jobId)
+			if (!existing) return old
+			const next = patch(existing)
+			return jobMatchesQueryKey(next, queryKey) ? updateJob(old, jobId, () => next) : removeJob(old, jobId)
+		})
 	}
 }
 

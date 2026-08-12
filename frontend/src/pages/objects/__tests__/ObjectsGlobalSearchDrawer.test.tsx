@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { selectBucketFirstHint, selectProfileFirstHint } from '../../../lib/actionHints'
@@ -158,5 +158,24 @@ describe('ObjectsGlobalSearchDrawer', () => {
 		)
 
 		expect(screen.getByRole('status')).toHaveTextContent('1 result(s)')
+	})
+
+	it('windows large result sets instead of mounting every action row', () => {
+		const items = Array.from({ length: 200 }, (_, index) => ({
+			key: `object-${index}.txt`,
+			size: index,
+			lastModified: '2024-01-01T00:00:00Z',
+		}))
+
+		render(
+			<ObjectsGlobalSearchDrawer
+				{...buildProps()}
+				searchQueryText="object"
+				items={items}
+			/>,
+		)
+
+		expect(within(screen.getByTestId('objects-global-search-results')).getAllByRole('listitem')).toHaveLength(20)
+		expect(screen.queryByText('object-199.txt')).not.toBeInTheDocument()
 	})
 })

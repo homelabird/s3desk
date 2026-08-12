@@ -6,7 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { APIClient } from '../../../api/client'
 import { APIClientProvider } from '../../../api/APIClientProvider'
 import { AuthProvider } from '../../../auth/AuthProvider'
-import { TransfersContext } from '../../../components/useTransfers'
+import { TransfersContexts } from '../../../components/useTransfers'
 import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { ensureDomShims } from '../../../test/domShims'
 import { transfersStub } from '../../../test/transfersStub'
@@ -107,11 +107,11 @@ describe('ObjectsPage', () => {
 			<QueryClientProvider client={client}>
 				<AuthProvider>
 					<APIClientProvider>
-						<TransfersContext.Provider value={transfersStub}>
+						<TransfersContexts value={transfersStub}>
 							<MemoryRouter>
 								<ObjectsPage apiToken="token" profileId="profile-1" />
 							</MemoryRouter>
-						</TransfersContext.Provider>
+						</TransfersContexts>
 					</APIClientProvider>
 				</AuthProvider>
 			</QueryClientProvider>,

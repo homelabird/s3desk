@@ -236,11 +236,13 @@ function BucketPolicyEditor(props: {
 
   const diffText = useMemo(
     () =>
-      unifiedDiff(
-        (originalText ?? "").trimEnd(),
-        normalizedPolicyText.trimEnd(),
-      ),
-    [originalText, normalizedPolicyText],
+      activeTab === "diff"
+        ? unifiedDiff(
+            (originalText ?? "").trimEnd(),
+            normalizedPolicyText.trimEnd(),
+          )
+        : "",
+    [activeTab, originalText, normalizedPolicyText],
   );
 
   const hasPolicyChanges = useMemo(
@@ -252,7 +254,10 @@ function BucketPolicyEditor(props: {
     [originalText, normalizedPolicyText],
   );
 
-  const diffStats = useMemo(() => getUnifiedDiffStats(diffText), [diffText]);
+  const diffStats = useMemo(
+    () => (activeTab === "diff" ? getUnifiedDiffStats(diffText) : null),
+    [activeTab, diffText],
+  );
   const visibleDiffText = useMemo(
     () => getVisibleUnifiedDiff(diffText, showDiffContext),
     [diffText, showDiffContext],

@@ -43,6 +43,25 @@ function buildProps(
 }
 
 describe('ObjectsFavoritesPane', () => {
+	it('windows large favorite collections', () => {
+		const favorites = Array.from({ length: 1_000 }, (_, index) => ({
+			key: `archive/${String(index).padStart(4, '0')}/report.json`,
+			size: index,
+			lastModified: '2026-03-09T00:00:00Z',
+			createdAt: '2026-03-09T00:00:00Z',
+		}))
+
+		render(
+			<ObjectsFavoritesPane
+				{...buildProps({ favoriteCount: favorites.length, favorites })}
+			/>,
+		)
+
+		expect(screen.getAllByTestId('objects-favorite-item')).toHaveLength(20)
+		expect(screen.getByTitle('archive/0000/report.json')).toBeInTheDocument()
+		expect(screen.queryByTitle('archive/0999/report.json')).not.toBeInTheDocument()
+	})
+
 	it('shows shared prerequisite copy before a profile or bucket is selected', () => {
 		const { rerender } = render(<ObjectsFavoritesPane {...buildProps({ hasProfile: false })} />)
 

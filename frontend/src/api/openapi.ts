@@ -664,6 +664,7 @@ export interface paths {
                     content?: never;
                 };
                 404: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
             };
         };
         options?: never;
@@ -3743,7 +3744,9 @@ export interface components {
             days?: number;
             etag?: string;
             editable?: boolean;
-            legalHold?: boolean;
+            readonly legalHold?: boolean;
+            readonly legalHoldTags?: string[];
+            readonly legalHoldEditable?: boolean;
             allowProtectedAppendWrites?: boolean;
             allowProtectedAppendWritesAll?: boolean;
         };
@@ -3763,6 +3766,7 @@ export interface components {
             objectLock?: components["schemas"]["BucketObjectLockView"];
             softDelete?: components["schemas"]["BucketSoftDeleteView"];
             immutability?: components["schemas"]["BucketImmutabilityView"];
+            legalHoldTags?: string[];
         };
         /** @enum {string} */
         BucketVersioningStatus: "disabled" | "enabled" | "suspended";

@@ -76,6 +76,7 @@ export function useFullAppProfileState({
 	const profilesQuery = useQuery({
 		queryKey: queryKeys.profiles.list(apiToken),
 		queryFn: () => api.profiles.listProfiles(),
+		enabled: metaQuery.isSuccess,
 	})
 
 	useEffect(() => {
@@ -105,12 +106,14 @@ export function useFullAppProfileState({
 			setProfileId(storedProfileId)
 			return
 		}
+		if (pathname === '/' && !profileId && !initialStoredProfileId) return
 		setProfileId(profiles[0]?.id ?? null)
 	}, [
 		initialStoredProfileId,
 		profileId,
 		profilesQuery.data,
 		profilesQuery.isPending,
+		pathname,
 		setProfileId,
 	])
 
@@ -125,6 +128,7 @@ export function useFullAppProfileState({
 		}
 		const profiles = profilesQuery.data ?? []
 		if (profiles.length === 0) return null
+		if (pathname === '/' && !profileId && !initialStoredProfileId) return null
 		if (!profileId) {
 			const storedProfileId = initialStoredProfileId
 			if (
@@ -150,6 +154,7 @@ export function useFullAppProfileState({
 		profileId,
 		profilesQuery.data,
 		profilesQuery.isPending,
+		pathname,
 	])
 
 	const profileGate = renderProfileGate({

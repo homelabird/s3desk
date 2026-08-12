@@ -5,7 +5,7 @@ import { useCallback, useMemo } from 'react'
 
 import type { APIClientShape } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { withJobQueueRetry } from '../../lib/jobQueue'
 import { buildJobsPagePresentationProps } from './buildJobsPagePresentationProps'
@@ -41,7 +41,7 @@ type Props = {
   queryClient: QueryClient
   screens: JobsPageControllerScreens
   themeToken: JobsPageControllerThemeToken
-  transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 }
 
 export function getJobsDeletePrefillFromLocationState(locationState: unknown): DeleteJobPrefill | null {

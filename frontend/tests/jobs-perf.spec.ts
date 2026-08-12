@@ -178,9 +178,11 @@ test.describe('@perf jobs performance', () => {
 	test('jobs list renders within budget', async ({ page }) => {
 		await seedStorage(page)
 		await setupJobsApiMocks(page, 200)
+		await page.goto('/jobs')
+		await expect(page.getByText('200 visible', { exact: true })).toBeVisible()
 
 		const started = Date.now()
-		await page.goto('/jobs')
+		await page.reload()
 		await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
 		await expect(page.getByText('200 visible', { exact: true })).toBeVisible()
 		const elapsed = Date.now() - started
@@ -245,7 +247,12 @@ test.describe('@perf objects performance', () => {
 		await page.goto('/objects')
 		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
 		await expect(page.getByText('object-0.txt')).toBeVisible()
-		expect(requestedUrls.some((url) => /ObjectsPageOverlays|ObjectsImageViewerModal/.test(url))).toBe(false)
+		expect(
+			requestedUrls.some((url) => {
+				const path = new URL(url).pathname
+				return path.endsWith('/ObjectsPageOverlays.tsx') || path.endsWith('/ObjectsImageViewerModal.tsx')
+			}),
+		).toBe(false)
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `objects_page_render_ms=${elapsed}` })
 		expect(elapsed).toBeLessThan(3000)

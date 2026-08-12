@@ -36,7 +36,7 @@ export function BucketPolicyContentTabs(props: {
   localValidationErrors: string[];
   providerValidationHint: string;
   hasPolicyChanges: boolean;
-  diffStats: { added: number; removed: number };
+  diffStats: { added: number; removed: number } | null;
   isBusy: boolean;
   onValidate: () => void;
   validateLoading: boolean;
@@ -281,7 +281,7 @@ export function BucketPolicyContentTabs(props: {
                 }
                 description={
                   props.hasPolicyChanges
-                    ? `Diff preview shows +${props.diffStats.added} / -${props.diffStats.removed} changed lines.`
+                    ? "Open Diff to review the changed lines."
                     : "Current editor value matches the loaded policy."
                 }
               />
@@ -390,9 +390,11 @@ export function BucketPolicyContentTabs(props: {
         },
         {
           key: "diff",
-          label: props.hasPolicyChanges
+          label: props.hasPolicyChanges && props.diffStats
             ? `Diff (+${props.diffStats.added}/-${props.diffStats.removed})`
-            : "Diff",
+            : props.hasPolicyChanges
+              ? "Diff (changed)"
+              : "Diff",
           children: (
             <Space orientation="vertical" size="small" className={styles.fullWidth}>
               <Alert
@@ -400,7 +402,7 @@ export function BucketPolicyContentTabs(props: {
                 showIcon
                 title={props.hasPolicyChanges ? "Changes ready to save" : "No policy changes"}
                 description={
-                  props.hasPolicyChanges
+                  props.hasPolicyChanges && props.diffStats
                     ? `+${props.diffStats.added} / -${props.diffStats.removed}`
                     : undefined
                 }

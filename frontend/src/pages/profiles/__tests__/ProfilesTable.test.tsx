@@ -32,11 +32,11 @@ const row: ProfileTableRowViewModel = {
 	needsAttention: false,
 }
 
-function renderTable(scopeKey: string) {
+function renderTable(scopeKey: string, rows = [row]) {
 	return render(
 		<ProfilesTable
 			scopeKey={scopeKey}
-			rows={[row]}
+			rows={rows}
 			onUseProfile={vi.fn()}
 			onEdit={vi.fn()}
 			onTest={vi.fn()}
@@ -85,5 +85,19 @@ describe('ProfilesTable', () => {
 		)
 
 		expect(screen.queryByRole('menuitem', { name: 'Edit' })).not.toBeInTheDocument()
+	})
+
+	it('windows large compact profile lists', () => {
+		renderTable(
+			'token-a',
+			Array.from({ length: 1_000 }, (_, index) => ({
+				...row,
+				profile: { ...profile, id: `profile-${index}`, name: `Profile ${index}` },
+			})),
+		)
+
+		expect(screen.getAllByRole('listitem')).toHaveLength(20)
+		expect(screen.getByText('Profile 0')).toBeInTheDocument()
+		expect(screen.queryByText('Profile 999')).not.toBeInTheDocument()
 	})
 })

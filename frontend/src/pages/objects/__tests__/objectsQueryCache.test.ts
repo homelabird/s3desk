@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
+import type { Job } from '../../../api/types'
 import {
 	getVisibleCreatedPrefix,
 	hasVisiblePrefixInObjectsData,
 	insertOptimisticPrefixIntoObjectsData,
 	isObjectsQueryKeyRelevantToPrefix,
+	invalidateObjectQueriesForPrefix,
+	objectQueryLocationsForJob,
 } from '../objectsQueryCache'
 
 describe('objectsQueryCache', () => {
@@ -130,5 +133,74 @@ describe('objectsQueryCache', () => {
 		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/', 'token-a'))).toBe(true)
 		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/', 'token-b'))).toBe(false)
 		expect(isRelevant(listKey('profile-1', 'bucket-b', 'alpha/', 'token-a'))).toBe(false)
+	})
+
+	it('derives precise invalidation locations for object copy and prefix jobs', () => {
+		const copyJob = {
+			id: 'job-1',
+			type: 'transfer_copy_object',
+			status: 'succeeded',
+			createdAt: '2026-08-12T00:00:00Z',
+			payload: {
+				srcBucket: 'bucket-a',
+				srcKey: 'docs/source.txt',
+				dstBucket: 'bucket-b',
+				dstKey: 'archive/result.txt',
+			},
+		} as Job
+		expect(objectQueryLocationsForJob(copyJob, 'profile-1', 'token-a')).toEqual([
+			{ profileId: 'profile-1', bucket: 'bucket-a', changedPrefix: 'docs/', apiToken: 'token-a' },
+			{ profileId: 'profile-1', bucket: 'bucket-b', changedPrefix: 'archive/', apiToken: 'token-a' },
+		])
+
+		const prefixJob = {
+			...copyJob,
+			type: 'transfer_move_prefix',
+			payload: {
+				srcBucket: 'bucket-a',
+				srcPrefix: 'docs/',
+				dstBucket: 'bucket-a',
+				dstPrefix: 'archive/',
+				dryRun: false,
+			},
+		} as Job
+		expect(objectQueryLocationsForJob(prefixJob, 'profile-1', 'token-a')).toEqual([
+			{ profileId: 'profile-1', bucket: 'bucket-a', changedPrefix: 'docs/', apiToken: 'token-a' },
+			{ profileId: 'profile-1', bucket: 'bucket-a', changedPrefix: 'archive/', apiToken: 'token-a' },
+		])
+	})
+
+	it('skips dry-run jobs and includes related index caches', async () => {
+		const dryRunJob = {
+			id: 'job-1',
+			type: 'transfer_copy_object',
+			status: 'succeeded',
+			createdAt: '2026-08-12T00:00:00Z',
+			payload: { srcBucket: 'bucket-a', srcKey: 'a.txt', dstBucket: 'bucket-a', dstKey: 'b.txt', dryRun: true },
+		} as Job
+		expect(objectQueryLocationsForJob(dryRunJob, 'profile-1', 'token-a')).toEqual([])
+
+		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
+		await invalidateObjectQueriesForPrefix(
+			{ invalidateQueries } as never,
+			{ profileId: 'profile-1', bucket: 'bucket-a', changedPrefix: 'docs/', apiToken: 'token-a' },
+		)
+		const predicate = invalidateQueries.mock.calls[0]?.[0]?.predicate as (query: { queryKey: readonly unknown[] }) => boolean
+		expect(predicate({ queryKey: queryKeys.objects.indexSummary('profile-1', 'bucket-a', 'docs/', 'token-a') })).toBe(true)
+		expect(predicate({
+			queryKey: queryKeys.objects.indexSearch({
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				query: 'source',
+				prefix: 'docs/',
+				limit: 50,
+				ext: '',
+				minSize: null,
+				maxSize: null,
+				modifiedAfter: undefined,
+				modifiedBefore: undefined,
+				apiToken: 'token-a',
+			}),
+		})).toBe(true)
 	})
 })

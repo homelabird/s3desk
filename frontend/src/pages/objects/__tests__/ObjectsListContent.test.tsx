@@ -70,6 +70,43 @@ describe('ObjectsListContent', () => {
 		expect(screen.getByText('grid-object:photos/cat.png')).toBeInTheDocument()
 	})
 
+	it('windows large object grids', () => {
+		const rows = Array.from({ length: 200 }, (_, index) => ({
+			kind: 'object' as const,
+			object: {
+				key: `object-${index}`,
+				size: index,
+				lastModified: '2026-03-07T11:00:00Z',
+			},
+		}))
+
+		render(
+			<ObjectsListContent
+				rows={rows}
+				virtualItems={[]}
+				totalSize={0}
+				hasProfile
+				hasBucket
+				isFetching={false}
+				isFetchingNextPage={false}
+				emptyKind={null}
+				canClearSearch={false}
+				onClearSearch={vi.fn()}
+				viewMode="grid"
+				renderPrefixRow={vi.fn()}
+				renderObjectRow={vi.fn()}
+				renderPrefixGridItem={vi.fn()}
+				renderObjectGridItem={(object) => (
+					<div key={object.key}>{object.key}</div>
+				)}
+			/>,
+		)
+
+		expect(screen.getByText('object-0')).toBeInTheDocument()
+		expect(screen.queryByText('object-199')).not.toBeInTheDocument()
+		expect(screen.getByTestId('objects-grid-content').querySelectorAll('[data-index]')).toHaveLength(4)
+	})
+
 	it('passes virtual row indexes through to list renderers', () => {
 		const renderPrefixRow = vi.fn(
 			(prefix: string, offset: number, rowIndex: number) => (

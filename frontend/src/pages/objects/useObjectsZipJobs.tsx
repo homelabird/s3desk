@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router'
 
 import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { objectsFeedback } from './objectsFeedback'
 import { normalizePrefix } from './objectsListUtils'
 
@@ -16,7 +16,7 @@ type UseObjectsZipJobsArgs = {
 	apiToken: string
 	bucket: string
 	prefix: string
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	createJobWithRetry: CreateJobWithRetry
 }
 

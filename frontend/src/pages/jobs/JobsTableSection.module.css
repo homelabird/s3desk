@@ -39,8 +39,21 @@
 	background: color-mix(in srgb, var(--s3d-color-bg-card) 92%, transparent);
 }
 
-.mobileCard:first-child {
-	border-top: none;
+.mobileList {
+	position: relative;
+	overflow-y: auto;
+}
+
+.mobileVirtualContent {
+	position: relative;
+	width: 100%;
+}
+
+.mobileVirtualRow {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
 }
 
 .mobileCardFailed {

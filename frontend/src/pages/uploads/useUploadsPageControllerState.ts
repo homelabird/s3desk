@@ -1,11 +1,11 @@
 import type { APIClientShape } from '../../api/client'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { useUploadsPageQueriesState } from './useUploadsPageQueriesState'
 import { useUploadsPageSelectionState } from './useUploadsPageSelectionState'
 
 type UseUploadsPageControllerStateArgs = {
 	api: APIClientShape
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 	isOffline: boolean
 	apiToken: string
 	profileId: string | null

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Alert, Button, Input, Spin } from 'antd'
 import {
 	AppstoreOutlined,
@@ -6,15 +6,14 @@ import {
 	CopyOutlined,
 	FilterOutlined,
 	SearchOutlined,
-	StarFilled,
-	StarOutlined,
 } from '@ant-design/icons'
 
 import styles from './ObjectsListView.module.css'
 import type { ObjectSort, ObjectsViewMode } from './objectsTypes'
-import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
+import { copyToClipboard } from '../../lib/clipboard'
 import { NativeSelect } from '../../components/NativeSelect'
 import { buildS3Location } from './objectsLocationUtils'
+import { objectsFeedback } from './objectsFeedback'
 
 type BreadcrumbItem = {
 	title: ReactNode
@@ -52,8 +51,6 @@ type ObjectsListControlsProps = {
 	onViewModeChange: (value: ObjectsViewMode) => void
 }
 
-type CopyFeedback = 'copied' | 'failed' | null
-
 function renderBreadcrumb(items: BreadcrumbItem[]) {
 	if (!items.length) return null
 	return (
@@ -71,23 +68,20 @@ function renderBreadcrumb(items: BreadcrumbItem[]) {
 }
 
 export function ObjectsListControls(props: ObjectsListControlsProps) {
-	const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null)
 	const location = buildS3Location(props.bucket, props.prefix)
 	const searchTrimmed = props.search.trim()
 	const searchCapped = !!searchTrimmed && props.hasNextPage && props.rawTotalCount >= props.searchAutoScanCap
 	const compactUsesInlineIndexedCta = props.isCompact && searchCapped && !props.isAdvanced
 	const globalSearchLabel = 'Search bucket'
 
-	useEffect(() => {
-		if (!copyFeedback) return
-		const timeoutId = window.setTimeout(() => setCopyFeedback(null), 1600)
-		return () => window.clearTimeout(timeoutId)
-	}, [copyFeedback])
-
 	const copyLocation = async () => {
 		if (!location) return
 		const result = await copyToClipboard(location)
-		setCopyFeedback(result.ok ? 'copied' : 'failed')
+		if (result.ok) {
+			objectsFeedback.copied()
+			return
+		}
+		objectsFeedback.clipboardFailed()
 	}
 
 	const globalSearchButton = props.isAdvanced ? (
@@ -211,17 +205,6 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 		</div>
 	)
 
-	const locationFeedback =
-		copyFeedback === 'copied' ? (
-			<span className={styles.listControlsCopyFeedback}>Copied</span>
-		) : copyFeedback === 'failed' ? (
-			<span className={styles.listControlsCopyFeedback}>{clipboardFailureHint()}</span>
-		) : null
-	const showInlinePathShortcut = props.isAdvanced && !props.isCompact
-	const showInlineLocationBookmark = !props.isCompact
-	const showInlineCopyLocation = !props.isCompact
-	const bookmarkLocationLabel = props.isBookmarked ? 'Remove location bookmark' : 'Bookmark this location'
-
 	const filterButton = (
 		<Button
 			size="small"
@@ -230,7 +213,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			onClick={props.onOpenFilters}
 			disabled={!props.canInteract}
 		>
-			{props.isCompact ? 'Filters' : props.isAdvanced ? 'View' : 'Filter'}
+			{props.isAdvanced ? 'Filters' : 'Filter'}
 		</Button>
 	)
 
@@ -244,49 +227,21 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 								<span className={styles.listControlsLocationCode} title={location}>
 									{location}
 								</span>
-								{showInlineCopyLocation ? (
-									<button
-										type="button"
-										className={styles.listControlsIconButton}
-										onClick={copyLocation}
-										disabled={!props.canInteract}
+								{!props.isCompact ? (
+									<Button
+										type="text"
+										size="small"
+										icon={<CopyOutlined />}
 										aria-label="Copy location"
 										title="Copy location"
-									>
-										<CopyOutlined />
-									</button>
+										disabled={!props.canInteract}
+										onClick={() => void copyLocation()}
+									/>
 								) : null}
-								{locationFeedback}
 							</div>
 						) : null}
 						{renderBreadcrumb(props.breadcrumbItems)}
 					</div>
-				</div>
-				<div className={styles.listControlsTopActions}>
-					{showInlineLocationBookmark ? (
-						<button
-							type="button"
-							className={styles.listControlsIconButton}
-							onClick={props.onToggleBookmark}
-							disabled={!props.canInteract}
-							aria-label={bookmarkLocationLabel}
-							title={bookmarkLocationLabel}
-						>
-							{props.isBookmarked ? <StarFilled /> : <StarOutlined />}
-						</button>
-					) : null}
-					{showInlinePathShortcut ? (
-						<button
-							type="button"
-							className={styles.listControlsIconButton}
-							onClick={props.onOpenPath}
-							disabled={!props.canInteract}
-							aria-label="Go to path"
-							title="Go to path (Ctrl+L)"
-						>
-							<SearchOutlined />
-						</button>
-					) : null}
 				</div>
 			</div>
 

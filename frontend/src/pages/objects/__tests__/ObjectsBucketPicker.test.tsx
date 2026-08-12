@@ -262,4 +262,26 @@ describe('ObjectsBucketPicker', () => {
 
 		expect(screen.getByTestId('objects-bucket-picker-desktop')).toHaveAttribute('title', loadingBucketsPlaceholder())
 	})
+
+	it('windows large bucket option lists', () => {
+		render(
+			<ObjectsBucketPicker
+				scopeKey="token-a:profile-1"
+				isDesktop={true}
+				value=""
+				recentBuckets={[]}
+				options={Array.from({ length: 1_000 }, (_, index) => ({
+					label: `Bucket ${index}`,
+					value: `bucket-${index}`,
+				}))}
+				placeholder={bucketFieldPlaceholder()}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId('objects-bucket-picker-desktop'))
+		expect(screen.getByTestId('objects-bucket-picker-option-bucket-0')).toBeInTheDocument()
+		expect(screen.queryByTestId('objects-bucket-picker-option-bucket-999')).not.toBeInTheDocument()
+		expect(screen.getAllByTestId(/objects-bucket-picker-option-/)).toHaveLength(20)
+	})
 })

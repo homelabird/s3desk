@@ -5,6 +5,7 @@ export type {
 	QueueUploadFilesArgs,
 	TransfersContextValue,
 	TransfersRuntimeApi,
+	TransfersSummary,
 	TransfersRuntimeNotifications,
 	TransfersRuntimeSnapshot,
 	UploadCapabilityByProfileId,

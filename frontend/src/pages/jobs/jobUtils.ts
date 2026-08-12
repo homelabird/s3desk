@@ -34,6 +34,43 @@ export function updateJob(
 	if (!changed) return old
 	return { ...old, pages: nextPages }
 }
+
+export function removeJob(
+	old: InfiniteData<JobsListResponse, string | undefined> | undefined,
+	jobId: string,
+): InfiniteData<JobsListResponse, string | undefined> | undefined {
+	if (!old) return old
+	let changed = false
+	const nextPages = old.pages.map((page) => {
+		const nextItems = page.items.filter((job) => job.id !== jobId)
+		if (nextItems.length === page.items.length) return page
+		changed = true
+		return { ...page, items: nextItems }
+	})
+	if (!changed) return old
+	return { ...old, pages: nextPages }
+}
+
+export function jobMatchesQueryKey(job: Job, queryKey: readonly unknown[]): boolean {
+	if (queryKey[0] !== 'jobs' || queryKey.length < 6) return true
+
+	const statusFilter = queryKey[3]
+	if (typeof statusFilter === 'string' && statusFilter !== 'all') {
+		const statusMatches = statusFilter === 'active'
+			? job.status === 'queued' || job.status === 'running'
+			: job.status === statusFilter
+		if (!statusMatches) return false
+	}
+
+	const typeFilter = queryKey[4]
+	if (typeof typeFilter === 'string' && typeFilter && job.type !== typeFilter) return false
+
+	const errorCodeFilter = queryKey[5]
+	if (typeof errorCodeFilter === 'string' && errorCodeFilter && job.errorCode !== errorCodeFilter) return false
+
+	return true
+}
+
 export function getString(payload: Record<string, unknown>, key: string): string | null {
 	const v = payload[key]
 	return typeof v === 'string' && v.trim() ? v : null

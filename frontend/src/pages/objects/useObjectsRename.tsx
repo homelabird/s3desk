@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router'
 import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { objectsFeedback } from './objectsFeedback'
-import { fileNameFromKey, folderLabelFromPrefix, normalizePrefix, parentPrefixFromKey } from './objectsListUtils'
+import { fileNameFromKey, folderLabelFromPrefix } from './objectsListUtils'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
@@ -92,46 +92,8 @@ export function useObjectsRename({ profileId, apiToken, bucket, prefix, createJo
 		}) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
-			const raw = args.name.trim().replace(/\/+$/, '')
-			if (!raw) throw new Error('name is required')
-			if (raw === '.' || raw === '..') throw new Error('invalid name')
-			if (raw.includes('/')) throw new Error("name must not contain '/'")
-			if (raw.includes('\u0000')) throw new Error('invalid name')
-
-			if (args.kind === 'prefix') {
-				const srcPrefix = normalizePrefix(args.src)
-				const parent = parentPrefixFromKey(srcPrefix.replace(/\/+$/, ''))
-				const dstPrefix = `${parent}${raw}/`
-				if (dstPrefix === srcPrefix) throw new Error('already in destination')
-				if (dstPrefix.startsWith(srcPrefix)) throw new Error('destination must not be under source prefix')
-				return createJobWithRetry({
-					type: 'transfer_move_prefix',
-					payload: {
-						srcBucket: bucket,
-						srcPrefix,
-						dstBucket: bucket,
-						dstPrefix,
-						include: [],
-						exclude: [],
-						dryRun: false,
-					},
-				})
-			}
-
-			const srcKey = args.src.trim().replace(/^\/+/, '')
-			const parent = parentPrefixFromKey(srcKey)
-			const dstKey = `${parent}${raw}`
-			if (dstKey === srcKey) throw new Error('already in destination')
-			return createJobWithRetry({
-				type: 'transfer_move_object',
-				payload: {
-					srcBucket: bucket,
-					srcKey,
-					dstBucket: bucket,
-					dstKey,
-					dryRun: false,
-				},
-			})
+			const runtime = await import('./objectsDeferredActionRuntime')
+			return createJobWithRetry(runtime.buildRenameJobRequest({ ...args, bucket }))
 		},
 		onSuccess: async (job, args) => {
 			await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(args.scopeProfileId, args.scopeApiToken), exact: false })

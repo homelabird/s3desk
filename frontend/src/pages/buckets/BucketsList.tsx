@@ -1,5 +1,6 @@
 import { Typography } from 'antd'
 
+import { useAppContentVirtualizer } from '../../components/useAppContentVirtualizer'
 import { formatDateTime } from '../../lib/format'
 import styles from '../BucketsPage.module.css'
 import { BucketActions } from './BucketActions'
@@ -20,17 +21,32 @@ export type BucketsListProps = {
 }
 
 export function BucketsList(props: BucketsListProps) {
+	const { hostRef, items: virtualItems, measureElement, paddingBottom, paddingTop } =
+		useAppContentVirtualizer(props.buckets.length, props.useCompactList ? 210 : 70)
+
 	return (
 		<div className={styles.tableWrap}>
 			{props.useCompactList ? (
 				<div
+					ref={hostRef}
 					className={styles.mobileList}
 					data-testid="buckets-list-compact"
 					role="list"
 					aria-label="Buckets"
 				>
-					{props.buckets.map((row) => (
-						<article key={row.name} className={styles.mobileCard} role="listitem">
+					<div style={{ height: paddingTop }} aria-hidden />
+					{virtualItems.map((item) => {
+						const row = props.buckets[item.index]
+						if (!row) return null
+						return <article
+							key={row.name}
+							ref={measureElement}
+							data-index={item.index}
+							className={styles.mobileCard}
+							role="listitem"
+							aria-posinset={item.index + 1}
+							aria-setsize={props.buckets.length}
+						>
 							<Typography.Text strong className={styles.mobileCardTitle}>
 								{row.name}
 							</Typography.Text>
@@ -63,11 +79,12 @@ export function BucketsList(props: BucketsListProps) {
 								/>
 							</div>
 						</article>
-					))}
+					})}
+					<div style={{ height: paddingBottom }} aria-hidden />
 				</div>
 			) : (
-				<div className={styles.desktopTable} data-testid="buckets-table-desktop">
-					<table className={styles.table}>
+				<div ref={hostRef} className={styles.desktopTable} data-testid="buckets-table-desktop">
+					<table className={styles.table} aria-rowcount={props.buckets.length + 1}>
 						<caption className="sr-only">List of buckets</caption>
 						<thead>
 							<tr className={styles.headRow}>
@@ -83,8 +100,17 @@ export function BucketsList(props: BucketsListProps) {
 							</tr>
 						</thead>
 						<tbody>
-							{props.buckets.map((row) => (
-								<tr key={row.name} className={styles.tableRow}>
+							{paddingTop > 0 ? <tr aria-hidden><td colSpan={3} style={{ height: paddingTop }} /></tr> : null}
+							{virtualItems.map((item) => {
+								const row = props.buckets[item.index]
+								if (!row) return null
+								return <tr
+									key={row.name}
+									ref={measureElement}
+									data-index={item.index}
+									aria-rowindex={item.index + 2}
+									className={styles.tableRow}
+								>
 									<td className={styles.td}>
 										<Typography.Text strong className={styles.bucketName}>
 											{row.name}
@@ -114,7 +140,8 @@ export function BucketsList(props: BucketsListProps) {
 										/>
 									</td>
 								</tr>
-							))}
+							})}
+							{paddingBottom > 0 ? <tr aria-hidden><td colSpan={3} style={{ height: paddingBottom }} /></tr> : null}
 						</tbody>
 					</table>
 				</div>

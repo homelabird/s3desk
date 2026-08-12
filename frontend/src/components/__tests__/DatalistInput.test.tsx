@@ -104,4 +104,27 @@ describe('DatalistInput', () => {
 		expect(input).toHaveAttribute('list', 'bucket-options')
 		expect(document.getElementById('bucket-options')).not.toBeNull()
 	})
+
+	it('bounds large option sets while keeping typed matches discoverable', () => {
+		function Example() {
+			const [value, setValue] = useState('')
+			return (
+				<DatalistInput
+					value={value}
+					onChange={setValue}
+					options={Array.from({ length: 1_000 }, (_, index) => ({ value: `bucket-${index}` }))}
+					ariaLabel="Large bucket list"
+				/>
+			)
+		}
+
+		render(<Example />)
+		const input = screen.getByRole('combobox', { name: 'Large bucket list' })
+		const list = document.getElementById(input.getAttribute('list')!)!
+		expect(list.querySelectorAll('option')).toHaveLength(100)
+
+		fireEvent.change(input, { target: { value: 'bucket-999' } })
+		expect(list.querySelectorAll('option')).toHaveLength(1)
+		expect(list.querySelector('option')).toHaveAttribute('value', 'bucket-999')
+	})
 })

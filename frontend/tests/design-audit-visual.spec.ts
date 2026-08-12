@@ -6,8 +6,20 @@ import {
 	installObjectsMobileResponsiveFixtures,
 	seedObjectsMobileResponsiveStorage,
 } from './support/objectsMobileResponsive'
+import {
+	installProfilesBucketsMobileResponsiveFixtures,
+	seedProfilesBucketsMobileResponsiveStorage,
+} from './support/profilesBucketsMobileResponsive'
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
-import { dialogByName, gotoJobsPage, gotoUploadsPage, gotoWithDynamicImportRecovery, objectsListRow } from './support/ui'
+import {
+	dialogByName,
+	gotoBucketsPage,
+	gotoJobsPage,
+	gotoProfilesPage,
+	gotoUploadsPage,
+	gotoWithDynamicImportRecovery,
+	objectsListRow,
+} from './support/ui'
 
 const visualScreenshotOptions = {
 	animations: 'disabled',
@@ -30,6 +42,7 @@ async function setupObjectsAuditPage(
 	})
 	await expect(page.locator('html')).toHaveAttribute('data-theme', themeMode)
 	await expect(objectsListRow(page, 'preview.png')).toBeVisible()
+	await expect(page.getByRole('button', { name: /objects-mobile-bucket/i })).toBeVisible()
 }
 
 test.describe('Design audit visual smoke @visual', () => {
@@ -37,6 +50,9 @@ test.describe('Design audit visual smoke @visual', () => {
 		await setupObjectsAuditPage(page, 'light')
 		const listControls = await page.getByTestId('objects-list-controls-root').boundingBox() // e2e-geometry-allow keeps primary content above the desktop fold
 		expect(listControls?.y).toBeLessThanOrEqual(320)
+		const searchBox = await page.getByLabel('Search current folder').locator('..').boundingBox() // e2e-geometry-allow checks the visible input wrapper alignment
+		const filtersBox = await page.getByRole('button', { name: 'Filters' }).boundingBox() // e2e-geometry-allow checks desktop control alignment
+		expect(Math.abs((searchBox?.y ?? 0) - (filtersBox?.y ?? 0))).toBeLessThanOrEqual(2)
 
 		await expect(page).toHaveScreenshot('design-audit-objects-shell-light.png', visualScreenshotOptions)
 	})
@@ -51,6 +67,19 @@ test.describe('Design audit visual smoke @visual', () => {
 		await setupObjectsAuditPage(page, 'light', { width: 768, height: 1024 })
 
 		await expect(page).toHaveScreenshot('design-audit-objects-shell-tablet.png', visualScreenshotOptions)
+	})
+
+	test('Objects shell remains usable at the narrow mobile floor', async ({ page }) => {
+		await setupObjectsAuditPage(page, 'light', { width: 320, height: 568 })
+		await expect(page.getByLabel('Search current folder')).toBeVisible()
+		await expect(objectsListRow(page, 'alpha.txt')).toBeVisible()
+		const viewport = await page.evaluate(() => ({
+			clientWidth: document.documentElement.clientWidth, // e2e-geometry-allow compares the narrow layout viewport
+			scrollWidth: document.documentElement.scrollWidth, // e2e-geometry-allow detects page-level horizontal overflow
+		}))
+		expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth) // e2e-geometry-allow asserts page-level horizontal overflow
+
+		await expect(page).toHaveScreenshot('design-audit-objects-shell-narrow-mobile.png', visualScreenshotOptions)
 	})
 
 	test('Objects bucket picker floating surface remains distinct', async ({ page }) => {
@@ -87,5 +116,43 @@ test.describe('Design audit visual smoke @visual', () => {
 		expect((prefixBox?.y ?? 844) + (prefixBox?.height ?? 0)).toBeLessThanOrEqual(844)
 
 		await expect(page).toHaveScreenshot('design-audit-uploads-mobile.png', visualScreenshotOptions)
+	})
+
+	test('Profiles switches cleanly between desktop table and mobile cards', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await installProfilesBucketsMobileResponsiveFixtures(page)
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		await gotoProfilesPage(page)
+		await expect(page.getByTestId('profiles-table-desktop')).toBeVisible()
+		await expect(page).toHaveScreenshot('design-audit-profiles-desktop.png', visualScreenshotOptions)
+
+		await page.setViewportSize({ width: 390, height: 844 })
+		await expect(page.getByTestId('profiles-list-compact')).toBeVisible()
+		await expect(page).toHaveScreenshot('design-audit-profiles-mobile.png', visualScreenshotOptions)
+	})
+
+	test('Profiles mobile cards preserve hierarchy in dark mode', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await installProfilesBucketsMobileResponsiveFixtures(page)
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		await seedLocalStorage(page, { themeMode: 'dark' })
+		await gotoProfilesPage(page)
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+		await expect(page.getByTestId('profiles-list-compact')).toBeVisible()
+
+		await expect(page).toHaveScreenshot('design-audit-profiles-mobile-dark.png', visualScreenshotOptions)
+	})
+
+	test('Buckets switches cleanly between desktop table and mobile cards', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await installProfilesBucketsMobileResponsiveFixtures(page)
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		await gotoBucketsPage(page)
+		await expect(page.getByTestId('buckets-table-desktop')).toBeVisible()
+		await expect(page).toHaveScreenshot('design-audit-buckets-desktop.png', visualScreenshotOptions)
+
+		await page.setViewportSize({ width: 390, height: 844 })
+		await expect(page.getByTestId('buckets-list-compact')).toBeVisible()
+		await expect(page).toHaveScreenshot('design-audit-buckets-mobile.png', visualScreenshotOptions)
 	})
 })

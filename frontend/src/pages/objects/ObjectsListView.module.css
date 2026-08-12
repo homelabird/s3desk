@@ -432,13 +432,6 @@
   gap: 8px;
 }
 
-.listControlsTopActions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .listControlsStack {
   width: 100%;
   display: flex;
@@ -471,44 +464,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.listControlsIconButton {
-  border: 1px solid var(--s3d-color-border);
-  border-radius: 999px;
-  background: var(--s3d-color-bg-elevated);
-  color: inherit;
-  min-width: 34px;
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  cursor: pointer;
-  transition:
-    transform var(--s3d-transition-fast),
-    box-shadow var(--s3d-transition-fast),
-    border-color var(--s3d-transition-fast);
-}
-
-.listControlsIconButton:hover,
-.listControlsIconButton:focus-visible {
-  transform: translateY(-1px);
-  box-shadow: var(--s3d-shadow-sm);
-  border-color: var(--s3d-color-focus);
-  outline: none;
-}
-
-.listControlsIconButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.listControlsCopyFeedback {
-  color: var(--s3d-color-text-secondary);
-  font-size: 12px;
 }
 
 .listControlsSwitch {
@@ -674,7 +629,7 @@
   width: 100%;
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 10px 12px;
 }
 
@@ -693,6 +648,20 @@
   justify-self: end;
 }
 
+@media (min-width: 1201px) {
+  .listControlsSection[data-compact='false'] {
+    display: grid;
+    grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+    gap: 12px 16px;
+    align-items: start;
+  }
+
+  .listControlsSection[data-compact='false'] > .breadcrumbRow,
+  .listControlsSection[data-compact='false'] > .listControlsStack {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 768px) {
   .breadcrumbRow {
     align-items: flex-start;
@@ -705,12 +674,6 @@
     width: 100%;
   }
 
-  .listControlsTopActions {
-    width: auto;
-    flex: 0 0 auto;
-  }
-
-  .listControlsIconButton,
   .listRowIconButton,
   .selectionBarIconOnlyButton {
     min-width: 44px;
@@ -843,7 +806,6 @@
     gap: 5px;
   }
 
-  .listControlsTopActions,
   .selectionBarActions {
     gap: 4px;
   }
@@ -917,11 +879,21 @@
   }
 
   .selectionBarMeta,
-  .selectionBarActions,
-  .listControlsTopActions,
+  .selectionBarActions {
+    width: 100%;
+  }
+
+  .listControlsCompactFooter,
   .listControlsCompactActions,
   .listControlsViewToggle {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .listControlsCompactActions,
+  .listControlsViewToggle {
+    grid-column: 1 / -1;
   }
 
   .selectionBarActions {

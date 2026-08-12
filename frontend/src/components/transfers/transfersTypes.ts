@@ -56,6 +56,11 @@ export type TransfersRuntimeApi = Pick<
 	'openTransfers' | 'closeTransfers' | 'queueDownloadObject' | 'queueDownloadObjectsToDevice' | 'queueDownloadJobArtifact' | 'queueUploadFiles'
 >
 
+export type TransfersSummary = Pick<
+	TransfersContextValue,
+	'activeDownloadCount' | 'activeUploadCount' | 'activeTransferCount'
+>
+
 export type TransfersRuntimeSnapshot = Pick<
 	TransfersContextValue,
 	'isOpen' | 'tab' | 'activeDownloadCount' | 'activeUploadCount' | 'activeTransferCount' | 'downloadTasks' | 'uploadTasks'

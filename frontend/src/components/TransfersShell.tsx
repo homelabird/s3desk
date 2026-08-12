@@ -2,7 +2,7 @@ import { DownloadOutlined } from '@ant-design/icons'
 import { Badge, Button, type ButtonProps } from 'antd'
 import { type ReactNode, Suspense, lazy, useCallback, useMemo, useRef, useState } from 'react'
 
-import { TransfersContext, useTransfers } from './useTransfers'
+import { TransfersContexts, useTransfersCommands, useTransfersSummary } from './useTransfers'
 import type {
 	QueueDownloadJobArtifactArgs,
 	QueueDownloadObjectArgs,
@@ -127,7 +127,7 @@ export function TransfersProvider({
 	)
 
 	return (
-		<TransfersContext.Provider value={ctx}>
+		<TransfersContexts value={ctx}>
 			{children}
 			{shouldLoadRuntime ? (
 				<Suspense fallback={null}>
@@ -140,19 +140,20 @@ export function TransfersProvider({
 					/>
 				</Suspense>
 			) : null}
-		</TransfersContext.Provider>
+		</TransfersContexts>
 	)
 }
 
 export function TransfersButton(props: { showLabel?: boolean; ariaLabel?: string; type?: ButtonProps['type']; className?: string } = {}) {
-	const transfers = useTransfers()
+	const transfers = useTransfersCommands()
+	const summary = useTransfersSummary()
 	return (
 		<Button
 			type={props.type}
 			className={props.className}
 			aria-label={props.ariaLabel ?? 'Transfers'}
 			icon={
-				<Badge count={transfers.activeTransferCount} size="small" showZero={false}>
+				<Badge count={summary.activeTransferCount} size="small" showZero={false}>
 					<DownloadOutlined />
 				</Badge>
 			}

@@ -136,11 +136,9 @@
 }
 
 @media (max-width: 768px) {
-	.headerActions :global(.ant-btn),
-	.realtimeStatusRow :global(.ant-btn) {
+	.headerActions :global(.ant-btn) {
 		min-height: 44px;
 	}
-
 }
 
 @media (max-width: 767px) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { APIClientShape } from '../../api/client'
-import type { TransfersContextValue } from '../../components/transfersTypes'
+import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { listAllObjects } from '../../lib/objects'
 import { objectsFeedback } from './objectsFeedback'
 import { normalizePrefix } from './objectsListUtils'
@@ -14,7 +14,7 @@ type UseObjectsDownloadPrefixArgs = {
 	profileId: string | null
 	bucket: string
 	prefix: string
-	transfers: TransfersContextValue
+	transfers: TransfersRuntimeApi
 }
 
 export function useObjectsDownloadPrefix({ api, apiToken, profileId, bucket, prefix, transfers }: UseObjectsDownloadPrefixArgs) {

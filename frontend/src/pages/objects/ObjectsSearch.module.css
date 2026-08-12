@@ -171,10 +171,21 @@
   color: var(--s3d-color-text-secondary);
 }
 
-.globalSearchResultsList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.globalSearchResultsViewport {
+  max-height: min(52dvh, 520px);
+  overflow: auto;
+}
+
+.globalSearchVirtualList {
+  position: relative;
+  width: 100%;
+}
+
+.globalSearchVirtualCard {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 100%;
+  padding-bottom: 8px;
 }
 
 .globalSearchResultCard {
@@ -328,6 +339,11 @@
   overflow: hidden;
 }
 
+.globalSearchSpacerCell {
+  padding: 0;
+  border: 0;
+}
+
 .globalSearchTableActionRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) repeat(3, 32px);
@@ -455,6 +471,33 @@
 
   .globalSearchKeyTextMd {
     max-width: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .globalSearchTableMd {
+    min-width: 0;
+  }
+
+  .globalSearchThActions,
+  .globalSearchTdActions {
+    padding-inline: 8px;
+  }
+
+  .globalSearchTableActionRow {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 28px);
+    gap: 4px;
+  }
+
+  .globalSearchTableActionRow :global(.ant-btn.ant-btn-sm) {
+    min-height: 28px !important;
+    padding-inline: 4px !important;
+    font-size: 12px !important;
+  }
+
+  .globalSearchTableIconButton {
+    min-width: 28px;
+    width: 28px;
   }
 }
 
@@ -619,8 +662,8 @@
     font-size: 11px;
   }
 
-  .globalSearchResultsList {
-    gap: 6px;
+  .globalSearchVirtualCard {
+    padding-bottom: 6px;
   }
 
   .globalSearchResultCard {

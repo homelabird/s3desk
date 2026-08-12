@@ -1,5 +1,5 @@
 import { useAPIClient } from '../../api/useAPIClient'
-import { useTransfers } from '../../components/useTransfers'
+import { useTransfersCommands } from '../../components/useTransfers'
 import { useIsOffline } from '../../lib/useIsOffline'
 import { useUploadsPageControllerState } from './useUploadsPageControllerState'
 
@@ -10,7 +10,7 @@ type UseUploadsPageStateArgs = {
 
 export function useUploadsPageState(props: UseUploadsPageStateArgs) {
 	const api = useAPIClient()
-	const transfers = useTransfers()
+	const transfers = useTransfersCommands()
 	const isOffline = useIsOffline()
 
 	return useUploadsPageControllerState({

@@ -114,4 +114,25 @@ describe('SimpleTree', () => {
 		expect(screen.getByRole('treeitem', { name: 'root' })).toHaveAttribute('aria-busy', 'true')
 		expect(screen.getByRole('status')).toHaveTextContent('Loading root')
 	})
+
+	it('windows large trees', () => {
+		render(
+			<SimpleTree
+				nodes={Array.from({ length: 1_000 }, (_, index) => ({
+					key: `folder-${index}`,
+					title: `folder-${index}`,
+					isLeaf: true,
+				}))}
+				expandedKeys={[]}
+				selectedKeys={[]}
+				onExpandedKeysChange={vi.fn()}
+				onSelectKey={vi.fn()}
+				rowTestId="tree-row"
+			/>,
+		)
+
+		expect(screen.getAllByTestId('tree-row')).toHaveLength(30)
+		expect(screen.getByRole('treeitem', { name: 'folder-0' })).toBeInTheDocument()
+		expect(screen.queryByRole('treeitem', { name: 'folder-999' })).not.toBeInTheDocument()
+	})
 })

@@ -52,7 +52,7 @@ type RunUploadTaskArgs = {
 
 export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 	const { task, taskId, items } = args
-	let estimator = new TransferEstimator({ totalBytes: task.totalBytes })
+  const estimator = new TransferEstimator({ totalBytes: task.totalBytes })
 	args.uploadEstimatorByTaskIdRef.current[taskId] = estimator
 	args.updateUploadTask(taskId, (current) => ({
 		...current,

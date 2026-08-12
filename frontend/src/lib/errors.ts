@@ -41,6 +41,9 @@ export function getRecoveryHint(err: unknown): string | undefined {
 			// This is often the remote-access guard or an origin/host restriction.
 			return 'Forbidden. This server may be running in local-only mode or blocking your Host/Origin. If you are on the server host, open the UI from the same machine (loopback). For remote access, set ALLOW_REMOTE=true, configure API_TOKEN, and (if using a hostname) add it to ALLOWED_HOSTS.'
 		}
+		if (err.code === 'conflict' && err.message.toLowerCase().includes('active jobs')) {
+			return 'Cancel or wait for the profile\'s active jobs to finish, then try deleting the profile again.'
+		}
 		if (err.status === 400 && err.code === 'invalid_request') {
 			const msg = err.message.toLowerCase()
 			if (msg.includes('allowed local directory')) {

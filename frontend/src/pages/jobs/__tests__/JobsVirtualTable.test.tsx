@@ -48,7 +48,7 @@ describe('JobsVirtualTable', () => {
 
 		expect(screen.getByRole('button', { name: 'Sort by Name. Current sort: descending.' })).toBeInTheDocument()
 		expect(screen.getByText('v')).toHaveAttribute('aria-hidden', 'true')
-		expect(screen.getByText('sorted descending').className).toContain('visuallyHidden')
+		expect(screen.getByText('sorted descending')).toHaveClass('sr-only')
 	})
 
 	it('exposes virtualized row counts and visible row indexes', () => {

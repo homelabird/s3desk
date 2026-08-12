@@ -299,9 +299,18 @@
 }
 
 @media (max-width: 480px) {
+	.header {
+		gap: 5px;
+	}
+
 	.headerPadSm {
 		padding-inline: 8px;
-		padding-block: 7px;
+		padding-block: 5px;
+	}
+
+	.headerTopRow,
+	.headerProfileRow {
+		gap: 4px;
 	}
 
 	.contentPadSm {
