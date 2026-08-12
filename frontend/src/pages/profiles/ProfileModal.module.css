@@ -12,7 +12,7 @@
 .profileDialog > div:first-child {
 	padding: 13px 22px 10px;
 	border-bottom-color: color-mix(in srgb, var(--s3d-color-border) 34%, transparent);
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 95%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 95%, var(--s3d-color-bg));
 }
 
 .profileDialog > div:first-child h2 {
@@ -24,19 +24,19 @@
 	width: 32px;
 	height: 32px;
 	border-color: color-mix(in srgb, var(--s3d-color-border) 46%, transparent);
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 92%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 92%, var(--s3d-color-bg));
 	box-shadow: none;
 }
 
 .profileDialogBody {
 	padding: 17px 22px 12px;
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 98%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 98%, var(--s3d-color-bg));
 }
 
 .profileDialogFooter {
 	padding: 10px 22px 12px;
 	border-top-color: color-mix(in srgb, var(--s3d-color-border) 28%, transparent);
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 97%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 97%, var(--s3d-color-bg));
 }
 
 .profileSheet {
@@ -63,7 +63,7 @@
 	width: 28px;
 	height: 28px;
 	border-color: color-mix(in srgb, var(--s3d-color-border) 42%, transparent);
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 94%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 94%, var(--s3d-color-bg));
 }
 
 .providerChecklist,
@@ -114,17 +114,16 @@
 
 .sectionMetaText {
 	color: var(--s3d-color-text-secondary) !important;
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 400;
-	opacity: 0.72;
 	letter-spacing: 0.01em;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .staticSectionCard {
 	border: 1px solid color-mix(in srgb, var(--s3d-color-border) 24%, transparent);
 	border-radius: 16px;
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 99%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 99%, var(--s3d-color-bg));
 	overflow: hidden;
 	box-shadow: 0 8px 20px color-mix(in srgb, var(--s3d-color-text) 4%, transparent);
 }
@@ -143,7 +142,7 @@
 	margin-top: 2px;
 	border-width: 1px;
 	border-radius: 12px;
-	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 30%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 30%, var(--s3d-color-bg));
 }
 
 .staticSectionCard .sectionBody > .disclosure .disclosureSummary {
@@ -167,11 +166,11 @@
 }
 
 .staticSectionCard .sectionBody > .disclosure .disclosureSummaryTitle {
-	font-size: 11px;
+	font-size: 12px;
 }
 
 .staticSectionCard .sectionBody > .disclosure .disclosureCountBadge {
-	font-size: 9px;
+	font-size: 11px;
 	font-weight: 500;
 }
 
@@ -185,7 +184,7 @@
 	padding: 0;
 	border: 1px solid color-mix(in srgb, var(--s3d-color-border) 22%, transparent);
 	border-radius: 16px;
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 99%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 99%, var(--s3d-color-bg));
 	overflow: hidden;
 	box-shadow: 0 8px 20px color-mix(in srgb, var(--s3d-color-text) 3%, transparent);
 }
@@ -261,7 +260,7 @@
 
 .sectionBody label {
 	margin-bottom: 4px;
-	font-size: 11px;
+	font-size: 12px;
 }
 
 .sectionBody :global(.ant-input),
@@ -283,7 +282,7 @@
 
 .readOnlyField {
 	color: var(--s3d-color-text);
-	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, white) !important;
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, var(--s3d-color-bg)) !important;
 	border-color: color-mix(in srgb, var(--s3d-color-border) 54%, transparent) !important;
 	box-shadow: none !important;
 	cursor: default;
@@ -335,7 +334,7 @@
 }
 
 .switchCardDescription {
-	font-size: 11px;
+	font-size: 12px;
 	line-height: 1.3;
 	color: var(--s3d-color-text-secondary);
 }
@@ -343,7 +342,7 @@
 .sectionNote {
 	display: block;
 	margin-top: 0;
-	font-size: 11px;
+	font-size: 12px;
 	line-height: 1.45;
 	color: var(--s3d-color-text-secondary);
 	max-width: 58ch;
@@ -354,7 +353,7 @@
 	padding: 0;
 	border: 1px solid color-mix(in srgb, var(--s3d-color-border) 28%, transparent);
 	border-radius: 12px;
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 98%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 98%, var(--s3d-color-bg));
 }
 
 .disclosureSummary {
@@ -427,9 +426,9 @@
 	height: 18px;
 	padding: 0 7px;
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, var(--s3d-color-bg));
 	color: var(--s3d-color-text-secondary);
-	font-size: 9px;
+	font-size: 11px;
 	font-weight: 600;
 	line-height: 1;
 	letter-spacing: 0.01em;
@@ -444,7 +443,7 @@
 
 .disclosureBodyNote {
 	margin: 0;
-	font-size: 11px;
+	font-size: 12px;
 	line-height: 1.4;
 	color: var(--s3d-color-text-secondary);
 }
@@ -476,7 +475,7 @@
 
 .drawerFooterActions :global(.ant-btn-default) {
 	border-color: color-mix(in srgb, var(--s3d-color-border) 78%, transparent);
-	background: color-mix(in srgb, var(--s3d-color-bg-card) 72%, white);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 72%, var(--s3d-color-bg));
 }
 
 @media (max-width: 768px) {

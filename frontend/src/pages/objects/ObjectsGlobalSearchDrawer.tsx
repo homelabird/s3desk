@@ -70,6 +70,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 			title="Search bucket"
 			dataTestId="objects-global-search-sheet"
 			compactMobile
+			initialFocusSelector="[aria-label='Search files or folders']"
 		>
 			{!props.hasProfile ? (
 				<Alert type="warning" showIcon title={selectProfileFirstHint()} />

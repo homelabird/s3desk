@@ -206,10 +206,13 @@ export function useOverlayLayer(options: UseOverlayLayerOptions) {
 
 	useEffect(() => {
 		if (!options.open) return
-		const selectedElement = getInitialFocusSelectorElement(options.containerRef.current, options.initialFocusSelector)
-		if (focusElement(selectedElement)) return
-		if (focusElement(options.initialFocusRef?.current)) return
-		if (focusElement(getFocusableElements(options.containerRef.current)[0])) return
-		focusElement(options.containerRef.current)
+		const timeoutId = window.setTimeout(() => {
+			const selectedElement = getInitialFocusSelectorElement(options.containerRef.current, options.initialFocusSelector)
+			if (focusElement(selectedElement)) return
+			if (focusElement(options.initialFocusRef?.current)) return
+			if (focusElement(getFocusableElements(options.containerRef.current)[0])) return
+			focusElement(options.containerRef.current)
+		}, 0)
+		return () => window.clearTimeout(timeoutId)
 	}, [options.containerRef, options.initialFocusRef, options.initialFocusSelector, options.open])
 }

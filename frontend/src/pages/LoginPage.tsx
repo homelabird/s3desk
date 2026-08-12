@@ -46,7 +46,7 @@ export function LoginPage(props: Props) {
 	}
 
 	return (
-		<div className={styles.shell}>
+		<main className={styles.shell}>
 			<div className={styles.topRightActions}>
 				<Button icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />} onClick={toggleMode}>
 					{mode === 'dark' ? 'Light mode' : 'Dark mode'}
@@ -65,6 +65,6 @@ export function LoginPage(props: Props) {
 				inputId="login-api-token"
 				errorId="login-api-token-error"
 			/>
-		</div>
+		</main>
 	)
 }

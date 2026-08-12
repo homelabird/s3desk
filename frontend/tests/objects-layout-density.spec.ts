@@ -264,6 +264,11 @@ test.describe('Objects adaptive desktop workflows', () => {
 		})
 
 		await expect(page.getByTestId('objects-toolbar-tabs')).toBeVisible()
+		const closeTabButton = page.getByRole('button', { name: /Close tab:/ }).first()
+		await expect.poll(async () => {
+			const box = await closeTabButton.boundingBox() // e2e-geometry-allow verifies WCAG 2.5.8 workspace close target size
+			return Math.min(box?.width ?? 0, box?.height ?? 0)
+		}).toBeGreaterThanOrEqual(24)
 		await expect(page.getByTestId('objects-toolbar-desktop-nav')).toBeVisible()
 		await expect(page.getByTestId('objects-toolbar-desktop-actions')).toBeVisible()
 		await expect(objectsBucketPickerDesktop(page)).toBeVisible()

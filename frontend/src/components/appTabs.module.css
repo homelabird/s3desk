@@ -102,6 +102,8 @@
   border: none;
   background: transparent;
   padding: 0 6px;
+  min-width: 24px;
+  min-height: 24px;
   color: var(--s3d-color-text-muted);
   cursor: pointer;
   border-radius: 6px;
@@ -187,7 +189,6 @@
 
   .sizeSmall .closeButton {
     padding: 0 4px;
-    min-width: 20px;
   }
 
   .sizeSmall .addButton {

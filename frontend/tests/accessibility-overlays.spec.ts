@@ -18,7 +18,9 @@ import {
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
 import {
+	installLoginMobileResponsiveFixtures,
 	installSettingsMobileResponsiveFixtures,
+	seedLoginMobileResponsiveStorage,
 	seedSettingsMobileResponsiveStorage,
 } from './support/settingsLoginMobileResponsive'
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
@@ -63,6 +65,19 @@ async function expectNoA11yViolations(page: Page, scope: Locator) {
 			element.removeAttribute('data-a11y-scan-root')
 		})
 	}
+}
+
+async function expectFocusedControlExposed(scope: Locator) {
+	await expect.poll(() => scope.evaluate((container) => {
+		const active = document.activeElement
+		if (!(active instanceof HTMLElement) || !container.contains(active)) return false
+		const rect = active.getBoundingClientRect() // e2e-geometry-allow verifies focused controls remain exposed inside overlays
+		if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) return false
+		const x = Math.min(window.innerWidth - 1, Math.max(0, rect.left + rect.width / 2))
+		const y = Math.min(window.innerHeight - 1, Math.max(0, rect.top + rect.height / 2))
+		const hit = document.elementFromPoint(x, y)
+		return !!hit && (active.contains(hit) || hit.contains(active))
+	})).toBe(true)
 }
 
 async function seedObjectsA11yStorage(page: Page) {
@@ -444,6 +459,16 @@ async function seedPersistedTransfer(page: Page) {
 }
 
 test.describe('overlay accessibility scans', () => {
+	test('Login error state has no whole-page axe violations', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 800 })
+		await seedLoginMobileResponsiveStorage(page, 'stale-token')
+		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
+		await gotoProfilesPage(page, { ready: (scope) => scope.getByRole('heading', { name: 'S3Desk' }) })
+
+		await expect(page.getByText('Stored API token for this browser session is invalid.')).toBeVisible()
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
 	test('Profiles page has no whole-page axe violations', async ({ page }) => {
 		await setupProfilesDesktopA11yPage(page)
 
@@ -516,6 +541,25 @@ test.describe('overlay accessibility scans', () => {
 		await expect(drawer.getByText('alpha.png')).toBeVisible()
 
 		await expectNoA11yViolations(page, drawer)
+	})
+
+	test('Objects search drawer keeps keyboard focus exposed and restores its trigger', async ({ page }) => {
+		await setupObjectsMobileA11yPage(page)
+		const trigger = page.getByRole('button', { name: /Search bucket/ })
+		await trigger.focus()
+		await trigger.click()
+
+		const drawer = dialogByName(page, 'Search bucket')
+		await expect(drawer).toBeVisible()
+		await expect(drawer.getByLabel('Search files or folders')).toBeFocused()
+		for (let index = 0; index < 8; index += 1) {
+			await expectFocusedControlExposed(drawer)
+			await page.keyboard.press('Tab')
+		}
+
+		await page.keyboard.press('Escape')
+		await expect(drawer).toHaveCount(0)
+		await expect(trigger).toBeFocused()
 	})
 
 	test('Objects image viewer modal has no axe violations', async ({ page }) => {

@@ -13,10 +13,12 @@ import {
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
 import {
+	installLoginMobileResponsiveFixtures,
 	installSettingsMobileResponsiveFixtures,
+	seedLoginMobileResponsiveStorage,
 	seedSettingsMobileResponsiveStorage,
 } from './support/settingsLoginMobileResponsive'
-import { clickBucketCardManageAction, dialogByName, gotoBucketsPage, gotoJobsPage, gotoWithDynamicImportRecovery, objectsListRow } from './support/ui'
+import { clickBucketCardManageAction, dialogByName, gotoBucketsPage, gotoJobsPage, gotoProfilesPage, gotoWithDynamicImportRecovery, objectsListRow } from './support/ui'
 
 const bucketName = 'responsive-bucket'
 const jobsProfileId = 'jobs-mobile-profile'
@@ -113,6 +115,17 @@ async function seedPersistedTransfer(page: Page) {
 }
 
 test.describe('dark theme accessibility scans', () => {
+	test('Login has no whole-page axe violations in dark mode', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 800 })
+		await seedLoginMobileResponsiveStorage(page, '')
+		await seedDarkTheme(page)
+		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
+		await gotoProfilesPage(page, { ready: (scope) => scope.getByRole('heading', { name: 'S3Desk' }) })
+		await expectDarkThemeApplied(page)
+
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
 	test('Objects chrome and global search drawer have no axe violations in dark mode', async ({ page }) => {
 		await setupDarkObjectsPage(page, { width: 1440, height: 900 })
 
@@ -126,6 +139,23 @@ test.describe('dark theme accessibility scans', () => {
 		await expect(drawer.getByText('preview.png')).toBeVisible()
 
 		await expectNoA11yViolations(page, drawer)
+	})
+
+	test('mobile profile edit dialog has no axe violations in dark mode', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await installProfilesBucketsMobileResponsiveFixtures(page)
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		await seedDarkTheme(page)
+		await gotoProfilesPage(page)
+		await expectDarkThemeApplied(page)
+
+		const profileCard = page.getByTestId('profiles-list-compact').locator('article').filter({ hasText: 'Backup Profile' }).first()
+		await profileCard.getByRole('button', { name: 'Profile tools for Backup Profile' }).click()
+		await page.getByRole('menuitem', { name: 'Edit' }).click()
+		const dialog = dialogByName(page, 'Edit Profile')
+		await expect(dialog).toBeVisible()
+
+		await expectNoA11yViolations(page, dialog)
 	})
 
 	test('mobile bucket governance sheet has no axe violations in dark mode', async ({ page }) => {
@@ -145,6 +175,9 @@ test.describe('dark theme accessibility scans', () => {
 
 		const drawer = dialogByName(page, 'Settings')
 		await expect(drawer).toBeVisible()
+		await drawer.getByRole('tab', { name: 'Support' }).click()
+		await drawer.getByRole('button', { name: 'Server and backup' }).click()
+		await expect(drawer.getByText('Runtime diagnostics')).toBeVisible()
 
 		await expectNoA11yViolations(page, drawer)
 	})
