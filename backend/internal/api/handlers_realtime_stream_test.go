@@ -87,3 +87,42 @@ func TestServeRealtimeWS_ReplaysBacklogBeforeExit(t *testing.T) {
 		t.Fatalf("payload=%q, want replayed backlog payload", payload)
 	}
 }
+
+func TestRealtimeWSExitsWhenShutdownContextIsCanceled(t *testing.T) {
+	hub := ws.NewHub()
+	shutdownCtx, shutdown := context.WithCancel(context.Background())
+	serverState := &server{hub: hub, shutdownContext: shutdownCtx}
+	handlerDone := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, ok := serverState.prepareRealtimeWSConn(w, r)
+		if !ok {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		client, backlog, release := serverState.subscribeRealtime(0, true)
+		defer release()
+		session := newRealtimeWSSession(conn)
+		defer session.release()
+		streamCtx, releaseContext := serverState.withRealtimeShutdown(r.Context())
+		defer releaseContext()
+		serveRealtimeWS(streamCtx, client, backlog, session)
+		close(handlerDone)
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	header := http.Header{"Origin": []string{srv.URL}}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	shutdown()
+	select {
+	case <-handlerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for websocket handler shutdown")
+	}
+}

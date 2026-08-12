@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
 
@@ -218,10 +220,21 @@ func (s *server) listMultipartParts(ctx context.Context, client *s3.Client, meta
 }
 
 func (s *server) abortMultipartUpload(ctx context.Context, client *s3.Client, meta store.MultipartUpload) error {
-	_, err := client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
-		Bucket:   &meta.Bucket,
-		Key:      &meta.ObjectKey,
-		UploadId: &meta.S3UploadID,
-	})
-	return err
+	return s3client.AbortMultipartUpload(ctx, client, meta.Bucket, meta.ObjectKey, meta.S3UploadID)
+}
+
+func (s *server) rollbackMultipartUpload(ctx context.Context, client *s3.Client, meta store.MultipartUpload, metadataPersisted bool) error {
+	abortErr := s.abortMultipartUpload(ctx, client, meta)
+	if abortErr != nil {
+		if !metadataPersisted {
+			if persistErr := s.store.UpsertMultipartUpload(ctx, meta); persistErr != nil {
+				return fmt.Errorf("abort multipart upload: %v; preserve metadata: %w", abortErr, persistErr)
+			}
+		}
+		return abortErr
+	}
+	if err := s.deleteMultipartUploadMetadataAfterRemote(ctx, meta.ProfileID, meta.UploadID, meta.Path); err != nil {
+		return fmt.Errorf("multipart upload aborted but metadata cleanup failed: %w", err)
+	}
+	return nil
 }

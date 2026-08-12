@@ -16,6 +16,24 @@ has a stable place to land.
   import/export helpers, and database-specific query behavior.
 - `internal/bucketgov`, provider helper packages, and `internal/s3client` own
   provider-specific capabilities and control-plane calls.
+- `internal/rcloneegress` owns the short-lived authenticated loopback proxy
+  used by every rclone subprocess; its outbound HTTP/CONNECT dials must use the
+  guarded profile-endpoint resolver.
+
+## Runtime Ownership
+
+- The supported topology is one S3Desk replica owning one `DATA_DIR`. The job
+  queue, realtime state, and direct-multipart creation state are process-local;
+  the Helm chart rejects `replicaCount > 1`.
+- Direct multipart creation is serialized by a process-local lock so concurrent
+  chunks share one provider upload. A durable cross-process claim is intentionally
+  not implemented until HA becomes a supported topology.
+- The HTTP server leaves the total `ReadTimeout` unset for streaming uploads;
+  API middleware applies route-specific body-idle deadlines instead.
+- Shutdown first drains the HTTP server, then cancels the manager context and
+  waits up to ten seconds for registered job-manager lifecycles. A timeout is
+  logged as a warning; it is not proof that an external provider operation
+  completed.
 
 ## Handler Rules
 

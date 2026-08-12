@@ -32,7 +32,6 @@ const (
 	defaultDBStartupTimeout            = 30 * time.Second
 	defaultDBStartupRetryInterval      = time.Second
 	defaultHTTPMaxHeaderBytes          = 1 << 20
-	defaultHTTPReadTimeout             = 30 * time.Second
 	defaultHTTPIdleTimeout             = 60 * time.Second
 	minRemoteAPITokenBytes             = 32
 )
@@ -173,19 +172,23 @@ func Run(ctx context.Context, cfg config.Config) error {
 		UploadSessionTTL: cfg.UploadSessionTTL,
 	})
 
-	if err := jobManager.RecoverAndRequeue(ctx); err != nil {
+	managerCtx, managerCancel := context.WithCancel(ctx)
+	defer managerCancel()
+	realtimeShutdownCtx, realtimeShutdownCancel := context.WithCancel(ctx)
+	defer realtimeShutdownCancel()
+	if err := jobManager.RecoverAndRequeue(managerCtx); err != nil {
 		return err
 	}
-	go jobManager.Run(ctx)
-	go jobManager.RunMaintenance(ctx)
+	jobManager.Start(managerCtx)
 
 	handler := api.New(api.Dependencies{
-		Config:     cfg,
-		Store:      st,
-		Jobs:       jobManager,
-		Hub:        hub,
-		Metrics:    m,
-		ServerAddr: cfg.Addr,
+		Config:          cfg,
+		Store:           st,
+		Jobs:            jobManager,
+		Hub:             hub,
+		Metrics:         m,
+		ServerAddr:      cfg.Addr,
+		ShutdownContext: realtimeShutdownCtx,
 	})
 
 	server := &http.Server{
@@ -194,8 +197,10 @@ func Run(ctx context.Context, cfg config.Config) error {
 		ReadHeaderTimeout: 5 * time.Second,
 		MaxHeaderBytes:    defaultHTTPMaxHeaderBytes,
 		IdleTimeout:       defaultHTTPIdleTimeout,
-		ReadTimeout:       defaultHTTPReadTimeout,
-		WriteTimeout:      0,
+		// API middleware applies short control-plane and longer streaming-upload
+		// body idle deadlines; a server-wide total body deadline would cut slow uploads.
+		ReadTimeout:  0,
+		WriteTimeout: 0,
 	}
 
 	errCh := make(chan error, 1)
@@ -206,15 +211,31 @@ func Run(ctx context.Context, cfg config.Config) error {
 		}
 	}()
 
+	var runErr error
 	select {
 	case <-ctx.Done():
+		realtimeShutdownCancel()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
-		return nil
+		cancel()
 	case err := <-errCh:
-		return err
+		runErr = err
+		realtimeShutdownCancel()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = server.Shutdown(shutdownCtx)
+		cancel()
 	}
+
+	managerCancel()
+	workerShutdownCtx, workerCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := jobManager.Wait(workerShutdownCtx); err != nil {
+		logging.WarnFields("job manager did not stop before shutdown deadline", map[string]any{
+			"event": "job.manager_shutdown_timeout",
+			"error": err.Error(),
+		})
+	}
+	workerCancel()
+	return runErr
 }
 
 func applySafeDefaults(cfg *config.Config) {

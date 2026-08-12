@@ -11,6 +11,7 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
 
@@ -145,12 +146,7 @@ func (svc uploadPresignHTTPService) executeSinglePart(r *http.Request, prepared 
 
 	resp, err := presigner.PresignPutObject(r.Context(), input, s3.WithPresignExpires(prepared.expires))
 	if err != nil {
-		return nil, &uploadHTTPError{
-			status:  http.StatusBadGateway,
-			code:    "upload_failed",
-			message: "failed to presign upload",
-			details: map[string]any{"error": err.Error()},
-		}
+		return nil, newUploadProviderError("failed to presign upload", err, nil)
 	}
 
 	headers := flattenSignedHeaders(resp.SignedHeader)
@@ -229,28 +225,32 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		seen[num] = struct{}{}
 	}
 
+	svc.server.multipartStateMu.Lock()
+	defer svc.server.multipartStateMu.Unlock()
+
 	meta, found, err := svc.server.store.GetMultipartUpload(r.Context(), prepared.profileID, prepared.uploadID, prepared.relPath)
 	if err != nil {
 		return nil, newUploadInternalError("failed to load multipart upload", nil)
 	}
 	if found && (meta.FileSize != fileSize || meta.ChunkSize != partSize) {
-		if client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote); err == nil {
-			_ = svc.server.abortMultipartUpload(r.Context(), client, meta)
+		client, clientErr := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
+		if clientErr != nil {
+			return nil, newUploadInternalError("failed to prepare multipart reset", map[string]any{"error": clientErr.Error()})
 		}
-		_ = svc.server.store.DeleteMultipartUpload(r.Context(), prepared.profileID, prepared.uploadID, prepared.relPath)
+		if cleanupErr := svc.server.rollbackMultipartUpload(r.Context(), client, meta, true); cleanupErr != nil {
+			return nil, newUploadInternalError("failed to reset multipart upload", map[string]any{"error": cleanupErr.Error()})
+		}
 		found = false
 	}
 	createdMeta := false
+	var createdClient *s3.Client
 	if !found {
 		client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
 		if err != nil {
 			return nil, newUploadInternalError("failed to prepare multipart client", nil)
 		}
-		input := &s3.CreateMultipartUploadInput{Bucket: &prepared.us.Bucket, Key: &prepared.key}
-		if ct := strings.TrimSpace(prepared.req.ContentType); ct != "" {
-			input.ContentType = &ct
-		}
-		resp, err := client.CreateMultipartUpload(r.Context(), input)
+		createdClient = client
+		resp, err := s3client.CreateMultipartUpload(r.Context(), client, prepared.us.Bucket, prepared.key, prepared.req.ContentType)
 		s3UploadID, uploadErr := multipartUploadIDFromCreateResponse(resp, err)
 		if uploadErr != nil {
 			return nil, uploadErr
@@ -269,7 +269,11 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 			UpdatedAt:  now,
 		}
 		if err := svc.server.store.UpsertMultipartUpload(r.Context(), meta); err != nil {
-			return nil, newUploadInternalError("failed to persist multipart upload", nil)
+			details := map[string]any{"error": err.Error()}
+			if cleanupErr := svc.server.rollbackMultipartUpload(r.Context(), client, meta, false); cleanupErr != nil {
+				details["cleanupError"] = cleanupErr.Error()
+			}
+			return nil, newUploadInternalError("failed to persist multipart upload", details)
 		}
 		createdMeta = true
 	}
@@ -283,10 +287,12 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		ExpectedSize: &fileSize,
 	}); uploadErr != nil {
 		if createdMeta {
-			if client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote); err == nil {
-				_ = svc.server.abortMultipartUpload(r.Context(), client, meta)
+			if cleanupErr := svc.server.rollbackMultipartUpload(r.Context(), createdClient, meta, true); cleanupErr != nil {
+				if uploadErr.details == nil {
+					uploadErr.details = map[string]any{}
+				}
+				uploadErr.details["cleanupError"] = cleanupErr.Error()
 			}
-			_ = svc.server.store.DeleteMultipartUpload(r.Context(), prepared.profileID, prepared.uploadID, prepared.relPath)
 		}
 		return nil, uploadErr
 	}
@@ -310,12 +316,7 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 			PartNumber: &partNumber,
 		}, s3.WithPresignExpires(prepared.expires))
 		if err != nil {
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadGateway,
-				code:    "upload_failed",
-				message: "failed to presign multipart upload",
-				details: map[string]any{"error": err.Error()},
-			}
+			return nil, newUploadProviderError("failed to presign multipart upload", err, nil)
 		}
 
 		headers := flattenSignedHeaders(resp.SignedHeader)
@@ -372,8 +373,7 @@ func (svc uploadPresignHTTPService) handlePresignUpload(w http.ResponseWriter, r
 
 	resp, uploadErr, decodeErr := svc.executePresign(r)
 	if uploadErr != nil {
-		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &errResp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	if decodeErr != nil {

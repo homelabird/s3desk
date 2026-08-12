@@ -88,12 +88,7 @@ func (s *server) directMultipartChunkUploadPart(
 	contentLength int64,
 ) *uploadHTTPError {
 	if err := s.directMultipartUploadPart(r, client, us, key, uploadID, partNumber, contentLength); err != nil {
-		return &uploadHTTPError{
-			status:  http.StatusBadGateway,
-			code:    "upload_failed",
-			message: "failed to upload multipart part",
-			details: map[string]any{"error": err.Error()},
-		}
+		return newUploadProviderError("failed to upload multipart part", err, nil)
 	}
 	return nil
 }
@@ -146,7 +141,7 @@ func (s *server) stagingChunkFlow(
 	if uploadErr != nil {
 		return uploadErr
 	}
-	return s.stagingChunkStore(r, profileID, uploadID, stagingDir, relOS, chunkPath, prevSize, chunkValues, &remainingBytes, maxBytes, bytesTracked)
+	return s.stagingChunkStore(r, profileID, uploadID, stagingDir, relOS, chunkPath, prevSize, chunkValues, &remainingBytes, maxBytes)
 }
 
 func stagingChunkUploadPaths(
@@ -174,9 +169,8 @@ func (s *server) stagingChunkStore(
 	chunkValues uploadChunkHeaderValues,
 	remainingBytes *int64,
 	maxBytes int64,
-	bytesTracked int64,
 ) *uploadHTTPError {
-	if uploadErr := s.stagingChunkWrite(r, profileID, uploadID, stagingDir, relOS, chunkValues, chunkPath, prevSize, remainingBytes, maxBytes, bytesTracked); uploadErr != nil {
+	if uploadErr := s.stagingChunkWrite(r, profileID, uploadID, stagingDir, relOS, chunkValues, chunkPath, prevSize, remainingBytes, maxBytes); uploadErr != nil {
 		return uploadErr
 	}
 	return nil

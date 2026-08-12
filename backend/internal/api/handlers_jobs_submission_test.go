@@ -35,6 +35,35 @@ func TestBuildCreateJobSubmission_NormalizesNilPayload(t *testing.T) {
 	}
 }
 
+func TestValidateRunnableJobRequestReportsIncompatibleRclone(t *testing.T) {
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "", "", &jobs.RcloneIncompatibleError{
+			CurrentVersion: "rclone v1.51.0",
+			MinVersion:     "1.52.0",
+			Reason:         "version too old",
+		}
+	})
+
+	srv := &server{jobs: jobs.NewManager(jobs.Config{})}
+	err := srv.validateRunnableJobRequest(context.Background(), jobs.JobTypeS3DeleteObjects, map[string]any{
+		"bucket": "test-bucket",
+		"keys":   []any{"object.txt"},
+	})
+	var validationErr *jobSubmissionValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("err=%v, want jobSubmissionValidationError", err)
+	}
+	if validationErr.status != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", validationErr.status, http.StatusBadRequest)
+	}
+	if validationErr.code != "transfer_engine_incompatible" {
+		t.Fatalf("code=%q, want transfer_engine_incompatible", validationErr.code)
+	}
+	if validationErr.details["currentVersion"] != "rclone v1.51.0" {
+		t.Fatalf("currentVersion=%v, want rclone v1.51.0", validationErr.details["currentVersion"])
+	}
+}
+
 func TestBuildRetryJobSubmission_NormalizesNilPayloadForRetryableStatus(t *testing.T) {
 	t.Parallel()
 

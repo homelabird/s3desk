@@ -76,8 +76,7 @@ func (svc uploadFilesHTTPService) executePrepared(w http.ResponseWriter, r *http
 func (svc uploadFilesHTTPService) executeUpload(w http.ResponseWriter, r *http.Request) {
 	prepared := svc.prepareUpload(r)
 	if prepared.err != nil {
-		resp := buildAPIErrorResponse(prepared.err.code, prepared.err.message, prepared.err.details)
-		writeJSON(w, prepared.err.status, &resp)
+		writeError(w, prepared.err.status, prepared.err.code, prepared.err.message, prepared.err.details)
 		return
 	}
 	svc.executePrepared(w, r, prepared)

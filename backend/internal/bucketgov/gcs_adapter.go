@@ -190,35 +190,42 @@ func (a *gcsAdapter) GetPublicExposure(ctx context.Context, profile models.Profi
 }
 
 func (a *gcsAdapter) PutPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketPublicExposurePutRequest) error {
-
-	current, err := a.getIAMPolicy(ctx, profile, bucket, "read current GCS IAM policy", "bucket_public_exposure_error")
-	if err != nil {
-		return err
-	}
-
 	targetMode := strings.TrimSpace(string(req.Mode))
 	if targetMode == "" {
 		targetMode = strings.ToLower(strings.TrimSpace(req.Visibility))
 	}
 	if targetMode == "" {
-		return RequiredFieldError("mode", map[string]any{"section": "public-exposure"})
+		if req.PublicAccessPrevention == nil {
+			return RequiredFieldError("mode", map[string]any{"section": "public-exposure"})
+		}
+	} else {
+		switch models.BucketPublicExposureMode(targetMode) {
+		case models.BucketPublicExposureModePrivate, models.BucketPublicExposureModePublic:
+		default:
+			return InvalidEnumFieldError("mode", targetMode,
+				string(models.BucketPublicExposureModePrivate),
+				string(models.BucketPublicExposureModePublic),
+			)
+		}
 	}
 
-	next := current
-	switch models.BucketPublicExposureMode(targetMode) {
-	case models.BucketPublicExposureModePrivate:
-		next.Bindings = gcsRemovePublicMembers(next.Bindings)
-	case models.BucketPublicExposureModePublic:
-		next.Bindings = gcsEnsurePublicRead(next.Bindings)
-	default:
-		return InvalidEnumFieldError("mode", targetMode,
-			string(models.BucketPublicExposureModePrivate),
-			string(models.BucketPublicExposureModePublic),
-		)
-	}
+	if targetMode != "" {
+		current, err := a.getIAMPolicy(ctx, profile, bucket, "read current GCS IAM policy", "bucket_public_exposure_error")
+		if err != nil {
+			return err
+		}
 
-	if err := a.putIAMPolicy(ctx, profile, bucket, next, "put bucket public exposure", "bucket_public_exposure_error"); err != nil {
-		return err
+		next := current
+		switch models.BucketPublicExposureMode(targetMode) {
+		case models.BucketPublicExposureModePrivate:
+			next.Bindings = gcsRemovePublicMembers(next.Bindings)
+		case models.BucketPublicExposureModePublic:
+			next.Bindings = gcsEnsurePublicRead(next.Bindings)
+		}
+
+		if err := a.putIAMPolicy(ctx, profile, bucket, next, "put bucket public exposure", "bucket_public_exposure_error"); err != nil {
+			return err
+		}
 	}
 	if req.PublicAccessPrevention != nil {
 		patch := map[string]any{

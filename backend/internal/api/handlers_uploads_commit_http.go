@@ -36,8 +36,7 @@ func (svc uploadCommitHTTPService) handleCommitUpload(w http.ResponseWriter, r *
 		if uploadErr.code == "job_queue_full" {
 			w.Header().Set("Retry-After", "2")
 		}
-		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &errResp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	if decodeErr != nil {

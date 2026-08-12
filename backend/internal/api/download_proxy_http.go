@@ -116,6 +116,9 @@ func (svc downloadProxyHTTPService) executePrepared(r *http.Request, prepared do
 		}
 		return 0, nil, "", nil, nil, "", rcloneAPIErrorContext{}, nil, prepared.err
 	}
+	if svc.server.store == nil {
+		return 0, nil, "", nil, nil, "", rcloneAPIErrorContext{}, nil, newDownloadProxyHTTPError(http.StatusInternalServerError, "internal_error", "store is not configured", nil)
+	}
 
 	secrets, ok, err := svc.server.store.GetProfileSecrets(r.Context(), prepared.profileID)
 	if err != nil {

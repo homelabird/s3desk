@@ -166,6 +166,28 @@ func TestRealtimeTicketHTTPService_HandleCreateRealtimeTicket_RejectsMissingOrig
 	}
 }
 
+func TestRealtimeTicketHTTPService_HandleCreateRealtimeTicket_AcceptsSameOriginFetchMetadata(t *testing.T) {
+	t.Parallel()
+
+	svc := newRealtimeTicketHTTPService(&server{realtimeTickets: newRealtimeTicketStore(5 * time.Minute)})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/realtime-ticket?transport=ws", nil)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+
+	svc.handleCreateRealtimeTicket(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("rec.Code=%d, want %d body=%s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var resp realtimeTicketResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Transport != "ws" || resp.Ticket == "" {
+		t.Fatalf("resp=%+v, want ws ticket", resp)
+	}
+}
+
 func TestRealtimeTicketHTTPService_HandleCreateRealtimeTicket_RejectsMalformedOriginTable(t *testing.T) {
 	t.Parallel()
 

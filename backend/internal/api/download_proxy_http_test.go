@@ -91,6 +91,40 @@ func TestExecutePreparedDownloadProxy_PreservesPreparationError(t *testing.T) {
 	}
 }
 
+func TestDownloadProxyHTTPService_HandleDownloadProxy_ReturnsStoreNotConfigured(t *testing.T) {
+	srv := &server{
+		cfg:         config.Config{DataDir: t.TempDir()},
+		proxySecret: resolveProxySecret("proxy-test-token"),
+	}
+	token := downloadProxyToken{
+		ProfileID: "profile-1",
+		Bucket:    "bucket-a",
+		Key:       "report.txt",
+		Expires:   time.Now().UTC().Add(time.Minute).Unix(),
+	}
+	params := url.Values{}
+	params.Set("profileId", token.ProfileID)
+	params.Set("bucket", token.Bucket)
+	params.Set("key", token.Key)
+	params.Set("expires", strconv.FormatInt(token.Expires, 10))
+	params.Set("sig", srv.signDownloadProxy(token))
+	req := httptest.NewRequest(http.MethodGet, "/download-proxy?"+params.Encode(), nil)
+	rr := httptest.NewRecorder()
+
+	newDownloadProxyHTTPService(srv).handleDownloadProxy(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusInternalServerError)
+	}
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "internal_error" {
+		t.Fatalf("resp.Error.Code=%q, want internal_error", resp.Error.Code)
+	}
+}
+
 func TestExecuteProxy_PreservesPreparationError(t *testing.T) {
 	t.Parallel()
 

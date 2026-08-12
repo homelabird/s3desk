@@ -1,4 +1,4 @@
-import { Alert, Button } from "antd";
+import { Alert, Button, Input } from "antd";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import type { BucketPublicExposureMode } from "../../../api/types";
@@ -79,6 +79,56 @@ export function AzureVersioningControlBody({
             { value: "disabled", label: "Disabled" },
           ]}
           ariaLabel="Azure versioning status"
+        />
+      </FormField>
+      {warnings}
+    </>
+  );
+}
+
+export function AzureLegalHoldControlBody({
+  legalHold,
+  legalHoldTagsText,
+  setLegalHoldTagsText,
+  legalHoldEditable,
+  warnings,
+}: {
+  legalHold: boolean;
+  legalHoldTagsText: string;
+  setLegalHoldTagsText: (value: string) => void;
+  legalHoldEditable: boolean;
+  warnings: ReactNode;
+}) {
+  return (
+    <>
+      {!legalHoldEditable ? (
+        <Alert
+          type="info"
+          showIcon
+          title="Azure ARM credentials required for legal hold editing"
+          description="Legal hold tags are read-only until the Azure profile has subscription, resource group, tenant, client ID, and client secret configured."
+        />
+      ) : (
+        <Alert
+          type={legalHold ? "warning" : "info"}
+          showIcon
+          title={legalHold ? "Legal hold is active" : "No legal hold is active"}
+          description="Enter comma-separated 3–23 character alphanumeric tags. Saving an empty value clears all current legal hold tags."
+        />
+      )}
+      <FormField
+        label="Legal hold tags"
+        htmlFor="bucket-governance-azure-legal-hold-tags"
+        extra="Azure keeps each tag as a separate legal hold marker."
+      >
+        <Input
+          id="bucket-governance-azure-legal-hold-tags"
+          aria-label="Azure legal hold tags"
+          value={legalHoldTagsText}
+          onChange={(event) => setLegalHoldTagsText(event.target.value)}
+          disabled={!legalHoldEditable}
+          placeholder="case123, retention9"
+          autoComplete="off"
         />
       </FormField>
       {warnings}

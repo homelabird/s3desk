@@ -2,11 +2,12 @@ package jobs
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 
 	"s3desk/internal/logging"
+	"s3desk/internal/rcloneegress"
 )
 
 // runRcloneAttempt executes a single rclone invocation and streams logs to the job log.
@@ -32,22 +33,30 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+	egressProxy, err := rcloneegress.Start(ctx, m.allowRemote)
+	if err != nil {
+		return "", err
+	}
 
 	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
 	cmd := exec.Command(rclonePath, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	ConfigureProcessGroup(cmd)
+	cmd.Env = egressProxy.Environment(os.Environ())
 	cmd.ExtraFiles = opts.ExtraFiles
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = egressProxy.Close()
 		return "", err
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
+		_ = egressProxy.Close()
 		return "", err
 	}
 
 	if err := cmd.Start(); err != nil {
+		_ = egressProxy.Close()
 		return "", err
 	}
 
@@ -55,7 +64,7 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
 	}
-	cancelWatcher := startProcessCancelWatcher(ctx, jobID, pid)
+	cancelWatcher := StartProcessCancelWatcher(ctx, jobID, pid)
 
 	var (
 		progressCh   chan rcloneStatsUpdate
@@ -85,7 +94,7 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 
 	waitErr = cmd.Wait()
 
-	if cancelErr := cancelWatcher.finish(); cancelErr != nil {
+	if cancelErr := cancelWatcher(); cancelErr != nil {
 		if pid > 0 {
 			logging.WarnFields("job process termination helper failed", map[string]any{
 				"event":  "job.process_cancel_failed",
@@ -98,6 +107,7 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 			waitErr = cancelErr
 		}
 	}
+	_ = egressProxy.Close()
 
 	wg.Wait()
 

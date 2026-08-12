@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -50,6 +52,8 @@ type jobSubmissionSuccessOptions struct {
 type jobSubmissionHTTPService struct {
 	server *server
 }
+
+const jobEnqueueRollbackTimeout = 5 * time.Second
 
 type jobSubmissionPreparedRequest struct {
 	profileID      string
@@ -275,10 +279,13 @@ func (s *server) validateRunnableJobRequest(ctx context.Context, jobType string,
 
 	if jobs.RequiresRclone(jobType) {
 		if _, _, err := jobs.EnsureRcloneCompatible(ctx); err != nil {
+			if failure := classifyRcloneCapabilityFailure(err, "rclone is required for this job type (install it or set RCLONE_PATH)"); failure != nil {
+				return newJobSubmissionValidationError(http.StatusBadRequest, failure.code, failure.message, failure.details)
+			}
 			return newJobSubmissionValidationError(
-				http.StatusBadRequest,
-				"transfer_engine_missing",
-				"rclone is required for this job type (install it or set RCLONE_PATH)",
+				http.StatusInternalServerError,
+				"internal_error",
+				"failed to validate transfer engine",
 				nil,
 			)
 		}
@@ -297,7 +304,9 @@ func (s *server) createAndEnqueueJob(ctx context.Context, profileID, jobType str
 	}
 
 	if err := s.jobs.Enqueue(job.ID); err != nil {
-		_, _ = s.store.DeleteJob(ctx, profileID, job.ID)
+		if rollbackErr := s.rollbackCreatedJobAfterEnqueueFailure(ctx, profileID, job, err); rollbackErr != nil {
+			return job, nil, rollbackErr
+		}
 		if errors.Is(err, jobs.ErrJobQueueFull) {
 			stats := s.jobs.QueueStats()
 			return job, &stats, err
@@ -306,6 +315,28 @@ func (s *server) createAndEnqueueJob(ctx context.Context, profileID, jobType str
 	}
 
 	return job, nil, nil
+}
+
+func (s *server) rollbackCreatedJobAfterEnqueueFailure(
+	ctx context.Context,
+	profileID string,
+	job models.Job,
+	enqueueErr error,
+) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), jobEnqueueRollbackTimeout)
+	defer cancel()
+
+	if _, err := s.store.DeleteJob(cleanupCtx, profileID, job.ID); err != nil {
+		logging.ErrorFields("created job rollback failed after enqueue failure", map[string]any{
+			"event":          "job.enqueue_rollback_failed",
+			"profile_id":     profileID,
+			"job_id":         job.ID,
+			"enqueue_error":  enqueueErr.Error(),
+			"rollback_error": err.Error(),
+		})
+		return fmt.Errorf("job enqueue failed and created job rollback failed: %w", err)
+	}
+	return nil
 }
 
 func (s *server) submitRunnableJob(

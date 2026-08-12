@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"s3desk/internal/bucketpolicy"
 	"s3desk/internal/rcloneerrors"
-	"s3desk/internal/s3policy"
 )
 
 type xmlErrorEnvelope struct {
@@ -129,7 +129,7 @@ func (s *server) writeS3PolicyCallError(w http.ResponseWriter, op, bucket string
 	})
 }
 
-func (s *server) writeS3PolicyUpstreamError(w http.ResponseWriter, op, bucket string, resp s3policy.Response) {
+func (s *server) writeS3PolicyUpstreamError(w http.ResponseWriter, op, bucket string, resp bucketpolicy.Response) {
 	body := strings.TrimSpace(string(resp.Body))
 	e := parseXMLError(resp.Body)
 	code, msg := e.Code, e.Message

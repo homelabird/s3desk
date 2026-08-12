@@ -417,7 +417,14 @@ func extractPortableArchiveWithLimit(ctx context.Context, src io.Reader, backupP
 	if !manifestSeen {
 		return "", models.ServerMigrationManifest{}, nil, "", nil, errors.New("portable manifest is missing")
 	}
-	if _, err := verifyServerRestorePayload("portable", manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey); err != nil {
+	verifySignature := true
+	if strings.TrimSpace(manifest.ConfidentialityMode) != serverBackupConfidentialityEncrypted && !portableImportEncryptionKeyHintMatches(manifest, encryptionKey) {
+		// Clear payloads can still be checksum-verified when the destination key
+		// differs. Leave HMAC trust to the preflight blocker instead of turning a
+		// recoverable key mismatch into a generic archive error.
+		verifySignature = false
+	}
+	if _, err := verifyServerRestorePayloadWithOptions("portable", manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey, verifySignature); err != nil {
 		return "", models.ServerMigrationManifest{}, nil, "", nil, err
 	}
 	if err := verifyPortableAssetManifest(manifest, payloadEntries); err != nil {
@@ -562,6 +569,10 @@ func portableBackupEncryptionKeyHint(encryptionKey string) string {
 	}
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:8])
+}
+
+func portableImportEncryptionKeyHintMatches(manifest models.ServerMigrationManifest, encryptionKey string) bool {
+	return !manifest.EncryptionEnabled || manifest.EncryptionKeyHint == "" || manifest.EncryptionKeyHint == portableBackupEncryptionKeyHint(encryptionKey)
 }
 
 func decodePortableBase64Key(s string) ([]byte, error) {

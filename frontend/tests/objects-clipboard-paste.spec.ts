@@ -180,7 +180,8 @@ async function focusObjectsList(page: Page) {
 }
 
 async function navigateToPath(page: Page, prefix: string) {
-	await page.getByLabel('Go to path').click()
+	await page.getByRole('button', { name: 'Object tools' }).click()
+	await page.getByRole('menuitem', { name: /Go to path/ }).click()
 	const dialog = dialogByName(page, 'Go to path')
 	await expect(dialog).toBeVisible()
 	await dialog.getByLabel('Path').fill(prefix)

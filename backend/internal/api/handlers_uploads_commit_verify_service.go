@@ -130,12 +130,7 @@ func (svc uploadCommitVerificationService) verifyTargets(
 					details: map[string]any{"path": target.Path},
 				}
 			}
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadGateway,
-				code:    "upload_failed",
-				message: "failed to verify uploaded object",
-				details: map[string]any{"path": target.Path},
-			}
+			return nil, newUploadProviderError("failed to verify uploaded object", err, map[string]any{"path": target.Path})
 		}
 
 		var actualSize int64

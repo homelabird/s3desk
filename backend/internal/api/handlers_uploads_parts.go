@@ -110,9 +110,13 @@ func (s *server) directMultipartFormCleanupTempPart(
 	secrets models.ProfileSecrets,
 	us store.UploadSession,
 	tempKey string,
-) {
+) string {
 	target := rcloneRemoteObject(us.Bucket, tempKey, secrets.PreserveLeadingSlash)
-	_, _, _ = s.runRcloneCapture(r.Context(), secrets, []string{"deletefile", target}, "upload-temp-cleanup")
+	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, []string{"deletefile", target}, "upload-temp-cleanup")
+	if err == nil {
+		return ""
+	}
+	return redactRcloneDiagnostic(rcloneErrorMessage(err, stderr))
 }
 
 func stagingMultipartFormPaths(

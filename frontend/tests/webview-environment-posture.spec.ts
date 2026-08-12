@@ -236,9 +236,7 @@ test.describe('Webview environment and posture coverage', () => {
 		})
 		await page.getByRole('button', { name: 'Copy location' }).click()
 
-		await expect(
-			page.getByText(clipboardInsecureOriginHint()),
-		).toBeVisible()
+		await expect(page.locator('span').filter({ hasText: clipboardInsecureOriginHint() })).toBeVisible()
 		await expect(page.getByText(`s3://${defaultStorage.bucket}/${defaultStorage.prefix}`)).toBeVisible()
 	})
 })

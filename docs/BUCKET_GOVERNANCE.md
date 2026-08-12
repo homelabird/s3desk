@@ -16,7 +16,7 @@ Current implementation highlights:
 
 - AWS S3: typed public exposure, object ownership, versioning, encryption, and lifecycle
 - GCS: typed public exposure, uniform access, versioning, retention, and structured IAM bindings
-- Azure Blob: typed anonymous access, stored access policies, versioning, soft delete, and ARM-backed immutability editing
+- Azure Blob: typed anonymous access, stored access policies, versioning, soft delete, ARM-backed immutability editing, and legal-hold tag editing
 - OCI Object Storage: typed visibility, versioning, multi-rule retention, and PAR create/delete flows
 
 Provider-by-provider operator limits and support notes stay in
@@ -78,7 +78,7 @@ go test ./internal/api -run '^(TestLiveValidationAwsS3|TestLiveValidationGcpGcs|
 
 - AWS S3: public exposure, object ownership, versioning, encryption, lifecycle
 - GCS: IAM bindings, public access prevention, uniform access, versioning, retention
-- Azure Blob: anonymous access, stored access policies, soft delete, versioning, ARM-backed immutability
+- Azure Blob: anonymous access, stored access policies, soft delete, versioning, ARM-backed immutability, and legal-hold tags
 - OCI Object Storage: visibility, versioning, retention rules, PAR create/delete
 
 ## Exit Criteria
@@ -96,7 +96,6 @@ Governance changes are release-ready only when all of the following are true:
 The main open work is now narrower than the original rollout:
 
 - real-provider validation evidence still needs to be recorded for release decisions
-- Azure legal hold remains read-only in the typed UI
 - OCI PAR editing is still a delete-and-recreate flow
 - S3-compatible capability detection should be reviewed again after more live validation
 

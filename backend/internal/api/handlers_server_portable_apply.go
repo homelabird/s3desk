@@ -65,7 +65,7 @@ func (svc portableImportPreflightService) buildResponse(
 	preflight := models.ServerPortableImportPreflight{
 		SchemaReady:               manifest.FormatVersion == portableBackupFormatVersion && manifest.SchemaVersion == portableBackupSchemaVersion,
 		EncryptionReady:           !manifest.EncryptionEnabled || strings.TrimSpace(svc.encryptionKey) != "",
-		EncryptionKeyHintVerified: !manifest.EncryptionEnabled || manifest.EncryptionKeyHint == "" || manifest.EncryptionKeyHint == portableBackupEncryptionKeyHint(svc.encryptionKey),
+		EncryptionKeyHintVerified: portableImportEncryptionKeyHintMatches(manifest, svc.encryptionKey),
 		SpaceReady:                true,
 	}
 	if manifest.FormatVersion != portableBackupFormatVersion {

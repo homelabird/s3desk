@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	"s3desk/internal/azureacl"
+	"s3desk/internal/azurearmimmutability"
 	"s3desk/internal/gcsbucket"
 	"s3desk/internal/gcsiam"
 	"s3desk/internal/models"
@@ -243,6 +245,46 @@ func TestGCSAdapterPutPublicExposurePrivateRemovesPublicMembers(t *testing.T) {
 	}
 	if got := policy.Bindings[0].Members; len(got) != 1 || got[0] != "user:alice@example.com" {
 		t.Fatalf("members=%v, want non-public member only", got)
+	}
+}
+
+func TestGCSAdapterPutPublicExposureAllowsPAPOnly(t *testing.T) {
+	t.Parallel()
+
+	policyCalls := 0
+	var patchBody []byte
+	adapter := &gcsAdapter{
+		getPolicy: func(context.Context, models.ProfileSecrets, string) (gcsiam.Response, error) {
+			policyCalls++
+			return gcsiam.Response{Status: 200, Body: []byte(`{"bindings":[]}`)}, nil
+		},
+		putPolicy: func(context.Context, models.ProfileSecrets, string, []byte) (gcsiam.Response, error) {
+			policyCalls++
+			return gcsiam.Response{Status: 200}, nil
+		},
+		patchBucket: func(_ context.Context, _ models.ProfileSecrets, _ string, body []byte) (gcsbucket.Response, error) {
+			patchBody = append([]byte(nil), body...)
+			return gcsbucket.Response{Status: 200}, nil
+		},
+	}
+
+	err := adapter.PutPublicExposure(context.Background(), models.ProfileSecrets{}, "demo", models.BucketPublicExposurePutRequest{
+		PublicAccessPrevention: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("PutPublicExposure err=%v", err)
+	}
+	if policyCalls != 0 {
+		t.Fatalf("policyCalls=%d, want no IAM mutation for PAP-only request", policyCalls)
+	}
+
+	var patch map[string]any
+	if err := json.Unmarshal(patchBody, &patch); err != nil {
+		t.Fatalf("decode patch err=%v", err)
+	}
+	iamConfiguration, _ := patch["iamConfiguration"].(map[string]any)
+	if got := iamConfiguration["publicAccessPrevention"]; got != "enforced" {
+		t.Fatalf("publicAccessPrevention=%v, want enforced", got)
 	}
 }
 
@@ -531,6 +573,220 @@ func TestAzureAdapterGetProtectionAndVersioning(t *testing.T) {
 	}
 }
 
+func TestAzureAdapterGetProtectionIncludesLegalHoldTags(t *testing.T) {
+	t.Parallel()
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	adapter := &azureAdapter{
+		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			return azureacl.Response{Status: 200, Body: []byte(`{"deleteRetentionPolicy":{"enabled":false}}`)}, nil
+		},
+		getContainerProperties: func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error) {
+			return azureacl.Response{Status: 200, Body: []byte(`{"hasImmutabilityPolicy":false,"hasLegalHold":true}`)}, nil
+		},
+		getContainer: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{
+				Status: 200,
+				Body:   []byte(`{"properties":{"legalHold":{"hasLegalHold":true,"tags":[{"tag":"Case123"},{"tag":"retention9"}]}}}`),
+			}, nil
+		},
+		getImmutabilityPolicy: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{Status: 404}, nil
+		},
+	}
+
+	protection, err := adapter.GetProtection(context.Background(), profile, "demo")
+	if err != nil {
+		t.Fatalf("GetProtection err=%v", err)
+	}
+	if protection.Immutability == nil || !protection.Immutability.LegalHold || !protection.Immutability.LegalHoldEditable {
+		t.Fatalf("immutability=%+v, want editable legal hold", protection.Immutability)
+	}
+	if !reflect.DeepEqual(protection.Immutability.LegalHoldTags, []string{"case123", "retention9"}) {
+		t.Fatalf("legalHoldTags=%v, want normalized tags", protection.Immutability.LegalHoldTags)
+	}
+}
+
+func TestAzureAdapterPutProtectionUpdatesLegalHoldTagSet(t *testing.T) {
+	t.Parallel()
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	var cleared []string
+	var set []string
+	adapter := &azureAdapter{
+		getContainer: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{
+				Status: 200,
+				Body:   []byte(`{"properties":{"legalHold":{"hasLegalHold":true,"tags":[{"tag":"tag1"},{"tag":"tag2"}]}}}`),
+			}, nil
+		},
+		clearLegalHold: func(_ context.Context, _ models.ProfileSecrets, _ string, req azurearmimmutability.LegalHoldRequest) (azurearmimmutability.Response, error) {
+			cleared = append([]string(nil), req.Tags...)
+			return azurearmimmutability.Response{Status: 200}, nil
+		},
+		setLegalHold: func(_ context.Context, _ models.ProfileSecrets, _ string, req azurearmimmutability.LegalHoldRequest) (azurearmimmutability.Response, error) {
+			set = append([]string(nil), req.Tags...)
+			return azurearmimmutability.Response{Status: 200}, nil
+		},
+	}
+
+	err := adapter.PutProtection(context.Background(), profile, "demo", models.BucketProtectionPutRequest{
+		LegalHoldTags: []string{"TAG2", "tag3"},
+	})
+	if err != nil {
+		t.Fatalf("PutProtection err=%v", err)
+	}
+	if !reflect.DeepEqual(cleared, []string{"tag1"}) {
+		t.Fatalf("cleared=%v, want [tag1]", cleared)
+	}
+	if !reflect.DeepEqual(set, []string{"tag3"}) {
+		t.Fatalf("set=%v, want [tag3]", set)
+	}
+}
+
+func TestAzureAdapterPutProtectionRestoresLegalHoldWhenSetFails(t *testing.T) {
+	t.Parallel()
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	var setCalls [][]string
+	var clearCalls [][]string
+	adapter := &azureAdapter{
+		getContainer: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{
+				Status: 200,
+				Body:   []byte(`{"properties":{"legalHold":{"hasLegalHold":true,"tags":[{"tag":"tag1"},{"tag":"tag2"}]}}}`),
+			}, nil
+		},
+		clearLegalHold: func(_ context.Context, _ models.ProfileSecrets, _ string, req azurearmimmutability.LegalHoldRequest) (azurearmimmutability.Response, error) {
+			clearCalls = append(clearCalls, append([]string(nil), req.Tags...))
+			return azurearmimmutability.Response{Status: 200}, nil
+		},
+		setLegalHold: func(_ context.Context, _ models.ProfileSecrets, _ string, req azurearmimmutability.LegalHoldRequest) (azurearmimmutability.Response, error) {
+			setCalls = append(setCalls, append([]string(nil), req.Tags...))
+			if len(setCalls) == 1 {
+				return azurearmimmutability.Response{}, errors.New("set legal hold failed")
+			}
+			return azurearmimmutability.Response{Status: 200}, nil
+		},
+	}
+
+	err := adapter.PutProtection(context.Background(), profile, "demo", models.BucketProtectionPutRequest{
+		LegalHoldTags: []string{"tag2", "tag3"},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want set failure")
+	}
+	if !reflect.DeepEqual(setCalls, [][]string{{"tag3"}, {"tag1"}}) {
+		t.Fatalf("setCalls=%v, want failed update followed by restoration", setCalls)
+	}
+	if !reflect.DeepEqual(clearCalls, [][]string{{"tag1"}, {"tag3"}}) {
+		t.Fatalf("clearCalls=%v, want removed tag clear followed by ambiguous-set cleanup", clearCalls)
+	}
+}
+
+func TestAzureAdapterPutProtectionRollsBackSoftDeleteWhenLegalHoldFails(t *testing.T) {
+	t.Parallel()
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	var servicePropertyBodies [][]byte
+	adapter := &azureAdapter{
+		getContainer: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{
+				Status: 200,
+				Body:   []byte(`{"properties":{"legalHold":{"tags":[]}}}`),
+			}, nil
+		},
+		setLegalHold: func(context.Context, models.ProfileSecrets, string, azurearmimmutability.LegalHoldRequest) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{}, errors.New("set legal hold failed")
+		},
+		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			return azureacl.Response{Status: 200, Body: []byte(`{"isVersioningEnabled":true,"deleteRetentionPolicy":{"enabled":false}}`)}, nil
+		},
+		putServiceProperties: func(_ context.Context, _ models.ProfileSecrets, body []byte) (azureacl.Response, error) {
+			servicePropertyBodies = append(servicePropertyBodies, append([]byte(nil), body...))
+			return azureacl.Response{Status: 202}, nil
+		},
+	}
+
+	days := 7
+	err := adapter.PutProtection(context.Background(), profile, "demo", models.BucketProtectionPutRequest{
+		SoftDelete:    &models.BucketSoftDeleteView{Enabled: true, Days: &days},
+		LegalHoldTags: []string{"tag1"},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want legal hold failure")
+	}
+	if len(servicePropertyBodies) != 2 {
+		t.Fatalf("service property PUTs=%d, want initial change plus rollback", len(servicePropertyBodies))
+	}
+
+	var restored azureacl.ServiceProperties
+	if err := json.Unmarshal(servicePropertyBodies[1], &restored); err != nil {
+		t.Fatalf("decode restored service properties: %v", err)
+	}
+	if !restored.IsVersioningEnabled || restored.DeleteRetentionPolicy == nil || restored.DeleteRetentionPolicy.Enabled {
+		t.Fatalf("restored service properties=%+v, want original versioning and disabled retention", restored)
+	}
+}
+
+func TestAzureAdapterPutProtectionRejectsInvalidLegalHoldTagsBeforeMutation(t *testing.T) {
+	t.Parallel()
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	getCalls := 0
+	setCalls := 0
+	adapter := &azureAdapter{
+		getContainer: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			getCalls++
+			return azurearmimmutability.Response{Status: 200, Body: []byte(`{"properties":{"legalHold":{"tags":[]}}}`)}, nil
+		},
+		setLegalHold: func(context.Context, models.ProfileSecrets, string, azurearmimmutability.LegalHoldRequest) (azurearmimmutability.Response, error) {
+			setCalls++
+			return azurearmimmutability.Response{Status: 200}, nil
+		},
+	}
+
+	err := adapter.PutProtection(context.Background(), profile, "demo", models.BucketProtectionPutRequest{
+		LegalHoldTags: []string{"bad tag"},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want invalid tag error")
+	}
+	if getCalls != 1 || setCalls != 0 {
+		t.Fatalf("getCalls=%d setCalls=%d, want read once and no mutation", getCalls, setCalls)
+	}
+}
+
 func TestAzureAdapterPutProtectionAndVersioning(t *testing.T) {
 	t.Parallel()
 
@@ -586,6 +842,176 @@ func TestAzureAdapterPutProtectionAndVersioning(t *testing.T) {
 	}
 	if !versioningProps.IsVersioningEnabled {
 		t.Fatalf("versioning props=%+v, want enabled", versioningProps)
+	}
+}
+
+func TestAzureAdapterPutProtectionValidatesARMBeforeSoftDelete(t *testing.T) {
+	t.Parallel()
+
+	putCalls := 0
+	adapter := &azureAdapter{
+		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			return azureacl.Response{
+				Status: 200,
+				Body:   []byte("{\"deleteRetentionPolicy\":{\"enabled\":false}}"),
+			}, nil
+		},
+		putServiceProperties: func(context.Context, models.ProfileSecrets, []byte) (azureacl.Response, error) {
+			putCalls++
+			return azureacl.Response{Status: 202}, nil
+		},
+	}
+
+	days := 7
+	err := adapter.PutProtection(context.Background(), models.ProfileSecrets{}, "demo", models.BucketProtectionPutRequest{
+		SoftDelete: &models.BucketSoftDeleteView{
+			Enabled: true,
+			Days:    &days,
+		},
+		Immutability: &models.BucketImmutabilityView{
+			Enabled: true,
+			Days:    &days,
+		},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want missing ARM configuration error")
+	}
+	if putCalls != 0 {
+		t.Fatalf("putCalls=%d, want 0 before ARM validation", putCalls)
+	}
+}
+
+func TestAzureAdapterPutProtectionPreflightsLockedImmutabilityBeforeSoftDelete(t *testing.T) {
+	t.Parallel()
+
+	daysToShorten := 7
+	daysToKeep := 30
+	cases := []struct {
+		name         string
+		immutability models.BucketImmutabilityView
+	}{
+		{name: "disable", immutability: models.BucketImmutabilityView{}},
+		{
+			name: "shorten",
+			immutability: models.BucketImmutabilityView{
+				Enabled: true,
+				Mode:    "locked",
+				Days:    &daysToShorten,
+			},
+		},
+		{
+			name: "change append setting",
+			immutability: models.BucketImmutabilityView{
+				Enabled:                    true,
+				Mode:                       "locked",
+				Days:                       &daysToKeep,
+				AllowProtectedAppendWrites: true,
+			},
+		},
+	}
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			softDeletePutCalls := 0
+			adapter := &azureAdapter{
+				getImmutabilityPolicy: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+					return azurearmimmutability.Response{
+						Status: 200,
+						Body:   []byte(`{"etag":"etag-current","properties":{"state":"Locked","immutabilityPeriodSinceCreationInDays":30}}`),
+					}, nil
+				},
+				getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+					return azureacl.Response{Status: 200, Body: []byte(`{"deleteRetentionPolicy":{"enabled":false}}`)}, nil
+				},
+				putServiceProperties: func(context.Context, models.ProfileSecrets, []byte) (azureacl.Response, error) {
+					softDeletePutCalls++
+					return azureacl.Response{Status: 202}, nil
+				},
+			}
+
+			days := 7
+			err := adapter.PutProtection(context.Background(), profile, "demo", models.BucketProtectionPutRequest{
+				SoftDelete:   &models.BucketSoftDeleteView{Enabled: true, Days: &days},
+				Immutability: &tc.immutability,
+			})
+			if err == nil {
+				t.Fatal("PutProtection error=nil, want locked immutability validation error")
+			}
+			if softDeletePutCalls != 0 {
+				t.Fatalf("softDeletePutCalls=%d, want 0 before locked-policy validation", softDeletePutCalls)
+			}
+		})
+	}
+}
+
+func TestAzureAdapterPutProtectionRollsBackSoftDeleteWhenImmutabilityFails(t *testing.T) {
+	t.Parallel()
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	var servicePropertyBodies [][]byte
+	adapter := &azureAdapter{
+		getImmutabilityPolicy: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{Status: 404}, nil
+		},
+		putImmutabilityPolicy: func(context.Context, models.ProfileSecrets, string, azurearmimmutability.PutPolicyRequest) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.Response{}, errors.New("arm immutability failed")
+		},
+		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			return azureacl.Response{
+				Status: 200,
+				Body:   []byte(`{"isVersioningEnabled":true,"deleteRetentionPolicy":{"enabled":false}}`),
+			}, nil
+		},
+		putServiceProperties: func(_ context.Context, _ models.ProfileSecrets, body []byte) (azureacl.Response, error) {
+			servicePropertyBodies = append(servicePropertyBodies, append([]byte(nil), body...))
+			return azureacl.Response{Status: 202}, nil
+		},
+	}
+
+	days := 7
+	err := adapter.PutProtection(context.Background(), profile, "demo", models.BucketProtectionPutRequest{
+		SoftDelete: &models.BucketSoftDeleteView{Enabled: true, Days: &days},
+		Immutability: &models.BucketImmutabilityView{
+			Enabled: true,
+			Days:    &days,
+		},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want ARM immutability failure")
+	}
+	if len(servicePropertyBodies) != 2 {
+		t.Fatalf("service property PUTs=%d, want initial change plus rollback", len(servicePropertyBodies))
+	}
+
+	var applied azureacl.ServiceProperties
+	if err := json.Unmarshal(servicePropertyBodies[0], &applied); err != nil {
+		t.Fatalf("decode applied service properties: %v", err)
+	}
+	if applied.DeleteRetentionPolicy == nil || !applied.DeleteRetentionPolicy.Enabled {
+		t.Fatalf("applied delete retention policy=%+v, want enabled", applied.DeleteRetentionPolicy)
+	}
+
+	var restored azureacl.ServiceProperties
+	if err := json.Unmarshal(servicePropertyBodies[1], &restored); err != nil {
+		t.Fatalf("decode restored service properties: %v", err)
+	}
+	if restored.IsVersioningEnabled != true || restored.DeleteRetentionPolicy == nil || restored.DeleteRetentionPolicy.Enabled {
+		t.Fatalf("restored service properties=%+v, want original versioning and disabled retention", restored)
 	}
 }
 
@@ -680,5 +1106,265 @@ func TestOCIAdapterPutPublicExposureVersioningAndProtection(t *testing.T) {
 	}
 	if createdDays != 7 {
 		t.Fatalf("createdDays=%d, want 7", createdDays)
+	}
+}
+
+func TestOCIAdapterPutProtectionKeepsExistingRulesWhenCreateFails(t *testing.T) {
+	t.Parallel()
+
+	deleteCalls := 0
+	adapter := &ociAdapter{
+		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte("{\"data\":[{\"id\":\"rule-old\",\"time-rule-locked\":false,\"duration\":{\"time-amount\":30,\"time-unit\":\"DAYS\"}}]}")}, nil
+		},
+		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error) {
+			return ocicli.Response{}, errors.New("create failed")
+		},
+		deleteRetentionRule: func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error) {
+			deleteCalls++
+			return ocicli.Response{}, nil
+		},
+	}
+
+	days := 7
+	err := adapter.PutProtection(context.Background(), models.ProfileSecrets{}, "demo", models.BucketProtectionPutRequest{
+		Retention: &models.BucketRetentionView{
+			Enabled: true,
+			Rules: []models.BucketRetentionRuleView{{
+				DisplayName: "new",
+				Days:        &days,
+			}},
+		},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want create failure")
+	}
+	if deleteCalls != 0 {
+		t.Fatalf("deleteCalls=%d, want 0 when create fails", deleteCalls)
+	}
+}
+
+func TestOCIAdapterPutProtectionRollsBackCreatedRulesWhenLaterCreateFails(t *testing.T) {
+	t.Parallel()
+
+	var deletedIDs []string
+	createCalls := 0
+	updateCalls := 0
+	adapter := &ociAdapter{
+		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-existing","display-name":"existing","duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
+		},
+		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error) {
+			createCalls++
+			if createCalls == 1 {
+				return ocicli.Response{Body: []byte(`{"data":{"id":"rule-new"}}`)}, nil
+			}
+			return ocicli.Response{}, errors.New("create failed")
+		},
+		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error) {
+			updateCalls++
+			return ocicli.Response{Body: []byte(`{"data":{}}`)}, nil
+		},
+		deleteRetentionRule: func(_ context.Context, _ models.ProfileSecrets, _ string, id string) (ocicli.Response, error) {
+			deletedIDs = append(deletedIDs, id)
+			return ocicli.Response{}, nil
+		},
+	}
+
+	days := 7
+	existingDays := 60
+	err := adapter.PutProtection(context.Background(), models.ProfileSecrets{}, "demo", models.BucketProtectionPutRequest{
+		Retention: &models.BucketRetentionView{
+			Enabled: true,
+			Rules: []models.BucketRetentionRuleView{
+				{ID: "rule-existing", Days: &existingDays},
+				{DisplayName: "first", Days: &days},
+				{DisplayName: "second", Days: &days},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want later create failure")
+	}
+	if len(deletedIDs) != 1 || deletedIDs[0] != "rule-new" {
+		t.Fatalf("deletedIDs=%v, want [rule-new]", deletedIDs)
+	}
+	if updateCalls != 0 {
+		t.Fatalf("updateCalls=%d, want 0 before all new rules are created", updateCalls)
+	}
+}
+
+func TestOCIAdapterPutProtectionRollsBackCreatedRulesWhenExistingUpdateFails(t *testing.T) {
+	t.Parallel()
+
+	var deletedIDs []string
+	adapter := &ociAdapter{
+		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-existing","duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
+		},
+		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":{"id":"rule-new"}}`)}, nil
+		},
+		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error) {
+			return ocicli.Response{}, errors.New("update failed")
+		},
+		deleteRetentionRule: func(_ context.Context, _ models.ProfileSecrets, _ string, id string) (ocicli.Response, error) {
+			deletedIDs = append(deletedIDs, id)
+			return ocicli.Response{}, nil
+		},
+	}
+
+	existingDays := 60
+	newDays := 7
+	err := adapter.PutProtection(context.Background(), models.ProfileSecrets{}, "demo", models.BucketProtectionPutRequest{
+		Retention: &models.BucketRetentionView{
+			Enabled: true,
+			Rules: []models.BucketRetentionRuleView{
+				{ID: "rule-existing", Days: &existingDays},
+				{DisplayName: "new", Days: &newDays},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want existing update failure")
+	}
+	if len(deletedIDs) != 1 || deletedIDs[0] != "rule-new" {
+		t.Fatalf("deletedIDs=%v, want [rule-new]", deletedIDs)
+	}
+}
+
+func TestOCIAdapterPutProtectionValidatesNewRulesBeforeMutation(t *testing.T) {
+	t.Parallel()
+
+	updateCalls := 0
+	adapter := &ociAdapter{
+		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte("{\"data\":[{\"id\":\"rule-existing\",\"time-rule-locked\":false,\"duration\":{\"time-amount\":30,\"time-unit\":\"DAYS\"}}]}")}, nil
+		},
+		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error) {
+			updateCalls++
+			return ocicli.Response{Body: []byte("{\"data\":{}}")}, nil
+		},
+	}
+
+	existingDays := 60
+	invalidDays := 0
+	err := adapter.PutProtection(context.Background(), models.ProfileSecrets{}, "demo", models.BucketProtectionPutRequest{
+		Retention: &models.BucketRetentionView{
+			Enabled: true,
+			Rules: []models.BucketRetentionRuleView{
+				{ID: "rule-existing", Days: &existingDays},
+				{DisplayName: "invalid", Days: &invalidDays},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("PutProtection error=nil, want invalid new rule error")
+	}
+	if updateCalls != 0 {
+		t.Fatalf("updateCalls=%d, want 0 before new-rule validation", updateCalls)
+	}
+}
+
+func TestOCIAdapterPutSharingKeepsExistingPARsWhenCreateFails(t *testing.T) {
+	t.Parallel()
+
+	deleteCalls := 0
+	adapter := &ociAdapter{
+		listPreauthenticatedRequests: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":[{"id":"par-old","name":"old"}]}`)}, nil
+		},
+		createPreauthenticatedRequest: func(context.Context, models.ProfileSecrets, string, string, string, string, string, string) (ocicli.Response, error) {
+			return ocicli.Response{}, errors.New("create failed")
+		},
+		deletePreauthenticatedRequest: func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error) {
+			deleteCalls++
+			return ocicli.Response{}, nil
+		},
+	}
+
+	_, err := adapter.PutSharing(context.Background(), models.ProfileSecrets{}, "demo", models.BucketSharingPutRequest{
+		PreauthenticatedRequests: []models.BucketPreauthenticatedRequestView{{
+			Name:        "new",
+			AccessType:  "AnyObjectRead",
+			TimeExpires: "2030-01-01T00:00:00Z",
+		}},
+	})
+	if err == nil {
+		t.Fatal("PutSharing error=nil, want create failure")
+	}
+	if deleteCalls != 0 {
+		t.Fatalf("deleteCalls=%d, want 0 when create fails", deleteCalls)
+	}
+}
+
+func TestOCIAdapterPutSharingRollsBackCreatedPARsWhenLaterCreateFails(t *testing.T) {
+	t.Parallel()
+
+	var deletedIDs []string
+	createCalls := 0
+	adapter := &ociAdapter{
+		listPreauthenticatedRequests: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":[]}`)}, nil
+		},
+		createPreauthenticatedRequest: func(context.Context, models.ProfileSecrets, string, string, string, string, string, string) (ocicli.Response, error) {
+			createCalls++
+			if createCalls == 1 {
+				return ocicli.Response{Body: []byte(`{"data":{"id":"par-new"}}`)}, nil
+			}
+			return ocicli.Response{}, errors.New("create failed")
+		},
+		deletePreauthenticatedRequest: func(_ context.Context, _ models.ProfileSecrets, _ string, id string) (ocicli.Response, error) {
+			deletedIDs = append(deletedIDs, id)
+			return ocicli.Response{}, nil
+		},
+	}
+
+	_, err := adapter.PutSharing(context.Background(), models.ProfileSecrets{}, "demo", models.BucketSharingPutRequest{
+		PreauthenticatedRequests: []models.BucketPreauthenticatedRequestView{
+			{Name: "first", AccessType: "AnyObjectRead", TimeExpires: "2030-01-01T00:00:00Z"},
+			{Name: "second", AccessType: "AnyObjectRead", TimeExpires: "2030-01-01T00:00:00Z"},
+		},
+	})
+	if err == nil {
+		t.Fatal("PutSharing error=nil, want later create failure")
+	}
+	if len(deletedIDs) != 1 || deletedIDs[0] != "par-new" {
+		t.Fatalf("deletedIDs=%v, want [par-new]", deletedIDs)
+	}
+}
+
+func TestOCIAdapterPutSharingRollsBackCreatedPARsWhenExistingDeleteFails(t *testing.T) {
+	t.Parallel()
+
+	var deletedIDs []string
+	adapter := &ociAdapter{
+		listPreauthenticatedRequests: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":[{"id":"par-old"}]}`)}, nil
+		},
+		createPreauthenticatedRequest: func(context.Context, models.ProfileSecrets, string, string, string, string, string, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":{"id":"par-new"}}`)}, nil
+		},
+		deletePreauthenticatedRequest: func(_ context.Context, _ models.ProfileSecrets, _ string, id string) (ocicli.Response, error) {
+			deletedIDs = append(deletedIDs, id)
+			if id == "par-old" {
+				return ocicli.Response{}, errors.New("delete failed")
+			}
+			return ocicli.Response{}, nil
+		},
+	}
+
+	_, err := adapter.PutSharing(context.Background(), models.ProfileSecrets{}, "demo", models.BucketSharingPutRequest{
+		PreauthenticatedRequests: []models.BucketPreauthenticatedRequestView{{
+			Name:        "new",
+			AccessType:  "AnyObjectRead",
+			TimeExpires: "2030-01-01T00:00:00Z",
+		}},
+	})
+	if err == nil {
+		t.Fatal("PutSharing error=nil, want existing delete failure")
+	}
+	if len(deletedIDs) != 2 || deletedIDs[0] != "par-old" || deletedIDs[1] != "par-new" {
+		t.Fatalf("deletedIDs=%v, want [par-old par-new]", deletedIDs)
 	}
 }

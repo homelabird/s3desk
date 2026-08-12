@@ -139,6 +139,48 @@ func TestListJobsFiltersAndCursor(t *testing.T) {
 	}
 }
 
+func TestCreateJobPersistsInitialCompletionState(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	startedAt := "2026-08-12T00:00:00Z"
+	finishedAt := "2026-08-12T00:00:01Z"
+	bytesDone := int64(7)
+	progress := &models.JobProgress{BytesDone: &bytesDone, BytesTotal: &bytesDone}
+
+	created, err := st.CreateJob(ctx, profile.ID, CreateJobInput{
+		Type:       "transfer_direct_upload",
+		Payload:    map[string]any{"uploadId": "upload-1"},
+		Status:     models.JobStatusSucceeded,
+		StartedAt:  &startedAt,
+		FinishedAt: &finishedAt,
+		Progress:   progress,
+	})
+	if err != nil {
+		t.Fatalf("create completed job: %v", err)
+	}
+
+	got, ok, err := st.GetJob(ctx, profile.ID, created.ID)
+	if err != nil {
+		t.Fatalf("get completed job: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected completed job")
+	}
+	if got.Status != models.JobStatusSucceeded {
+		t.Fatalf("status=%s, want %s", got.Status, models.JobStatusSucceeded)
+	}
+	if got.StartedAt == nil || *got.StartedAt != startedAt {
+		t.Fatalf("startedAt=%v, want %q", got.StartedAt, startedAt)
+	}
+	if got.FinishedAt == nil || *got.FinishedAt != finishedAt {
+		t.Fatalf("finishedAt=%v, want %q", got.FinishedAt, finishedAt)
+	}
+	if got.Progress == nil || got.Progress.BytesDone == nil || *got.Progress.BytesDone != bytesDone {
+		t.Fatalf("progress=%+v, want bytesDone %d", got.Progress, bytesDone)
+	}
+}
+
 func TestListJobsSkipsCorruptedPayload(t *testing.T) {
 	dataDir := t.TempDir()
 	gormDB, err := db.Open(db.Config{

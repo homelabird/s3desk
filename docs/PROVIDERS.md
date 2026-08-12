@@ -24,7 +24,7 @@ Section status terms used below:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | AWS S3 | Typed | Typed | Unsupported | Typed | Typed | Typed | Unsupported | Advanced raw bucket policy editing remains available. Object Lock is not part of the typed flow yet. |
 | S3-compatible | Partial | Unsupported | Unsupported | Partial | Partial | Partial | Unsupported | Support is intentionally conservative because capability coverage varies across targets. |
-| Azure Blob Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | Stored access policies are typed. Immutability editing requires Azure ARM credentials. Legal hold is surfaced but not released from this client. |
+| Azure Blob Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | Stored access policies, immutability, and legal-hold tags are typed. These protection edits require Azure ARM credentials. |
 | Google Cloud Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | IAM bindings and IAM conditions are typed. Uniform bucket-level access and retention are typed. |
 | OCI Object Storage | Unsupported | Typed | Typed | Typed | Unsupported | Unsupported | Typed | Bucket visibility, multi-rule retention, and PAR create/delete are typed. Existing PARs are immutable in-place and must be deleted/recreated to change. |
 
@@ -40,7 +40,7 @@ Section status terms used below:
 
 - Stored access policies are typed, but SAS issuance itself remains outside the governance modal.
 - Container immutability editing requires Azure ARM credentials in addition to storage account credentials.
-- Legal hold is detected and shown, but legal hold release is not part of the current typed flow.
+- Legal hold tags are edited through Azure ARM; saving an empty tag list clears all current legal hold tags.
 - Versioning and soft delete remain account-scoped Azure features even though they are surfaced from the container-oriented governance UI.
 
 ### OCI Object Storage

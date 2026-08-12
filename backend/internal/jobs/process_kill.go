@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
 
@@ -48,6 +49,21 @@ type KillResult struct {
 type processCancelWatcher struct {
 	done   chan struct{}
 	result chan error
+}
+
+// ConfigureProcessGroup makes cmd own a process group so cancellation can
+// terminate rclone and any children it starts together.
+func ConfigureProcessGroup(cmd *exec.Cmd) {
+	if cmd != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
+}
+
+// StartProcessCancelWatcher returns a one-shot cleanup function for a
+// process-group-backed command.
+func StartProcessCancelWatcher(ctx context.Context, jobID string, pid int) func() error {
+	watcher := startProcessCancelWatcher(ctx, jobID, pid)
+	return watcher.finish
 }
 
 func startProcessCancelWatcher(ctx context.Context, jobID string, pid int) *processCancelWatcher {

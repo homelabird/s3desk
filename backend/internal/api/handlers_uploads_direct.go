@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"s3desk/internal/models"
+	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
 
@@ -34,17 +35,20 @@ func (s *server) directMultipartState(
 	chunkIndex, chunkTotal int,
 	fileSize, chunkSize int64,
 ) (store.MultipartUpload, *uploadHTTPError) {
+	s.multipartStateMu.Lock()
+	defer s.multipartStateMu.Unlock()
+
 	meta, found, err := s.store.GetMultipartUpload(r.Context(), profileID, uploadID, relPath)
 	if err != nil {
 		return store.MultipartUpload{}, newUploadInternalError("failed to load multipart upload", map[string]any{"error": err.Error()})
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	createdMeta := false
 	if found {
 		if meta.FileSize != fileSize || meta.ChunkSize <= 0 {
-			if err := s.abortMultipartUpload(r.Context(), client, meta); err != nil {
+			if err := s.rollbackMultipartUpload(r.Context(), client, meta, true); err != nil {
 				return store.MultipartUpload{}, newUploadInternalError("failed to reset multipart upload", map[string]any{"error": err.Error()})
 			}
-			_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, relPath)
 			found = false
 		} else if chunkIndex < chunkTotal-1 {
 			if uploadErr := uploadRejectIfChunkMismatch(chunkSize, meta.ChunkSize); uploadErr != nil {
@@ -53,10 +57,7 @@ func (s *server) directMultipartState(
 		}
 	}
 	if !found {
-		resp, err := client.CreateMultipartUpload(r.Context(), &s3.CreateMultipartUploadInput{
-			Bucket: &us.Bucket,
-			Key:    &key,
-		})
+		resp, err := s3client.CreateMultipartUpload(r.Context(), client, us.Bucket, key, "")
 		s3UploadID, uploadErr := multipartUploadIDFromCreateResponse(resp, err)
 		if uploadErr != nil {
 			return store.MultipartUpload{}, uploadErr
@@ -73,11 +74,18 @@ func (s *server) directMultipartState(
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
+		createdMeta = true
 	} else {
 		meta.UpdatedAt = now
 	}
 	if err := s.store.UpsertMultipartUpload(r.Context(), meta); err != nil {
-		return store.MultipartUpload{}, newUploadInternalError("failed to persist multipart upload", map[string]any{"error": err.Error()})
+		details := map[string]any{"error": err.Error()}
+		if createdMeta {
+			if cleanupErr := s.rollbackMultipartUpload(r.Context(), client, meta, false); cleanupErr != nil {
+				details["cleanupError"] = cleanupErr.Error()
+			}
+		}
+		return store.MultipartUpload{}, newUploadInternalError("failed to persist multipart upload", details)
 	}
 	return meta, nil
 }
@@ -125,14 +133,22 @@ func (s *server) directMultipartFormPart(
 		return 0, 1, nil
 	}
 	tempKey := directUploadTempObjectKey(us.Prefix, uploadID, relPath)
+	appendCleanupError := func(uploadErr *uploadHTTPError) {
+		if cleanupErr := s.directMultipartFormCleanupTempPart(r, secrets, us, tempKey); cleanupErr != "" {
+			if uploadErr.details == nil {
+				uploadErr.details = map[string]any{}
+			}
+			uploadErr.details["cleanupError"] = cleanupErr
+		}
+	}
 	size, uploadErr := s.directMultipartFormUploadPart(r, secrets, us, tempKey, relPath, part, remainingBytes, maxBytes)
 	if uploadErr != nil {
-		s.directMultipartFormCleanupTempPart(r, secrets, us, tempKey)
+		appendCleanupError(uploadErr)
 		return 0, 0, uploadErr
 	}
 	reservation, uploadErr := s.directMultipartFormPersistPart(r, profileID, uploadID, relPath, key, us.Bucket, size)
 	if uploadErr != nil {
-		s.directMultipartFormCleanupTempPart(r, secrets, us, tempKey)
+		appendCleanupError(uploadErr)
 		return 0, 0, uploadErr
 	}
 	if uploadErr := s.directMultipartFormPromoteTempPart(r, secrets, us, tempKey, key, relPath); uploadErr != nil {
@@ -142,7 +158,7 @@ func (s *server) directMultipartFormPart(
 			}
 			uploadErr.details["rollbackError"] = rollbackErr.message
 		}
-		s.directMultipartFormCleanupTempPart(r, secrets, us, tempKey)
+		appendCleanupError(uploadErr)
 		return 0, 0, uploadErr
 	}
 	return 1, 0, nil

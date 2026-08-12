@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path"
@@ -20,17 +21,19 @@ import (
 )
 
 type Dependencies struct {
-	Config     config.Config
-	Store      *store.Store
-	Jobs       *jobs.Manager
-	Hub        *ws.Hub
-	Metrics    *metrics.Metrics
-	ServerAddr string
+	Config          config.Config
+	Store           *store.Store
+	Jobs            *jobs.Manager
+	Hub             *ws.Hub
+	Metrics         *metrics.Metrics
+	ServerAddr      string
+	ShutdownContext context.Context
 }
 
 func New(dep Dependencies) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(requestBodyIdleTimeout)
 
 	api := &server{
 		cfg:             dep.Config,
@@ -39,6 +42,7 @@ func New(dep Dependencies) http.Handler {
 		hub:             dep.Hub,
 		metrics:         dep.Metrics,
 		serverAddr:      dep.ServerAddr,
+		shutdownContext: dep.ShutdownContext,
 		proxySecret:     resolveProxySecret(dep.Config.APIToken),
 		realtimeTickets: newRealtimeTicketStore(30 * time.Second),
 		authLimit:       newAuthFailureLimiter(10, time.Minute, time.Minute),
@@ -204,6 +208,7 @@ func New(dep Dependencies) http.Handler {
 
 	r.With(api.requireLocalPeer).Get("/healthz", api.handleHealthz)
 	r.With(api.requireLocalPeer).Get("/readyz", api.handleReadyz)
+	r.With(api.requireLocalPeer).Get("/workerz", api.handleWorkerz)
 	r.With(api.requireLocalPeer, api.requireAPIToken).Get("/metrics", api.handleMetrics)
 
 	staticIndex := filepath.Join(dep.Config.StaticDir, "index.html")

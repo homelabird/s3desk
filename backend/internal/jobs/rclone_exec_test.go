@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,6 +57,54 @@ func TestStartRcloneCommandWaitDrainsUnreadStdout(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("wait remained hung after context cancellation")
 		}
+	}
+}
+
+func TestStartRcloneCommandInjectsGuardedProxyEnvironment(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake rclone helper uses a POSIX shell")
+	}
+
+	tempDir := t.TempDir()
+	t.Setenv("S3DESK_RCLONE_PROXY_ENV", filepath.Join(tempDir, "proxy"))
+	t.Setenv("S3DESK_RCLONE_NO_PROXY_ENV", filepath.Join(tempDir, "no-proxy"))
+	rclonePath := filepath.Join(tempDir, "rclone")
+	script := `#!/bin/sh
+set -eu
+printf '%s' "$HTTP_PROXY" > "$S3DESK_RCLONE_PROXY_ENV"
+printf '%s' "$NO_PROXY" > "$S3DESK_RCLONE_NO_PROXY_ENV"
+`
+	if err := os.WriteFile(rclonePath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write fake rclone: %v", err)
+	}
+	installJobsEnsureRclonePath(t, rclonePath)
+
+	manager := NewManager(Config{DataDir: t.TempDir()})
+	proc, err := manager.startRcloneCommand(context.Background(), testRcloneExecProfile(), "job-proxy-env", []string{"about", "remote:"})
+	if err != nil {
+		t.Fatalf("startRcloneCommand: %v", err)
+	}
+	if err := proc.wait(); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+
+	proxyRaw, err := os.ReadFile(os.Getenv("S3DESK_RCLONE_PROXY_ENV"))
+	if err != nil {
+		t.Fatalf("read proxy environment: %v", err)
+	}
+	proxyURL, err := url.Parse(string(proxyRaw))
+	if err != nil {
+		t.Fatalf("parse proxy environment %q: %v", proxyRaw, err)
+	}
+	if proxyURL.Hostname() != "127.0.0.1" || proxyURL.User == nil {
+		t.Fatalf("proxy URL=%q, want authenticated loopback URL", proxyURL)
+	}
+	noProxy, err := os.ReadFile(os.Getenv("S3DESK_RCLONE_NO_PROXY_ENV"))
+	if err != nil {
+		t.Fatalf("read no-proxy environment: %v", err)
+	}
+	if len(noProxy) != 0 {
+		t.Fatalf("NO_PROXY=%q, want empty", noProxy)
 	}
 }
 

@@ -3,10 +3,13 @@ package api
 import (
 	"context"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"s3desk/internal/config"
 	"s3desk/internal/models"
@@ -76,6 +79,126 @@ func TestRunRcloneCaptureRejectsOversizedStdout(t *testing.T) {
 	}
 }
 
+func TestRunRcloneCaptureInjectsGuardedProxyEnvironment(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("S3DESK_RCLONE_PROXY_ENV", filepath.Join(tempDir, "proxy"))
+	t.Setenv("S3DESK_RCLONE_NO_PROXY_ENV", filepath.Join(tempDir, "no-proxy"))
+	rclonePath := writeAPIFakeRcloneScript(t, "#!/bin/sh\nprintf '%s' \"$HTTP_PROXY\" > \"$S3DESK_RCLONE_PROXY_ENV\"\nprintf '%s' \"$NO_PROXY\" > \"$S3DESK_RCLONE_NO_PROXY_ENV\"\nprintf '[]'\n")
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return rclonePath, "rclone v1.66.0", nil
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	out, _, err := srv.runRcloneCapture(context.Background(), models.ProfileSecrets{
+		Provider:        models.ProfileProviderS3Compatible,
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+	}, []string{"about", "remote:"}, "proxy-env")
+	if err != nil {
+		t.Fatalf("runRcloneCapture: %v", err)
+	}
+	if out != "[]" {
+		t.Fatalf("output=%q, want []", out)
+	}
+	proxyRaw, err := os.ReadFile(os.Getenv("S3DESK_RCLONE_PROXY_ENV"))
+	if err != nil {
+		t.Fatalf("read proxy environment: %v", err)
+	}
+	proxyURL, err := url.Parse(string(proxyRaw))
+	if err != nil {
+		t.Fatalf("parse proxy environment %q: %v", proxyRaw, err)
+	}
+	if proxyURL.Hostname() != "127.0.0.1" || proxyURL.User == nil {
+		t.Fatalf("proxy URL=%q, want authenticated loopback URL", proxyURL)
+	}
+	noProxy, err := os.ReadFile(os.Getenv("S3DESK_RCLONE_NO_PROXY_ENV"))
+	if err != nil {
+		t.Fatalf("read no-proxy environment: %v", err)
+	}
+	if len(noProxy) != 0 {
+		t.Fatalf("NO_PROXY=%q, want empty", noProxy)
+	}
+}
+
+func TestStartRcloneCancellationTerminatesProcessGroup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("process group tests use POSIX signals")
+	}
+
+	tempDir := t.TempDir()
+	readyPath := filepath.Join(tempDir, "ready")
+	markerPath := filepath.Join(tempDir, "terminated")
+	t.Setenv("S3DESK_RCLONE_CHILD_READY", readyPath)
+	t.Setenv("S3DESK_RCLONE_CHILD_MARKER", markerPath)
+	rclonePath := writeAPIFakeRcloneScript(t, "#!/bin/sh\n(\n  trap 'printf done > \"$S3DESK_RCLONE_CHILD_MARKER\"; exit 0' TERM\n  : > \"$S3DESK_RCLONE_CHILD_READY\"\n  sleep 1\n) &\nchild=$!\ntrap ':' TERM\nwait \"$child\"\n")
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return rclonePath, "rclone v1.66.0", nil
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	proc, err := srv.startRclone(ctx, models.ProfileSecrets{
+		Provider:        models.ProfileProviderS3Compatible,
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+	}, []string{"about", "remote:"}, "process-group")
+	if err != nil {
+		t.Fatalf("startRclone: %v", err)
+	}
+	waitForAPIRcloneTestFile(t, readyPath)
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- proc.wait()
+	}()
+	cancel()
+	select {
+	case <-waitDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("rclone process group did not stop after cancellation")
+	}
+	waitForAPIRcloneTestFile(t, markerPath)
+}
+
+func TestRunRcloneStdinCancellationTerminatesProcessGroup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("process group tests use POSIX signals")
+	}
+
+	tempDir := t.TempDir()
+	readyPath := filepath.Join(tempDir, "ready")
+	markerPath := filepath.Join(tempDir, "terminated")
+	t.Setenv("S3DESK_RCLONE_CHILD_READY", readyPath)
+	t.Setenv("S3DESK_RCLONE_CHILD_MARKER", markerPath)
+	rclonePath := writeAPIFakeRcloneScript(t, "#!/bin/sh\n(\n  trap 'printf done > \"$S3DESK_RCLONE_CHILD_MARKER\"; exit 0' TERM\n  : > \"$S3DESK_RCLONE_CHILD_READY\"\n  sleep 1\n) &\nchild=$!\ntrap ':' TERM\nwait \"$child\"\n")
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return rclonePath, "rclone v1.66.0", nil
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	done := make(chan error, 1)
+	go func() {
+		_, err := srv.runRcloneStdin(ctx, models.ProfileSecrets{
+			Provider:        models.ProfileProviderS3Compatible,
+			AccessKeyID:     "access",
+			SecretAccessKey: "secret",
+		}, []string{"rcat", "remote:object"}, "process-group-stdin", strings.NewReader("body"))
+		done <- err
+	}()
+	waitForAPIRcloneTestFile(t, readyPath)
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("rclone stdin process group did not stop after cancellation")
+	}
+	waitForAPIRcloneTestFile(t, markerPath)
+}
+
 func unsafeRcloneEndpointProfile() models.ProfileSecrets {
 	return models.ProfileSecrets{
 		Provider:        models.ProfileProviderS3Compatible,
@@ -93,4 +216,18 @@ func writeAPIFakeRcloneScript(t *testing.T, script string) string {
 		t.Fatalf("write fake rclone: %v", err)
 	}
 	return path
+}
+
+func waitForAPIRcloneTestFile(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

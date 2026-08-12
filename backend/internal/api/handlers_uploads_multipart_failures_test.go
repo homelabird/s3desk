@@ -111,6 +111,45 @@ func TestUploadFilesDirectMultipartInvalidCreateResponse(t *testing.T) {
 	}
 }
 
+func TestRollbackCreatedMultipartUploadPreservesMetadataWhenAbortFails(t *testing.T) {
+	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
+		abortStatus: http.StatusInternalServerError,
+		abortBody:   `<Error><Code>InternalError</Code><Message>abort failed</Message></Error>`,
+	})
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("get profile secrets: ok=%v err=%v", ok, err)
+	}
+	client, err := s3ClientFromProfile(secrets, false)
+	if err != nil {
+		t.Fatalf("create S3 client: %v", err)
+	}
+	apiServer := &server{store: st}
+	meta := store.MultipartUpload{
+		UploadID:   upload.UploadID,
+		ProfileID:  profile.ID,
+		Path:       "file.bin",
+		Bucket:     "test-bucket",
+		ObjectKey:  "incoming/file.bin",
+		S3UploadID: "upload-1",
+		ChunkSize:  5,
+		FileSize:   10,
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+		UpdatedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+	}
+
+	if err := apiServer.rollbackMultipartUpload(context.Background(), client, meta, false); err == nil {
+		t.Fatal("expected abort failure")
+	}
+	if _, found, err := st.GetMultipartUpload(context.Background(), profile.ID, upload.UploadID, "file.bin"); err != nil || !found {
+		t.Fatalf("multipart metadata found=%v err=%v, want preserved metadata", found, err)
+	}
+}
+
 func TestPresignUploadMultipartInvalidCreateResponse(t *testing.T) {
 	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
 		createStatus: http.StatusOK,
@@ -150,6 +189,74 @@ func TestPresignUploadMultipartInvalidCreateResponse(t *testing.T) {
 	}
 	if ok {
 		t.Fatalf("expected multipart metadata to remain absent after invalid presign create response")
+	}
+}
+
+func TestPresignMultipartReservationFailurePreservesMetadataWhenAbortFails(t *testing.T) {
+	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
+		abortStatus: http.StatusInternalServerError,
+		abortBody:   `<Error><Code>InternalError</Code><Message>abort failed</Message></Error>`,
+	})
+
+	st, _, srv, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
+	us, ok, err := st.GetUploadSession(context.Background(), profile.ID, upload.UploadID)
+	if err != nil || !ok {
+		t.Fatalf("get upload session: ok=%v err=%v", ok, err)
+	}
+	maxBytes := int64(15 * 1024 * 1024)
+	existingSize := int64(14 * 1024 * 1024)
+	if err := st.UpsertUploadObjectWithByteLimit(context.Background(), store.UploadObject{
+		UploadID:     upload.UploadID,
+		ProfileID:    profile.ID,
+		Path:         "existing.bin",
+		Bucket:       us.Bucket,
+		ObjectKey:    "incoming/existing.bin",
+		ExpectedSize: &existingSize,
+	}, maxBytes); err != nil {
+		t.Fatalf("seed upload object: %v", err)
+	}
+
+	fileSize := int64(10 * 1024 * 1024)
+	svc := newUploadPresignHTTPService(&server{
+		cfg:   config.Config{DataDir: dataDir, UploadMaxBytes: maxBytes},
+		store: st,
+	})
+	_, uploadErr := svc.executeMultipart(httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/presign", nil), uploadPresignPreparedRequest{
+		profileID: profile.ID,
+		uploadID:  upload.UploadID,
+		us:        us,
+		secrets: models.ProfileSecrets{
+			ID:              profile.ID,
+			Provider:        models.ProfileProviderS3Compatible,
+			Endpoint:        fakeS3.URL,
+			Region:          "us-east-1",
+			AccessKeyID:     "access",
+			SecretAccessKey: "secret",
+			ForcePathStyle:  true,
+		},
+		req: models.UploadPresignRequest{
+			Path: "new.bin",
+			Multipart: &models.UploadMultipartPresignReq{
+				FileSize:      &fileSize,
+				PartSizeBytes: 5 * 1024 * 1024,
+			},
+		},
+		relPath:   "new.bin",
+		key:       "incoming/new.bin",
+		expires:   time.Minute,
+		expiresAt: time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano),
+	})
+
+	if uploadErr == nil || uploadErr.code != "too_large" {
+		t.Fatalf("uploadErr=%+v, want too_large", uploadErr)
+	}
+	if uploadErr.details == nil || uploadErr.details["cleanupError"] == nil {
+		t.Fatalf("uploadErr.details=%v, want cleanupError", uploadErr.details)
+	}
+	if _, found, err := st.GetMultipartUpload(context.Background(), profile.ID, upload.UploadID, "new.bin"); err != nil || !found {
+		t.Fatalf("multipart metadata found=%v err=%v, want preserved metadata", found, err)
 	}
 }
 
@@ -730,19 +837,12 @@ func TestTryAssembleChunkFileConcurrentCalls(t *testing.T) {
 	}
 
 	var (
-		mu       sync.Mutex
-		netDelta int64
-		wg       sync.WaitGroup
-		errCh    = make(chan error, 2)
+		wg    sync.WaitGroup
+		errCh = make(chan error, 2)
 	)
 	assemble := func() {
 		defer wg.Done()
-		err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2, func(delta int64) error {
-			mu.Lock()
-			netDelta += delta
-			mu.Unlock()
-			return nil
-		})
+		err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2)
 		errCh <- err
 	}
 
@@ -771,16 +871,13 @@ func TestTryAssembleChunkFileConcurrentCalls(t *testing.T) {
 		t.Fatalf("expected chunk dir removed, stat err=%v", err)
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	if netDelta != 0 {
-		t.Fatalf("expected net delta 0, got %d", netDelta)
-	}
 }
 
 type multipartS3Behavior struct {
 	createStatus   int
 	createBody     string
+	abortStatus    int
+	abortBody      string
 	listStatus     int
 	listBody       string
 	completeStatus int
@@ -850,6 +947,19 @@ func newMultipartS3TestServer(t *testing.T, behavior multipartS3Behavior) *httpt
 			}
 			w.WriteHeader(status)
 			_, _ = io.WriteString(w, body)
+		case http.MethodDelete:
+			if r.URL.Query().Get("uploadId") == "" {
+				http.Error(w, "missing uploadId", http.StatusBadRequest)
+				return
+			}
+			status := behavior.abortStatus
+			if status == 0 {
+				status = http.StatusNoContent
+			}
+			w.WriteHeader(status)
+			if behavior.abortBody != "" {
+				_, _ = io.WriteString(w, behavior.abortBody)
+			}
 		case http.MethodHead:
 			head, ok := lookupMultipartObjectHead(r, behavior.headByObject)
 			status := http.StatusNotFound

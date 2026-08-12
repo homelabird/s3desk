@@ -26,7 +26,6 @@ func (s *server) stagingChunkWrite(
 	prevSize int64,
 	remainingBytes *int64,
 	maxBytes int64,
-	bytesTracked int64,
 ) *uploadHTTPError {
 	defer func() { _ = r.Body.Close() }()
 	limitBytes := *remainingBytes
@@ -44,28 +43,28 @@ func (s *server) stagingChunkWrite(
 	delta := n - prevSize
 	if delta != 0 {
 		if uploadErr := s.addUploadSessionBytesWithReservation(r.Context(), profileID, uploadID, delta); uploadErr != nil {
-			_ = os.Remove(tmpPath)
+			if cleanupErr := os.Remove(tmpPath); cleanupErr != nil {
+				if uploadErr.details == nil {
+					uploadErr.details = map[string]any{}
+				}
+				uploadErr.details["cleanupError"] = cleanupErr.Error()
+			}
 			return uploadErr
 		}
-		bytesTracked += delta
 	}
 	if err := os.Rename(tmpPath, chunkPath); err != nil {
+		details := map[string]any{"error": err.Error()}
 		if delta != 0 {
-			_ = s.store.AddUploadSessionBytes(r.Context(), profileID, uploadID, -delta)
+			if rollbackErr := s.store.AddUploadSessionBytes(r.Context(), profileID, uploadID, -delta); rollbackErr != nil {
+				details["rollbackError"] = rollbackErr.Error()
+			}
 		}
-		_ = os.Remove(tmpPath)
-		return newUploadInternalError("failed to store chunk", map[string]any{"error": err.Error()})
+		if cleanupErr := os.Remove(tmpPath); cleanupErr != nil {
+			details["cleanupError"] = cleanupErr.Error()
+		}
+		return newUploadInternalError("failed to store chunk", details)
 	}
-	if err := tryAssembleChunkFile(stagingDir, relOS, filepath.Dir(chunkPath), chunkValues.total, func(delta int64) error {
-		if delta == 0 {
-			return nil
-		}
-		if err := s.store.AddUploadSessionBytes(r.Context(), profileID, uploadID, delta); err != nil {
-			return err
-		}
-		bytesTracked += delta
-		return nil
-	}); err != nil {
+	if err := tryAssembleChunkFile(stagingDir, relOS, filepath.Dir(chunkPath), chunkValues.total); err != nil {
 		return newUploadInternalError("failed to assemble upload", map[string]any{"error": err.Error()})
 	}
 	return nil
@@ -97,10 +96,13 @@ func (s *server) releaseExistingStagingChunkFinal(
 		}
 	}
 	if err := os.Remove(finalPath); err != nil {
+		details := map[string]any{"error": err.Error()}
 		if size != 0 {
-			_ = s.store.AddUploadSessionBytes(r.Context(), profileID, uploadID, size)
+			if rollbackErr := s.store.AddUploadSessionBytes(r.Context(), profileID, uploadID, size); rollbackErr != nil {
+				details["rollbackError"] = rollbackErr.Error()
+			}
 		}
-		return 0, newUploadInternalError("failed to replace existing staged file", map[string]any{"error": err.Error()})
+		return 0, newUploadInternalError("failed to replace existing staged file", details)
 	}
 	return size, nil
 }
@@ -173,7 +175,12 @@ func (s *server) stagingMultipartFormPart(
 		return 0, 0, uploadErr
 	}
 	if uploadErr := s.stagingMultipartFormPersistPart(r, profileID, uploadID, n, remainingBytes, maxBytes); uploadErr != nil {
-		_ = os.Remove(dstPath)
+		if cleanupErr := os.Remove(dstPath); cleanupErr != nil {
+			if uploadErr.details == nil {
+				uploadErr.details = map[string]any{}
+			}
+			uploadErr.details["cleanupError"] = cleanupErr.Error()
+		}
 		return 0, 0, uploadErr
 	}
 	return 1, 0, nil

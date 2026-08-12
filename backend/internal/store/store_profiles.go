@@ -14,6 +14,11 @@ import (
 	"s3desk/internal/models"
 )
 
+var (
+	ErrProfileHasActiveJobs           = errors.New("profile has active jobs")
+	ErrProfileHasActiveUploadSessions = errors.New("profile has active upload sessions")
+)
+
 func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateRequest) (models.Profile, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := ulid.Make().String()
@@ -805,9 +810,46 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 func (s *Store) DeleteProfile(ctx context.Context, profileID string) (bool, error) {
 	res := s.db.WithContext(ctx).
 		Where("id = ?", profileID).
+		Where(
+			"NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.profile_id = ? AND jobs.status IN ?)",
+			profileID,
+			[]string{string(models.JobStatusQueued), string(models.JobStatusRunning)},
+		).
+		Where("NOT EXISTS (SELECT 1 FROM upload_sessions WHERE upload_sessions.profile_id = ?)", profileID).
 		Delete(&profileRow{})
 	if res.Error != nil {
 		return false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		var exists int64
+		if err := s.db.WithContext(ctx).
+			Model(&profileRow{}).
+			Where("id = ?", profileID).
+			Count(&exists).Error; err != nil {
+			return false, err
+		}
+		if exists > 0 {
+			var activeJobs int64
+			if err := s.db.WithContext(ctx).
+				Model(&jobRow{}).
+				Where("profile_id = ? AND status IN ?", profileID, []string{string(models.JobStatusQueued), string(models.JobStatusRunning)}).
+				Count(&activeJobs).Error; err != nil {
+				return false, err
+			}
+			if activeJobs > 0 {
+				return false, ErrProfileHasActiveJobs
+			}
+			var activeUploadSessions int64
+			if err := s.db.WithContext(ctx).
+				Model(&uploadSessionRow{}).
+				Where("profile_id = ?", profileID).
+				Count(&activeUploadSessions).Error; err != nil {
+				return false, err
+			}
+			if activeUploadSessions > 0 {
+				return false, ErrProfileHasActiveUploadSessions
+			}
+		}
 	}
 	return res.RowsAffected > 0, nil
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/bucketgov"
+	"s3desk/internal/bucketops"
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneerrors"
 )
@@ -29,7 +31,8 @@ type bucketHTTPError struct {
 }
 
 type bucketHTTPService struct {
-	server *server
+	server  *server
+	service *bucketops.Service
 }
 
 func (e *bucketHTTPError) Error() string {
@@ -37,7 +40,25 @@ func (e *bucketHTTPError) Error() string {
 }
 
 func newBucketHTTPService(s *server) bucketHTTPService {
-	return bucketHTTPService{server: s}
+	return bucketHTTPService{
+		server: s,
+		service: bucketops.NewService(
+			func(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (*bucketops.Process, error) {
+				proc, err := s.startRclone(ctx, profile, args, hint)
+				if err != nil {
+					return nil, err
+				}
+				return &bucketops.Process{
+					Stdout: proc.stdout,
+					Stderr: func() string { return proc.stderr.String() },
+					Wait:   proc.wait,
+				}, nil
+			},
+			func(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (string, string, error) {
+				return s.runRcloneCapture(ctx, profile, args, hint)
+			},
+		),
+	}
 }
 
 func newBucketHTTPError(status int, code, message string, details map[string]any) *bucketHTTPError {
@@ -144,39 +165,15 @@ func (svc bucketHTTPService) executeList(metric *storageMetric, r *http.Request)
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, err
 	}
 
-	proc, err := svc.server.startRclone(r.Context(), secrets, []string{"lsjson", "--dirs-only", "remote:"}, "list-buckets")
+	resp, err := svc.service.List(r.Context(), secrets)
 	if err != nil {
-		metric.SetStatus("remote_error")
-		return nil, err, "", bucketOperationRcloneErrorContext(bucketHTTPOperationList), nil, nil
-	}
-
-	resp := make([]models.Bucket, 0, 16)
-	listErr := decodeRcloneList(proc.stdout, func(entry rcloneListEntry) error {
-		if !entry.IsDir && !entry.IsBucket {
-			return nil
-		}
-		name := strings.TrimSpace(entry.Name)
-		if name == "" {
-			name = strings.TrimSpace(entry.Path)
-		}
-		if name == "" {
-			return nil
-		}
-		resp = append(resp, models.Bucket{Name: name})
-		return nil
-	})
-	waitErr := proc.wait()
-	if listErr != nil {
-		if waitErr != nil {
+		var remoteErr *bucketops.RemoteError
+		if errors.As(err, &remoteErr) {
 			metric.SetStatus("remote_error")
-			return nil, waitErr, proc.stderr.String(), bucketOperationRcloneErrorContext(bucketHTTPOperationList), nil, nil
+			return nil, remoteErr.Err, remoteErr.Stderr, bucketOperationRcloneErrorContext(bucketHTTPOperationList), nil, nil
 		}
 		metric.SetStatus("internal_error")
-		return nil, nil, "", rcloneAPIErrorContext{}, nil, newBucketHTTPError(http.StatusBadRequest, "s3_error", "failed to list buckets", map[string]any{"error": listErr.Error()})
-	}
-	if waitErr != nil {
-		metric.SetStatus("remote_error")
-		return nil, waitErr, proc.stderr.String(), bucketOperationRcloneErrorContext(bucketHTTPOperationList), nil, nil
+		return nil, nil, "", rcloneAPIErrorContext{}, nil, newBucketHTTPError(http.StatusBadRequest, "s3_error", "failed to list buckets", map[string]any{"error": err.Error()})
 	}
 
 	metric.SetStatus("success")
@@ -189,20 +186,14 @@ func (svc bucketHTTPService) executeCreate(metric *storageMetric, r *http.Reques
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, err
 	}
 
-	args := []string{"mkdir"}
-	if secrets.Provider == models.ProfileProviderGcpGcs {
-		if createReq.Region != "" {
-			args = append(args, "--gcs-location", createReq.Region)
+	if err := svc.service.Create(r.Context(), secrets, createReq.Name, createReq.Region); err != nil {
+		var remoteErr *bucketops.RemoteError
+		if !errors.As(err, &remoteErr) {
+			metric.SetStatus("internal_error")
+			return nil, nil, "", rcloneAPIErrorContext{}, nil, newBucketHTTPError(http.StatusInternalServerError, "internal_error", "failed to create bucket", nil)
 		}
-	} else if createReq.Region != "" {
-		secrets.Region = createReq.Region
-	}
-	args = append(args, rcloneRemoteBucket(createReq.Name))
-
-	_, stderr, err := svc.server.runRcloneCapture(r.Context(), secrets, args, "create-bucket")
-	if err != nil {
 		metric.SetStatus("remote_error")
-		return nil, err, stderr, bucketOperationRcloneErrorContext(bucketHTTPOperationCreate), nil, nil
+		return nil, remoteErr.Err, remoteErr.Stderr, bucketOperationRcloneErrorContext(bucketHTTPOperationCreate), nil, nil
 	}
 	if createReq.Defaults != nil {
 		if err := bucketgov.ApplyCreateDefaults(r.Context(), svc.server.bucketGov, secrets, createReq.Name, createReq.Defaults); err != nil {
@@ -222,18 +213,24 @@ func (svc bucketHTTPService) executeDelete(metric *storageMetric, r *http.Reques
 		return nil, "", rcloneAPIErrorContext{}, nil, err
 	}
 
-	_, stderr, err := svc.server.runRcloneCapture(r.Context(), secrets, []string{"rmdir", rcloneRemoteBucket(bucket)}, "delete-bucket")
+	err = svc.service.Delete(r.Context(), secrets, bucket)
 	if err != nil {
-		if rcloneerrors.IsBucketNotEmpty(strings.ToLower(rcloneErrorMessage(err, stderr))) {
+		var remoteErr *bucketops.RemoteError
+		if !errors.As(err, &remoteErr) {
+			metric.SetStatus("internal_error")
+			return nil, "", rcloneAPIErrorContext{}, nil, newBucketHTTPError(http.StatusInternalServerError, "internal_error", "failed to delete bucket", nil)
+		}
+		rcloneErr, stderr := remoteErr.Err, remoteErr.Stderr
+		if rcloneerrors.IsBucketNotEmpty(strings.ToLower(rcloneErrorMessage(rcloneErr, stderr))) {
 			metric.SetStatus("client_error")
 			return nil, "", rcloneAPIErrorContext{}, nil, newBucketHTTPError(http.StatusConflict, "bucket_not_empty", "bucket is not empty; delete objects first", map[string]any{"bucket": bucket})
 		}
-		if rcloneIsBucketNotFound(err, stderr) || rcloneIsNotFound(err, stderr) {
+		if rcloneIsBucketNotFound(rcloneErr, stderr) || rcloneIsNotFound(rcloneErr, stderr) {
 			metric.SetStatus("not_found")
 			return nil, "", rcloneAPIErrorContext{}, nil, newBucketHTTPError(http.StatusNotFound, "not_found", "bucket not found", map[string]any{"bucket": bucket})
 		}
 		metric.SetStatus("remote_error")
-		return err, stderr, bucketOperationRcloneErrorContext(bucketHTTPOperationDelete), map[string]any{"bucket": bucket}, nil
+		return rcloneErr, stderr, bucketOperationRcloneErrorContext(bucketHTTPOperationDelete), map[string]any{"bucket": bucket}, nil
 	}
 
 	metric.SetStatus("success")

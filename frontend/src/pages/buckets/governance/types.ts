@@ -74,6 +74,8 @@ export type AzureGovernanceDraft = {
   immutabilityMode: "unlocked" | "locked";
   immutabilityEditable: boolean;
   legalHold: boolean;
+  legalHoldTags: string[];
+  legalHoldEditable: boolean;
   allowProtectedAppendWrites: boolean;
   allowProtectedAppendWritesAll: boolean;
 };
@@ -92,6 +94,8 @@ export type AzureImmutabilityView = {
   etag?: string;
   editable?: boolean;
   legalHold?: boolean;
+  legalHoldTags?: string[];
+  legalHoldEditable?: boolean;
   allowProtectedAppendWrites?: boolean;
   allowProtectedAppendWritesAll?: boolean;
 };

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"s3desk/internal/processio"
 	"s3desk/internal/profileendpoint"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/rcloneegress"
 	"s3desk/internal/rcloneerrors"
 	"s3desk/internal/redact"
 )
@@ -175,7 +177,11 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 	// cleanup consolidates all resource cleanup; on error paths before
 	// cmd.Start succeeds we call it directly instead of repeating each
 	// cleanup individually.
+	var egressProxy *rcloneegress.Proxy
 	cleanup := func() {
+		if egressProxy != nil {
+			_ = egressProxy.Close()
+		}
 		configCleanup()
 		tlsCleanup()
 	}
@@ -183,9 +189,20 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 	fullArgs := []string{"--config", configPath}
 	fullArgs = append(fullArgs, tlsArgs...)
 	fullArgs = append(fullArgs, args...)
+	if err := ctx.Err(); err != nil {
+		cleanup()
+		return nil, err
+	}
+	egressProxy, err = rcloneegress.Start(ctx, s.cfg.AllowRemote)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
 
 	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
-	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
+	cmd := exec.Command(rclonePath, fullArgs...)
+	jobs.ConfigureProcessGroup(cmd)
+	cmd.Env = egressProxy.Environment(os.Environ())
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cleanup()
@@ -201,6 +218,11 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 		cleanup()
 		return nil, err
 	}
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+	cancelWatcher := jobs.StartProcessCancelWatcher(ctx, hint, pid)
 
 	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
 	stderrDone := make(chan struct{})
@@ -211,6 +233,9 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 
 	wait := func() error {
 		err := cmd.Wait()
+		if cancelErr := cancelWatcher(); cancelErr != nil && err == nil && ctx.Err() != nil {
+			err = cancelErr
+		}
 		<-stderrDone
 		cleanup()
 		return err
@@ -274,7 +299,11 @@ func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecre
 		configCleanup()
 		return "", err
 	}
+	var egressProxy *rcloneegress.Proxy
 	cleanup := func() {
+		if egressProxy != nil {
+			_ = egressProxy.Close()
+		}
 		configCleanup()
 		tlsCleanup()
 	}
@@ -283,15 +312,35 @@ func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecre
 	fullArgs := []string{"--config", configPath}
 	fullArgs = append(fullArgs, tlsArgs...)
 	fullArgs = append(fullArgs, args...)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	egressProxy, err = rcloneegress.Start(ctx, s.cfg.AllowRemote)
+	if err != nil {
+		return "", err
+	}
 
 	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
-	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
+	cmd := exec.Command(rclonePath, fullArgs...)
+	jobs.ConfigureProcessGroup(cmd)
+	cmd.Env = egressProxy.Environment(os.Environ())
 	cmd.Stdin = stdin
 	cmd.Stdout = io.Discard
 	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
 	cmd.Stderr = stderrBuf
 
-	err = cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+	cancelWatcher := jobs.StartProcessCancelWatcher(ctx, hint, pid)
+	err = cmd.Wait()
+	if cancelErr := cancelWatcher(); cancelErr != nil && err == nil && ctx.Err() != nil {
+		err = cancelErr
+	}
 	return strings.TrimSpace(stderrBuf.String()), err
 }
 
@@ -487,6 +536,37 @@ type rcloneAPIErrorContext struct {
 	DefaultMessage string
 }
 
+type rcloneCapabilityFailure struct {
+	code    string
+	message string
+	details map[string]any
+}
+
+func classifyRcloneCapabilityFailure(err error, missingMessage string) *rcloneCapabilityFailure {
+	if errors.Is(err, jobs.ErrRcloneNotFound) {
+		return &rcloneCapabilityFailure{
+			code:    "transfer_engine_missing",
+			message: missingMessage,
+		}
+	}
+	var incompatible *jobs.RcloneIncompatibleError
+	if errors.As(err, &incompatible) {
+		details := map[string]any{}
+		if incompatible.CurrentVersion != "" {
+			details["currentVersion"] = incompatible.CurrentVersion
+		}
+		if incompatible.MinVersion != "" {
+			details["minVersion"] = incompatible.MinVersion
+		}
+		return &rcloneCapabilityFailure{
+			code:    "transfer_engine_incompatible",
+			message: incompatible.Error(),
+			details: details,
+		}
+	}
+	return nil
+}
+
 const rcloneDiagnosticRedacted = redact.Marker
 
 func redactRcloneDiagnostic(s string) string {
@@ -498,26 +578,26 @@ func redactRcloneDiagnosticDetails(details map[string]any) map[string]any {
 }
 
 func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rcloneAPIErrorContext, details map[string]any) {
-	if errors.Is(err, jobs.ErrRcloneNotFound) {
-		writeError(w, http.StatusBadRequest, "transfer_engine_missing", ctx.MissingMessage, nil)
-		return
-	}
-	var ie *jobs.RcloneIncompatibleError
-	if errors.As(err, &ie) {
+	if failure := classifyRcloneCapabilityFailure(err, ctx.MissingMessage); failure != nil {
+		if failure.code == "transfer_engine_missing" {
+			writeError(w, http.StatusBadRequest, failure.code, failure.message, nil)
+			return
+		}
 		out := redactRcloneDiagnosticDetails(details)
 		if out == nil {
 			out = map[string]any{}
 		}
-		if ie.CurrentVersion != "" {
-			out["currentVersion"] = ie.CurrentVersion
+		for key, value := range failure.details {
+			out[key] = value
 		}
-		if ie.MinVersion != "" {
-			out["minVersion"] = ie.MinVersion
-		}
-		writeError(w, http.StatusBadRequest, "transfer_engine_incompatible", ie.Error(), out)
+		writeError(w, http.StatusBadRequest, failure.code, failure.message, out)
 		return
 	}
-	cls := rcloneerrors.Classify(err, stderr)
+	writeClassifiedProviderAPIError(w, err, stderr, ctx, details)
+}
+
+func writeClassifiedProviderAPIError(w http.ResponseWriter, err error, diagnostic string, ctx rcloneAPIErrorContext, details map[string]any) {
+	cls := rcloneerrors.Classify(err, diagnostic)
 	norm := &models.NormalizedError{Code: models.NormalizedErrorCode(cls.Code), Retryable: cls.Retryable}
 
 	// Rate-limited responses are actionable for clients; expose a conservative backoff hint.
@@ -527,13 +607,13 @@ func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rc
 		}
 	}
 
-	if status, code, ok := rcloneErrorStatus(err, stderr); ok {
+	if status, code, ok := rcloneErrorStatus(err, diagnostic); ok {
 		writeJSON(w, status, models.ErrorResponse{
 			Error: models.APIError{
 				Code:            code,
 				Message:         ctx.DefaultMessage,
 				NormalizedError: norm,
-				Details:         rcloneErrorDetails(err, stderr, details),
+				Details:         rcloneErrorDetails(err, diagnostic, details),
 			},
 		})
 		return
@@ -543,7 +623,7 @@ func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rc
 			Code:            ctx.DefaultCode,
 			Message:         ctx.DefaultMessage,
 			NormalizedError: norm,
-			Details:         rcloneErrorDetails(err, stderr, details),
+			Details:         rcloneErrorDetails(err, diagnostic, details),
 		},
 	})
 }

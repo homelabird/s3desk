@@ -1,16 +1,16 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3client"
 )
 
 type objectDeleteHTTPError struct {
@@ -89,23 +89,15 @@ func (svc objectDeleteHTTPService) deleteS3LikeMarkerObjects(r *http.Request, se
 		return nil
 	}
 
-	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote)
-	if err != nil {
+	err := s3client.DeleteFolderMarkersWithOptions(r.Context(), secrets, bucket, keys, s3client.ProfileOptions{AllowRemote: svc.server.cfg.AllowRemote})
+	if err == nil {
+		return nil
+	}
+	var markerErr *s3client.MarkerDeleteError
+	if !errors.As(err, &markerErr) {
 		return newObjectDeleteHTTPError(http.StatusInternalServerError, "internal_error", "failed to prepare S3 client", nil)
 	}
-	for _, key := range keys {
-		if !strings.HasSuffix(key, "/") {
-			continue
-		}
-		if _, err := client.DeleteObject(r.Context(), &s3.DeleteObjectInput{Bucket: &bucket, Key: &key}); err != nil {
-			return newObjectDeleteHTTPError(http.StatusBadRequest, "s3_error", "failed to delete object", map[string]any{
-				"bucket": bucket,
-				"key":    key,
-				"error":  err.Error(),
-			})
-		}
-	}
-	return nil
+	return markerErr
 }
 
 func (svc objectDeleteHTTPService) executeDelete(r *http.Request) (*models.DeleteObjectsResponse, error, string, rcloneAPIErrorContext, map[string]any, error) {
@@ -127,6 +119,21 @@ func (svc objectDeleteHTTPService) executeDelete(r *http.Request) (*models.Delet
 	}
 
 	if err := svc.deleteS3LikeMarkerObjects(r, secrets, bucket, keys); err != nil {
+		var markerErr *s3client.MarkerDeleteError
+		if errors.As(err, &markerErr) {
+			providerErr := markerErr.Err
+			if providerErr == nil {
+				providerErr = err
+			}
+			return nil, providerErr, "", rcloneAPIErrorContext{
+					DefaultStatus:  http.StatusBadRequest,
+					DefaultCode:    "s3_error",
+					DefaultMessage: "failed to delete object",
+				}, map[string]any{
+					"bucket": bucket,
+					"key":    markerErr.Key,
+				}, nil
+		}
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, err
 	}
 

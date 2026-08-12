@@ -23,12 +23,7 @@ var errUploadIncomplete = errors.New("upload incomplete")
 
 func multipartUploadIDFromCreateResponse(resp *s3.CreateMultipartUploadOutput, err error) (string, *uploadHTTPError) {
 	if err != nil {
-		return "", &uploadHTTPError{
-			status:  http.StatusBadGateway,
-			code:    "upload_failed",
-			message: "failed to create multipart upload",
-			details: map[string]any{"error": err.Error()},
-		}
+		return "", newUploadProviderError("failed to create multipart upload", err, nil)
 	}
 	if resp == nil || resp.UploadId == nil || strings.TrimSpace(*resp.UploadId) == "" {
 		return "", &uploadHTTPError{
@@ -39,6 +34,24 @@ func multipartUploadIDFromCreateResponse(resp *s3.CreateMultipartUploadOutput, e
 		}
 	}
 	return strings.TrimSpace(*resp.UploadId), nil
+}
+
+func newUploadProviderError(message string, err error, details map[string]any) *uploadHTTPError {
+	status, code, ok := rcloneErrorStatus(err, "")
+	if !ok {
+		status = http.StatusBadGateway
+		code = "upload_failed"
+	}
+	if details == nil {
+		details = make(map[string]any, 1)
+	}
+	details["error"] = err.Error()
+	return &uploadHTTPError{
+		status:  status,
+		code:    code,
+		message: message,
+		details: details,
+	}
 }
 
 func newUploadBadRequestError(message string, details map[string]any) *uploadHTTPError {

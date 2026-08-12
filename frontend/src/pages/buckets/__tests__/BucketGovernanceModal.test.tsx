@@ -127,6 +127,9 @@ function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_o
             enabled: true,
             days: 30,
             editable: true,
+            legalHold: false,
+            legalHoldTags: [],
+            legalHoldEditable: true,
             until: "2026-04-01T00:00:00Z",
           },
         },
@@ -976,6 +979,27 @@ describe("BucketGovernanceModal", () => {
             allowProtectedAppendWritesAll: false,
           },
         },
+      ),
+    );
+
+    const legalHoldSection = await screen.findByTestId(
+      "bucket-governance-legal-hold",
+    );
+    fireEvent.change(
+      within(legalHoldSection).getByRole("textbox", {
+        name: "Azure legal hold tags",
+      }),
+      { target: { value: "case123, retention9" } },
+    );
+    fireEvent.click(
+      within(legalHoldSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.buckets.putBucketProtection).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        { legalHoldTags: ["case123", "retention9"] },
       ),
     );
   }, SLOW_GOVERNANCE_TIMEOUT_MS);

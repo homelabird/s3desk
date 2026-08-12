@@ -66,7 +66,7 @@ test.describe('webview clipboard', () => {
 
 		await page.getByRole('button', { name: 'Copy location' }).click()
 
-		await expect(page.getByText('Copied')).toBeVisible()
+		await expect(page.locator('span').filter({ hasText: 'Copied' })).toBeVisible()
 		await expect(page.getByText(clipboardInsecureOriginHint())).toHaveCount(0)
 		await expect.poll(async () => (await readClipboardWrites(page)).at(-1)).toBe(location)
 	})

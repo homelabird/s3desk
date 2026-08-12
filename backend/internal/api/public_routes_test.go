@@ -53,6 +53,7 @@ func TestPublicRoutesRequireLocalHostByDefault(t *testing.T) {
 		{name: "openapi", path: "/openapi.yml"},
 		{name: "healthz", path: "/healthz"},
 		{name: "readyz", path: "/readyz"},
+		{name: "workerz", path: "/workerz"},
 		{name: "download proxy", path: "/download-proxy"},
 		{name: "ui root", path: "/"},
 	}
@@ -136,6 +137,21 @@ func TestPublicDownloadProxyRouteAllowsPrivateRemoteCustomPortWhenAllowRemoteEna
 	}
 	if got := resp.Error.Details["expires"]; got != "bad" {
 		t.Fatalf("details.expires=%v, want bad", got)
+	}
+}
+
+func TestPublicDownloadProxyRouteRegistersHeadWhenAllowRemoteEnabled(t *testing.T) {
+	t.Parallel()
+
+	handler := newPublicRoutesHandler(t, true)
+	req := httptest.NewRequest(http.MethodHead, "http://10.1.2.10:9443/download-proxy?profileId=p1&bucket=test-bucket&key=report.txt&expires=bad&sig=test-signature", nil)
+	req.RemoteAddr = "10.1.2.3:1234"
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
 	}
 }
 

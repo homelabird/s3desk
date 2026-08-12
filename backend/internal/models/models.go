@@ -432,15 +432,17 @@ type BucketSoftDeleteView struct {
 }
 
 type BucketImmutabilityView struct {
-	Enabled                       bool   `json:"enabled"`
-	Mode                          string `json:"mode,omitempty"`
-	Until                         string `json:"until,omitempty"`
-	Days                          *int   `json:"days,omitempty"`
-	ETag                          string `json:"etag,omitempty"`
-	Editable                      bool   `json:"editable,omitempty"`
-	LegalHold                     bool   `json:"legalHold,omitempty"`
-	AllowProtectedAppendWrites    bool   `json:"allowProtectedAppendWrites,omitempty"`
-	AllowProtectedAppendWritesAll bool   `json:"allowProtectedAppendWritesAll,omitempty"`
+	Enabled                       bool     `json:"enabled"`
+	Mode                          string   `json:"mode,omitempty"`
+	Until                         string   `json:"until,omitempty"`
+	Days                          *int     `json:"days,omitempty"`
+	ETag                          string   `json:"etag,omitempty"`
+	Editable                      bool     `json:"editable,omitempty"`
+	LegalHold                     bool     `json:"legalHold,omitempty"`
+	LegalHoldTags                 []string `json:"legalHoldTags,omitempty"`
+	LegalHoldEditable             bool     `json:"legalHoldEditable,omitempty"`
+	AllowProtectedAppendWrites    bool     `json:"allowProtectedAppendWrites,omitempty"`
+	AllowProtectedAppendWritesAll bool     `json:"allowProtectedAppendWritesAll,omitempty"`
 }
 
 type BucketAdvancedView struct {
@@ -559,6 +561,7 @@ type BucketProtectionPutRequest struct {
 	ObjectLock    *BucketObjectLockView   `json:"objectLock,omitempty"`
 	SoftDelete    *BucketSoftDeleteView   `json:"softDelete,omitempty"`
 	Immutability  *BucketImmutabilityView `json:"immutability,omitempty"`
+	LegalHoldTags []string                `json:"legalHoldTags,omitempty"`
 }
 
 type BucketVersioningPutRequest struct {

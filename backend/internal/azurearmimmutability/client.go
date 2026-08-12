@@ -44,6 +44,10 @@ type PolicyProperties struct {
 	AllowProtectedAppendWritesAll         bool   `json:"allowProtectedAppendWritesAll,omitempty"`
 }
 
+type LegalHoldRequest struct {
+	Tags []string `json:"tags"`
+}
+
 type PutPolicyRequest struct {
 	Days                          int
 	IfMatch                       string
@@ -111,6 +115,30 @@ func GetPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, co
 	return NewClientWithOptions(opts).GetPolicy(ctx, profile, container)
 }
 
+func GetContainer(ctx context.Context, profile models.ProfileSecrets, container string) (Response, error) {
+	return defaultClient.GetContainer(ctx, profile, container)
+}
+
+func GetContainerWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).GetContainer(ctx, profile, container)
+}
+
+func SetLegalHold(ctx context.Context, profile models.ProfileSecrets, container string, req LegalHoldRequest) (Response, error) {
+	return defaultClient.SetLegalHold(ctx, profile, container, req)
+}
+
+func SetLegalHoldWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, req LegalHoldRequest, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).SetLegalHold(ctx, profile, container, req)
+}
+
+func ClearLegalHold(ctx context.Context, profile models.ProfileSecrets, container string, req LegalHoldRequest) (Response, error) {
+	return defaultClient.ClearLegalHold(ctx, profile, container, req)
+}
+
+func ClearLegalHoldWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, req LegalHoldRequest, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).ClearLegalHold(ctx, profile, container, req)
+}
+
 func PutPolicy(ctx context.Context, profile models.ProfileSecrets, container string, req PutPolicyRequest) (Response, error) {
 	return defaultClient.PutPolicy(ctx, profile, container, req)
 }
@@ -149,6 +177,34 @@ func (c *Client) GetPolicy(ctx context.Context, profile models.ProfileSecrets, c
 		return Response{}, err
 	}
 	return c.do(ctx, http.MethodGet, resourceURL(profile, container), token, "", nil)
+}
+
+func (c *Client) GetContainer(ctx context.Context, profile models.ProfileSecrets, container string) (Response, error) {
+	token, err := c.getToken(ctx, profile)
+	if err != nil {
+		return Response{}, err
+	}
+	return c.do(ctx, http.MethodGet, containerURL(profile, container), token, "", nil)
+}
+
+func (c *Client) SetLegalHold(ctx context.Context, profile models.ProfileSecrets, container string, req LegalHoldRequest) (Response, error) {
+	return c.mutateLegalHold(ctx, profile, container, "setLegalHold", req)
+}
+
+func (c *Client) ClearLegalHold(ctx context.Context, profile models.ProfileSecrets, container string, req LegalHoldRequest) (Response, error) {
+	return c.mutateLegalHold(ctx, profile, container, "clearLegalHold", req)
+}
+
+func (c *Client) mutateLegalHold(ctx context.Context, profile models.ProfileSecrets, container, action string, req LegalHoldRequest) (Response, error) {
+	token, err := c.getToken(ctx, profile)
+	if err != nil {
+		return Response{}, err
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return Response{}, err
+	}
+	return c.do(ctx, http.MethodPost, containerActionURL(profile, container, action), token, "", body)
 }
 
 func (c *Client) PutPolicy(ctx context.Context, profile models.ProfileSecrets, container string, req PutPolicyRequest) (Response, error) {
@@ -290,9 +346,24 @@ func actionURL(profile models.ProfileSecrets, container string, action string) s
 	return resourceBaseURL(profile, container) + "/" + strings.TrimSpace(action) + "?api-version=" + apiVersion
 }
 
+func containerActionURL(profile models.ProfileSecrets, container string, action string) string {
+	return containerBaseURL(profile, container) + "/" + strings.TrimSpace(action) + "?api-version=" + apiVersion
+}
+
+func containerURL(profile models.ProfileSecrets, container string) string {
+	return containerBaseURL(profile, container) + "?api-version=" + apiVersion
+}
+
 func resourceBaseURL(profile models.ProfileSecrets, container string) string {
 	return fmt.Sprintf(
-		"%s/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts/%s/blobServices/default/containers/%s/immutabilityPolicies/default",
+		"%s/immutabilityPolicies/default",
+		containerBaseURL(profile, container),
+	)
+}
+
+func containerBaseURL(profile models.ProfileSecrets, container string) string {
+	return fmt.Sprintf(
+		"%s/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts/%s/blobServices/default/containers/%s",
 		baseURL,
 		url.PathEscape(strings.TrimSpace(profile.AzureSubscriptionID)),
 		url.PathEscape(strings.TrimSpace(profile.AzureResourceGroup)),

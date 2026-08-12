@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -52,5 +53,26 @@ func TestCancelRunningJobInvokesCancelFunc(t *testing.T) {
 	case <-called:
 	case <-time.After(time.Second):
 		t.Fatal("Cancel did not invoke running job cancel func")
+	}
+}
+
+func TestManagerWaitHonorsDeadlineAndWaitsForLifecycle(t *testing.T) {
+	manager := NewManager(Config{Concurrency: 1})
+	manager.lifecycleWG.Add(1)
+	release := make(chan struct{})
+	go func() {
+		<-release
+		manager.lifecycleWG.Done()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if err := manager.Wait(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Wait() error=%v, want deadline exceeded", err)
+	}
+
+	close(release)
+	if err := manager.Wait(context.Background()); err != nil {
+		t.Fatalf("Wait() after lifecycle completion: %v", err)
 	}
 }

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -101,15 +103,13 @@ func (svc uploadSessionHTTPService) executePreparedCreate(r *http.Request, prepa
 	if prepared.mode == uploadModeStaging {
 		stagingDir, err := store.ResolveUploadStagingDir(svc.server.cfg.DataDir, us.ID)
 		if err != nil {
-			_, _ = svc.server.store.DeleteUploadSession(r.Context(), prepared.profileID, us.ID)
-			return nil, newUploadInternalError("failed to prepare staging directory", map[string]any{"error": err.Error()}), nil
+			return nil, svc.rollbackCreatedStagingSession(r.Context(), prepared.profileID, us.ID, "failed to prepare staging directory", err, ""), nil
 		}
 		if err := os.MkdirAll(stagingDir, 0o700); err != nil {
-			_, _ = svc.server.store.DeleteUploadSession(r.Context(), prepared.profileID, us.ID)
-			return nil, newUploadInternalError("failed to create staging directory", nil), nil
+			return nil, svc.rollbackCreatedStagingSession(r.Context(), prepared.profileID, us.ID, "failed to create staging directory", err, stagingDir), nil
 		}
 		if err := svc.server.store.SetUploadSessionStagingDir(r.Context(), prepared.profileID, us.ID, stagingDir); err != nil {
-			return nil, newUploadInternalError("failed to finalize upload session", nil), nil
+			return nil, svc.rollbackCreatedStagingSession(r.Context(), prepared.profileID, us.ID, "failed to finalize upload session", err, stagingDir), nil
 		}
 	}
 
@@ -119,6 +119,27 @@ func (svc uploadSessionHTTPService) executePreparedCreate(r *http.Request, prepa
 		MaxBytes:  uploadMaxBytesResponse(svc.server.cfg.UploadMaxBytes),
 		ExpiresAt: expiresAt,
 	}, nil, nil
+}
+
+func (svc uploadSessionHTTPService) rollbackCreatedStagingSession(ctx context.Context, profileID, uploadID, message string, cause error, stagingDir string) *uploadHTTPError {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+
+	cleanupErrs := make([]error, 0, 2)
+	if stagingDir != "" {
+		if err := os.RemoveAll(stagingDir); err != nil {
+			cleanupErrs = append(cleanupErrs, err)
+		}
+	}
+	if _, err := svc.server.store.DeleteUploadSession(cleanupCtx, profileID, uploadID); err != nil {
+		cleanupErrs = append(cleanupErrs, err)
+	}
+
+	details := map[string]any{"error": cause.Error()}
+	if cleanupErr := errors.Join(cleanupErrs...); cleanupErr != nil {
+		details["cleanupError"] = cleanupErr.Error()
+	}
+	return newUploadInternalError(message, details)
 }
 
 func (svc uploadSessionHTTPService) prepareDeleteUploadSession(r *http.Request) uploadSessionDeletePreparedRequest {
@@ -153,34 +174,37 @@ func (svc uploadSessionHTTPService) executePreparedDelete(r *http.Request, prepa
 	if prepared.err != nil {
 		return prepared.err
 	}
-	if prepared.mode != uploadModeStaging {
+	if err := svc.server.abortStoredMultipartUploads(r.Context(), prepared.profileID, prepared.uploadID); err != nil {
+		return newUploadInternalError("failed to abort multipart uploads", map[string]any{"error": err.Error()})
+	}
+	if prepared.mode == uploadModeDirect {
 		secrets, ok := profileFromContext(r.Context())
-		if ok && rcloneconfig.IsS3LikeProvider(secrets.Provider) {
-			if client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote); err == nil {
-				if uploads, err := svc.server.store.ListMultipartUploads(r.Context(), prepared.profileID, prepared.uploadID); err == nil {
-					for _, meta := range uploads {
-						_ = svc.server.abortMultipartUpload(r.Context(), client, meta)
-					}
-				}
-			}
+		if !ok {
+			return newUploadInternalError("missing profile secrets", nil)
 		}
-		if prepared.mode == uploadModeDirect {
-			if !ok {
-				return newUploadInternalError("missing profile secrets", nil)
-			}
-			if uploadErr := svc.cleanupDirectUploadTempPrefix(r, prepared, secrets); uploadErr != nil {
-				return uploadErr
-			}
+		if uploadErr := svc.cleanupDirectUploadTempPrefix(r, prepared, secrets); uploadErr != nil {
+			return uploadErr
 		}
-		_ = svc.server.store.DeleteMultipartUploadsBySession(r.Context(), prepared.profileID, prepared.uploadID)
+	}
+	if err := svc.server.store.DeleteMultipartUploadsBySession(r.Context(), prepared.profileID, prepared.uploadID); err != nil {
+		return newUploadInternalError("failed to delete multipart metadata", map[string]any{"error": err.Error()})
 	}
 
-	_ = svc.server.store.DeleteUploadObjectsBySession(r.Context(), prepared.profileID, prepared.uploadID)
-	_, _ = svc.server.store.DeleteUploadSession(r.Context(), prepared.profileID, prepared.uploadID)
 	if prepared.us.StagingDir != "" {
-		if stagingDir, err := store.ResolveUploadStagingDir(svc.server.cfg.DataDir, prepared.us.ID); err == nil {
-			_ = os.RemoveAll(stagingDir)
+		stagingDir, err := store.ResolveUploadStagingDir(svc.server.cfg.DataDir, prepared.us.ID)
+		if err != nil {
+			return newUploadInternalError("failed to resolve staging directory", map[string]any{"error": err.Error()})
 		}
+		if err := os.RemoveAll(stagingDir); err != nil {
+			return newUploadInternalError("failed to remove staging directory", map[string]any{"error": err.Error()})
+		}
+	}
+
+	if err := svc.server.store.DeleteUploadObjectsBySession(r.Context(), prepared.profileID, prepared.uploadID); err != nil {
+		return newUploadInternalError("failed to delete upload object metadata", map[string]any{"error": err.Error()})
+	}
+	if _, err := svc.server.store.DeleteUploadSession(r.Context(), prepared.profileID, prepared.uploadID); err != nil {
+		return newUploadInternalError("failed to delete upload session", map[string]any{"error": err.Error()})
 	}
 
 	return nil
@@ -208,8 +232,7 @@ func (svc uploadSessionHTTPService) executeDelete(r *http.Request) *uploadHTTPEr
 func (svc uploadSessionHTTPService) handleCreateUploadSession(w http.ResponseWriter, r *http.Request) {
 	resp, uploadErr, decodeErr := svc.executeCreate(r)
 	if uploadErr != nil {
-		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &errResp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	if decodeErr != nil {
@@ -222,8 +245,7 @@ func (svc uploadSessionHTTPService) handleCreateUploadSession(w http.ResponseWri
 func (svc uploadSessionHTTPService) handleDeleteUploadSession(w http.ResponseWriter, r *http.Request) {
 	uploadErr := svc.executeDelete(r)
 	if uploadErr != nil {
-		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &errResp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

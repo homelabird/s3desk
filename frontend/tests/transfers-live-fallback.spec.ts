@@ -171,8 +171,13 @@ test.describe('Live transfer fallback flows', () => {
 				},
 			})
 			expect(createProfile.status()).toBe(201)
-			const profile = (await createProfile.json()) as { id: string }
+			const profile = (await createProfile.json()) as {
+				id: string
+				effectiveCapabilities?: { directUpload?: boolean; presignedUpload?: boolean }
+			}
 			profileId = profile.id
+			expect(profile.effectiveCapabilities?.presignedUpload).toBe(false)
+			const expectedUploadMode = profile.effectiveCapabilities?.directUpload ? 'direct' : 'staging'
 
 			await seedStorage(page, { profileId, bucket: bucketName })
 			page.on('request', (req) => {
@@ -207,7 +212,7 @@ test.describe('Live transfer fallback flows', () => {
 			await queueSelectedUpload(page)
 
 			await expect.poll(() => uploadModes.length, { timeout: 30_000 }).toBeGreaterThan(0)
-			expect(uploadModes[0]).toBe('staging')
+			expect(uploadModes[0]).toBe(expectedUploadMode)
 			expect(uploadModes).not.toContain('presigned')
 		} finally {
 			if (profileId) {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"s3desk/internal/bucketpolicy"
 	"s3desk/internal/models"
-	"s3desk/internal/s3policy"
 )
 
 func TestWriteRcloneAPIError_RedactsDiagnosticsAndKeepsContext(t *testing.T) {
@@ -105,7 +105,7 @@ func TestWriteS3PolicyUpstreamError_RedactsProviderDiagnosticsAndKeepsContext(t 
 	t.Parallel()
 
 	rr := httptest.NewRecorder()
-	(&server{}).writeS3PolicyUpstreamError(rr, "get", "reports", s3policy.Response{
+	(&server{}).writeS3PolicyUpstreamError(rr, "get", "reports", bucketpolicy.Response{
 		Status:  http.StatusForbidden,
 		Headers: http.Header{"x-amz-request-id": []string{"req-456"}},
 		Body:    []byte(`<Error><Code>AccessDenied</Code><Message>AccessDenied for reports secret_access_key=provider-secret-123 url=https://s3.example.invalid/reports/object.txt?X-Amz-Signature=provider-signature-secret-123&amp;partNumber=2</Message><RequestId>req-body</RequestId></Error>`),

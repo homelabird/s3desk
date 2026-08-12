@@ -105,7 +105,7 @@ test.describe('@check-smoke Objects page smoke', () => {
 		await expect(page.getByRole('menuitem', { name: /Hide workspace tools/i })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Search bucket/i })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: /Search bucket/i })).toBeVisible()
-		await expect(controls.getByLabel('Go to path')).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Go to path/i })).toBeVisible()
 		await expect
 			.poll(() => page.evaluate(() => window.localStorage.getItem('objectsUIMode')))
 			.toBe(JSON.stringify('advanced'))

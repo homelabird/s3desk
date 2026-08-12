@@ -241,7 +241,28 @@ export function parsePositiveDays(value: string, label: string): number {
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${label} must be greater than zero.`);
   }
-  return parsed;
+	return parsed;
+}
+
+export function parseAzureLegalHoldTags(value: string): string[] {
+	const parts = value.split(",").map((item) => item.trim());
+	if (parts.length === 1 && parts[0] === "") {
+		return [];
+	}
+	const seen = new Set<string>();
+	return parts.map((item, index) => {
+		const tag = item.toLowerCase();
+		if (tag.length < 3 || tag.length > 23 || !/^[a-z0-9]+$/.test(tag)) {
+			throw new Error(
+				`Legal hold tag ${index + 1} must contain 3 to 23 alphanumeric characters.`,
+			);
+		}
+		if (seen.has(tag)) {
+			throw new Error(`Legal hold tag ${index + 1} must be unique.`);
+		}
+		seen.add(tag);
+		return tag;
+	});
 }
 
 function normalizeLifecycleText(governance: BucketGovernanceView): string {
@@ -320,6 +341,10 @@ export function buildAzureDraft(
     immutabilityMode: normalizeAzureImmutabilityMode(immutability?.mode),
     immutabilityEditable: immutability?.editable !== false,
     legalHold: immutability?.legalHold === true,
+    legalHoldTags: Array.isArray(immutability?.legalHoldTags)
+      ? immutability.legalHoldTags
+      : [],
+    legalHoldEditable: immutability?.legalHoldEditable === true,
     allowProtectedAppendWrites:
       immutability?.allowProtectedAppendWrites === true,
     allowProtectedAppendWritesAll:

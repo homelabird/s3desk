@@ -285,6 +285,7 @@ func TestRejectInvalidRealtimeOrigin_Table(t *testing.T) {
 		name             string
 		cfg              config.Config
 		origin           string
+		fetchSite        string
 		wantRejected     bool
 		wantStatus       int
 		wantBodyContains string
@@ -294,6 +295,11 @@ func TestRejectInvalidRealtimeOrigin_Table(t *testing.T) {
 			wantRejected:     true,
 			wantStatus:       http.StatusForbidden,
 			wantBodyContains: "trusted Origin",
+		},
+		{
+			name:         "same-origin fetch metadata without origin allowed",
+			fetchSite:    "same-origin",
+			wantRejected: false,
 		},
 		{
 			name:         "localhost origin allowed",
@@ -434,6 +440,9 @@ func TestRejectInvalidRealtimeOrigin_Table(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/events", nil)
 			if tc.origin != "" {
 				req.Header.Set("Origin", tc.origin)
+			}
+			if tc.fetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", tc.fetchSite)
 			}
 
 			rejected := s.rejectInvalidRealtimeOrigin(rr, req, "trusted Origin required for realtime requests")

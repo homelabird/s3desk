@@ -23,6 +23,18 @@ func verifyServerRestorePayload(
 	backupPassword string,
 	encryptionKey string,
 ) (serverRestorePayloadVerification, error) {
+	return verifyServerRestorePayloadWithOptions(subject, manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey, true)
+}
+
+func verifyServerRestorePayloadWithOptions(
+	subject string,
+	manifest models.ServerMigrationManifest,
+	archiveManifest serverBackupArchiveManifest,
+	payloadEntries []serverBackupPayloadEntry,
+	backupPassword string,
+	encryptionKey string,
+	verifySignature bool,
+) (serverRestorePayloadVerification, error) {
 	var verification serverRestorePayloadVerification
 
 	if subject == "portable" && manifest.FormatVersion == portableBackupFormatVersion {
@@ -56,6 +68,9 @@ func verifyServerRestorePayload(
 
 	if archiveManifest.PayloadHMACSHA256 != "" {
 		verification.SignaturePresent = true
+		if !verifySignature {
+			return verification, nil
+		}
 		secrets := resolveServerBackupArchiveSecrets(manifest, backupPassword, encryptionKey)
 		expectedHMAC := buildServerBackupPayloadHMAC(archiveManifest, secrets.HMACSecret)
 		if expectedHMAC != "" && !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {

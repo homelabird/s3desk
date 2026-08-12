@@ -7,6 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
+	"s3desk/internal/logging"
+	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
 
@@ -23,12 +25,7 @@ func (s *server) completeDirectMultipartUploads(ctx context.Context, profileID s
 
 		parts, err := s.listMultipartParts(ctx, client, meta)
 		if err != nil {
-			return &uploadHTTPError{
-				status:  http.StatusBadGateway,
-				code:    "upload_failed",
-				message: "failed to list multipart parts",
-				details: map[string]any{"path": meta.Path},
-			}
+			return newUploadProviderError("failed to list multipart parts", err, map[string]any{"path": meta.Path})
 		}
 
 		expectedTotal, err := expectedMultipartPartCount(meta.FileSize, meta.ChunkSize)
@@ -50,24 +47,20 @@ func (s *server) completeDirectMultipartUploads(ctx context.Context, profileID s
 			}
 		}
 
-		_, err = client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
-			Bucket:   &meta.Bucket,
-			Key:      &meta.ObjectKey,
-			UploadId: &meta.S3UploadID,
-			MultipartUpload: &types.CompletedMultipartUpload{
-				Parts: completed,
-			},
-		})
+		err = s3client.CompleteMultipartUpload(ctx, client, meta.Bucket, meta.ObjectKey, meta.S3UploadID, completed)
 		if err != nil {
-			return &uploadHTTPError{
-				status:  http.StatusBadGateway,
-				code:    "upload_failed",
-				message: "failed to complete multipart upload",
-				details: map[string]any{"path": meta.Path},
-			}
+			return newUploadProviderError("failed to complete multipart upload", err, map[string]any{"path": meta.Path})
 		}
 
-		_ = s.store.DeleteMultipartUpload(ctx, profileID, meta.UploadID, meta.Path)
+		if err := s.deleteMultipartUploadMetadataAfterRemote(ctx, profileID, meta.UploadID, meta.Path); err != nil {
+			logging.ErrorFields("direct multipart metadata cleanup failed after completion", map[string]any{
+				"event":      "upload.direct_multipart_metadata_cleanup_failed",
+				"profile_id": profileID,
+				"upload_id":  meta.UploadID,
+				"path":       meta.Path,
+				"error":      err.Error(),
+			})
+		}
 	}
 
 	return nil

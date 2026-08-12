@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -307,6 +308,9 @@ func TestUploadDirectHTTPService_FormUploadRollsBackReservationWhenPromotionFail
 		if len(args) > 0 && args[0] == "moveto" {
 			return "", "move failed secret_access_key=stderr-secret", errors.New("exit status 1 api_token=error-secret")
 		}
+		if len(args) > 0 && args[0] == "deletefile" {
+			return "", "cleanup failed secret_access_key=cleanup-secret", errors.New("exit status 1 api_token=cleanup-error-secret")
+		}
 		return "", "", nil
 	})
 	installAPIRcloneStdinHook(t, func(_ models.ProfileSecrets, _ []string, stdin io.Reader) (string, error) {
@@ -351,6 +355,14 @@ func TestUploadDirectHTTPService_FormUploadRollsBackReservationWhenPromotionFail
 		if strings.Contains(bodyText, secret) {
 			t.Fatalf("response leaked %q in %s", secret, bodyText)
 		}
+	}
+	for _, secret := range []string{"cleanup-secret", "cleanup-error-secret"} {
+		if strings.Contains(bodyText, secret) {
+			t.Fatalf("response leaked %q in %s", secret, bodyText)
+		}
+	}
+	if !strings.Contains(bodyText, "cleanupError") || !strings.Contains(bodyText, rcloneDiagnosticRedacted) {
+		t.Fatalf("response body=%s, want redacted cleanupError", bodyText)
 	}
 	assertRcloneMovetoTempToFinal(t, captureCalls, upload.ID, "incoming/file.bin")
 	assertRcloneDeletefileTempTarget(t, captureCalls, upload.ID, "incoming/file.bin")
@@ -491,5 +503,100 @@ func assertUploadObjectCount(t *testing.T, st *store.Store, profileID, uploadID 
 	}
 	if len(objects) != want {
 		t.Fatalf("len(objects)=%d, want %d", len(objects), want)
+	}
+}
+
+func TestDirectMultipartStateSerializesCreateForConcurrentChunks(t *testing.T) {
+	var (
+		mu          sync.Mutex
+		createCount int
+		secondPost  = make(chan struct{})
+	)
+	fakeS3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !r.URL.Query().Has("uploads") {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		createCount++
+		current := createCount
+		mu.Unlock()
+		if current == 1 {
+			select {
+			case <-secondPost:
+			case <-time.After(100 * time.Millisecond):
+			}
+		} else if current == 2 {
+			close(secondPost)
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	<Bucket>test-bucket</Bucket>
+	<Key>incoming/file.bin</Key>
+	<UploadId>upload-1</UploadId>
+</InitiateMultipartUploadResult>`)
+	}))
+	t.Cleanup(fakeS3.Close)
+
+	st, _, _, _ := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, true)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeDirect, "", time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("get profile secrets: ok=%v err=%v", ok, err)
+	}
+	client, err := s3ClientFromProfile(secrets, false)
+	if err != nil {
+		t.Fatalf("create s3 client: %v", err)
+	}
+	apiServer := &server{store: st}
+
+	var wg sync.WaitGroup
+	errs := make(chan *uploadHTTPError, 2)
+	for _, chunkIndex := range []int{0, 1} {
+		chunkIndex := chunkIndex
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, uploadErr := apiServer.directMultipartState(
+				httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files", nil),
+				client,
+				profile.ID,
+				upload.ID,
+				"file.bin",
+				upload,
+				"incoming/file.bin",
+				chunkIndex,
+				2,
+				10,
+				5,
+			)
+			errs <- uploadErr
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for uploadErr := range errs {
+		if uploadErr != nil {
+			t.Fatalf("directMultipartState error: %v", uploadErr)
+		}
+	}
+
+	mu.Lock()
+	gotCreates := createCount
+	mu.Unlock()
+	if gotCreates != 1 {
+		t.Fatalf("provider multipart creates=%d, want 1", gotCreates)
+	}
+	meta, found, err := st.GetMultipartUpload(context.Background(), profile.ID, upload.ID, "file.bin")
+	if err != nil || !found {
+		t.Fatalf("get multipart metadata: found=%v err=%v", found, err)
+	}
+	if meta.S3UploadID != "upload-1" {
+		t.Fatalf("S3UploadID=%q, want upload-1", meta.S3UploadID)
 	}
 }

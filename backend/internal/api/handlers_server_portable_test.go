@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -361,6 +362,33 @@ func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyHintMismatches(t *te
 	}
 }
 
+func TestHandlePreviewPortableImport_KeyMismatchReturnsPreflightBlocker(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+
+	otherKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x43}, 32))
+	_, _, targetSrv, _ := newTestJobsServer(t, otherKey, false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable/preview", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Preflight.EncryptionKeyHintVerified {
+		t.Fatal("expected encryptionKeyHintVerified=false")
+	}
+	blockers := strings.Join(resp.Preflight.Blockers, "\n")
+	if !strings.Contains(blockers, "encryption fingerprint") {
+		t.Fatalf("expected encryption fingerprint blocker, got %v", resp.Preflight.Blockers)
+	}
+}
+
 func TestHandlePreviewPortableImport_RejectsOversizedBundle(t *testing.T) {
 	t.Parallel()
 
@@ -504,6 +532,50 @@ func TestHandleImportPortableBackup_RejectsTamperedClearBundleWhenHMACPresent(t 
 	body, _ := io.ReadAll(res.Body)
 	if !strings.Contains(string(body), "portable payload signature mismatch") {
 		t.Fatalf("expected signature mismatch error, got %s", string(body))
+	}
+}
+
+func TestHandleImportPortableBackup_KeyMismatchBlocksTamperedClearBundle(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+	tamperedArchive := mutateServerBackupArchive(t, archiveBytes, func(manifest *serverBackupArchiveManifest, entries map[string][]byte) {
+		profiles := append([]byte(nil), entries["data/profiles.jsonl"]...)
+		if len(profiles) == 0 {
+			t.Fatal("data/profiles.jsonl missing from portable backup")
+		}
+		profiles[0] ^= 0x01
+		entries["data/profiles.jsonl"] = profiles
+		updateServerBackupArchivePayloadSummary(manifest, entries)
+	})
+
+	otherKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x43}, 32))
+	targetStore, _, targetSrv, _ := newTestJobsServer(t, otherKey, false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", tamperedArchive, "portable-backup-key-mismatch.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected blocked import status 200, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Verification.PostImportHealthCheckPassed {
+		t.Fatal("expected blocked import to skip post-import health check")
+	}
+	blockers := strings.Join(resp.Preflight.Blockers, "\n")
+	if !strings.Contains(blockers, "encryption fingerprint") {
+		t.Fatalf("expected encryption fingerprint blocker, got %v", resp.Preflight.Blockers)
+	}
+	profiles, err := targetStore.ListProfiles(context.Background())
+	if err != nil {
+		t.Fatalf("ListProfiles() error = %v", err)
+	}
+	if len(profiles) != 0 {
+		t.Fatalf("expected key-mismatched tampered import to skip apply, got %d profiles", len(profiles))
 	}
 }
 

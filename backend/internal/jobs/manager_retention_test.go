@@ -3,6 +3,8 @@ package jobs
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -292,6 +294,15 @@ func TestCleanupOldJobs(t *testing.T) {
 
 func TestCleanupExpiredUploadSessionsRemovesTrackedRows(t *testing.T) {
 	dataDir := t.TempDir()
+	fakeS3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(fakeS3.Close)
+
 	gormDB, err := db.Open(db.Config{
 		Backend:    db.BackendSQLite,
 		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
@@ -310,7 +321,7 @@ func TestCleanupExpiredUploadSessionsRemovesTrackedRows(t *testing.T) {
 		t.Fatalf("new store: %v", err)
 	}
 
-	endpoint := "http://localhost:9000"
+	endpoint := fakeS3.URL
 	region := "us-east-1"
 	accessKey := "access"
 	secretKey := "secret"
@@ -561,5 +572,111 @@ func TestCleanupExpiredUploadSessionsKeepsDirectSessionWhenTempCleanupFails(t *t
 		t.Fatalf("get upload session: %v", err)
 	} else if !ok {
 		t.Fatalf("expected upload session to remain for retry")
+	}
+}
+
+func TestCleanupExpiredUploadSessionsAbortsProviderMultipartBeforeDeletingRows(t *testing.T) {
+	var aborted = make(chan string, 2)
+	fakeS3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		aborted <- r.URL.Query().Get("uploadId")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(fakeS3.Close)
+
+	manager, st, _, _, profile, _ := newManagerConsistencyFixture(t)
+	endpoint := fakeS3.URL
+	if _, ok, err := st.UpdateProfile(context.Background(), profile.ID, models.ProfileUpdateRequest{Endpoint: &endpoint}); err != nil || !ok {
+		t.Fatalf("update profile endpoint: ok=%v err=%v", ok, err)
+	}
+
+	ctx := context.Background()
+	expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	sessions := make([]store.UploadSession, 0, 2)
+	for _, mode := range []string{"presigned", "staging"} {
+		session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "incoming", mode, "", expiredAt)
+		if err != nil {
+			t.Fatalf("create %s upload session: %v", mode, err)
+		}
+		sessions = append(sessions, session)
+		if err := st.UpsertMultipartUpload(ctx, store.MultipartUpload{
+			UploadID:   session.ID,
+			ProfileID:  profile.ID,
+			Path:       "file.bin",
+			Bucket:     "bucket",
+			ObjectKey:  "incoming/file.bin",
+			S3UploadID: "multipart-" + mode,
+			ChunkSize:  5,
+			FileSize:   10,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}); err != nil {
+			t.Fatalf("upsert %s multipart upload: %v", mode, err)
+		}
+	}
+
+	manager.cleanupExpiredUploadSessions(ctx)
+
+	wantAborts := map[string]bool{"multipart-presigned": false, "multipart-staging": false}
+	for range sessions {
+		select {
+		case got := <-aborted:
+			if _, ok := wantAborts[got]; !ok {
+				t.Fatalf("abort uploadId=%q, want one of %v", got, wantAborts)
+			}
+			wantAborts[got] = true
+		case <-time.After(2 * time.Second):
+			t.Fatal("expected provider multipart abort request")
+		}
+	}
+	for uploadID, aborted := range wantAborts {
+		if !aborted {
+			t.Fatalf("uploadId=%q was not aborted", uploadID)
+		}
+	}
+	for _, session := range sessions {
+		if _, ok, err := st.GetUploadSession(ctx, profile.ID, session.ID); err != nil || ok {
+			t.Fatalf("upload session %s deleted=%v err=%v, want deleted", session.ID, ok, err)
+		}
+		uploads, err := st.ListMultipartUploads(ctx, profile.ID, session.ID)
+		if err != nil {
+			t.Fatalf("list multipart uploads for %s: %v", session.ID, err)
+		}
+		if len(uploads) != 0 {
+			t.Fatalf("multipart uploads for %s=%d, want 0", session.ID, len(uploads))
+		}
+	}
+}
+
+func TestCleanupOrphanAPIRcloneConfigsRemovesOnlyExpiredFiles(t *testing.T) {
+	dataDir := t.TempDir()
+	dir := filepath.Join(dataDir, "tmp", "rclone")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("mkdir rclone temp dir: %v", err)
+	}
+	oldPath := filepath.Join(dir, "api-old.rclone.conf")
+	newPath := filepath.Join(dir, "api-new.rclone.conf")
+	for _, file := range []string{oldPath, newPath} {
+		if err := os.WriteFile(file, []byte("secret_access_key=secret"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", file, err)
+		}
+	}
+	oldAt := time.Now().Add(-orphanAPIRcloneConfigRetention - time.Hour)
+	if err := os.Chtimes(oldPath, oldAt, oldAt); err != nil {
+		t.Fatalf("age old config: %v", err)
+	}
+
+	manager := NewManager(Config{DataDir: dataDir})
+	manager.cleanupOrphanAPIRcloneConfigs(context.Background())
+
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("old config still exists or unexpected stat error: %v", err)
+	}
+	if _, err := os.Stat(newPath); err != nil {
+		t.Fatalf("new config removed or unexpected stat error: %v", err)
 	}
 }

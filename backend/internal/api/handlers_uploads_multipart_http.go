@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
+	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
 
@@ -165,24 +166,17 @@ func (svc uploadMultipartHTTPService) executeComplete(r *http.Request, prepared 
 		return 0, uploadErr, nil
 	}
 
-	_, err := prepared.client.CompleteMultipartUpload(r.Context(), &s3.CompleteMultipartUploadInput{
-		Bucket:   &prepared.meta.Bucket,
-		Key:      &prepared.meta.ObjectKey,
-		UploadId: &prepared.meta.S3UploadID,
-		MultipartUpload: &types.CompletedMultipartUpload{
-			Parts: prepared.completed,
-		},
-	})
+	err := s3client.CompleteMultipartUpload(r.Context(), prepared.client, prepared.meta.Bucket, prepared.meta.ObjectKey, prepared.meta.S3UploadID, prepared.completed)
 	if err != nil {
-		return 0, &uploadHTTPError{
-			status:  http.StatusBadGateway,
-			code:    "upload_failed",
-			message: "failed to complete multipart upload",
-			details: map[string]any{"error": err.Error()},
-		}, nil
+		return 0, newUploadProviderError("failed to complete multipart upload", err, nil), nil
 	}
 
-	_ = svc.server.store.DeleteMultipartUpload(r.Context(), prepared.session.profileID, prepared.session.uploadID, prepared.meta.Path)
+	if err := svc.server.deleteMultipartUploadMetadataAfterRemote(r.Context(), prepared.session.profileID, prepared.session.uploadID, prepared.meta.Path); err != nil {
+		return 0, newUploadInternalError("multipart upload completed but metadata cleanup failed", map[string]any{
+			"path":  prepared.meta.Path,
+			"error": err.Error(),
+		}), nil
+	}
 	return http.StatusNoContent, nil, nil
 }
 
@@ -229,14 +223,14 @@ func (svc uploadMultipartHTTPService) executeAbort(r *http.Request, prepared upl
 		return 0, prepared.err, prepared.decodeErr
 	}
 	if err := svc.server.abortMultipartUpload(r.Context(), prepared.client, prepared.meta); err != nil {
-		return 0, &uploadHTTPError{
-			status:  http.StatusBadGateway,
-			code:    "upload_failed",
-			message: "failed to abort multipart upload",
-			details: map[string]any{"error": err.Error()},
-		}, nil
+		return 0, newUploadProviderError("failed to abort multipart upload", err, nil), nil
 	}
-	_ = svc.server.store.DeleteMultipartUpload(r.Context(), prepared.session.profileID, prepared.session.uploadID, prepared.meta.Path)
+	if err := svc.server.deleteMultipartUploadMetadataAfterRemote(r.Context(), prepared.session.profileID, prepared.session.uploadID, prepared.meta.Path); err != nil {
+		return 0, newUploadInternalError("multipart upload aborted but metadata cleanup failed", map[string]any{
+			"path":  prepared.meta.Path,
+			"error": err.Error(),
+		}), nil
+	}
 	return http.StatusNoContent, nil, nil
 }
 
@@ -311,12 +305,7 @@ func (svc uploadMultipartHTTPService) executeChunks(r *http.Request, prepared up
 	if prepared.client != nil {
 		parts, err := svc.server.listMultipartParts(r.Context(), prepared.client, prepared.meta)
 		if err != nil {
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadGateway,
-				code:    "upload_failed",
-				message: "failed to list multipart parts",
-				details: map[string]any{"error": err.Error()},
-			}
+			return nil, newUploadProviderError("failed to list multipart parts", err, nil)
 		}
 		resp := buildRemoteMultipartChunkState(parts, prepared.meta)
 		return &resp, nil
@@ -340,8 +329,7 @@ func (svc uploadMultipartHTTPService) executeGetUploadChunks(r *http.Request) (*
 func (svc uploadMultipartHTTPService) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	status, uploadErr, decodeErr := svc.executeCompleteMultipartUpload(r)
 	if uploadErr != nil {
-		resp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &resp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	if decodeErr != nil {
@@ -354,8 +342,7 @@ func (svc uploadMultipartHTTPService) handleCompleteMultipartUpload(w http.Respo
 func (svc uploadMultipartHTTPService) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	status, uploadErr, decodeErr := svc.executeAbortMultipartUpload(r)
 	if uploadErr != nil {
-		resp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &resp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	if decodeErr != nil {
@@ -368,8 +355,7 @@ func (svc uploadMultipartHTTPService) handleAbortMultipartUpload(w http.Response
 func (svc uploadMultipartHTTPService) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
 	resp, uploadErr := svc.executeGetUploadChunks(r)
 	if uploadErr != nil {
-		resp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &resp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)

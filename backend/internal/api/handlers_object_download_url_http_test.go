@@ -33,6 +33,34 @@ func TestObjectDownloadURLHTTPService_HandleGetObjectDownloadURL_ReturnsMissingP
 	}
 }
 
+func TestObjectDownloadURLHTTPService_HandleGetObjectDownloadURL_ReturnsInvalidConfigForPresignerSetup(t *testing.T) {
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/test-bucket/objects/download-url?key=report.txt", nil)
+	req = withBucketParam(req, "test-bucket")
+	req = withProfileSecrets(req, models.ProfileSecrets{
+		Provider: models.ProfileProviderAwsS3,
+		Endpoint: "ftp://provider.example",
+	})
+	rr := httptest.NewRecorder()
+
+	newObjectDownloadURLHTTPService(srv).handleGetObjectDownloadURL(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "invalid_config" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_config", resp.Error.Code)
+	}
+	if resp.Error.NormalizedError == nil || resp.Error.NormalizedError.Code != models.NormalizedErrorInvalidConfig {
+		t.Fatalf("normalized error=%+v, want invalid_config", resp.Error.NormalizedError)
+	}
+}
+
 func TestObjectDownloadURLHTTPService_HandleGetObjectDownloadURL_ProxyRequiresProfileHeader(t *testing.T) {
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/test-bucket/objects/download-url?key=report.txt&proxy=1", nil)

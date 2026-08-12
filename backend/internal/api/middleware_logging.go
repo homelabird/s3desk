@@ -63,5 +63,5 @@ func writeRequestLog(status int, path string, fields map[string]any) {
 }
 
 func shouldSkipAccessLogPath(path string) bool {
-	return path == "/healthz" || path == "/readyz" || path == "/metrics"
+	return path == "/healthz" || path == "/readyz" || path == "/workerz" || path == "/metrics"
 }

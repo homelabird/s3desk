@@ -15,10 +15,36 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
+	"s3desk/internal/jobs"
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
+
+func TestExecuteStagingReportsIncompatibleRclone(t *testing.T) {
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "", "", &jobs.RcloneIncompatibleError{
+			CurrentVersion: "rclone v1.51.0",
+			MinVersion:     "1.52.0",
+			Reason:         "version too old",
+		}
+	})
+
+	_, uploadErr := (uploadCommitExecutionService{server: &server{}}).executeStaging(
+		context.Background(),
+		"profile-1",
+		map[string]any{},
+	)
+	if uploadErr == nil {
+		t.Fatal("expected upload error")
+	}
+	if uploadErr.code != "transfer_engine_incompatible" {
+		t.Fatalf("code=%q, want transfer_engine_incompatible", uploadErr.code)
+	}
+	if uploadErr.details["minVersion"] != "1.52.0" {
+		t.Fatalf("minVersion=%v, want 1.52.0", uploadErr.details["minVersion"])
+	}
+}
 
 func TestBuildVerifiedUploadCommitArtifactsUsesVerifiedState(t *testing.T) {
 	artifacts := newUploadCommitArtifactService().buildFromVerified("upload-1", store.UploadSession{

@@ -753,7 +753,7 @@ test.describe('overlay accessibility scans', () => {
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByText('Azure Controls', { exact: true })).toBeVisible()
-		await expect(sheet.getByText('Legal hold detected')).toBeVisible()
+		await expect(sheet.getByText('Azure ARM credentials required for legal hold editing')).toBeVisible()
 		await expect(sheet.getByText('Policy is locked')).toBeVisible()
 
 		await expectNoA11yViolations(page, sheet)

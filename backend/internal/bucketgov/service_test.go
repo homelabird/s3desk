@@ -180,3 +180,27 @@ func TestServiceRejectsLoopbackEndpointWhenRemoteEnabled(t *testing.T) {
 		t.Fatalf("bucketSeen=%q, want empty because adapter was not called", adapter.bucketSeen)
 	}
 }
+
+func TestValidateSharingPutRejectsDuplicateOCIPARIDs(t *testing.T) {
+	t.Parallel()
+
+	err := ValidateSharingPut(newValidationContext(models.ProfileProviderOciObjectStorage, "demo"), models.BucketSharingPutRequest{
+		PreauthenticatedRequests: []models.BucketPreauthenticatedRequestView{
+			{ID: "par-1"},
+			{ID: " PAR-1 "},
+		},
+	})
+	if err == nil {
+		t.Fatal("ValidateSharingPut() error=nil, want duplicate PAR id error")
+	}
+	opErr, ok := err.(*OperationError)
+	if !ok {
+		t.Fatalf("error type=%T, want *OperationError", err)
+	}
+	if got := opErr.Details["field"]; got != "preauthenticatedRequests[1].id" {
+		t.Fatalf("field=%v, want preauthenticatedRequests[1].id", got)
+	}
+	if opErr.Message != "PAR id must be unique" {
+		t.Fatalf("message=%q, want duplicate-id message", opErr.Message)
+	}
+}

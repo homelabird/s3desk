@@ -136,8 +136,7 @@ func (svc uploadStagingHTTPService) handleStagingChunkUpload(w http.ResponseWrit
 		w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
 	}
 	if uploadErr != nil {
-		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &errResp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	w.WriteHeader(status)
@@ -149,8 +148,7 @@ func (svc uploadStagingHTTPService) handleStagingMultipartFormUpload(w http.Resp
 		w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
 	}
 	if uploadErr != nil {
-		errResp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
-		writeJSON(w, uploadErr.status, &errResp)
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	w.WriteHeader(status)

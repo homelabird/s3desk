@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"s3desk/internal/models"
+	"s3desk/internal/redact"
 )
 
 const (
@@ -37,7 +38,7 @@ func buildAPIErrorResponse(code, message string, details map[string]any) models.
 		Error: models.APIError{
 			Code:    code,
 			Message: message,
-			Details: details,
+			Details: redact.DiagnosticDetails(details),
 		},
 	}
 	// Keep provider-specific codes aligned with the normalized client error taxonomy.
@@ -69,6 +70,8 @@ func normalizedErrorFromCode(code string) (*models.NormalizedError, bool) {
 		return &models.NormalizedError{Code: models.NormalizedErrorRateLimited, Retryable: true}, true
 	case "profile_not_found":
 		return &models.NormalizedError{Code: models.NormalizedErrorNotFound, Retryable: false}, true
+	case "encrypted_credentials", "encryption_required":
+		return &models.NormalizedError{Code: models.NormalizedErrorInvalidConfig, Retryable: false}, true
 	case string(models.NormalizedErrorInvalidCredentials):
 		return &models.NormalizedError{Code: models.NormalizedErrorInvalidCredentials, Retryable: false}, true
 	case string(models.NormalizedErrorAccessDenied):

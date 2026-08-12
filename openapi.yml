@@ -485,6 +485,8 @@ paths:
           description: No Content
         "404":
           $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
 
   /profiles/{profileId}/test:
     post:
@@ -2760,7 +2762,16 @@ components:
         days: { type: integer }
         etag: { type: string }
         editable: { type: boolean }
-        legalHold: { type: boolean }
+        legalHold: { type: boolean, readOnly: true }
+        legalHoldTags:
+          type: array
+          readOnly: true
+          items:
+            type: string
+            minLength: 3
+            maxLength: 23
+            pattern: '^[A-Za-z0-9]+$'
+        legalHoldEditable: { type: boolean, readOnly: true }
         allowProtectedAppendWrites: { type: boolean }
         allowProtectedAppendWritesAll: { type: boolean }
 
@@ -2797,7 +2808,13 @@ components:
           $ref: "#/components/schemas/BucketSoftDeleteView"
         immutability:
           $ref: "#/components/schemas/BucketImmutabilityView"
-
+        legalHoldTags:
+          type: array
+          items:
+            type: string
+            minLength: 3
+            maxLength: 23
+            pattern: '^[A-Za-z0-9]+$'
     BucketVersioningStatus:
       type: string
       enum: [disabled, enabled, suspended]

@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -9,12 +10,29 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"s3desk/internal/logging"
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
 
+const orphanAPIRcloneConfigRetention = 24 * time.Hour
+
 func (m *Manager) RunMaintenance(ctx context.Context) {
+	m.lifecycleWG.Add(1)
+	m.runMaintenance(ctx)
+}
+
+func (m *Manager) runMaintenance(ctx context.Context) {
+	defer m.lifecycleWG.Done()
+	if ctx.Err() != nil {
+		return
+	}
+
 	m.cleanupExpiredUploadSessions(ctx)
 	m.cleanupOrphanArtifacts(ctx)
 	m.cleanupOldJobs(ctx)
@@ -53,16 +71,44 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 				return
 			default:
 			}
-			if err := m.cleanupExpiredUploadSessionRemoteTemps(ctx, us); err != nil {
+			logCleanupError := func(step string, err error) {
+				if err == nil {
+					return
+				}
+				logging.ErrorFields("expired upload session cleanup failed", map[string]any{
+					"event":      "upload.expired_cleanup_failed",
+					"profile_id": us.ProfileID,
+					"upload_id":  us.ID,
+					"step":       step,
+					"error":      err.Error(),
+				})
+			}
+			if err := m.cleanupExpiredUploadSessionRemoteState(ctx, us); err != nil {
+				logCleanupError("remote_state", err)
 				continue
 			}
-			_ = m.store.DeleteMultipartUploadsBySession(ctx, us.ProfileID, us.ID)
-			_ = m.store.DeleteUploadObjectsBySession(ctx, us.ProfileID, us.ID)
-			_, _ = m.store.DeleteUploadSession(ctx, us.ProfileID, us.ID)
+			if err := m.store.DeleteMultipartUploadsBySession(ctx, us.ProfileID, us.ID); err != nil {
+				logCleanupError("multipart_metadata", err)
+				continue
+			}
+			if err := m.store.DeleteUploadObjectsBySession(ctx, us.ProfileID, us.ID); err != nil {
+				logCleanupError("upload_object_metadata", err)
+				continue
+			}
 			if us.StagingDir != "" {
-				if stagingDir, err := store.ResolveUploadStagingDir(m.dataDir, us.ID); err == nil {
-					_ = os.RemoveAll(stagingDir)
+				stagingDir, err := store.ResolveUploadStagingDir(m.dataDir, us.ID)
+				if err != nil {
+					logCleanupError("staging_path", err)
+					continue
 				}
+				if err := os.RemoveAll(stagingDir); err != nil {
+					logCleanupError("staging_directory", err)
+					continue
+				}
+			}
+			if _, err := m.store.DeleteUploadSession(ctx, us.ProfileID, us.ID); err != nil {
+				logCleanupError("upload_session", err)
+				continue
 			}
 			deleted++
 		}
@@ -70,6 +116,55 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (m *Manager) cleanupExpiredUploadSessionRemoteState(ctx context.Context, us store.UploadSession) error {
+	if err := m.cleanupExpiredUploadSessionMultipartUploads(ctx, us); err != nil {
+		return err
+	}
+	return m.cleanupExpiredUploadSessionRemoteTemps(ctx, us)
+}
+
+func (m *Manager) cleanupExpiredUploadSessionMultipartUploads(ctx context.Context, us store.UploadSession) error {
+	uploads, err := m.store.ListMultipartUploads(ctx, us.ProfileID, us.ID)
+	if err != nil {
+		return err
+	}
+	if len(uploads) == 0 {
+		return nil
+	}
+
+	secrets, ok, err := m.store.GetProfileSecrets(ctx, us.ProfileID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("profile %q not found for multipart cleanup", us.ProfileID)
+	}
+	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+		return fmt.Errorf("multipart cleanup requires an S3-compatible profile")
+	}
+	client, err := s3ClientFromProfile(secrets, m.allowRemote)
+	if err != nil {
+		return err
+	}
+
+	for _, meta := range uploads {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := abortStoredMultipartUpload(ctx, client, meta); err != nil {
+			return fmt.Errorf("abort multipart upload %q/%q: %w", meta.Bucket, meta.ObjectKey, err)
+		}
+		if err := m.store.DeleteMultipartUpload(ctx, meta.ProfileID, meta.UploadID, meta.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func abortStoredMultipartUpload(ctx context.Context, client *s3.Client, meta store.MultipartUpload) error {
+	return s3client.AbortMultipartUpload(ctx, client, meta.Bucket, meta.ObjectKey, meta.S3UploadID)
 }
 
 func (m *Manager) cleanupExpiredUploadSessionRemoteTemps(ctx context.Context, us store.UploadSession) error {
@@ -113,6 +208,43 @@ func (m *Manager) cleanupOrphanArtifacts(ctx context.Context) {
 	m.cleanupOrphanJobLogs(ctx)
 	m.cleanupOrphanJobArtifacts(ctx)
 	m.cleanupOrphanStagingDirs(ctx)
+	m.cleanupOrphanAPIRcloneConfigs(ctx)
+}
+
+func (m *Manager) cleanupOrphanAPIRcloneConfigs(ctx context.Context) {
+	m.cleanupAPIRcloneConfigs(ctx, false)
+}
+
+func (m *Manager) cleanupStartupAPIRcloneConfigs(ctx context.Context) {
+	m.cleanupAPIRcloneConfigs(ctx, true)
+}
+
+func (m *Manager) cleanupAPIRcloneConfigs(ctx context.Context, removeAll bool) {
+	dir := filepath.Join(m.dataDir, "tmp", "rclone")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-orphanAPIRcloneConfigRetention)
+	for _, entry := range entries {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".rclone.conf") {
+			continue
+		}
+		if removeAll {
+			_ = os.Remove(filepath.Join(dir, entry.Name()))
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, entry.Name()))
+	}
 }
 
 func (m *Manager) cleanupOldJobs(ctx context.Context) {

@@ -2,14 +2,15 @@ package api
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3client"
 )
 
 type objectCreateFolderHTTPError struct {
@@ -98,21 +99,24 @@ func (svc objectCreateFolderHTTPService) prepareCreateObjectFolder(r *http.Reque
 }
 
 func (svc objectCreateFolderHTTPService) executeS3Like(r *http.Request, secrets models.ProfileSecrets, bucket string, key string) (*models.CreateFolderResponse, error, string, rcloneAPIErrorContext, map[string]any, error) {
-	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote)
+	err := s3client.PutEmptyObjectWithOptions(r.Context(), secrets, bucket, key, s3client.ProfileOptions{AllowRemote: svc.server.cfg.AllowRemote})
 	if err != nil {
-		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectCreateFolderHTTPError(http.StatusInternalServerError, "internal_error", "failed to prepare S3 client", nil)
-	}
-	_, err = client.PutObject(r.Context(), &s3.PutObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
-		Body:   bytes.NewReader(nil),
-	})
-	if err != nil {
-		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectCreateFolderHTTPError(http.StatusBadRequest, "s3_error", "failed to create folder", map[string]any{
-			"bucket": bucket,
-			"key":    key,
-			"error":  err.Error(),
-		})
+		var putErr *s3client.ObjectPutError
+		if !errors.As(err, &putErr) {
+			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectCreateFolderHTTPError(http.StatusInternalServerError, "internal_error", "failed to prepare S3 client", nil)
+		}
+		providerErr := putErr.Err
+		if providerErr == nil {
+			providerErr = err
+		}
+		return nil, providerErr, "", rcloneAPIErrorContext{
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to create folder",
+			}, map[string]any{
+				"bucket": bucket,
+				"key":    key,
+			}, nil
 	}
 	return &models.CreateFolderResponse{Key: key}, nil, "", rcloneAPIErrorContext{}, nil, nil
 }

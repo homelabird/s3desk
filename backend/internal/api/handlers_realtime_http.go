@@ -29,6 +29,18 @@ type realtimeWSHTTPService struct {
 	server *server
 }
 
+func (s *server) withRealtimeShutdown(parent context.Context) (context.Context, func()) {
+	if s.shutdownContext == nil {
+		return parent, func() {}
+	}
+	ctx, cancel := context.WithCancel(parent)
+	stop := context.AfterFunc(s.shutdownContext, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
+}
+
 func newRealtimeSSEHTTPService(s *server) realtimeSSEHTTPService {
 	return realtimeSSEHTTPService{server: s}
 }
@@ -53,6 +65,8 @@ func (svc realtimeSSEHTTPService) prepareEventsSSE(w http.ResponseWriter, r *htt
 
 func (svc realtimeSSEHTTPService) executePrepared(ctx context.Context, w http.ResponseWriter, prepared realtimeSSEPreparedRequest) {
 	defer prepared.releaseSlot()
+	streamCtx, releaseContext := svc.server.withRealtimeShutdown(ctx)
+	defer releaseContext()
 
 	writeRealtimeSSEHandshake(w, prepared.flusher)
 
@@ -62,7 +76,7 @@ func (svc realtimeSSEHTTPService) executePrepared(ctx context.Context, w http.Re
 	session := newRealtimeSSESession(w, prepared.flusher)
 	defer session.release()
 
-	serveRealtimeSSE(ctx, client, backlog, session)
+	serveRealtimeSSE(streamCtx, client, backlog, session)
 }
 
 func (svc realtimeSSEHTTPService) handleEventsSSE(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +110,8 @@ func (svc realtimeWSHTTPService) prepareUpgrade(w http.ResponseWriter, r *http.R
 func (svc realtimeWSHTTPService) executePrepared(ctx context.Context, prepared realtimeWSPreparedRequest) {
 	defer prepared.releaseSlot()
 	defer func() { _ = prepared.conn.Close() }()
+	streamCtx, releaseContext := svc.server.withRealtimeShutdown(ctx)
+	defer releaseContext()
 
 	client, backlog, release := svc.server.subscribeRealtime(prepared.afterSeq, prepared.includeLogs)
 	defer release()
@@ -103,7 +119,7 @@ func (svc realtimeWSHTTPService) executePrepared(ctx context.Context, prepared r
 	session := newRealtimeWSSession(prepared.conn)
 	defer session.release()
 
-	serveRealtimeWS(ctx, client, backlog, session)
+	serveRealtimeWS(streamCtx, client, backlog, session)
 }
 
 func (svc realtimeWSHTTPService) handleWSUpgrade(w http.ResponseWriter, r *http.Request) {

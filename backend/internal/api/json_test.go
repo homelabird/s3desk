@@ -43,6 +43,29 @@ func TestWriteErrorAddsNormalizedErrorForKnownCodes(t *testing.T) {
 	}
 }
 
+func TestBuildAPIErrorResponseRedactsDiagnosticDetails(t *testing.T) {
+	resp := buildAPIErrorResponse("upload_failed", "upload failed", map[string]any{
+		"path":  "reports/object.txt",
+		"error": "AccessDenied secret_access_key=provider-secret https://s3.example/object?X-Amz-Signature=signature-secret",
+	})
+
+	body, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	bodyText := string(body)
+	for _, secret := range []string{"provider-secret", "signature-secret"} {
+		if strings.Contains(bodyText, secret) {
+			t.Fatalf("response leaked %q: %s", secret, bodyText)
+		}
+	}
+	for _, context := range []string{"AccessDenied", "reports/object.txt", "[REDACTED]"} {
+		if !strings.Contains(bodyText, context) {
+			t.Fatalf("response lost %q: %s", context, bodyText)
+		}
+	}
+}
+
 func TestWriteErrorPreservesRetryAfterHeader(t *testing.T) {
 	rr := httptest.NewRecorder()
 	rr.Header().Set("Retry-After", "2")
@@ -64,6 +87,23 @@ func TestWriteErrorLeavesUnknownCodeUnnormalized(t *testing.T) {
 	}
 	if resp.Error.NormalizedError != nil {
 		t.Fatalf("expected normalizedError to be nil for unknown mapping, got %+v", resp.Error.NormalizedError)
+	}
+}
+
+func TestBuildAPIErrorResponseMapsProfileEncryptionFailuresToInvalidConfig(t *testing.T) {
+	for _, code := range []string{"encrypted_credentials", "encryption_required"} {
+		t.Run(code, func(t *testing.T) {
+			resp := buildAPIErrorResponse(code, "profile configuration is unavailable", nil)
+			if resp.Error.NormalizedError == nil {
+				t.Fatal("expected normalized error")
+			}
+			if resp.Error.NormalizedError.Code != models.NormalizedErrorInvalidConfig {
+				t.Fatalf("normalized code=%q, want %q", resp.Error.NormalizedError.Code, models.NormalizedErrorInvalidConfig)
+			}
+			if resp.Error.NormalizedError.Retryable {
+				t.Fatal("profile encryption failures must not be retryable")
+			}
+		})
 	}
 }
 

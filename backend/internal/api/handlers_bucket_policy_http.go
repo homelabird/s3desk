@@ -7,10 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"s3desk/internal/azureacl"
-	"s3desk/internal/gcsiam"
+	"s3desk/internal/bucketpolicy"
 	"s3desk/internal/models"
-	"s3desk/internal/s3policy"
 )
 
 type bucketPolicyHTTPError struct {
@@ -22,6 +20,7 @@ type bucketPolicyHTTPError struct {
 
 type bucketPolicyHTTPService struct {
 	server *server
+	policy *bucketpolicy.Service
 }
 
 func (e *bucketPolicyHTTPError) Error() string {
@@ -29,7 +28,29 @@ func (e *bucketPolicyHTTPError) Error() string {
 }
 
 func newBucketPolicyHTTPService(s *server) bucketPolicyHTTPService {
-	return bucketPolicyHTTPService{server: s}
+	allowRemote := s != nil && s.cfg.AllowRemote
+	return bucketPolicyHTTPService{
+		server: s,
+		policy: bucketpolicy.NewService(allowRemote),
+	}
+}
+
+func policyCallErrors(err error) (callErr, requestErr error) {
+	if err == nil {
+		return nil, nil
+	}
+	var unsupported *bucketpolicy.UnsupportedProviderError
+	if errors.As(err, &unsupported) {
+		if unsupported.Operation == "delete" && unsupported.Provider == models.ProfileProviderGcpGcs {
+			return nil, newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_delete_unsupported", "GCS IAM policy cannot be deleted; update it instead", map[string]any{
+				"provider": unsupported.Provider,
+			})
+		}
+		return nil, newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{
+			"provider": unsupported.Provider,
+		})
+	}
+	return err, nil
 }
 
 func newBucketPolicyHTTPError(status int, code, message string, details map[string]any) *bucketPolicyHTTPError {
@@ -63,142 +84,132 @@ func (svc bucketPolicyHTTPService) preparePutBucketPolicy(r *http.Request) (mode
 	return secrets, bucket, req, nil
 }
 
-func (svc bucketPolicyHTTPService) executeGet(r *http.Request) (*models.BucketPolicyResponse, string, error, s3policy.Response, int, http.Header, []byte, string, error) {
+func (svc bucketPolicyHTTPService) executeGet(r *http.Request) (*models.BucketPolicyResponse, string, error, bucketpolicy.Response, int, http.Header, []byte, string, error) {
 	secrets, bucket, err := svc.prepareBucketPolicy(r)
 	if err != nil {
-		return nil, "", nil, s3policy.Response{}, 0, nil, nil, "", err
+		return nil, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", err
+	}
+
+	resp, err := svc.policy.Get(r.Context(), secrets, bucket)
+	callErr, requestErr := policyCallErrors(err)
+	if requestErr != nil {
+		return nil, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", requestErr
+	}
+	if callErr != nil {
+		return nil, bucket, callErr, bucketpolicy.Response{}, 0, nil, nil, "", nil
 	}
 
 	switch secrets.Provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.GetBucketPolicyWithOptions(r.Context(), secrets, bucket, s3policy.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return nil, bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		switch resp.Status {
 		case http.StatusOK:
-			return &models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body}, "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return &models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body}, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		case http.StatusNotFound:
 			e := parseXMLError(resp.Body)
 			if isNoSuchBucketPolicy(e.Code, e.Message) {
-				return &models.BucketPolicyResponse{Bucket: bucket, Exists: false}, "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+				return &models.BucketPolicyResponse{Bucket: bucket, Exists: false}, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 			}
 			if isNoSuchBucket(e.Code, e.Message) {
-				return nil, "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket, "upstreamCode": e.Code})
+				return nil, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket, "upstreamCode": e.Code})
 			}
 			return nil, "", nil, resp, 0, nil, nil, "", nil
 		default:
 			return nil, "", nil, resp, 0, nil, nil, "", nil
 		}
 	case models.ProfileProviderGcpGcs:
-		resp, err := gcsiam.GetBucketIamPolicyWithOptions(r.Context(), secrets, bucket, gcsiam.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return nil, bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		if resp.Status == http.StatusOK {
-			return &models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body}, "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return &models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body}, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		}
 		if resp.Status == http.StatusNotFound {
-			return nil, "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket})
+			return nil, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket})
 		}
-		return nil, "", nil, s3policy.Response{}, resp.Status, resp.Headers, resp.Body, "gcs", nil
+		return nil, "", nil, bucketpolicy.Response{}, resp.Status, resp.Headers, resp.Body, "gcs", nil
 	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.GetContainerPolicyWithOptions(r.Context(), secrets, bucket, azureacl.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return nil, bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		if resp.Status == http.StatusOK {
-			return &models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body}, "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return &models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body}, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		}
 		if resp.Status == http.StatusNotFound {
-			return nil, "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "container not found", map[string]any{"bucket": bucket})
+			return nil, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "container not found", map[string]any{"bucket": bucket})
 		}
-		return nil, "", nil, s3policy.Response{}, resp.Status, resp.Headers, resp.Body, "azure", nil
-	default:
-		return nil, "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
+		return nil, "", nil, bucketpolicy.Response{}, resp.Status, resp.Headers, resp.Body, "azure", nil
 	}
+	return nil, "", nil, bucketpolicy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
 }
 
-func (svc bucketPolicyHTTPService) executePut(r *http.Request) (string, error, s3policy.Response, int, http.Header, []byte, string, error) {
+func (svc bucketPolicyHTTPService) executePut(r *http.Request) (string, error, bucketpolicy.Response, int, http.Header, []byte, string, error) {
 	secrets, bucket, putReq, err := svc.preparePutBucketPolicy(r)
 	if err != nil {
-		return "", nil, s3policy.Response{}, 0, nil, nil, "", err
+		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", err
+	}
+
+	resp, err := svc.policy.Put(r.Context(), secrets, bucket, putReq.Policy)
+	callErr, requestErr := policyCallErrors(err)
+	if requestErr != nil {
+		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", requestErr
+	}
+	if callErr != nil {
+		return bucket, callErr, bucketpolicy.Response{}, 0, nil, nil, "", nil
 	}
 
 	switch secrets.Provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.PutBucketPolicyWithOptions(r.Context(), secrets, bucket, putReq.Policy, s3policy.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		if resp.Status == http.StatusNoContent || resp.Status == http.StatusOK {
-			return "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		}
 		return "", nil, resp, 0, nil, nil, "", nil
 	case models.ProfileProviderGcpGcs:
-		resp, err := gcsiam.PutBucketIamPolicyWithOptions(r.Context(), secrets, bucket, putReq.Policy, gcsiam.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		if resp.Status == http.StatusOK {
-			return "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		}
-		return "", nil, s3policy.Response{}, resp.Status, resp.Headers, resp.Body, "gcs", nil
+		return "", nil, bucketpolicy.Response{}, resp.Status, resp.Headers, resp.Body, "gcs", nil
 	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.PutContainerPolicyWithOptions(r.Context(), secrets, bucket, putReq.Policy, azureacl.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		if resp.Status == http.StatusOK || resp.Status == http.StatusNoContent {
-			return "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		}
-		return "", nil, s3policy.Response{}, resp.Status, resp.Headers, resp.Body, "azure", nil
-	default:
-		return "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
+		return "", nil, bucketpolicy.Response{}, resp.Status, resp.Headers, resp.Body, "azure", nil
 	}
+	return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
 }
 
-func (svc bucketPolicyHTTPService) executeDelete(r *http.Request) (string, error, s3policy.Response, int, http.Header, []byte, string, error) {
+func (svc bucketPolicyHTTPService) executeDelete(r *http.Request) (string, error, bucketpolicy.Response, int, http.Header, []byte, string, error) {
 	secrets, bucket, err := svc.prepareBucketPolicy(r)
 	if err != nil {
-		return "", nil, s3policy.Response{}, 0, nil, nil, "", err
+		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", err
+	}
+
+	resp, err := svc.policy.Delete(r.Context(), secrets, bucket)
+	callErr, requestErr := policyCallErrors(err)
+	if requestErr != nil {
+		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", requestErr
+	}
+	if callErr != nil {
+		return bucket, callErr, bucketpolicy.Response{}, 0, nil, nil, "", nil
 	}
 
 	switch secrets.Provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.DeleteBucketPolicyWithOptions(r.Context(), secrets, bucket, s3policy.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		switch resp.Status {
 		case http.StatusNoContent, http.StatusOK:
-			return "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		case http.StatusNotFound:
 			e := parseXMLError(resp.Body)
 			if isNoSuchBucketPolicy(e.Code, e.Message) {
-				return "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+				return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 			}
 			if isNoSuchBucket(e.Code, e.Message) {
-				return "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket, "upstreamCode": e.Code})
+				return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket, "upstreamCode": e.Code})
 			}
 			return "", nil, resp, 0, nil, nil, "", nil
 		default:
 			return "", nil, resp, 0, nil, nil, "", nil
 		}
-	case models.ProfileProviderGcpGcs:
-		return "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_delete_unsupported", "GCS IAM policy cannot be deleted; update it instead", map[string]any{"provider": secrets.Provider})
 	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.DeleteContainerPolicyWithOptions(r.Context(), secrets, bucket, azureacl.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
-		if err != nil {
-			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
-		}
 		if resp.Status == http.StatusOK || resp.Status == http.StatusNoContent {
-			return "", nil, s3policy.Response{}, 0, nil, nil, "", nil
+			return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", nil
 		}
-		return "", nil, s3policy.Response{}, resp.Status, resp.Headers, resp.Body, "azure", nil
-	default:
-		return "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
+		return "", nil, bucketpolicy.Response{}, resp.Status, resp.Headers, resp.Body, "azure", nil
 	}
+	return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
 }
 
 func (svc bucketPolicyHTTPService) handleGetBucketPolicy(w http.ResponseWriter, r *http.Request) {

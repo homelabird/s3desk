@@ -3,9 +3,11 @@ package bucketgov
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"s3desk/internal/models"
 	"s3desk/internal/ocicli"
@@ -26,6 +28,8 @@ type ociAdapter struct {
 type OCIAdapterOptions struct {
 	AllowRemote bool
 }
+
+const ociMutationRollbackTimeout = 5 * time.Second
 
 type ociBucketResponse struct {
 	Data ociBucket `json:"data"`
@@ -243,6 +247,18 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 		}
 	}
 
+	createdRules := make([]ociRetentionRule, 0, len(desiredRules))
+	for index, desired := range desiredRules {
+		if strings.TrimSpace(desired.ID) != "" {
+			continue
+		}
+		if desired.Days == nil || *desired.Days <= 0 {
+			return InvalidFieldError("retention.rules["+fmt.Sprintf("%d", index)+"].days", "retention rule days must be greater than zero", map[string]any{
+				"section": "protection",
+			})
+		}
+	}
+
 	for _, current := range rules {
 		desired, exists := desiredByID[current.ID]
 		if !exists {
@@ -251,9 +267,6 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 					"section": "protection",
 					"id":      current.ID,
 				})
-			}
-			if _, err := a.deleteOCIRetentionRule(ctx, profile, bucket, current.ID, "delete OCI retention rule", "bucket_protection_error"); err != nil {
-				return err
 			}
 			continue
 		}
@@ -284,19 +297,6 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 					"currentDays": currentDays,
 				})
 			}
-			if desiredDays == currentDays {
-				continue
-			}
-			if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDays, currentName, "extend OCI retention rule", "bucket_protection_error"); err != nil {
-				return err
-			}
-			continue
-		}
-		if desiredDays == currentDays && desiredName == currentName {
-			continue
-		}
-		if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDays, desiredName, "update OCI retention rule", "bucket_protection_error"); err != nil {
-			return err
 		}
 	}
 
@@ -304,17 +304,52 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 		if strings.TrimSpace(desired.ID) != "" {
 			continue
 		}
-		if desired.Days == nil || *desired.Days <= 0 {
-			return InvalidFieldError("retention.rules["+fmt.Sprintf("%d", index)+"].days", "retention rule days must be greater than zero", map[string]any{
-				"section": "protection",
-			})
-		}
 		displayName := strings.TrimSpace(desired.DisplayName)
 		if displayName == "" {
 			displayName = defaultOCIRetentionRuleName(index + 1)
 		}
-		if _, err := a.createOCIRetentionRule(ctx, profile, bucket, *desired.Days, displayName, "create OCI retention rule", "bucket_protection_error"); err != nil {
-			return err
+		createdRule, err := a.createOCIRetentionRule(ctx, profile, bucket, *desired.Days, displayName, "create OCI retention rule", "bucket_protection_error")
+		if err != nil {
+			return a.rollbackCreatedOCIRetentionRules(ctx, profile, bucket, createdRules, err)
+		}
+		createdRules = append(createdRules, createdRule)
+	}
+
+	for _, current := range rules {
+		desired, exists := desiredByID[current.ID]
+		if !exists {
+			continue
+		}
+		currentDays := ociRetentionRuleDays(current)
+		desiredDays := *desired.Days
+		currentName := strings.TrimSpace(current.DisplayName)
+		desiredName := strings.TrimSpace(desired.DisplayName)
+		if desiredName == "" {
+			desiredName = currentName
+		}
+		if current.TimeRuleLocked {
+			if desiredDays == currentDays {
+				continue
+			}
+			if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDays, currentName, "extend OCI retention rule", "bucket_protection_error"); err != nil {
+				return a.rollbackCreatedOCIRetentionRules(ctx, profile, bucket, createdRules, err)
+			}
+			continue
+		}
+		if desiredDays == currentDays && desiredName == currentName {
+			continue
+		}
+		if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDays, desiredName, "update OCI retention rule", "bucket_protection_error"); err != nil {
+			return a.rollbackCreatedOCIRetentionRules(ctx, profile, bucket, createdRules, err)
+		}
+	}
+
+	for _, current := range rules {
+		if _, exists := desiredByID[current.ID]; exists {
+			continue
+		}
+		if _, err := a.deleteOCIRetentionRule(ctx, profile, bucket, current.ID, "delete OCI retention rule", "bucket_protection_error"); err != nil {
+			return a.rollbackCreatedOCIRetentionRules(ctx, profile, bucket, createdRules, err)
 		}
 	}
 	return nil
@@ -407,9 +442,6 @@ func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecre
 	for _, existing := range current {
 		desired, ok := desiredByID[existing.ID]
 		if !ok {
-			if _, err := a.deleteOCIPreauthenticatedRequest(ctx, profile, bucket, existing.ID, "delete OCI pre-authenticated request", "bucket_sharing_error"); err != nil {
-				return models.BucketSharingView{}, err
-			}
 			continue
 		}
 		if existingPARChanged(existing, desired) {
@@ -420,7 +452,7 @@ func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecre
 		}
 	}
 
-	created := make([]models.BucketPreauthenticatedRequestView, 0)
+	created := make([]models.BucketPreauthenticatedRequestView, 0, len(req.PreauthenticatedRequests))
 	for index, item := range req.PreauthenticatedRequests {
 		if strings.TrimSpace(item.ID) != "" {
 			continue
@@ -446,14 +478,23 @@ func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecre
 			"bucket_sharing_error",
 		)
 		if err != nil {
-			return models.BucketSharingView{}, err
+			return models.BucketSharingView{}, a.rollbackCreatedOCIPreauthenticatedRequests(ctx, profile, bucket, created, err)
 		}
 		created = append(created, toBucketPreauthenticatedRequest(createdItem))
 	}
 
+	for _, existing := range current {
+		if _, ok := desiredByID[existing.ID]; ok {
+			continue
+		}
+		if _, err := a.deleteOCIPreauthenticatedRequest(ctx, profile, bucket, existing.ID, "delete OCI pre-authenticated request", "bucket_sharing_error"); err != nil {
+			return models.BucketSharingView{}, a.rollbackCreatedOCIPreauthenticatedRequests(ctx, profile, bucket, created, err)
+		}
+	}
+
 	view, err := a.GetSharing(ctx, profile, bucket)
 	if err != nil {
-		return models.BucketSharingView{}, err
+		return models.BucketSharingView{}, a.rollbackCreatedOCIPreauthenticatedRequests(ctx, profile, bucket, created, err)
 	}
 	if len(created) > 0 {
 		createdByID := make(map[string]models.BucketPreauthenticatedRequestView, len(created))
@@ -468,6 +509,64 @@ func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecre
 		view.Warnings = append(view.Warnings, "OCI only returns the full PAR access URI when a PAR is created. Copy it now if you need the complete link later.")
 	}
 	return view, nil
+}
+
+func (a *ociAdapter) rollbackCreatedOCIRetentionRules(ctx context.Context, profile models.ProfileSecrets, bucket string, created []ociRetentionRule, cause error) error {
+	if len(created) == 0 {
+		return cause
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ociMutationRollbackTimeout)
+	defer cancel()
+	var cleanupErr error
+	for index := len(created) - 1; index >= 0; index-- {
+		id := strings.TrimSpace(created[index].ID)
+		if id == "" {
+			if cleanupErr == nil {
+				cleanupErr = errors.New("created OCI retention rule response did not include an id")
+			}
+			continue
+		}
+		if _, err := a.deleteOCIRetentionRule(cleanupCtx, profile, bucket, id, "rollback OCI retention rule", "bucket_protection_error"); err != nil && cleanupErr == nil {
+			cleanupErr = err
+		}
+	}
+	return withOCICleanupError(cause, cleanupErr)
+}
+
+func (a *ociAdapter) rollbackCreatedOCIPreauthenticatedRequests(ctx context.Context, profile models.ProfileSecrets, bucket string, created []models.BucketPreauthenticatedRequestView, cause error) error {
+	if len(created) == 0 {
+		return cause
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ociMutationRollbackTimeout)
+	defer cancel()
+	var cleanupErr error
+	for index := len(created) - 1; index >= 0; index-- {
+		id := strings.TrimSpace(created[index].ID)
+		if id == "" {
+			if cleanupErr == nil {
+				cleanupErr = errors.New("created OCI pre-authenticated request response did not include an id")
+			}
+			continue
+		}
+		if _, err := a.deleteOCIPreauthenticatedRequest(cleanupCtx, profile, bucket, id, "rollback OCI pre-authenticated request", "bucket_sharing_error"); err != nil && cleanupErr == nil {
+			cleanupErr = err
+		}
+	}
+	return withOCICleanupError(cause, cleanupErr)
+}
+
+func withOCICleanupError(cause, cleanupErr error) error {
+	if cause == nil || cleanupErr == nil {
+		return cause
+	}
+	var operationErr *OperationError
+	if errors.As(cause, &operationErr) {
+		details := cloneDetails(operationErr.Details)
+		details["cleanupError"] = cleanupErr.Error()
+		operationErr.Details = details
+		return cause
+	}
+	return fmt.Errorf("%w (OCI cleanup failed: %v)", cause, cleanupErr)
 }
 
 func (a *ociAdapter) getOCIBucket(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (ociBucket, error) {

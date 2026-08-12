@@ -5,12 +5,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"syscall"
 
 	"s3desk/internal/logging"
 	"s3desk/internal/models"
 	"s3desk/internal/processio"
 	"s3desk/internal/profileendpoint"
+	"s3desk/internal/rcloneegress"
 )
 
 type rcloneProcess struct {
@@ -61,24 +61,34 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 		tlsCleanup()
 		return nil, err
 	}
+	egressProxy, err := rcloneegress.Start(ctx, m.allowRemote)
+	if err != nil {
+		_ = os.Remove(configPath)
+		tlsCleanup()
+		return nil, err
+	}
 
 	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
 	cmd := exec.Command(rclonePath, fullArgs...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	ConfigureProcessGroup(cmd)
+	cmd.Env = egressProxy.Environment(os.Environ())
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = egressProxy.Close()
 		_ = os.Remove(configPath)
 		tlsCleanup()
 		return nil, err
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
+		_ = egressProxy.Close()
 		_ = os.Remove(configPath)
 		tlsCleanup()
 		return nil, err
 	}
 
 	if err := cmd.Start(); err != nil {
+		_ = egressProxy.Close()
 		_ = os.Remove(configPath)
 		tlsCleanup()
 		return nil, err
@@ -87,7 +97,7 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
 	}
-	cancelWatcher := startProcessCancelWatcher(ctx, jobID, pid)
+	cancelWatcher := StartProcessCancelWatcher(ctx, jobID, pid)
 
 	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
 	stderrDone := make(chan struct{})
@@ -106,7 +116,7 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 			close(stdoutDone)
 		}()
 		err := cmd.Wait()
-		if cancelErr := cancelWatcher.finish(); cancelErr != nil {
+		if cancelErr := cancelWatcher(); cancelErr != nil {
 			if pid > 0 {
 				logging.WarnFields("job process termination helper failed", map[string]any{
 					"event":  "job.process_cancel_failed",
@@ -121,6 +131,7 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 		}
 		<-stdoutDone
 		<-stderrDone
+		_ = egressProxy.Close()
 		_ = os.Remove(configPath)
 		tlsCleanup()
 		return err

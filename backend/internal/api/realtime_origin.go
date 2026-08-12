@@ -62,11 +62,17 @@ func (s *server) isAllowedRealtimeOrigin(originHeader string) bool {
 }
 
 func (s *server) rejectInvalidRealtimeOrigin(w http.ResponseWriter, r *http.Request, message string) bool {
-	if s.isAllowedRealtimeOrigin(r.Header.Get("Origin")) {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		// Same-origin browser requests can omit Origin but include Fetch Metadata.
+		if strings.EqualFold(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")), "same-origin") {
+			return false
+		}
+	} else if s.isAllowedRealtimeOrigin(origin) {
 		return false
 	}
 	writeError(w, http.StatusForbidden, "forbidden", message, map[string]any{
-		"origin": strings.TrimSpace(r.Header.Get("Origin")),
+		"origin": origin,
 	})
 	return true
 }

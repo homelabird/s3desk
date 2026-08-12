@@ -143,7 +143,7 @@ test.describe('Objects global search and favorites chaos', () => {
 		await expect(favoritesPaneStatus).toContainText('favorites backend unavailable')
 		await expect(favoritesAlerts).toHaveCount(3)
 
-		await page.getByRole('button', { name: 'View' }).click()
+		await page.getByRole('button', { name: 'Filters' }).click()
 		const viewDrawer = dialogByName(page, 'View options')
 		await expect(viewDrawer).toBeVisible({ timeout: 15_000 })
 		await viewDrawer.getByLabel('Favorites only').uncheck()

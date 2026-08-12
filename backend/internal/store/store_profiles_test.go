@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"s3desk/internal/db"
 	"s3desk/internal/models"
@@ -104,6 +106,50 @@ func TestGetProfileSecretsFailsOnCorruptedSecretsJSON(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), profile.ID) {
 		t.Fatalf("expected profile id in error, got %v", err)
+	}
+}
+
+func TestDeleteProfileRejectsActiveJobs(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	profile := createAzureProfile(t, st)
+	ctx := context.Background()
+	job, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := st.UpdateJobStatus(ctx, job.ID, models.JobStatusRunning, &startedAt, nil, nil, nil, nil); err != nil {
+		t.Fatalf("UpdateJobStatus: %v", err)
+	}
+
+	deleted, err := st.DeleteProfile(ctx, profile.ID)
+	if !errors.Is(err, ErrProfileHasActiveJobs) {
+		t.Fatalf("DeleteProfile() error=%v, want ErrProfileHasActiveJobs", err)
+	}
+	if deleted {
+		t.Fatal("DeleteProfile() deleted profile with active job")
+	}
+	if _, ok, err := st.GetProfile(ctx, profile.ID); err != nil || !ok {
+		t.Fatalf("GetProfile() = (_, %v, %v), want profile retained", ok, err)
+	}
+}
+
+func TestDeleteProfileRejectsActiveUploadSessions(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	profile := createAzureProfile(t, st)
+	if _, err := st.CreateUploadSession(context.Background(), profile.ID, "bucket", "prefix", "staging", "", time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)); err != nil {
+		t.Fatalf("CreateUploadSession: %v", err)
+	}
+
+	deleted, err := st.DeleteProfile(context.Background(), profile.ID)
+	if !errors.Is(err, ErrProfileHasActiveUploadSessions) {
+		t.Fatalf("DeleteProfile() error=%v, want ErrProfileHasActiveUploadSessions", err)
+	}
+	if deleted {
+		t.Fatal("DeleteProfile() deleted profile with active upload session")
+	}
+	if _, ok, err := st.GetProfile(context.Background(), profile.ID); err != nil || !ok {
+		t.Fatalf("GetProfile() = (_, %v, %v), want profile retained", ok, err)
 	}
 }
 

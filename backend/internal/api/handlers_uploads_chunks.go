@@ -89,7 +89,7 @@ func chunkPartName(index int) string {
 	return fmt.Sprintf("part-%06d", index)
 }
 
-func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, onDelta func(int64) error) error {
+func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int) error {
 	if totalChunks <= 0 {
 		return nil
 	}
@@ -113,7 +113,6 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, o
 	if !isUnderDir(stagingDir, dstDir) {
 		return fmt.Errorf("invalid upload path")
 	}
-	previousFinalSize := fileSizeIfExists(finalPath)
 	if err := os.MkdirAll(dstDir, 0o700); err != nil {
 		return err
 	}
@@ -125,91 +124,43 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, o
 	tmpPath := tmpFile.Name()
 	f := tmpFile
 
-	var appliedDelta int64
-	rollbackDelta := func() {
-		if onDelta == nil || appliedDelta == 0 {
-			return
-		}
-		_ = onDelta(-appliedDelta)
-	}
-	applyDelta := func(delta int64) error {
-		if onDelta == nil || delta == 0 {
-			return nil
-		}
-		if err := onDelta(delta); err != nil {
-			return err
-		}
-		appliedDelta += delta
-		return nil
-	}
-
 	for i := 0; i < totalChunks; i++ {
 		partPath := filepath.Join(chunkDir, chunkPartName(i))
-		info, err := os.Stat(partPath)
-		if err != nil {
+		if _, err := os.Stat(partPath); err != nil {
 			_ = f.Close()
 			_ = os.Remove(tmpPath)
-			rollbackDelta()
 			return err
 		}
-		partSize := info.Size()
 
 		// #nosec G304 -- partPath is derived from the server-managed chunk directory and chunk index.
 		part, err := os.Open(partPath)
 		if err != nil {
 			_ = f.Close()
 			_ = os.Remove(tmpPath)
-			rollbackDelta()
 			return err
 		}
 
-		copied, err := copyWithTransferBuffer(f, part)
-		if copied > 0 {
-			if deltaErr := applyDelta(copied); deltaErr != nil {
-				_ = part.Close()
-				_ = f.Close()
-				_ = os.Remove(tmpPath)
-				rollbackDelta()
-				return fmt.Errorf("apply upload byte delta: %w", deltaErr)
-			}
-		}
+		_, err = copyWithTransferBuffer(f, part)
 		if err != nil {
 			_ = part.Close()
 			_ = f.Close()
 			_ = os.Remove(tmpPath)
-			rollbackDelta()
 			return err
 		}
 		_ = part.Close()
-
-		if err := os.Remove(partPath); err == nil {
-			if deltaErr := applyDelta(-partSize); deltaErr != nil {
-				_ = f.Close()
-				_ = os.Remove(tmpPath)
-				rollbackDelta()
-				return fmt.Errorf("apply upload byte delta: %w", deltaErr)
-			}
-		}
 	}
 
 	if err := f.Close(); err != nil {
 		_ = os.Remove(tmpPath)
-		rollbackDelta()
 		return err
-	}
-	if previousFinalSize > 0 {
-		if err := applyDelta(-previousFinalSize); err != nil {
-			_ = os.Remove(tmpPath)
-			rollbackDelta()
-			return fmt.Errorf("apply upload byte delta: %w", err)
-		}
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		_ = os.Remove(tmpPath)
-		rollbackDelta()
 		return err
 	}
-	_ = os.RemoveAll(chunkDir)
+	if err := os.RemoveAll(chunkDir); err != nil {
+		return fmt.Errorf("cleanup assembled chunks: %w", err)
+	}
 	return nil
 }
 

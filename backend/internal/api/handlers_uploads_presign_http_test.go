@@ -3,8 +3,10 @@ package api
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -277,5 +279,110 @@ func TestExecuteMultipartRejectsUploadMaxBytes(t *testing.T) {
 	}
 	if uploadErr.code != "too_large" {
 		t.Fatalf("uploadErr.code=%q, want too_large", uploadErr.code)
+	}
+}
+
+func TestExecuteMultipartSerializesCreateForConcurrentPresigns(t *testing.T) {
+	var (
+		mu           sync.Mutex
+		createCount  int
+		firstStarted = make(chan struct{})
+		releaseFirst = make(chan struct{})
+		once         sync.Once
+	)
+	fakeS3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !r.URL.Query().Has("uploads") {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		createCount++
+		current := createCount
+		mu.Unlock()
+		if current == 1 {
+			once.Do(func() { close(firstStarted) })
+			<-releaseFirst
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	<Bucket>test-bucket</Bucket>
+	<Key>incoming/file.bin</Key>
+	<UploadId>upload-1</UploadId>
+</InitiateMultipartUploadResult>`)
+	}))
+	t.Cleanup(fakeS3.Close)
+
+	st, _, _, dataDir := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, false)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModePresigned, "", time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("get profile secrets: ok=%v err=%v", ok, err)
+	}
+
+	svc := newUploadPresignHTTPService(&server{cfg: config.Config{DataDir: dataDir}, store: st})
+	fileSize := int64(10 * 1024 * 1024)
+	prepared := func() uploadPresignPreparedRequest {
+		return uploadPresignPreparedRequest{
+			profileID: profile.ID,
+			uploadID:  upload.ID,
+			us:        upload,
+			secrets:   secrets,
+			req: models.UploadPresignRequest{
+				Path: "file.bin",
+				Multipart: &models.UploadMultipartPresignReq{
+					FileSize:      &fileSize,
+					PartSizeBytes: 5 * 1024 * 1024,
+					PartNumbers:   []int{1, 2},
+				},
+			},
+			relPath:   "file.bin",
+			key:       "incoming/file.bin",
+			expires:   time.Minute,
+			expiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		}
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan *uploadHTTPError, 2)
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, uploadErr := svc.executeMultipart(httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/presign", nil), prepared())
+			errs <- uploadErr
+		}()
+	}
+
+	select {
+	case <-firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first multipart create")
+	}
+	close(releaseFirst)
+	wg.Wait()
+	close(errs)
+	for uploadErr := range errs {
+		if uploadErr != nil {
+			t.Fatalf("executeMultipart error: %v", uploadErr)
+		}
+	}
+
+	mu.Lock()
+	gotCreates := createCount
+	mu.Unlock()
+	if gotCreates != 1 {
+		t.Fatalf("provider multipart creates=%d, want 1", gotCreates)
+	}
+	meta, found, err := st.GetMultipartUpload(context.Background(), profile.ID, upload.ID, "file.bin")
+	if err != nil || !found {
+		t.Fatalf("get multipart metadata: found=%v err=%v", found, err)
+	}
+	if meta.S3UploadID != "upload-1" {
+		t.Fatalf("S3UploadID=%q, want upload-1", meta.S3UploadID)
 	}
 }

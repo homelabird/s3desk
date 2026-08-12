@@ -23,7 +23,8 @@ import type {
   OCISharingView,
 } from "./types";
 import {
-  parseJSONArray,
+	parseAzureLegalHoldTags,
+	parseJSONArray,
   parsePositiveDays,
   serializeAzureStoredAccessPolicies,
   serializeGCSBindings,
@@ -174,7 +175,11 @@ export function buildAzureProtectionRequest(options: {
           etag: options.immutability?.etag,
         };
   }
-  return req as BucketProtectionPutRequest;
+	return req as BucketProtectionPutRequest;
+}
+
+export function buildAzureLegalHoldRequest(tagsText: string): BucketProtectionPutRequest {
+	return { legalHoldTags: parseAzureLegalHoldTags(tagsText) };
 }
 
 export function buildOCIPublicExposureRequest(

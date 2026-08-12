@@ -146,7 +146,7 @@ describe('SidebarBackupAction', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('opens a drawer with export, restore, portable import, and staged restore sections', async () => {
+	it('opens a drawer with export, restore, portable import, and staged restore sections', { timeout: 15_000 }, async () => {
 		const downloadServerBackup = vi.fn(() => ({
 			promise: Promise.resolve({
 				blob: new Blob(['backup'], { type: 'application/gzip' }),

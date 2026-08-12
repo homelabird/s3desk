@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +18,28 @@ import (
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
+
+func TestNewUploadProviderErrorClassifiesRetryableFailure(t *testing.T) {
+	uploadErr := newUploadProviderError(
+		"failed to upload multipart part",
+		errors.New("SlowDown: retry later secret_access_key=provider-secret"),
+		map[string]any{"path": "folder/file.bin"},
+	)
+
+	if uploadErr.status != http.StatusTooManyRequests {
+		t.Fatalf("status=%d, want %d", uploadErr.status, http.StatusTooManyRequests)
+	}
+	if uploadErr.code != "rate_limited" {
+		t.Fatalf("code=%q, want rate_limited", uploadErr.code)
+	}
+	resp := buildAPIErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
+	if resp.Error.NormalizedError == nil || resp.Error.NormalizedError.Code != models.NormalizedErrorRateLimited || !resp.Error.NormalizedError.Retryable {
+		t.Fatalf("normalizedError=%+v, want retryable rate_limited", resp.Error.NormalizedError)
+	}
+	if got := resp.Error.Details["path"]; got != "folder/file.bin" {
+		t.Fatalf("path=%v, want folder/file.bin", got)
+	}
+}
 
 func TestSanitizeUploadPath(t *testing.T) {
 	t.Parallel()
@@ -200,7 +221,7 @@ func TestDeleteUploadIgnoresStoredStagingDirOutsideDataDir(t *testing.T) {
 	}
 }
 
-func TestTryAssembleChunkFile_DeltaError(t *testing.T) {
+func TestTryAssembleChunkFile_PreservesPartsOnAssemblyFailure(t *testing.T) {
 	t.Parallel()
 
 	stagingDir := t.TempDir()
@@ -209,38 +230,30 @@ func TestTryAssembleChunkFile_DeltaError(t *testing.T) {
 	if err := os.MkdirAll(chunkDir, 0o700); err != nil {
 		t.Fatalf("mkdir chunk dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(chunkDir, chunkPartName(0)), []byte("hello"), 0o600); err != nil {
-		t.Fatalf("write chunk 0: %v", err)
+	if err := os.Mkdir(filepath.Join(chunkDir, chunkPartName(0)), 0o700); err != nil {
+		t.Fatalf("mkdir chunk 0: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(chunkDir, chunkPartName(1)), []byte("world"), 0o600); err != nil {
 		t.Fatalf("write chunk 1: %v", err)
 	}
 
-	var deltas []int64
-	err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2, func(delta int64) error {
-		deltas = append(deltas, delta)
-		if delta > 0 {
-			return errors.New("store update failed")
-		}
-		return nil
-	})
+	err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2)
 	if err == nil {
-		t.Fatalf("expected delta error, got nil")
-	}
-	if !strings.Contains(err.Error(), "apply upload byte delta") {
-		t.Fatalf("expected apply upload byte delta error, got %v", err)
-	}
-	if len(deltas) != 1 || deltas[0] <= 0 {
-		t.Fatalf("expected only one positive delta callback, got %v", deltas)
+		t.Fatalf("expected assembly error, got nil")
 	}
 
 	finalPath := filepath.Join(stagingDir, relOS)
 	if _, statErr := os.Stat(finalPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected no assembled file, stat err=%v", statErr)
 	}
+	for _, name := range []string{chunkPartName(0), chunkPartName(1)} {
+		if _, statErr := os.Stat(filepath.Join(chunkDir, name)); statErr != nil {
+			t.Fatalf("expected part %s to remain, stat err=%v", name, statErr)
+		}
+	}
 }
 
-func TestTryAssembleChunkFile_ReplacesExistingFinalAccounting(t *testing.T) {
+func TestTryAssembleChunkFile_ReplacesExistingFinal(t *testing.T) {
 	t.Parallel()
 
 	stagingDir := t.TempDir()
@@ -265,11 +278,7 @@ func TestTryAssembleChunkFile_ReplacesExistingFinalAccounting(t *testing.T) {
 		t.Fatalf("write chunk 1: %v", err)
 	}
 
-	trackedBytes := int64(len(oldBody) + len("new ") + len("body"))
-	if err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2, func(delta int64) error {
-		trackedBytes += delta
-		return nil
-	}); err != nil {
+	if err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2); err != nil {
 		t.Fatalf("tryAssembleChunkFile: %v", err)
 	}
 
@@ -279,9 +288,6 @@ func TestTryAssembleChunkFile_ReplacesExistingFinalAccounting(t *testing.T) {
 	}
 	if string(gotBody) != "new body" {
 		t.Fatalf("final body=%q, want new body", string(gotBody))
-	}
-	if trackedBytes != int64(len(gotBody)) {
-		t.Fatalf("trackedBytes=%d, want final size %d", trackedBytes, len(gotBody))
 	}
 }
 

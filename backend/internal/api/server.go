@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"sync"
 
 	"s3desk/internal/bucketgov"
@@ -18,6 +19,7 @@ type server struct {
 	hub             *ws.Hub
 	metrics         *metrics.Metrics
 	serverAddr      string
+	shutdownContext context.Context
 	proxySecret     []byte
 	realtimeTickets *realtimeTicketStore
 	authLimit       *authFailureLimiter
@@ -26,6 +28,8 @@ type server struct {
 	realtimeMax     int
 	bucketGov       *bucketgov.Service
 	restoreMu       sync.RWMutex
+	// ponytail: process-local create lock; replace with a durable claim if HA is supported.
+	multipartStateMu sync.Mutex
 }
 
 type contextKey string

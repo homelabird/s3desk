@@ -5,14 +5,12 @@ import { FormField } from "../../../components/FormField";
 import { NativeSelect } from "../../../components/NativeSelect";
 import { ToggleSwitch } from "../../../components/ToggleSwitch";
 import styles from "../BucketGovernanceModal.module.css";
-import type { AzureImmutabilityView } from "./types";
 
 type AzureProtectionControlsBodyProps = {
   softDeleteEnabled: boolean;
   setSoftDeleteEnabled: Dispatch<SetStateAction<boolean>>;
   softDeleteDays: string;
   setSoftDeleteDays: Dispatch<SetStateAction<string>>;
-  immutability?: AzureImmutabilityView;
   immutabilityEditable: boolean;
   immutabilityLocked: boolean;
   immutabilityEnabled: boolean;
@@ -33,7 +31,6 @@ export function AzureProtectionControlsBody({
   setSoftDeleteEnabled,
   softDeleteDays,
   setSoftDeleteDays,
-  immutability,
   immutabilityEditable,
   immutabilityLocked,
   immutabilityEnabled,
@@ -181,14 +178,6 @@ export function AzureProtectionControlsBody({
           />
         </div>
       </div>
-      {immutability?.legalHold ? (
-        <Alert
-          type="warning"
-          showIcon
-          title="Legal hold detected"
-          description="A legal hold is active on this container. This client only edits time-based immutability policy; legal hold release remains outside this surface."
-        />
-      ) : null}
       {immutabilityLocked ? (
         <Alert
           type="info"

@@ -24,7 +24,7 @@ func TestTerminateJobProcessWithTimeoutsGraceful(t *testing.T) {
 		waitDone <- cmd.Wait()
 	}()
 
-	usedSigkill, err := terminateJobProcessWithTimeouts("job-term", cmd.Process.Pid, 250*time.Millisecond, time.Second, 20*time.Millisecond)
+	usedSigkill, err := terminateJobProcessWithTimeouts("job-term", cmd.Process.Pid, time.Second, time.Second, 20*time.Millisecond)
 	if err != nil {
 		t.Fatalf("terminateJobProcessWithTimeouts: %v", err)
 	}

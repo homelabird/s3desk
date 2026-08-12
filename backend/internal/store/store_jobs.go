@@ -14,8 +14,12 @@ import (
 )
 
 type CreateJobInput struct {
-	Type    string
-	Payload map[string]any
+	Type       string
+	Payload    map[string]any
+	Status     models.JobStatus
+	StartedAt  *string
+	FinishedAt *string
+	Progress   *models.JobProgress
 }
 
 func (s *Store) CreateJob(ctx context.Context, profileID string, in CreateJobInput) (models.Job, error) {
@@ -26,25 +30,44 @@ func (s *Store) CreateJob(ctx context.Context, profileID string, in CreateJobInp
 	if err != nil {
 		return models.Job{}, err
 	}
+	status := in.Status
+	if status == "" {
+		status = models.JobStatusQueued
+	}
+	var progressJSON *string
+	if in.Progress != nil {
+		progressBytes, err := json.Marshal(in.Progress)
+		if err != nil {
+			return models.Job{}, err
+		}
+		progressValue := string(progressBytes)
+		progressJSON = &progressValue
+	}
 
 	row := jobRow{
-		ID:          id,
-		ProfileID:   profileID,
-		Type:        in.Type,
-		Status:      string(models.JobStatusQueued),
-		PayloadJSON: string(payloadJSON),
-		CreatedAt:   now,
+		ID:           id,
+		ProfileID:    profileID,
+		Type:         in.Type,
+		Status:       string(status),
+		PayloadJSON:  string(payloadJSON),
+		ProgressJSON: progressJSON,
+		CreatedAt:    now,
+		StartedAt:    in.StartedAt,
+		FinishedAt:   in.FinishedAt,
 	}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return models.Job{}, err
 	}
 
 	return models.Job{
-		ID:        id,
-		Type:      in.Type,
-		Status:    models.JobStatusQueued,
-		Payload:   in.Payload,
-		CreatedAt: now,
+		ID:         id,
+		Type:       in.Type,
+		Status:     status,
+		Payload:    in.Payload,
+		Progress:   in.Progress,
+		CreatedAt:  now,
+		StartedAt:  in.StartedAt,
+		FinishedAt: in.FinishedAt,
 	}, nil
 }
 

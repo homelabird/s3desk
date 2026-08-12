@@ -23,7 +23,9 @@ func (s *server) enqueueStagingUploadCommit(
 	}
 
 	if err := s.jobs.Enqueue(job.ID); err != nil {
-		_, _ = s.store.DeleteJob(ctx, profileID, job.ID)
+		if rollbackErr := s.rollbackCreatedJobAfterEnqueueFailure(ctx, profileID, job, err); rollbackErr != nil {
+			return models.Job{}, rollbackErr
+		}
 		return models.Job{}, err
 	}
 

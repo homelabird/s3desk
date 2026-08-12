@@ -121,11 +121,15 @@ func (svc uploadCommitExecutionService) executeStaging(
 	payload map[string]any,
 ) (models.JobCreatedResponse, *uploadHTTPError) {
 	if _, _, err := jobs.EnsureRcloneCompatible(ctx); err != nil {
-		return models.JobCreatedResponse{}, &uploadHTTPError{
-			status:  http.StatusBadRequest,
-			code:    "transfer_engine_missing",
-			message: "rclone is required to commit an upload (install it or set RCLONE_PATH)",
+		if failure := classifyRcloneCapabilityFailure(err, "rclone is required to commit an upload (install it or set RCLONE_PATH)"); failure != nil {
+			return models.JobCreatedResponse{}, &uploadHTTPError{
+				status:  http.StatusBadRequest,
+				code:    failure.code,
+				message: failure.message,
+				details: failure.details,
+			}
 		}
+		return models.JobCreatedResponse{}, newUploadInternalError("failed to validate transfer engine", nil)
 	}
 
 	job, queueErr := svc.server.enqueueStagingUploadCommit(ctx, profileID, payload)

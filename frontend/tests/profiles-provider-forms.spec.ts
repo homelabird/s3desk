@@ -58,7 +58,7 @@ test('profile provider forms toggle provider-specific fields', async ({ page }) 
 	await expect(page.getByLabel('OCI Object Storage setup checklist')).toContainText('Auth provider and config overrides')
 })
 
-test('profile edit drawer keeps credentials collapsed by default', async ({ page }) => {
+test('profile edit drawer keeps saved-credential guidance visible', async ({ page }) => {
 	await seedStorage(page)
 	await setupApiMocks(page, [
 		{
@@ -82,11 +82,8 @@ test('profile edit drawer keeps credentials collapsed by default', async ({ page
 	const drawer = page.getByRole('dialog', { name: 'Edit Profile' })
 	await expect(drawer).toBeVisible()
 	await expect(drawer.getByLabel('S3 Compatible setup checklist')).toContainText('Saved credentials will be kept unless replaced.')
-	await expect(drawer.getByText('After saving, use Test on the saved profile row to verify access.')).toBeVisible()
+	await expect(drawer.getByText('Leave blank to keep stored credentials.')).toBeVisible()
 	await expect(drawer.getByText('Credentials', { exact: true })).toBeVisible()
-	await expect(drawer.getByLabel('Access Key ID')).toHaveCount(0)
-
-	await drawer.getByText('Credentials', { exact: true }).click()
 	await expect(drawer.getByLabel('Access Key ID')).toBeVisible()
 	await expect(drawer.getByLabel('Secret')).toBeVisible()
 })

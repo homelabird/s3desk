@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"s3desk/internal/logging"
@@ -70,8 +71,10 @@ type Manager struct {
 	queueCapacity int
 	sem           chan struct{}
 
-	mu      sync.Mutex
-	cancels map[string]context.CancelFunc
+	mu          sync.Mutex
+	cancels     map[string]context.CancelFunc
+	lifecycleWG sync.WaitGroup
+	running     atomic.Bool
 
 	uploadTTL time.Duration
 
@@ -155,7 +158,27 @@ func NewManager(cfg Config) *Manager {
 	return m
 }
 
+// Start registers both long-lived manager goroutines before launching either
+// one, so shutdown cannot call Wait while their lifecycle counters are still
+// being added.
+func (m *Manager) Start(ctx context.Context) {
+	m.lifecycleWG.Add(2)
+	go m.run(ctx)
+	go m.runMaintenance(ctx)
+}
+
 func (m *Manager) Run(ctx context.Context) {
+	m.lifecycleWG.Add(1)
+	m.run(ctx)
+}
+
+func (m *Manager) run(ctx context.Context) {
+	m.running.Store(true)
+	defer func() {
+		m.running.Store(false)
+		m.lifecycleWG.Done()
+	}()
+
 	stopWake := context.AfterFunc(ctx, func() {
 		m.queueMu.Lock()
 		m.queueCond.Broadcast()
@@ -169,7 +192,9 @@ func (m *Manager) Run(ctx context.Context) {
 			return
 		}
 		m.sem <- struct{}{}
+		m.lifecycleWG.Add(1)
 		go func() {
+			defer m.lifecycleWG.Done()
 			defer func() { <-m.sem }()
 			if err := m.runJob(ctx, jobID); err != nil {
 				logging.ErrorFields("job execution failed", map[string]any{
@@ -180,6 +205,24 @@ func (m *Manager) Run(ctx context.Context) {
 				})
 			}
 		}()
+	}
+}
+
+func (m *Manager) Running() bool {
+	return m.running.Load()
+}
+
+func (m *Manager) Wait(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		m.lifecycleWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

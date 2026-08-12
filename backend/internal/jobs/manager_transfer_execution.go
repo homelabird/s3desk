@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"s3desk/internal/logging"
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
@@ -71,10 +72,40 @@ func (m *Manager) runTransferSyncStagingToS3(ctx context.Context, profileID, job
 		return err
 	}
 
-	// Cleanup staging on success (best-effort).
-	_, _ = m.store.DeleteUploadSession(context.Background(), profileID, uploadID)
-	_ = os.RemoveAll(stagingDir)
+	m.cleanupCompletedStagingUpload(ctx, profileID, uploadID, stagingDir)
 	return nil
+}
+
+func (m *Manager) cleanupCompletedStagingUpload(ctx context.Context, profileID, uploadID, stagingDir string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	logCleanupError := func(step string, err error) {
+		if err == nil {
+			return
+		}
+		logging.ErrorFields("staging upload cleanup failed", map[string]any{
+			"event":      "upload.staging_commit_cleanup_failed",
+			"profile_id": profileID,
+			"upload_id":  uploadID,
+			"step":       step,
+			"error":      err.Error(),
+		})
+	}
+
+	if err := os.RemoveAll(stagingDir); err != nil {
+		logCleanupError("staging_directory", err)
+		return
+	}
+	if err := m.store.DeleteMultipartUploadsBySession(cleanupCtx, profileID, uploadID); err != nil {
+		logCleanupError("multipart_metadata", err)
+		return
+	}
+	if err := m.store.DeleteUploadObjectsBySession(cleanupCtx, profileID, uploadID); err != nil {
+		logCleanupError("upload_object_metadata", err)
+		return
+	}
+	_, err := m.store.DeleteUploadSession(cleanupCtx, profileID, uploadID)
+	logCleanupError("upload_session", err)
 }
 
 func (m *Manager) runTransferSyncLocalToS3(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {

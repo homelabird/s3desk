@@ -175,6 +175,34 @@ func TestRunTransferSyncStagingToS3PinsSourceForRclone(t *testing.T) {
 	if err := st.SetUploadSessionStagingDir(context.Background(), profile.ID, session.ID, stagingDir); err != nil {
 		t.Fatalf("set staging dir: %v", err)
 	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	expectedSize := int64(5)
+	if err := st.UpsertUploadObject(context.Background(), storepkg.UploadObject{
+		UploadID:     session.ID,
+		ProfileID:    profile.ID,
+		Path:         "alpha.txt",
+		Bucket:       "bucket",
+		ObjectKey:    "prefix/alpha.txt",
+		ExpectedSize: &expectedSize,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("upsert upload object: %v", err)
+	}
+	if err := st.UpsertMultipartUpload(context.Background(), storepkg.MultipartUpload{
+		UploadID:   session.ID,
+		ProfileID:  profile.ID,
+		Path:       "alpha.txt",
+		Bucket:     "bucket",
+		ObjectKey:  "prefix/alpha.txt",
+		S3UploadID: "stale-metadata",
+		ChunkSize:  5,
+		FileSize:   expectedSize,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}); err != nil {
+		t.Fatalf("upsert multipart upload: %v", err)
+	}
 	job, err := st.CreateJob(context.Background(), profile.ID, storepkg.CreateJobInput{
 		Type:    JobTypeTransferSyncStagingToS3,
 		Payload: map[string]any{},
@@ -222,6 +250,26 @@ func TestRunTransferSyncStagingToS3PinsSourceForRclone(t *testing.T) {
 	}
 	if !strings.Contains(gotSrc, "/fd/3") {
 		t.Fatalf("rclone source=%q, want fd 3 path", gotSrc)
+	}
+	if _, ok, err := st.GetUploadSession(context.Background(), profile.ID, session.ID); err != nil || ok {
+		t.Fatalf("upload session deleted=%v err=%v, want deleted", ok, err)
+	}
+	objects, err := st.ListUploadObjects(context.Background(), profile.ID, session.ID)
+	if err != nil {
+		t.Fatalf("list upload objects: %v", err)
+	}
+	if len(objects) != 0 {
+		t.Fatalf("upload objects=%d, want 0", len(objects))
+	}
+	multipartUploads, err := st.ListMultipartUploads(context.Background(), profile.ID, session.ID)
+	if err != nil {
+		t.Fatalf("list multipart uploads: %v", err)
+	}
+	if len(multipartUploads) != 0 {
+		t.Fatalf("multipart uploads=%d, want 0", len(multipartUploads))
+	}
+	if _, err := os.Stat(stagingDir); !os.IsNotExist(err) {
+		t.Fatalf("staging dir still exists, err=%v", err)
 	}
 }
 

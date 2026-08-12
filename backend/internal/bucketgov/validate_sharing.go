@@ -21,8 +21,18 @@ func ValidateSharingPut(ctx ValidationContext, req models.BucketSharingPutReques
 				"section": "sharing",
 			})
 		}
+		seenIDs := make(map[string]struct{}, len(req.PreauthenticatedRequests))
 		for index, item := range req.PreauthenticatedRequests {
-			if strings.TrimSpace(item.ID) != "" {
+			id := strings.TrimSpace(item.ID)
+			if id != "" {
+				key := strings.ToLower(id)
+				if _, exists := seenIDs[key]; exists {
+					return InvalidFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].id", "PAR id must be unique", map[string]any{
+						"section": "sharing",
+						"value":   item.ID,
+					})
+				}
+				seenIDs[key] = struct{}{}
 				continue
 			}
 			if strings.TrimSpace(item.Name) == "" {

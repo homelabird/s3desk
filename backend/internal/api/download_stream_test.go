@@ -255,6 +255,97 @@ func TestHandleDownloadProxy_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
 	}
 }
 
+func TestHandleDownloadProxy_ClassifiesStatProviderErrors(t *testing.T) {
+	cases := []struct {
+		name         string
+		stderr       string
+		wantStatus   int
+		wantCode     string
+		wantRetry    bool
+		wantRetryAge string
+	}{
+		{
+			name:       "access denied",
+			stderr:     "AccessDenied secret_access_key=provider-secret https://s3.example/object?X-Amz-Signature=signature-secret",
+			wantStatus: http.StatusForbidden,
+			wantCode:   "access_denied",
+		},
+		{
+			name:         "slow down",
+			stderr:       "SlowDown secret_access_key=provider-secret",
+			wantStatus:   http.StatusTooManyRequests,
+			wantCode:     "rate_limited",
+			wantRetry:    true,
+			wantRetryAge: "3",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lockTestEnv(t)
+			installDownloadStartRcloneHook(t, func(args []string) (*rcloneProcess, error) {
+				if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
+					return &rcloneProcess{
+						stdout: io.NopCloser(strings.NewReader("")),
+						stderr: bytes.NewBufferString(tc.stderr),
+						wait:   func() error { return errors.New("exit status 1") },
+					}, nil
+				}
+				return nil, errors.New("unexpected rclone args")
+			})
+
+			st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+			profile := createTestProfile(t, st)
+			s := &server{
+				cfg:         config.Config{DataDir: dataDir},
+				store:       st,
+				proxySecret: resolveProxySecret("proxy-test-token"),
+			}
+			token := downloadProxyToken{
+				ProfileID: profile.ID,
+				Bucket:    "test-bucket",
+				Key:       "report.txt",
+				Expires:   time.Now().UTC().Add(time.Minute).Unix(),
+			}
+			params := url.Values{}
+			params.Set("profileId", token.ProfileID)
+			params.Set("bucket", token.Bucket)
+			params.Set("key", token.Key)
+			params.Set("expires", strconv.FormatInt(token.Expires, 10))
+			params.Set("sig", s.signDownloadProxy(token))
+
+			rr := httptest.NewRecorder()
+			s.handleDownloadProxy(rr, httptest.NewRequest(http.MethodGet, "/download-proxy?"+params.Encode(), nil))
+
+			if rr.Code != tc.wantStatus {
+				t.Fatalf("status=%d, want %d body=%s", rr.Code, tc.wantStatus, rr.Body.String())
+			}
+			if got := rr.Header().Get("Retry-After"); got != tc.wantRetryAge {
+				t.Fatalf("Retry-After=%q, want %q", got, tc.wantRetryAge)
+			}
+			rawBody := rr.Body.String()
+			var resp models.ErrorResponse
+			if err := json.NewDecoder(strings.NewReader(rawBody)).Decode(&resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Error.Code != tc.wantCode {
+				t.Fatalf("error.code=%q, want %q", resp.Error.Code, tc.wantCode)
+			}
+			if resp.Error.NormalizedError == nil || resp.Error.NormalizedError.Code != models.NormalizedErrorCode(tc.wantCode) {
+				t.Fatalf("normalized error=%+v, want %q", resp.Error.NormalizedError, tc.wantCode)
+			}
+			if resp.Error.NormalizedError.Retryable != tc.wantRetry {
+				t.Fatalf("retryable=%v, want %v", resp.Error.NormalizedError.Retryable, tc.wantRetry)
+			}
+			for _, secret := range []string{"provider-secret", "signature-secret"} {
+				if strings.Contains(rawBody, secret) {
+					t.Fatalf("response leaked %q: %s", secret, rawBody)
+				}
+			}
+		})
+	}
+}
+
 func TestHandleDownloadProxy_SkipsStatWhenSignedMetadataIsEmbedded(t *testing.T) {
 	lockTestEnv(t)
 	installDownloadStartRcloneHook(t, func(args []string) (*rcloneProcess, error) {
@@ -307,6 +398,65 @@ func TestHandleDownloadProxy_SkipsStatWhenSignedMetadataIsEmbedded(t *testing.T)
 	}
 	if body := rr.Body.String(); body != "hello" {
 		t.Fatalf("body=%q, want %q", body, "hello")
+	}
+}
+
+func TestHandleDownloadProxy_HEADReturnsMetadataWithoutStartingCat(t *testing.T) {
+	lockTestEnv(t)
+	installDownloadStartRcloneHook(t, func(args []string) (*rcloneProcess, error) {
+		if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
+			return &rcloneProcess{
+				stdout: io.NopCloser(strings.NewReader("{\"Path\":\"report.txt\",\"Name\":\"report.txt\",\"Size\":5,\"ModTime\":\"2024-01-01T00:00:00Z\",\"MimeType\":\"text/plain\",\"Hashes\":{\"MD5\":\"abc\"}}\n")),
+				stderr: &bytes.Buffer{},
+				wait:   func() error { return nil },
+			}, nil
+		}
+		if len(args) >= 1 && args[0] == "cat" {
+			t.Fatal("HEAD request must not start cat")
+		}
+		return nil, errors.New("unexpected rclone args")
+	})
+
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	s := &server{
+		cfg:         config.Config{DataDir: dataDir},
+		store:       st,
+		proxySecret: resolveProxySecret("proxy-test-token"),
+	}
+
+	token := downloadProxyToken{
+		ProfileID: profile.ID,
+		Bucket:    "test-bucket",
+		Key:       "report.txt",
+		Expires:   time.Now().UTC().Add(time.Minute).Unix(),
+	}
+	params := url.Values{}
+	params.Set("profileId", token.ProfileID)
+	params.Set("bucket", token.Bucket)
+	params.Set("key", token.Key)
+	params.Set("expires", strconv.FormatInt(token.Expires, 10))
+	params.Set("sig", s.signDownloadProxy(token))
+
+	rr := httptest.NewRecorder()
+	s.handleDownloadProxy(rr, httptest.NewRequest(http.MethodHead, "/download-proxy?"+params.Encode(), nil))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("body length=%d, want 0", rr.Body.Len())
+	}
+	for header, want := range map[string]string{
+		"Cache-Control":       "no-store",
+		"Content-Disposition": `attachment; filename=report.txt`,
+		"Content-Length":      "5",
+		"Content-Type":        "text/plain",
+		"ETag":                "abc",
+	} {
+		if got := rr.Header().Get(header); got != want {
+			t.Fatalf("%s=%q, want %q", header, got, want)
+		}
 	}
 }
 

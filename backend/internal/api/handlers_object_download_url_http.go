@@ -130,8 +130,8 @@ func (svc objectDownloadURLHTTPService) executeGet(metric *storageMetric, r *htt
 	if secrets.Provider == models.ProfileProviderAwsS3 || secrets.Provider == models.ProfileProviderS3Compatible {
 		presigner, err := s3PresignClientFromProfile(secrets, svc.server.cfg.AllowRemote)
 		if err != nil {
-			metric.SetStatus("internal_error")
-			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectDownloadURLHTTPError(http.StatusInternalServerError, "internal_error", "failed to prepare download presigner", nil)
+			metric.SetStatus("invalid_config")
+			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectDownloadURLHTTPError(http.StatusBadRequest, "invalid_config", "failed to prepare download presigner", nil)
 		}
 		resp, err := presigner.PresignGetObject(
 			r.Context(),
@@ -140,7 +140,11 @@ func (svc objectDownloadURLHTTPService) executeGet(metric *storageMetric, r *htt
 		)
 		if err != nil {
 			metric.SetStatus("remote_error")
-			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectDownloadURLHTTPError(http.StatusBadRequest, "invalid_request", "failed to generate download url", map[string]any{"bucket": bucket, "key": key, "error": err.Error()})
+			return nil, err, "", rcloneAPIErrorContext{
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "invalid_request",
+				DefaultMessage: "failed to generate download url",
+			}, map[string]any{"bucket": bucket, "key": key}, nil
 		}
 		out := buildObjectDownloadURLResponse(resp.URL, expires, time.Now())
 		metric.SetStatus("success")

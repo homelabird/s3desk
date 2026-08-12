@@ -4,11 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3client"
 )
 
 func cleanupS3PrefixMarkerIfEmpty(ctx context.Context, secrets models.ProfileSecrets, bucket, prefix string, allowRemote bool) error {
@@ -22,31 +20,5 @@ func cleanupS3PrefixMarkerIfEmpty(ctx context.Context, secrets models.ProfileSec
 		return nil
 	}
 
-	client, err := s3ClientFromProfile(secrets, allowRemote)
-	if err != nil {
-		return err
-	}
-	resp, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-		Bucket:  aws.String(bucket),
-		Prefix:  aws.String(prefix),
-		MaxKeys: aws.Int32(2),
-	})
-	if err != nil {
-		return err
-	}
-
-	for _, obj := range resp.Contents {
-		if obj.Key == nil {
-			continue
-		}
-		if *obj.Key != prefix {
-			return nil
-		}
-	}
-
-	_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(prefix),
-	})
-	return err
+	return s3client.DeletePrefixMarkerIfEmpty(ctx, secrets, bucket, prefix, s3client.ProfileOptions{AllowRemote: allowRemote})
 }

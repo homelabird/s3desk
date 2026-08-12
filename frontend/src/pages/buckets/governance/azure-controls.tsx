@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { BucketPublicExposureMode } from "../../../api/types";
 import {
   AzurePublicExposureControlBody,
+  AzureLegalHoldControlBody,
   AzureStoredAccessPoliciesActions,
   AzureStoredAccessPoliciesControlBody,
   AzureVersioningControlBody,
@@ -17,6 +18,7 @@ import {
 } from "./shell";
 import {
   buildAzureAccessRequest,
+  buildAzureLegalHoldRequest,
   buildAzureProtectionRequest,
   buildAzurePublicExposureRequest,
   buildVersioningRequest,
@@ -62,12 +64,16 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
   );
   const [allowProtectedAppendWritesAll, setAllowProtectedAppendWritesAll] =
     useState(draft.allowProtectedAppendWritesAll);
+  const [legalHoldTagsText, setLegalHoldTagsText] = useState(
+    draft.legalHoldTags.join(", "),
+  );
   const immutability = props.governance.protection?.immutability as
     | AzureImmutabilityView
     | undefined;
   const immutabilityEditable = immutability?.editable !== false;
   const immutabilityLocked =
     normalizeAzureImmutabilityMode(immutability?.mode) === "locked";
+  const legalHoldEditable = draft.legalHoldEditable;
   const mutationRunner = useLinkedGovernanceMutationState(props);
 
   const publicExposureMutation = useGovernanceControlMutation(mutationRunner, {
@@ -120,6 +126,16 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
       ),
   });
 
+  const legalHoldMutation = useGovernanceControlMutation(mutationRunner, {
+    successMessage: "Legal hold updated",
+    mutationFn: () =>
+      props.api.buckets.putBucketProtection(
+        props.profileId,
+        props.bucket,
+        buildAzureLegalHoldRequest(legalHoldTagsText),
+      ),
+  });
+
   const headerTags = buildAzureSummaryTags(props.governance, {
     publicMode,
     versioningStatus,
@@ -128,7 +144,8 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
     publicExposureMutation.isPending ||
     accessMutation.isPending ||
     protectionMutation.isPending ||
-    versioningMutation.isPending;
+    versioningMutation.isPending ||
+    legalHoldMutation.isPending;
 
   return (
     <GovernanceControlsLayout
@@ -138,7 +155,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
       onClose={props.onClose}
       closeDisabled={anyMutationPending}
       summaryTitle="Azure Controls"
-      summaryDescription="Manage anonymous access, stored access policies, account-level versioning, soft delete, and Azure container immutability from one controls surface."
+      summaryDescription="Manage anonymous access, stored access policies, account-level versioning, soft delete, container immutability, and legal-hold tags from one controls surface."
       summaryTags={headerTags}
       isRefreshing={props.isFetching || anyMutationPending}
       warnings={props.governance}
@@ -194,7 +211,6 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
                 setSoftDeleteEnabled={setSoftDeleteEnabled}
                 softDeleteDays={softDeleteDays}
                 setSoftDeleteDays={setSoftDeleteDays}
-                immutability={immutability}
                 immutabilityEditable={immutabilityEditable}
                 immutabilityLocked={immutabilityLocked}
                 immutabilityEnabled={immutabilityEnabled}
@@ -209,6 +225,26 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
                 setAllowProtectedAppendWritesAll={
                   setAllowProtectedAppendWritesAll
                 }
+                warnings={renderWarningStack(
+                  extractWarningList(props.governance.protection),
+                )}
+              />
+            ),
+          },
+          {
+            testId: "bucket-governance-legal-hold",
+            title: "Legal hold",
+            description:
+              "Manage Azure container legal hold tags explicitly. Clearing the field releases every tag currently listed on the container.",
+            saveLoading: legalHoldMutation.isPending,
+            saveDisabled: !legalHoldEditable,
+            onSave: () => legalHoldMutation.mutate(),
+            content: (
+              <AzureLegalHoldControlBody
+                legalHold={draft.legalHold}
+                legalHoldTagsText={legalHoldTagsText}
+                setLegalHoldTagsText={setLegalHoldTagsText}
+                legalHoldEditable={legalHoldEditable}
                 warnings={renderWarningStack(
                   extractWarningList(props.governance.protection),
                 )}
