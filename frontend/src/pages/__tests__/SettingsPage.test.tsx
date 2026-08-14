@@ -184,7 +184,7 @@ describe('SettingsPage', () => {
 		renderSettingsPage(undefined, '/?settings=objects')
 
 		expect(screen.getByRole('tab', { name: 'Objects' })).toHaveAttribute('aria-selected', 'true')
-		expect(await screen.findByText('Changes save immediately.')).toBeInTheDocument()
+		expect(await screen.findByText('Saved immediately in this browser.')).toBeInTheDocument()
 	})
 
 	it('resets dismissed dialog preferences only for the current api token scope', async () => {

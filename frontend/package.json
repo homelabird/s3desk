@@ -33,6 +33,7 @@
     "test:e2e:core": "playwright test --grep-invert \"@check-smoke|@mobile-responsive|@demo|@perf|@visual\"",
     "test:e2e:visual": "playwright test --grep @visual --project=chromium",
     "test:e2e:design-audit": "playwright test tests/design-audit-visual.spec.ts --project=chromium",
+    "test:e2e:firefox-reflow": "PLAYWRIGHT_FIREFOX=1 playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow",
     "validate:design-audit": "node ./scripts/run-design-audit-validation.mjs",
     "test:e2e:demo": "playwright test --grep @demo --project=chromium",
     "test:e2e:perf": "PERF_TESTS=1 playwright test --grep @perf --project=chromium",

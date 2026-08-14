@@ -20,8 +20,6 @@ export type ProfileChecklistGroup = {
 
 export type ProfileProviderChecklist = {
 	providerLabel: string
-	completeCount: number
-	incompleteCount: number
 	groups: ProfileChecklistGroup[]
 }
 
@@ -393,11 +391,8 @@ export function buildProfileProviderChecklist(args: BuildProfileProviderChecklis
 				? buildOciItems(args)
 				: buildS3Items(args)
 	const groups = [...providerGroups, buildPrivateEndpointGroup(args)]
-	const items = groups.flatMap((group) => group.items)
 	return {
 		providerLabel: args.viewState.providerLabel,
-		completeCount: items.filter((item) => item.status === 'complete').length,
-		incompleteCount: items.filter((item) => item.status === 'incomplete').length,
 		groups,
 	}
 }

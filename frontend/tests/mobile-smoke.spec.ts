@@ -145,7 +145,8 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		const navButton = page.getByRole('button', { name: 'Open navigation' })
 		const profileSelect = page.getByRole('combobox', { name: 'Profile' })
 		const transfersButton = page.getByRole('button', { name: 'Transfers' })
-		const appMenuButton = page.getByTestId('app-header').getByRole('button', { name: 'App menu' })
+		const appHeader = page.getByTestId('app-header')
+		const appMenuButton = appHeader.getByRole('button', { name: 'App menu' })
 
 		await expect(navButton).toBeVisible()
 		await expect(profileSelect).toBeVisible()
@@ -155,6 +156,18 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await expectMinTouchTarget(profileSelect)
 		await expectMinTouchTarget(transfersButton)
 		await expectMinTouchTarget(appMenuButton)
+		const headerGeometry = await appHeader.evaluate((header) => {
+			const headerRect = header.getBoundingClientRect() // e2e-geometry-allow verifies the stacked header owns both rows
+			const profileRect = header.querySelector('[data-testid="app-header-profile-row"]')?.getBoundingClientRect()
+			const mainRect = document.querySelector('main[data-scroll-container="app-content"]')?.getBoundingClientRect()
+			return {
+				headerBottom: headerRect.bottom,
+				profileBottom: profileRect?.bottom ?? 0,
+				mainTop: mainRect?.top ?? 0,
+			}
+		})
+		expect(headerGeometry.profileBottom).toBeLessThanOrEqual(headerGeometry.headerBottom + 1)
+		expect(headerGeometry.mainTop).toBeGreaterThanOrEqual(headerGeometry.headerBottom - 1)
 
 		await appMenuButton.click()
 		const settingsItem = page.getByRole('menuitem', { name: /Settings/i })

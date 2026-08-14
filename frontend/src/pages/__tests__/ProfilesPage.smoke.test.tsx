@@ -314,7 +314,7 @@ describe('ProfilesPage', () => {
 
 		expect(await screen.findByText('Profiles need updates (1)')).toBeInTheDocument()
 		expect(screen.getAllByText('Legacy GCS').length).toBeGreaterThan(0)
-		expect(screen.getAllByText('Needs update').length).toBeGreaterThan(0)
+		expect((await screen.findAllByText('Needs update')).length).toBeGreaterThan(0)
 		fireEvent.click(screen.getByRole('button', { name: 'Edit profile Legacy GCS' }))
 		expect(await screen.findByText('Edit Profile', undefined, { timeout: 10_000 })).toBeInTheDocument()
 	}, 20_000)

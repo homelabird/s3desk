@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 
 import { useLocalStorageState } from './lib/useLocalStorageState'
 import { ThemeModeContext, type ThemeMode, type ThemeModeContextValue } from './themeModeContext'
@@ -14,11 +14,27 @@ type ThemeModeProviderProps = {
 
 export function ThemeModeProvider(props: ThemeModeProviderProps) {
 	const [mode, setMode] = useLocalStorageState<ThemeMode>('themeMode', getInitialThemeMode())
+	const transitionFrameRef = useRef<number | undefined>(undefined)
 
 	useEffect(() => {
-		document.documentElement.dataset.theme = mode
-		document.documentElement.style.colorScheme = mode
+		const root = document.documentElement
+		root.dataset.themeChanging = 'true'
+		root.dataset.theme = mode
+		root.style.colorScheme = mode
 		document.body.dataset.theme = mode
+		transitionFrameRef.current = window.requestAnimationFrame(() => {
+			transitionFrameRef.current = window.requestAnimationFrame(() => {
+				delete root.dataset.themeChanging
+				transitionFrameRef.current = undefined
+			})
+		})
+
+		return () => {
+			if (transitionFrameRef.current !== undefined) {
+				window.cancelAnimationFrame(transitionFrameRef.current)
+			}
+			delete root.dataset.themeChanging
+		}
 	}, [mode])
 
 	const toggleMode = useCallback(() => {

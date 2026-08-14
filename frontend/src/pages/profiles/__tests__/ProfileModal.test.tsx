@@ -42,6 +42,12 @@ describe('ProfileModal', () => {
 
 		expect(getEndpointInput()).toHaveValue('')
 		expect(getPublicEndpointInput()).toHaveAttribute('placeholder', 'https://storage.example.com')
+		const setupStatus = screen.getByLabelText('S3 Compatible setup status')
+		expect(setupStatus).toHaveTextContent('Before saving')
+		expect(setupStatus).toHaveTextContent('2 items need attention.')
+		expect(setupStatus).toHaveTextContent('Add endpoint URL, region, and profile name.')
+		expect(setupStatus).toHaveTextContent('Add access key ID and secret.')
+		expect(setupStatus).not.toHaveTextContent('Optional')
 	})
 
 	it('keeps the existing endpoint in edit mode', () => {
@@ -60,6 +66,9 @@ describe('ProfileModal', () => {
 		})
 
 		expect(getEndpointInput()).toHaveValue('https://example.com')
+		const setupStatus = screen.getByLabelText('S3 Compatible setup status')
+		expect(setupStatus).toHaveTextContent('Ready to save')
+		expect(setupStatus).toHaveTextContent('Required settings are complete.')
 	})
 
 	it('shows provider as a read-only text field in edit mode', () => {

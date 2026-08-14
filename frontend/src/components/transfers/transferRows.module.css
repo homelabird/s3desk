@@ -32,7 +32,7 @@
 	overflow: hidden;
 	border: 1px solid var(--s3d-color-border-strong);
 	border-radius: var(--s3d-radius-lg);
-	background: var(--s3d-color-bg-code);
+	background: var(--s3d-media-checkerboard);
 }
 
 .rowPreviewImage {

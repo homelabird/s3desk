@@ -482,6 +482,32 @@ test.describe('overlay accessibility scans', () => {
 		await expectNoA11yViolations(page, page.locator('body'))
 	})
 
+	test('Buckets empty state has no whole-page axe violations', async ({ page }) => {
+		await installProfilesBucketsMobileResponsiveFixtures(page, { buckets: [] })
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		await gotoBucketsPage(page, { ready: (scope) => scope.getByText('No buckets found in this storage.') })
+
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
+	test('Buckets loading state has no whole-page axe violations', async ({ page }) => {
+		await installProfilesBucketsMobileResponsiveFixtures(page)
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		let releaseBuckets: () => void = () => undefined
+		const bucketsReleased = new Promise<void>((resolve) => {
+			releaseBuckets = resolve
+		})
+		await page.route('**/api/v1/buckets', async (route) => {
+			await bucketsReleased
+			await route.fallback()
+		})
+
+		await gotoWithDynamicImportRecovery(page, '/buckets', (scope) => scope.getByLabel('Loading buckets'))
+		await expectNoA11yViolations(page, page.locator('body'))
+		releaseBuckets()
+		await expect(page.getByText('responsive-bucket')).toBeVisible()
+	})
+
 	test('Objects page has no whole-page axe violations', async ({ page }) => {
 		await page.setViewportSize({ width: 1440, height: 900 })
 		await seedObjectsA11yStorage(page)
@@ -521,6 +547,23 @@ test.describe('overlay accessibility scans', () => {
 
 		await expectNoA11yViolations(page, page.getByTestId('app-header'))
 		await expectNoA11yViolations(page, page.getByRole('navigation', { name: 'Primary' }))
+	})
+
+	test('forced colors preserves Objects navigation, focus, and selection semantics', async ({ page }) => {
+		await page.emulateMedia({ forcedColors: 'active' })
+		await page.setViewportSize({ width: 1440, height: 900 })
+		await seedObjectsA11yStorage(page)
+		await installObjectsA11yApi(page)
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'))
+
+		await expect(page.locator('[aria-current="page"]')).toBeVisible()
+		const search = page.getByPlaceholder('Search current folder')
+		await search.focus()
+		expect(await search.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
+		const selectObject = page.getByRole('button', { name: 'Select object alpha.png' })
+		await selectObject.click()
+		await expect(selectObject).toHaveAttribute('aria-pressed', 'true')
+		await expectNoA11yViolations(page, page.locator('body'))
 	})
 
 	test('Objects global search drawer has no axe violations', async ({ page }) => {
@@ -601,6 +644,8 @@ test.describe('overlay accessibility scans', () => {
 		const drawer = dialogByName(page, 'View options')
 		await expect(drawer).toBeVisible()
 		await expect(drawer.getByLabel('Type filter')).toBeVisible()
+		await drawer.getByLabel('Favorites only').check()
+		await expect(drawer.getByLabel('Favorites first')).toBeDisabled()
 
 		await expectNoA11yViolations(page, drawer)
 	})

@@ -131,6 +131,11 @@
 	gap: 8px;
 }
 
+.headerStacked {
+	height: auto;
+	line-height: normal;
+}
+
 .headerTopRow,
 .headerProfileRow {
 	width: 100%;
@@ -288,7 +293,7 @@
 	.headerLeading :global(.ant-btn),
 	.headerActions :global(.ant-btn),
 	.headerProfileRow :global(.ant-btn) {
-		min-height: 44px;
+		min-height: 48px;
 	}
 
 	.headerLeading :global(.ant-btn),

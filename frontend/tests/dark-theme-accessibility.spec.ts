@@ -141,6 +141,32 @@ test.describe('dark theme accessibility scans', () => {
 		await expectNoA11yViolations(page, drawer)
 	})
 
+	test('theme switch disables intermediate color transitions', async ({ page }) => {
+		await setupDarkObjectsPage(page, { width: 1440, height: 900 })
+		await page.getByRole('button', { name: 'App menu' }).click()
+
+		const transitionProof = page.evaluate(() => new Promise<{ changing: boolean; sampled: number; nonZero: string[] }>((resolve) => {
+			const observer = new MutationObserver(() => {
+				observer.disconnect()
+				const elements = [...document.querySelectorAll<HTMLElement>('.ant-btn, .ant-menu-item, .ant-layout, .ant-layout-sider')]
+				const durations = elements.map((element) => getComputedStyle(element).transitionDuration)
+				resolve({
+					changing: document.documentElement.dataset.themeChanging === 'true',
+					sampled: durations.length,
+					nonZero: durations.filter((duration) => duration.split(', ').some((value) => value !== '0s')),
+				})
+			})
+			observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+		}))
+
+		await page.getByRole('menuitem', { name: /Light mode/i }).click()
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+		const proof = await transitionProof
+		expect(proof.changing).toBe(true)
+		expect(proof.sampled).toBeGreaterThan(5)
+		expect(proof.nonZero).toEqual([])
+	})
+
 	test('mobile profile edit dialog has no axe violations in dark mode', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await installProfilesBucketsMobileResponsiveFixtures(page)

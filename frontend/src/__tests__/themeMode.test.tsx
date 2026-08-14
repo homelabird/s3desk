@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useThemeMode } from '../useThemeMode'
@@ -20,12 +20,19 @@ describe('ThemeModeProvider', () => {
 		window.matchMedia = originalMatchMedia
 		window.localStorage.clear()
 		document.documentElement.dataset.theme = ''
+		delete document.documentElement.dataset.themeChanging
 		document.documentElement.style.colorScheme = ''
 		document.body.dataset.theme = ''
 		vi.restoreAllMocks()
 	})
 
 	it('uses the preferred color scheme initially and updates document theme state when toggled', () => {
+		const animationFrames: FrameRequestCallback[] = []
+		vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+			animationFrames.push(callback)
+			return animationFrames.length
+		})
+		vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
 		window.matchMedia = vi.fn().mockImplementation((query: string): MediaQueryList => ({
 			matches: query === '(prefers-color-scheme: dark)',
 			media: query,
@@ -47,6 +54,12 @@ describe('ThemeModeProvider', () => {
 		expect(document.documentElement.dataset.theme).toBe('dark')
 		expect(document.documentElement.style.colorScheme).toBe('dark')
 		expect(document.body.dataset.theme).toBe('dark')
+		expect(document.documentElement.dataset.themeChanging).toBe('true')
+
+		act(() => animationFrames.shift()?.(0))
+		expect(document.documentElement.dataset.themeChanging).toBe('true')
+		act(() => animationFrames.shift()?.(16))
+		expect(document.documentElement.dataset.themeChanging).toBeUndefined()
 
 		fireEvent.click(screen.getByRole('button', { name: 'dark' }))
 
@@ -55,5 +68,6 @@ describe('ThemeModeProvider', () => {
 		expect(document.documentElement.dataset.theme).toBe('light')
 		expect(document.documentElement.style.colorScheme).toBe('light')
 		expect(document.body.dataset.theme).toBe('light')
+		expect(document.documentElement.dataset.themeChanging).toBe('true')
 	})
 })

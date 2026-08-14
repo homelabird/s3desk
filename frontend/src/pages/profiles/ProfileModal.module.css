@@ -66,29 +66,44 @@
 	background: color-mix(in srgb, var(--s3d-color-bg-card) 94%, var(--s3d-color-bg));
 }
 
-.providerChecklist,
 .switchCard {
 	padding: 12px 14px;
 	border-radius: var(--s3d-radius-lg);
 }
 
 .providerChecklist {
-	padding: 0 2px 0;
-	border-radius: 0;
-	border: 0;
-	background: transparent;
-}
-
-.providerChecklistHeader {
 	display: flex;
-	align-items: center;
-	justify-content: flex-start;
-	gap: 8px;
-	flex-wrap: wrap;
-	padding: 0 2px 1px;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 11px 13px;
+	border: 1px solid var(--s3d-color-warning-border);
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--s3d-color-warning-bg) 68%, var(--s3d-color-bg-card));
 }
 
-.providerChecklistTitleBlock,
+.providerChecklist[data-status='complete'] {
+	border-color: color-mix(in srgb, var(--s3d-color-success-text) 38%, var(--s3d-color-border));
+	background: color-mix(in srgb, var(--s3d-color-success-bg) 72%, var(--s3d-color-bg-card));
+}
+
+.providerChecklistIcon {
+	flex: 0 0 auto;
+	margin-top: 2px;
+	color: var(--s3d-color-warning-text);
+	font-size: 17px;
+	line-height: 1;
+}
+
+.providerChecklist[data-status='complete'] .providerChecklistIcon {
+	color: var(--s3d-color-success-text);
+}
+
+.providerChecklistBody,
+.sectionText,
+.switchCardCopy {
+	min-width: 0;
+}
+
 .sectionText,
 .switchCardCopy {
 	display: flex;
@@ -96,20 +111,36 @@
 	gap: 1px;
 }
 
-.providerChecklistTitleBlock,
-.sectionText,
-.switchCardCopy {
-	min-width: 0;
+.providerChecklistBody {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 5px;
 }
 
-.providerChecklistTitleBlock {
-	flex-direction: row;
+.providerChecklistHeader {
+	display: flex;
 	align-items: baseline;
 	gap: 8px;
+	flex-wrap: wrap;
 }
 
-.providerChecklistTitleBlock :global(.ant-typography) {
+.providerChecklistHeader :global(.ant-typography) {
 	margin-bottom: 0;
+}
+
+.providerChecklistSummary {
+	font-size: 12px;
+}
+
+.providerChecklistItems {
+	display: grid;
+	gap: 2px;
+	margin: 0;
+	padding-left: 18px;
+	color: var(--s3d-color-text-secondary);
+	font-size: 12px;
+	line-height: 1.45;
 }
 
 .sectionMetaText {

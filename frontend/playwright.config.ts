@@ -18,6 +18,7 @@ const headless = !isFalsey(process.env.PLAYWRIGHT_HEADLESS)
 const slowMoMs = parseInteger(process.env.PLAYWRIGHT_SLOW_MO_MS)
 const testTimeoutMs = parseInteger(process.env.PLAYWRIGHT_TEST_TIMEOUT_MS) ?? 30_000
 const expectTimeoutMs = parseInteger(process.env.PLAYWRIGHT_EXPECT_TIMEOUT_MS) ?? 5_000
+const includeFirefox = isTruthy(process.env.PLAYWRIGHT_FIREFOX)
 
 const videoMode = parseMode(process.env.PLAYWRIGHT_VIDEO_MODE, VIDEO_MODES, recordArtifacts || recordVideos ? 'on' : 'off')
 const screenshotMode = parseMode(
@@ -87,6 +88,13 @@ export default defineConfig({
 			testMatch:
 				/(?:mobile-smoke|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
 		},
+		...(includeFirefox
+			? [{
+					name: 'firefox-reflow',
+					use: { ...devices['Desktop Firefox'] },
+					testMatch: /wcag-reflow\.spec\.ts/,
+				}]
+			: []),
 	],
 })
 

@@ -96,8 +96,21 @@ describe('ProfilesTable', () => {
 			})),
 		)
 
-		expect(screen.getAllByRole('listitem')).toHaveLength(20)
+		expect(screen.getAllByRole('listitem')).toHaveLength(10)
 		expect(screen.getByText('Profile 0')).toBeInTheDocument()
 		expect(screen.queryByText('Profile 999')).not.toBeInTheDocument()
+	})
+
+	it('renders short compact profile lists without measurement windowing', () => {
+		renderTable(
+			'token-a',
+			Array.from({ length: 10 }, (_, index) => ({
+				...row,
+				profile: { ...profile, id: `profile-${index}`, name: `Profile ${index}` },
+			})),
+		)
+
+		expect(screen.getAllByRole('listitem')).toHaveLength(10)
+		expect(screen.getByText('Profile 9')).toBeInTheDocument()
 	})
 })

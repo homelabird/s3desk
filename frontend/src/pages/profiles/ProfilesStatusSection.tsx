@@ -1,5 +1,7 @@
 import { Alert, Button, Empty, Space, Spin, Typography } from 'antd'
 
+import { useEffect, useState } from 'react'
+
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import type { Profile } from '../../api/types'
 import { ProfilesTable } from './ProfilesTable'
@@ -32,6 +34,23 @@ type Props = {
 }
 
 export function ProfilesStatusSection(props: Props) {
+	const [tableReady, setTableReady] = useState(false)
+
+	useEffect(() => {
+		if (tableReady || props.tableRows.length === 0) return
+
+		let renderTimer = 0
+		const firstFrame = requestAnimationFrame(() => {
+			renderTimer = window.setTimeout(() => {
+				setTableReady(true)
+			}, 0)
+		})
+		return () => {
+			cancelAnimationFrame(firstFrame)
+			clearTimeout(renderTimer)
+		}
+	}, [props.tableRows.length, tableReady])
+
 	const visibleAttentionProfiles = props.profilesNeedingAttention.slice(0, 5)
 	const hiddenAttentionCount = props.profilesNeedingAttention.length - visibleAttentionProfiles.length
 
@@ -92,7 +111,7 @@ export function ProfilesStatusSection(props: Props) {
 						Create profile
 					</Button>
 				</Empty>
-			) : (
+			) : props.tableRows.length > 0 && !tableReady ? null : (
 				<ProfilesTable
 					scopeKey={props.currentScopeKey}
 					rows={props.tableRows}
