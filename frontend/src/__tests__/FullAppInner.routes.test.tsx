@@ -208,53 +208,53 @@ function mockViewportWidth(width: number) {
 
 function mockAuthorizedShellApi(profileIds: string[] = ['profile-1']) {
 	const now = '2024-01-01T00:00:00Z'
+	const profiles = profileIds.map((id, index) => ({
+		id,
+		name: index === 0 ? 'Primary Profile' : `Profile ${index + 1}`,
+		provider: 's3_compatible',
+		endpoint: 'http://127.0.0.1:9000',
+		region: 'us-east-1',
+		forcePathStyle: true,
+		preserveLeadingSlash: false,
+		tlsInsecureSkipVerify: true,
+		createdAt: now,
+		updatedAt: now,
+	}))
+	const meta = {
+		version: 'test',
+		serverAddr: '127.0.0.1:8080',
+		dataDir: '/data',
+		staticDir: '/app/ui',
+		apiTokenEnabled: true,
+		encryptionEnabled: false,
+		capabilities: {
+			profileTls: { enabled: false, reason: 'test' },
+			providers: {},
+		},
+		allowedLocalDirs: [],
+		jobConcurrency: 1,
+		uploadSessionTTLSeconds: 3600,
+		uploadDirectStream: false,
+		transferEngine: {
+			name: 'rclone',
+			available: true,
+			compatible: true,
+			minVersion: '1.52.0',
+			path: '/usr/bin/rclone',
+			version: 'v1.66.0',
+		},
+	}
 	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
-		getMeta: vi.fn().mockResolvedValue({
-			version: 'test',
-			serverAddr: '127.0.0.1:8080',
-			dataDir: '/data',
-			staticDir: '/app/ui',
-			apiTokenEnabled: true,
-			encryptionEnabled: false,
-			capabilities: {
-				profileTls: { enabled: false, reason: 'test' },
-				providers: {},
-			},
-			allowedLocalDirs: [],
-			jobConcurrency: 1,
-			uploadSessionTTLSeconds: 3600,
-			uploadDirectStream: false,
-			transferEngine: {
-				name: 'rclone',
-				available: true,
-				compatible: true,
-				minVersion: '1.52.0',
-				path: '/usr/bin/rclone',
-				version: 'v1.66.0',
-			},
-		} as never),
+		getBootstrap: vi.fn().mockResolvedValue({ meta, profiles } as never),
 	} as never)
 	vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue({
-		listProfiles: vi.fn().mockResolvedValue(
-			profileIds.map((id, index) => ({
-				id,
-				name: index === 0 ? 'Primary Profile' : `Profile ${index + 1}`,
-				provider: 's3_compatible',
-				endpoint: 'http://127.0.0.1:9000',
-				region: 'us-east-1',
-				forcePathStyle: true,
-				preserveLeadingSlash: false,
-				tlsInsecureSkipVerify: true,
-				createdAt: now,
-				updatedAt: now,
-			})) as never,
-		),
+		listProfiles: vi.fn().mockResolvedValue(profiles as never),
 	} as never)
 }
 
 function mockUnauthorizedShellApi() {
 	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
-		getMeta: vi.fn().mockRejectedValue(
+		getBootstrap: vi.fn().mockRejectedValue(
 			new APIError({
 				status: 401,
 				code: 'unauthorized',
@@ -267,9 +267,13 @@ function mockUnauthorizedShellApi() {
 	} as never)
 }
 
-function renderShell(initialEntries: Array<string | { pathname: string; state?: unknown }>, apiToken = 'token') {
+function renderShell(
+	initialEntries: Array<string | { pathname: string; state?: unknown }>,
+	apiToken = 'token',
+	profileId: string | null = 'profile-1',
+) {
 	window.localStorage.setItem('apiToken', JSON.stringify(apiToken))
-	window.localStorage.setItem('profileId', JSON.stringify('profile-1'))
+	window.localStorage.setItem('profileId', JSON.stringify(profileId))
 
 	const client = new QueryClient({
 		defaultOptions: {
@@ -466,6 +470,19 @@ describe('FullAppInner route remounts', () => {
 		await waitFor(() => {
 			expect(window.localStorage.getItem(serverScopedStorageKey('app', 'token-a', 'profileId'))).toBe('null')
 		})
+	})
+
+	it.each([
+		['/buckets', 'buckets-route-seeded-scope'],
+		['/objects', 'objects-route-seeded-scope'],
+		['/jobs', 'jobs-route-seeded-token'],
+	])('keeps %s open when no profile is connected', async (pathname, testId) => {
+		mockViewportWidth(1280)
+		mockAuthorizedShellApi([])
+
+		renderShell([pathname], 'token-a', null)
+
+		expect(await screen.findByTestId(testId)).toBeInTheDocument()
 	})
 
 	it('remounts JobsPage when same-path navigation pushes new location.state', async () => {

@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
 
-import type { APIClientShape } from './api/client'
+import { APIError, type APIClientShape } from './api/client'
 import { queryKeys } from './api/queryKeys'
 import { renderProfileGate } from './app/ProfileGate'
 import { clearPersistedTransfersStorage } from './components/transfers/useTransfersPersistence'
@@ -37,6 +37,7 @@ export function useFullAppProfileState({
 	apiToken,
 	pathname,
 }: UseFullAppProfileStateArgs) {
+	const queryClient = useQueryClient()
 	const profileStorageKey = useMemo(
 		() => serverScopedStorageKey('app', apiToken, 'profileId'),
 		[apiToken],
@@ -70,13 +71,25 @@ export function useFullAppProfileState({
 
 	const metaQuery = useQuery({
 		queryKey: queryKeys.server.meta(apiToken),
-		queryFn: () => api.server.getMeta(),
+		queryFn: async () => {
+			const bootstrap = await api.server.getBootstrap().catch(async (error) => {
+				if (!(error instanceof APIError) || error.status !== 404) throw error
+				const [meta, profiles] = await Promise.all([
+					api.server.getMeta(),
+					api.profiles.listProfiles(),
+				])
+				return { meta, profiles }
+			})
+			queryClient.setQueryData(queryKeys.profiles.list(apiToken), bootstrap.profiles)
+			return bootstrap.meta
+		},
 		retry: false,
 	})
 	const profilesQuery = useQuery({
 		queryKey: queryKeys.profiles.list(apiToken),
 		queryFn: () => api.profiles.listProfiles(),
 		enabled: metaQuery.isSuccess,
+		staleTime: 30_000,
 	})
 
 	useEffect(() => {

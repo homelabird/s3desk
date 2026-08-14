@@ -93,6 +93,19 @@ describe('api fixture helpers', () => {
 		expect(fulfill).not.toHaveBeenCalled()
 	})
 
+	it('keeps bootstrap fail-closed when a permissive fallback is configured', async () => {
+		const routes = buildFixtureRoutes([], { status: 200, json: {} })
+		const { ctx, fulfill } = createMockApiContext()
+
+		expect(routes[0]).toMatchObject({ method: 'GET', path: '/bootstrap' })
+		await routes[0]?.handle(ctx)
+		expect(fulfill).toHaveBeenCalledWith({
+			status: 404,
+			contentType: 'application/json',
+			body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
+		})
+	})
+
 	it('replays the last response in a sequence to model fail-then-retry success flows', async () => {
 		const [route] = buildFixtureRoutes([
 			sequenceFixture('GET', '/test', [

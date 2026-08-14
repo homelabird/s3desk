@@ -39,7 +39,7 @@ describe('BucketsList', () => {
 			/>,
 		)
 
-		expect(screen.getAllByRole('listitem')).toHaveLength(20)
+		expect(screen.getAllByRole('listitem')).toHaveLength(10)
 		expect(screen.getByText('bucket-0')).toBeInTheDocument()
 		expect(screen.queryByText('bucket-999')).not.toBeInTheDocument()
 	})

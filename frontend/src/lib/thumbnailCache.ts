@@ -372,8 +372,9 @@ async function prunePersistentThumbnailCache(
 	const orderedKeys = Object.entries(index)
 		.sort((a, b) => a[1] - b[1])
 		.map(([cacheKey]) => cacheKey)
-	while (orderedKeys.length > maxEntries) {
-		const oldestKey = orderedKeys.shift()
+	const removeCount = Math.max(0, orderedKeys.length - maxEntries)
+	for (let i = 0; i < removeCount; i++) {
+		const oldestKey = orderedKeys[i]
 		if (!oldestKey) break
 		await deletePersistentThumbnailEntry(cache, oldestKey)
 		delete index[oldestKey]

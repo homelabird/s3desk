@@ -2,10 +2,9 @@ import { LogoutOutlined, MoonOutlined, SettingOutlined, SunOutlined } from '@ant
 import { useQueryClient } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
 import { createElement, useCallback, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 
 import { confirmDangerAction } from './lib/confirmDangerAction'
-import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import type { ThemeMode } from './themeModeContext'
 
 type ScopedOverlayState = {
@@ -41,7 +40,6 @@ export function useFullAppShellState({
 	themeMode,
 	toggleThemeMode,
 }: UseFullAppShellStateArgs) {
-	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [navState, setNavState] = useState<ScopedOverlayState>({
@@ -59,10 +57,6 @@ export function useFullAppShellState({
 		searchParams.has('settings') &&
 		(settingsState.scopeKey === null ||
 			(settingsState.open && settingsState.scopeKey === shellScopeKey))
-	const { guideOpen, setGuideOpen } = useKeyboardShortcuts(
-		(path) => navigate(path),
-		shellScopeKey,
-	)
 
 	const openNav = useCallback(() => {
 		setNavState({ open: true, scopeKey: shellScopeKey })
@@ -146,8 +140,6 @@ export function useFullAppShellState({
 		selectedKey,
 		navOpen,
 		settingsOpen,
-		guideOpen,
-		setGuideOpen,
 		openNav,
 		closeNav,
 		openSettings,

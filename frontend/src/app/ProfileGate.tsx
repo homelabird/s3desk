@@ -8,7 +8,12 @@ export function renderProfileGate(args: {
   if (profileId) {
     return null;
   }
-  if (pathname.startsWith("/profiles")) {
+  if (
+    pathname.startsWith("/profiles") ||
+    pathname.startsWith("/buckets") ||
+    pathname.startsWith("/objects") ||
+    pathname.startsWith("/jobs")
+  ) {
     return null;
   }
   return <Navigate to="/profiles" replace />;

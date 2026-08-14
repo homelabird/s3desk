@@ -96,7 +96,6 @@ describe('useFullAppController', () => {
 		const api = {} as APIClientShape
 		const setApiToken = vi.fn()
 		const setProfileId = vi.fn()
-		const setGuideOpen = vi.fn()
 		const refetch = vi.fn()
 		const openNav = vi.fn()
 		const closeNav = vi.fn()
@@ -131,10 +130,6 @@ describe('useFullAppController', () => {
 				profileId: 'profile-1',
 				profileName: 'Profile One',
 			},
-			guide: {
-				open: true,
-				close: vi.fn(),
-			},
 		}
 
 		profileStateRef.current = {
@@ -161,8 +156,6 @@ describe('useFullAppController', () => {
 			selectedKey: '/objects',
 			navOpen: true,
 			settingsOpen: true,
-			guideOpen: true,
-			setGuideOpen,
 			openNav,
 			closeNav,
 			openSettings,
@@ -223,8 +216,6 @@ describe('useFullAppController', () => {
 			settingsOpen: true,
 			closeSettings,
 			setApiToken,
-			guideOpen: true,
-			setGuideOpen,
 			theme,
 			viewport,
 		})
@@ -310,8 +301,6 @@ describe('useFullAppController', () => {
 			selectedKey: '/profiles',
 			navOpen: false,
 			settingsOpen: false,
-			guideOpen: false,
-			setGuideOpen: vi.fn(),
 			openNav: vi.fn(),
 			closeNav: vi.fn(),
 			openSettings: vi.fn(),
@@ -331,10 +320,6 @@ describe('useFullAppController', () => {
 					setApiToken,
 					profileId: null,
 					setProfileId,
-				},
-				guide: {
-					open: false,
-					close: vi.fn(),
 				},
 			},
 		}

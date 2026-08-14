@@ -17,12 +17,13 @@ type PendingTask<T> = {
 }
 
 const pendingQueue: PendingTask<unknown>[] = []
+let pendingQueueHead = 0
 let inFlight = 0
 let concurrencyLimit = getThumbnailRequestConcurrency(readStoredObjectsCostMode())
 
 function pumpThumbnailQueue() {
-	while (inFlight < concurrencyLimit && pendingQueue.length > 0) {
-		const task = pendingQueue.shift()
+	while (inFlight < concurrencyLimit && pendingQueueHead < pendingQueue.length) {
+		const task = pendingQueue[pendingQueueHead++]
 		if (!task || task.canceled) continue
 		task.started = true
 		inFlight += 1
@@ -32,6 +33,10 @@ function pumpThumbnailQueue() {
 			inFlight = Math.max(0, inFlight - 1)
 			pumpThumbnailQueue()
 		})
+	}
+	if (pendingQueueHead === pendingQueue.length) {
+		pendingQueue.length = 0
+		pendingQueueHead = 0
 	}
 }
 

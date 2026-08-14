@@ -865,6 +865,11 @@ type MetaResponse struct {
 	TransferEngine          TransferEngineInfo `json:"transferEngine"`
 }
 
+type BootstrapResponse struct {
+	Meta     MetaResponse `json:"meta"`
+	Profiles []Profile    `json:"profiles"`
+}
+
 type ServerMigrationManifest struct {
 	Format              string                                   `json:"format"`
 	BundleKind          string                                   `json:"bundleKind"`

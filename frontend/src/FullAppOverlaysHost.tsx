@@ -8,11 +8,6 @@ const SettingsDrawer = lazy(async () => {
 	return { default: m.SettingsDrawer }
 })
 
-const KeyboardShortcutGuide = lazy(async () => {
-	const m = await import('./components/KeyboardShortcutGuide')
-	return { default: m.KeyboardShortcutGuide }
-})
-
 export type FullAppOverlaysHostSettings = {
 	open: boolean
 	shellScopeKey: string
@@ -25,19 +20,12 @@ export type FullAppOverlaysHostSettings = {
 	profileName: string | null
 }
 
-export type FullAppOverlaysHostGuide = {
-	open: boolean
-	close: () => void
-}
-
 export type FullAppOverlaysHostProps = {
 	settings: FullAppOverlaysHostSettings
-	guide: FullAppOverlaysHostGuide
 }
 
 export function FullAppOverlaysHost({
 	settings,
-	guide,
 }: FullAppOverlaysHostProps) {
 	return (
 		<>
@@ -55,11 +43,6 @@ export function FullAppOverlaysHost({
 						profileId={settings.profileId}
 						profileName={settings.profileName}
 					/>
-				</Suspense>
-			) : null}
-			{guide.open ? (
-				<Suspense fallback={null}>
-					<KeyboardShortcutGuide open={true} onClose={guide.close} />
 				</Suspense>
 			) : null}
 		</>

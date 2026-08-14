@@ -179,6 +179,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Authenticated UI bootstrap data */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BootstrapResponse"];
+                    };
+                };
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/meta": {
         parameters: {
             query?: never;
@@ -4352,6 +4393,10 @@ export interface components {
         JobsListResponse: {
             items: components["schemas"]["Job"][];
             nextCursor?: string | null;
+        };
+        BootstrapResponse: {
+            meta: components["schemas"]["MetaResponse"];
+            profiles: components["schemas"]["Profile"][];
         };
         MetaResponse: {
             version: string;

@@ -1,5 +1,5 @@
 import type { RequestOptions } from '../retryTransport'
-import type { MetaResponse, ServerPortableImportResponse, ServerRestoreResponse, ServerStagedRestoreListResponse } from '../types'
+import type { BootstrapResponse, MetaResponse, ServerPortableImportResponse, ServerRestoreResponse, ServerStagedRestoreListResponse } from '../types'
 
 type RequestFn = <T>(path: string, init: RequestInit, options?: RequestOptions) => Promise<T>
 
@@ -14,6 +14,10 @@ function buildBundleForm(file: File, password?: string): FormData {
 
 export function getMeta(request: RequestFn): Promise<MetaResponse> {
 	return request('/meta', { method: 'GET' })
+}
+
+export function getBootstrap(request: RequestFn): Promise<BootstrapResponse> {
+	return request('/bootstrap', { method: 'GET' })
 }
 
 export function restoreServerBackup(request: RequestFn, file: File, password?: string): Promise<ServerRestoreResponse> {

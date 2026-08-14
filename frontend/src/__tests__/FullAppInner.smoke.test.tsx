@@ -98,6 +98,10 @@ function mockShellApi() {
 	] as never)
 
 	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
+		getBootstrap: vi.fn().mockImplementation(async () => ({
+			meta: await getMeta(),
+			profiles: await listProfiles(),
+		})),
 		getMeta,
 	} as never)
 	vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue({

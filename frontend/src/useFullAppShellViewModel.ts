@@ -1,9 +1,6 @@
-import { useCallback, useMemo } from 'react'
+import { useMemo } from 'react'
 
-import type {
-	FullAppOverlaysHostGuide,
-	FullAppOverlaysHostSettings,
-} from './FullAppOverlaysHost'
+import type { FullAppOverlaysHostSettings } from './FullAppOverlaysHost'
 import type {
 	FullAppShellChromeSession,
 	FullAppShellChromeTheme,
@@ -31,8 +28,6 @@ type UseFullAppShellViewModelArgs = {
 	settingsOpen: boolean
 	closeSettings: () => void
 	setApiToken: (token: string) => void
-	guideOpen: boolean
-	setGuideOpen: (open: boolean) => void
 	theme: FullAppShellChromeTheme
 	viewport: FullAppViewportState
 }
@@ -55,15 +50,9 @@ export function useFullAppShellViewModel({
 	settingsOpen,
 	closeSettings,
 	setApiToken,
-	guideOpen,
-	setGuideOpen,
 	theme,
 	viewport,
 }: UseFullAppShellViewModelArgs) {
-	const closeGuide = useCallback(() => {
-		setGuideOpen(false)
-	}, [setGuideOpen])
-
 	const session = useMemo<FullAppShellChromeSession>(
 		() => ({
 			apiToken,
@@ -120,14 +109,6 @@ export function useFullAppShellViewModel({
 		],
 	)
 
-	const guide = useMemo<FullAppOverlaysHostGuide>(
-		() => ({
-			open: guideOpen,
-			close: closeGuide,
-		}),
-		[guideOpen, closeGuide],
-	)
-
 	return {
 		chrome: {
 			session,
@@ -136,7 +117,6 @@ export function useFullAppShellViewModel({
 		},
 		overlays: {
 			settings,
-			guide,
 		},
 	}
 }

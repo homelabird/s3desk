@@ -147,6 +147,24 @@ paths:
         "403":
           $ref: "#/components/responses/ErrorResponse"
 
+  /bootstrap:
+    get:
+      tags: [System]
+      summary: Authenticated UI bootstrap data
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootstrapResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
   /meta:
     get:
       tags: [System]
@@ -3705,6 +3723,15 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Job" }
         nextCursor: { type: string, nullable: true }
+
+    BootstrapResponse:
+      type: object
+      required: [meta, profiles]
+      properties:
+        meta: { $ref: "#/components/schemas/MetaResponse" }
+        profiles:
+          type: array
+          items: { $ref: "#/components/schemas/Profile" }
 
     MetaResponse:
       type: object

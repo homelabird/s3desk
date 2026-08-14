@@ -69,6 +69,7 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.Get("/ws", api.handleWSUpgrade)
 	apiRouter.Get("/events", api.handleEventsSSE)
 	apiRouter.Post("/realtime-ticket", api.handleCreateRealtimeTicket)
+	apiRouter.Get("/bootstrap", api.handleGetBootstrap)
 	apiRouter.Get("/meta", api.handleGetMeta)
 	apiRouter.Get("/server/backup", api.handleGetServerBackup)
 	apiRouter.Post("/server/restore", api.handleRestoreServerBackup)
@@ -246,6 +247,7 @@ func spaHandler(staticDir string) http.HandlerFunc {
 
 		reqPath := path.Clean(r.URL.Path)
 		if reqPath == "/" {
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFile(w, r, indexPath)
 			return
 		}
@@ -253,10 +255,16 @@ func spaHandler(staticDir string) http.HandlerFunc {
 		rel := strings.TrimPrefix(reqPath, "/")
 		target := filepath.Join(staticDir, rel)
 		if info, err := os.Stat(target); err == nil && !info.IsDir() {
+			if strings.HasPrefix(rel, "assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				w.Header().Set("Cache-Control", "public, max-age=86400")
+			}
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
+		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, indexPath)
 	}
 }

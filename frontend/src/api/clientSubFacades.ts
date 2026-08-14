@@ -7,6 +7,7 @@ import * as serverDomain from './domains/server'
 import * as uploadsDomain from './domains/uploads'
 import type {
 	Bucket,
+	BootstrapResponse,
 	BucketAccessPutRequest,
 	BucketCreateRequest,
 	BucketEncryptionPutRequest,
@@ -87,6 +88,9 @@ export function createAPIClientFacades(deps: SubFacadeDeps) {
 
 export function createServerSubFacade(deps: SubFacadeDeps) {
 	return {
+		getBootstrap(): Promise<BootstrapResponse> {
+			return serverDomain.getBootstrap(deps.requestFn)
+		},
 		getMeta(): Promise<MetaResponse> {
 			return serverDomain.getMeta(deps.requestFn)
 		},

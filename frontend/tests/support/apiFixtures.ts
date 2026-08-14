@@ -217,6 +217,11 @@ export function buildFixtureRoutes(fixtures: ApiFixture[], fallback?: ApiFixture
 
 	if (fallback) {
 		routes.push({
+			method: 'GET',
+			path: '/bootstrap',
+			handle: (ctx) => ctx.notFound(),
+		})
+		routes.push({
 			path: /.*/,
 			handle: (ctx) => fulfillFixtureResponse(ctx, fallback),
 		})

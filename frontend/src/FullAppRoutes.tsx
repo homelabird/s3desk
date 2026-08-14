@@ -1,30 +1,41 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { Suspense, lazy, type ReactNode } from 'react'
 
-const ProfilesPage = lazy(async () => {
-	const m = await import('./pages/ProfilesPage')
-	return { default: m.ProfilesPage }
-})
+import { ProfilesPage } from './pages/ProfilesPage'
 
-const BucketsPage = lazy(async () => {
+const loadBucketsPage = async () => {
 	const m = await import('./pages/BucketsPage')
 	return { default: m.BucketsPage }
-})
+}
 
-const ObjectsPage = lazy(async () => {
+const loadObjectsPage = async () => {
 	const m = await import('./pages/ObjectsPage')
 	return { default: m.ObjectsPage }
-})
+}
 
-const UploadsPage = lazy(async () => {
+const loadUploadsPage = async () => {
 	const m = await import('./pages/UploadsPage')
 	return { default: m.UploadsPage }
-})
+}
 
-const JobsPage = lazy(async () => {
+const loadJobsPage = async () => {
 	const m = await import('./pages/JobsPage')
 	return { default: m.JobsPage }
-})
+}
+
+const BucketsPage = lazy(loadBucketsPage)
+const ObjectsPage = lazy(loadObjectsPage)
+const UploadsPage = lazy(loadUploadsPage)
+const JobsPage = lazy(loadJobsPage)
+
+const initialPageLoader = {
+	'/buckets': loadBucketsPage,
+	'/objects': loadObjectsPage,
+	'/uploads': loadUploadsPage,
+	'/jobs': loadJobsPage,
+}[window.location.pathname]
+
+void initialPageLoader?.()
 
 export type FullAppRoutesProps = {
 	apiToken: string

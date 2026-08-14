@@ -25,6 +25,15 @@ func newPublicRoutesHandler(t *testing.T, allowRemote bool) http.Handler {
 	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<!doctype html><html><body>ui</body></html>"), 0o600); err != nil {
 		t.Fatalf("write index.html: %v", err)
 	}
+	if err := os.Mkdir(filepath.Join(staticDir, "assets"), 0o700); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "assets", "app-hash.js"), []byte("export {}"), 0o600); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "icon.png"), []byte("png"), 0o600); err != nil {
+		t.Fatalf("write public asset: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(root, "openapi.yml"), []byte("openapi: 3.0.0\ninfo:\n  title: test\n  version: 1.0.0\npaths: {}\n"), 0o600); err != nil {
 		t.Fatalf("write openapi.yml: %v", err)
 	}
@@ -38,6 +47,35 @@ func newPublicRoutesHandler(t *testing.T, allowRemote bool) http.Handler {
 		Hub:        ws.NewHub(),
 		ServerAddr: "127.0.0.1:0",
 	})
+}
+
+func TestUIStaticCachePolicy(t *testing.T) {
+	t.Parallel()
+
+	handler := newPublicRoutesHandler(t, false)
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/assets/app-hash.js", want: "public, max-age=31536000, immutable"},
+		{path: "/icon.png", want: "public, max-age=86400"},
+		{path: "/", want: "no-cache"},
+		{path: "/profiles", want: "no-cache"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1"+tc.path, nil)
+			req.RemoteAddr = "127.0.0.1:1234"
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if got := rr.Header().Get("Cache-Control"); got != tc.want {
+				t.Fatalf("Cache-Control=%q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 func TestPublicRoutesRequireLocalHostByDefault(t *testing.T) {

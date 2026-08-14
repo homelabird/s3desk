@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { APIClientShape } from '../api/client'
+import { APIError, type APIClientShape } from '../api/client'
 import { useFullAppProfileState } from '../useFullAppProfileState'
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -11,9 +11,13 @@ function wrapper({ children }: { children: ReactNode }) {
 	return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-function buildApi(getMeta: () => Promise<unknown>, listProfiles: () => Promise<unknown>) {
+function buildApi(
+	getBootstrap: () => Promise<unknown>,
+	listProfiles: () => Promise<unknown>,
+	getMeta: () => Promise<unknown> = vi.fn(),
+) {
 	return {
-		server: { getMeta },
+		server: { getBootstrap, getMeta },
 		profiles: { listProfiles },
 	} as unknown as APIClientShape
 }
@@ -32,15 +36,35 @@ describe('useFullAppProfileState', () => {
 		expect(listProfiles).not.toHaveBeenCalled()
 	})
 
-	it('loads profiles after server authentication succeeds', async () => {
+	it('seeds profiles from the authenticated bootstrap response', async () => {
 		const listProfiles = vi.fn().mockResolvedValue([])
-		const api = buildApi(vi.fn().mockResolvedValue({}), listProfiles)
+		const api = buildApi(vi.fn().mockResolvedValue({ meta: {}, profiles: [] }), listProfiles)
 
-		renderHook(
+		const { result } = renderHook(
 			() => useFullAppProfileState({ api, apiToken: 'demo-token', pathname: '/' }),
 			{ wrapper },
 		)
 
-		await waitFor(() => expect(listProfiles).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(result.current.metaQuery.isSuccess).toBe(true))
+		expect(listProfiles).not.toHaveBeenCalled()
+	})
+
+	it('falls back to legacy endpoints when bootstrap is unavailable', async () => {
+		const listProfiles = vi.fn().mockResolvedValue([])
+		const getMeta = vi.fn().mockResolvedValue({})
+		const api = buildApi(
+			vi.fn().mockRejectedValue(new APIError({ status: 404, code: 'not_found', message: 'not found' })),
+			listProfiles,
+			getMeta,
+		)
+
+		const { result } = renderHook(
+			() => useFullAppProfileState({ api, apiToken: 'demo-token', pathname: '/' }),
+			{ wrapper },
+		)
+
+		await waitFor(() => expect(result.current.metaQuery.isSuccess).toBe(true))
+		expect(getMeta).toHaveBeenCalledOnce()
+		expect(listProfiles).toHaveBeenCalledOnce()
 	})
 })

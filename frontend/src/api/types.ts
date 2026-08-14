@@ -120,6 +120,7 @@ export type JobsListResponse = Omit<components["schemas"]["JobsListResponse"], "
   items: Job[];
 };
 export type MetaResponse = components["schemas"]["MetaResponse"];
+export type BootstrapResponse = components["schemas"]["BootstrapResponse"];
 export type ServerMigrationManifest =
   components["schemas"]["ServerMigrationManifest"];
 export type ServerRestoreResponse =

@@ -77,8 +77,6 @@ export function useFullAppController({
 		selectedKey,
 		navOpen,
 		settingsOpen,
-		guideOpen,
-		setGuideOpen,
 		openNav,
 		closeNav,
 		openSettings,
@@ -113,8 +111,6 @@ export function useFullAppController({
 		settingsOpen,
 		closeSettings,
 		setApiToken,
-		guideOpen,
-		setGuideOpen,
 		theme,
 		viewport,
 	})
