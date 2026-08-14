@@ -68,6 +68,7 @@ type Manager struct {
 	queueMu       sync.Mutex
 	queueCond     *sync.Cond
 	queue         []string
+	queueHead     int
 	queueCapacity int
 	sem           chan struct{}
 
@@ -187,11 +188,16 @@ func (m *Manager) run(ctx context.Context) {
 	defer stopWake()
 
 	for {
-		jobID, ok := m.dequeue(ctx)
-		if !ok {
+		select {
+		case m.sem <- struct{}{}:
+		case <-ctx.Done():
 			return
 		}
-		m.sem <- struct{}{}
+		jobID, ok := m.dequeue(ctx)
+		if !ok {
+			<-m.sem
+			return
+		}
 		m.lifecycleWG.Add(1)
 		go func() {
 			defer m.lifecycleWG.Done()

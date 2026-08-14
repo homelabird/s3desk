@@ -9,19 +9,20 @@ func (m *Manager) QueueStats() QueueStats {
 	defer m.queueMu.Unlock()
 
 	return QueueStats{
-		Depth:    len(m.queue),
+		Depth:    m.queueDepthLocked(),
 		Capacity: m.queueCapacity,
 	}
 }
 
 func (m *Manager) Enqueue(jobID string) error {
 	m.queueMu.Lock()
-	if len(m.queue) >= m.queueCapacity {
+	if m.queueDepthLocked() >= m.queueCapacity {
 		m.queueMu.Unlock()
 		return ErrJobQueueFull
 	}
+	m.compactQueueLocked()
 	m.queue = append(m.queue, jobID)
-	depth := len(m.queue)
+	depth := m.queueDepthLocked()
 	m.queueCond.Broadcast()
 	m.queueMu.Unlock()
 	m.setQueueDepth(depth)
@@ -39,15 +40,16 @@ func (m *Manager) enqueueBlocking(ctx context.Context, ids []string) {
 
 	for _, id := range ids {
 		m.queueMu.Lock()
-		for len(m.queue) >= m.queueCapacity {
+		for m.queueDepthLocked() >= m.queueCapacity {
 			if ctx.Err() != nil {
 				m.queueMu.Unlock()
 				return
 			}
 			m.queueCond.Wait()
 		}
+		m.compactQueueLocked()
 		m.queue = append(m.queue, id)
-		depth := len(m.queue)
+		depth := m.queueDepthLocked()
 		m.queueCond.Broadcast()
 		m.queueMu.Unlock()
 		m.setQueueDepth(depth)
@@ -70,7 +72,7 @@ func (m *Manager) Cancel(jobID string) {
 
 func (m *Manager) dequeue(ctx context.Context) (string, bool) {
 	m.queueMu.Lock()
-	for len(m.queue) == 0 {
+	for m.queueDepthLocked() == 0 {
 		if ctx.Err() != nil {
 			m.queueMu.Unlock()
 			return "", false
@@ -78,11 +80,14 @@ func (m *Manager) dequeue(ctx context.Context) (string, bool) {
 		m.queueCond.Wait()
 	}
 
-	jobID := m.queue[0]
-	copy(m.queue, m.queue[1:])
-	m.queue[len(m.queue)-1] = ""
-	m.queue = m.queue[:len(m.queue)-1]
-	depth := len(m.queue)
+	jobID := m.queue[m.queueHead]
+	m.queue[m.queueHead] = ""
+	m.queueHead++
+	depth := m.queueDepthLocked()
+	if depth == 0 {
+		m.queue = m.queue[:0]
+		m.queueHead = 0
+	}
 	m.queueCond.Broadcast()
 	m.queueMu.Unlock()
 	m.setQueueDepth(depth)
@@ -91,7 +96,7 @@ func (m *Manager) dequeue(ctx context.Context) (string, bool) {
 
 func (m *Manager) removeQueued(jobID string) bool {
 	m.queueMu.Lock()
-	for i := range m.queue {
+	for i := m.queueHead; i < len(m.queue); i++ {
 		if m.queue[i] != jobID {
 			continue
 		}
@@ -99,7 +104,11 @@ func (m *Manager) removeQueued(jobID string) bool {
 		copy(m.queue[i:], m.queue[i+1:])
 		m.queue[len(m.queue)-1] = ""
 		m.queue = m.queue[:len(m.queue)-1]
-		depth := len(m.queue)
+		depth := m.queueDepthLocked()
+		if depth == 0 {
+			m.queue = m.queue[:0]
+			m.queueHead = 0
+		}
 		m.queueCond.Broadcast()
 		m.queueMu.Unlock()
 		m.setQueueDepth(depth)
@@ -108,6 +117,19 @@ func (m *Manager) removeQueued(jobID string) bool {
 
 	m.queueMu.Unlock()
 	return false
+}
+
+func (m *Manager) queueDepthLocked() int {
+	return len(m.queue) - m.queueHead
+}
+
+func (m *Manager) compactQueueLocked() {
+	if m.queueHead == 0 || len(m.queue) < cap(m.queue) {
+		return
+	}
+	copy(m.queue, m.queue[m.queueHead:])
+	m.queue = m.queue[:m.queueDepthLocked()]
+	m.queueHead = 0
 }
 
 func (m *Manager) setQueueDepth(depth int) {

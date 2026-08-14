@@ -76,3 +76,47 @@ func TestManagerWaitHonorsDeadlineAndWaitsForLifecycle(t *testing.T) {
 		t.Fatalf("Wait() after lifecycle completion: %v", err)
 	}
 }
+
+func TestQueueDequeueChurnKeepsBoundedBackingStorage(t *testing.T) {
+	t.Setenv("JOB_QUEUE_CAPACITY", "8")
+	manager := NewManager(Config{Concurrency: 1})
+
+	for i := 0; i < 10_000; i++ {
+		if err := manager.Enqueue("job"); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+		if _, ok := manager.dequeue(context.Background()); !ok {
+			t.Fatalf("dequeue %d failed", i)
+		}
+	}
+
+	if got := cap(manager.queue); got > manager.queueCapacity {
+		t.Fatalf("queue backing capacity=%d, want <= %d", got, manager.queueCapacity)
+	}
+}
+
+func TestManagerKeepsJobQueuedUntilWorkerSlotIsAvailable(t *testing.T) {
+	manager := NewManager(Config{Concurrency: 1})
+	manager.sem <- struct{}{}
+	if err := manager.Enqueue("job-1"); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	manager.lifecycleWG.Add(1)
+	go manager.run(ctx)
+	t.Cleanup(func() {
+		cancel()
+		_ = manager.Wait(context.Background())
+		<-manager.sem
+	})
+
+	time.Sleep(10 * time.Millisecond)
+	if stats := manager.QueueStats(); stats.Depth != 1 {
+		t.Fatalf("queue depth=%d, want 1 while worker slot is unavailable", stats.Depth)
+	}
+	manager.Cancel("job-1")
+	if stats := manager.QueueStats(); stats.Depth != 0 {
+		t.Fatalf("queue depth=%d, want 0 after queued cancellation", stats.Depth)
+	}
+}
