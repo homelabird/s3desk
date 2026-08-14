@@ -43,28 +43,25 @@ describe('useJobsColumnsVisibility', () => {
 			{ initialProps: { apiToken: 'token-a', profileId: 'profile-1' } },
 		)
 
-		act(() => {
-			result.current.setColumnVisible('id', false)
-			result.current.setColumnVisible('progress', false)
-		})
+		act(() => result.current.setColumnVisible('progress', false))
 
 		expect(result.current.mergedColumnVisibility.id).toBe(false)
 		expect(result.current.mergedColumnVisibility.progress).toBe(false)
 
 		rerender({ apiToken: 'token-a', profileId: 'profile-2' })
 
-		expect(result.current.mergedColumnVisibility.id).toBe(true)
+		expect(result.current.mergedColumnVisibility.id).toBe(false)
 		expect(result.current.mergedColumnVisibility.progress).toBe(true)
 
 		act(() => {
-			result.current.setColumnVisible('error', false)
+			result.current.setColumnVisible('summary', false)
 		})
 
 		rerender({ apiToken: 'token-a', profileId: 'profile-1' })
 
 		expect(result.current.mergedColumnVisibility.id).toBe(false)
 		expect(result.current.mergedColumnVisibility.progress).toBe(false)
-		expect(result.current.mergedColumnVisibility.error).toBe(true)
+		expect(result.current.mergedColumnVisibility.summary).toBe(true)
 	})
 
 	it('keeps column visibility isolated per api token for the same profile', () => {
@@ -73,13 +70,11 @@ describe('useJobsColumnsVisibility', () => {
 			{ initialProps: { apiToken: 'token-a' } },
 		)
 
-		act(() => {
-			result.current.setColumnVisible('id', false)
-		})
+		act(() => result.current.setColumnVisible('summary', false))
 
 		rerender({ apiToken: 'token-b' })
 
-		expect(result.current.mergedColumnVisibility.id).toBe(true)
+		expect(result.current.mergedColumnVisibility.summary).toBe(true)
 
 		act(() => {
 			result.current.setColumnVisible('progress', false)
@@ -87,7 +82,18 @@ describe('useJobsColumnsVisibility', () => {
 
 		rerender({ apiToken: 'token-a' })
 
-		expect(result.current.mergedColumnVisibility.id).toBe(false)
+		expect(result.current.mergedColumnVisibility.summary).toBe(false)
 		expect(result.current.mergedColumnVisibility.progress).toBe(true)
+	})
+
+	it('moves the old all-visible default to the compact default once', async () => {
+		const key = profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'columnVisibility')
+		window.localStorage.setItem(key, JSON.stringify({ id: true, type: true, summary: true, status: true, progress: true, errorCode: true, error: true, createdAt: true, actions: true }))
+
+		const { result } = renderHook(() => useJobsColumnsVisibility('token-a', 'profile-1'))
+
+		expect(result.current.mergedColumnVisibility.id).toBe(false)
+		expect(result.current.mergedColumnVisibility.error).toBe(false)
+		await waitFor(() => expect(JSON.parse(window.localStorage.getItem(key) ?? '{}').id).toBe(false))
 	})
 })

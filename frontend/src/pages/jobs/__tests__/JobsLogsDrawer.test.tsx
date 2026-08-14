@@ -94,6 +94,35 @@ describe('JobsLogsDrawer', () => {
 		expect(screen.queryByText('#1')).not.toBeInTheDocument()
 	})
 
+	it('parses legacy backend lines and explains empty logs', () => {
+		const { rerender } = render(
+			<JobsLogsDrawer
+				open onClose={vi.fn()} drawerWidth={720} activeLogJobId="job-1" isLogsLoading={false} onRefresh={vi.fn()}
+				followLogs onFollowLogsChange={vi.fn()} logPollPaused={false} logPollFailures={0} onResumeLogPolling={vi.fn()}
+				logSearchQuery="" onLogSearchQueryChange={vi.fn()} onCopyVisibleLogs={vi.fn(async () => {})} normalizedLogSearchQuery=""
+				visibleLogEntries={['[info] uploaded file']} visibleLogSeveritySummary={{ error: 0, warn: 0 }} latestErrorIndex={-1}
+				activeLogLines={1} onLogsContainerRef={vi.fn()} visibleLogText="[info] uploaded file" searchInputWidth={320}
+			/>,
+		)
+
+		expect(screen.getByText('INFO')).toBeInTheDocument()
+		expect(screen.getByText('uploaded file')).toBeInTheDocument()
+
+		rerender(
+			<JobsLogsDrawer
+				open onClose={vi.fn()} drawerWidth={720} activeLogJobId="job-1" isLogsLoading={false} onRefresh={vi.fn()}
+				followLogs onFollowLogsChange={vi.fn()} logPollPaused={false} logPollFailures={0} onResumeLogPolling={vi.fn()}
+				logSearchQuery="" onLogSearchQueryChange={vi.fn()} onCopyVisibleLogs={vi.fn(async () => {})} normalizedLogSearchQuery=""
+				visibleLogEntries={[]} visibleLogSeveritySummary={{ error: 0, warn: 0 }} latestErrorIndex={-1}
+				activeLogLines={0} onLogsContainerRef={vi.fn()} visibleLogText="" searchInputWidth={320}
+			/>,
+		)
+
+		expect(screen.getByText(/No log output was recorded/)).toBeInTheDocument()
+		expect(screen.queryByRole('textbox', { name: 'Search logs' })).not.toBeInTheDocument()
+		expect(screen.queryByText('Follow')).not.toBeInTheDocument()
+	})
+
 	it('virtualizes very large logs without truncating visible log metadata', () => {
 		const lines = Array.from({ length: 650 }, (_, index) => `2026-03-11T09:00:00Z INFO line-${index + 1}`)
 		const originalExec = RegExp.prototype.exec

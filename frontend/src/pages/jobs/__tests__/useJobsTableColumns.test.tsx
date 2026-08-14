@@ -85,6 +85,6 @@ describe('useJobsTableColumns', () => {
 
 		expect(getByRole('button', { name: 'Details for job job-1' })).toHaveTextContent('Details')
 		expect(getByRole('button', { name: 'Logs for job job-1' })).toHaveTextContent('Logs')
-		expect(getByRole('button', { name: 'Actions for job job-1' })).toHaveTextContent('Actions')
+		expect(getByRole('button', { name: 'Actions for job job-1' })).toHaveAttribute('aria-haspopup', 'menu')
 	})
 })

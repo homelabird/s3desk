@@ -7,6 +7,7 @@ import { copyToClipboard } from '../../lib/clipboard'
 import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { jobsFeedback } from './jobsFeedback'
+import { parseJobLogLine } from './jobLogParsing'
 
 type UseJobsLogsStateArgs = {
 	api: APIClientShape
@@ -48,31 +49,13 @@ export type JobsLogVisibleViewResult = {
 	searchCache: JobsLogSearchCache | null
 }
 
-const LOG_LEVEL_PATTERN =
-	/^(?:\[?\d{4}-\d{2}-\d{2}[^\s\]]*\]?|\[[^\]]+\])\s+(?<level>trace|debug|info|warn|warning|error|fatal)\b[: -]*(?:.*)$/i
-
-function classifyLogLevel(line: string, normalizedLine: string): JobsLogLevel {
-	const match = LOG_LEVEL_PATTERN.exec(line)
-	const rawLevel = match?.groups?.level?.toLowerCase()
-	if (rawLevel) {
-		if (rawLevel === 'error' || rawLevel === 'fatal') return 'error'
-		if (rawLevel === 'warn' || rawLevel === 'warning') return 'warn'
-		if (rawLevel === 'info') return 'info'
-		return 'debug'
-	}
-
-	if (normalizedLine.includes('error') || normalizedLine.includes('fatal')) return 'error'
-	if (normalizedLine.includes('warn')) return 'warn'
-	return 'plain'
-}
-
 function createLogEntry(line: string, lineNumber: number): JobsLogEntry {
 	const normalizedLine = line.toLowerCase()
 	return {
 		line,
 		lineNumber,
 		normalizedLine,
-		level: classifyLogLevel(line, normalizedLine),
+		level: parseJobLogLine(line, lineNumber).level,
 	}
 }
 
@@ -363,6 +346,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 	useEffect(() => {
 		if (!profileId) return
 		if (!logsOpen || !followLogs || !activeLogJobId) return
+		if (logsMutation.isPending) return
 		if (logPollPaused) return
 
 		const jobId = activeLogJobId
@@ -447,6 +431,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		logPollPaused,
 		logPollRetryToken,
 		logsOpen,
+		logsMutation.isPending,
 		maxLogLines,
 		profileId,
 	])

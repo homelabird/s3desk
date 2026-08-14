@@ -38,8 +38,7 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 
 	writeLog := func(format string, args ...any) {
 		msg := fmt.Sprintf(format, args...)
-		_, _ = logWriter.Write([]byte(msg + "\n"))
-		m.emitJobLogStdout(jobID, "info", msg)
+		_ = m.writeJobLog(logWriter, jobID, "info", msg)
 	}
 
 	writeLog("Starting index: bucket=%q prefix=%q", bucket, prefix)

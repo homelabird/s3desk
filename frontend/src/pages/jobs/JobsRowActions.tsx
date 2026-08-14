@@ -200,9 +200,7 @@ export function JobsRowActions({
 						aria-haspopup="menu"
 						aria-expanded={open}
 						onClick={toggle}
-					>
-						Actions
-					</Button>
+					/>
 				)}
 			</MenuPopover>
 		</Space>

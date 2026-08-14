@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"s3desk/internal/jobs"
@@ -47,6 +49,29 @@ func (svc uploadCommitFinalizeService) finalizeImmediate(
 			repairCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), objectIndexRepairEnqueueTimeout)
 			svc.enqueueObjectIndexRepair(repairCtx, profileID, us.Bucket, us.Prefix)
 			cancel()
+		}
+	}
+
+	objectsDone, bytesDone := int64(0), int64(0)
+	if progress != nil {
+		if progress.ObjectsDone != nil {
+			objectsDone = *progress.ObjectsDone
+		}
+		if progress.BytesDone != nil {
+			bytesDone = *progress.BytesDone
+		}
+	}
+	target := "s3://" + us.Bucket
+	if prefix := strings.Trim(us.Prefix, "/"); prefix != "" {
+		target += "/" + prefix
+	}
+	if svc.server.jobs != nil {
+		if err := svc.server.jobs.AppendJobLog(job.ID, "info", fmt.Sprintf("direct upload completed: %d object(s), %d bytes to %s", objectsDone, bytesDone, target)); err != nil {
+			logging.WarnFields("direct upload job log write failed", map[string]any{
+				"event":  "upload.job_log_write_failed",
+				"job_id": job.ID,
+				"error":  err.Error(),
+			})
 		}
 	}
 

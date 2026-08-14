@@ -14,7 +14,6 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/redact"
-	"s3desk/internal/ws"
 )
 
 const logReadBufferSize = 64 * 1024
@@ -198,7 +197,6 @@ func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID,
 			capture.Add(rendered)
 		}
 
-		_, _ = w.Write([]byte("[" + level + "] " + rendered + "\n"))
 		if progressCh != nil && stats != nil {
 			if update, ok := progressFromStats(stats, mode); ok {
 				select {
@@ -207,15 +205,7 @@ func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID,
 				}
 			}
 		}
-		m.hub.Publish(ws.Event{
-			Type:  "job.log",
-			JobID: jobID,
-			Payload: map[string]any{
-				"level":   level,
-				"message": rendered,
-			},
-		})
-		m.emitJobLogStdout(jobID, level, rendered)
+		_ = m.writeJobLog(w, jobID, level, rendered)
 
 		if errors.Is(err, io.EOF) {
 			return

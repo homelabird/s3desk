@@ -77,8 +77,7 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 
 	if tuneOK {
 		tuneMsg := fmt.Sprintf("rclone tune: activeJobs=%d transfers=%d checkers=%d uploadConcurrency=%d", tune.ActiveJobs, tune.Transfers, tune.Checkers, tune.UploadConcurrency)
-		_, _ = logWriter.Write([]byte("[info] " + tuneMsg + "\n"))
-		m.emitJobLogStdout(jobID, "info", tuneMsg)
+		_ = m.writeJobLog(logWriter, jobID, "info", tuneMsg)
 	}
 
 	maxAttempts := m.rcloneRetryAttempts

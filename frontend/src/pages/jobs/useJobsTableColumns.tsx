@@ -107,7 +107,7 @@ export function useJobsTableColumns({
 				key: 'type',
 				title: 'Type',
 				dataIndex: 'type',
-				width: 240,
+				width: 190,
 				render: (value: unknown) => {
 					const typeValue = typeof value === 'string' ? value : ''
 					const info = getJobTypeInfo(typeValue)
@@ -126,7 +126,7 @@ export function useJobsTableColumns({
 			{
 				key: 'summary',
 				title: 'Summary',
-				width: 420,
+				width: 340,
 				render: (_: unknown, row: Job) => renderClampedText(getJobSummary(row), 'secondary'),
 				sorter: (a: Job, b: Job) => compareText(getJobSummary(a), getJobSummary(b)),
 			},
@@ -134,7 +134,7 @@ export function useJobsTableColumns({
 				key: 'status',
 				title: 'Status',
 				dataIndex: 'status',
-				width: 140,
+				width: 110,
 				render: (value: unknown) => {
 					const status = typeof value === 'string' ? (value as JobStatus) : 'queued'
 					return <Tag color={statusColor(status)}>{status}</Tag>
@@ -144,7 +144,7 @@ export function useJobsTableColumns({
 			{
 				key: 'progress',
 				title: 'Progress',
-				width: 180,
+				width: 160,
 				render: (_: unknown, row: Job) => <Typography.Text type="secondary">{formatProgress(row.progress)}</Typography.Text>,
 				sorter: (a: Job, b: Job) => compareNumber(getProgressSortValue(a), getProgressSortValue(b)),
 			},
@@ -168,7 +168,7 @@ export function useJobsTableColumns({
 				key: 'createdAt',
 				title: 'Created',
 				dataIndex: 'createdAt',
-				width: 220,
+				width: 180,
 				render: (value: unknown) => {
 					const createdAt = typeof value === 'string' ? value : ''
 					return renderClampedText(createdAt ? formatDateTime(createdAt) : null, 'secondary', {
@@ -182,7 +182,7 @@ export function useJobsTableColumns({
 			{
 				key: 'actions',
 				title: 'Actions',
-				width: 250,
+				width: 210,
 				fixed: 'right',
 				align: 'center',
 				render: (_: unknown, row: Job) => (

@@ -90,6 +90,24 @@ describe('useJobsLogsState', () => {
 		})
 	})
 
+	it('waits for the initial tail before polling its offset', async () => {
+		window.localStorage.setItem('jobsFollowLogs', JSON.stringify(true))
+		const initial = deferred<{ text: string; nextOffset: number }>()
+		const getJobLogsTail = vi.fn().mockReturnValue(initial.promise)
+		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 9 })
+		const api = createMockApiClient({ jobs: { getJobLogsTail, getJobLogsAfterOffset } })
+		const { result } = renderHook(() => useJobsLogsState({ api, apiToken: 'token-a', profileId: 'profile-1' }), {
+			wrapper: createWrapper(),
+		})
+
+		act(() => result.current.openLogsForJob('job-1'))
+		await waitFor(() => expect(getJobLogsTail).toHaveBeenCalledOnce())
+		expect(getJobLogsAfterOffset).not.toHaveBeenCalled()
+		await act(async () => initial.resolve({ text: 'one line\n', nextOffset: 9 }))
+		await waitFor(() => expect(getJobLogsAfterOffset).toHaveBeenCalledWith('profile-1', 'job-1', 9, 128 * 1024))
+		expect(result.current.visibleLogEntries).toEqual(['one line'])
+	})
+
 	it('preserves source line numbers when visible logs are filtered', async () => {
 		const getJobLogsTail = vi.fn().mockResolvedValue({
 			text: 'first line\nneedle warning on source line two\n\n2026-03-11T09:00:04Z ERROR last needle\n',

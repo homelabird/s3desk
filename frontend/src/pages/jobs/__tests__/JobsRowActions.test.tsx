@@ -89,7 +89,6 @@ describe('JobsRowActions', () => {
 		expect(getByRole('button', { name: 'Details for job job-1' })).toHaveTextContent('Details')
 		expect(getByRole('button', { name: 'Logs for job job-1' })).toHaveTextContent('Logs')
 		const actionsButton = getByRole('button', { name: 'Actions for job job-1' })
-		expect(actionsButton).toHaveTextContent('Actions')
 		expect(actionsButton).toHaveAttribute('aria-haspopup', 'menu')
 		expect(actionsButton).toHaveAttribute('aria-expanded', 'false')
 	})

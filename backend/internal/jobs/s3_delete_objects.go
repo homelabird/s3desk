@@ -127,18 +127,23 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 	return nil
 }
 
-func (m *Manager) writeJobLog(w io.Writer, jobID, level, message string) {
+func (m *Manager) writeJobLog(w io.Writer, jobID, level, message string) error {
 	message = redact.Diagnostic(message)
-	_, _ = w.Write([]byte("[" + level + "] " + message + "\n"))
-	m.hub.Publish(ws.Event{
-		Type:  "job.log",
-		JobID: jobID,
-		Payload: map[string]any{
-			"level":   level,
-			"message": message,
-		},
-	})
+	if _, err := w.Write(formatJobLogLine(level, message)); err != nil {
+		return err
+	}
+	if m.hub != nil {
+		m.hub.Publish(ws.Event{
+			Type:  "job.log",
+			JobID: jobID,
+			Payload: map[string]any{
+				"level":   level,
+				"message": message,
+			},
+		})
+	}
 	m.emitJobLogStdout(jobID, level, message)
+	return nil
 }
 
 func (m *Manager) emitJobLogStdout(jobID, level, message string) {

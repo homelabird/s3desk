@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
 import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
@@ -19,35 +19,50 @@ export type JobsColumnsVisibilityState = {
 export function useJobsColumnsVisibility(apiToken: string, profileId: string | null): JobsColumnsVisibilityState {
 	const defaultColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
 		() => ({
-			id: true,
+			id: false,
 			type: true,
 			summary: true,
 			status: true,
 			progress: true,
-			errorCode: true,
-			error: true,
+			errorCode: false,
+			error: false,
 			createdAt: true,
 			actions: true,
 		}),
 		[],
 	)
+	const storageKey = profileScopedStorageKey('jobs', apiToken, profileId, 'columnVisibility')
+	const defaultsMigrationKey = `${storageKey}:compact-defaults-v1`
 
 	const [columnVisibility, setColumnVisibility] = useLocalStorageState<Record<ColumnKey, boolean>>(
-		profileScopedStorageKey('jobs', apiToken, profileId, 'columnVisibility'),
+		storageKey,
 		defaultColumnVisibility,
 		{
 			legacyLocalStorageKey: 'jobsColumnVisibility',
 			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'columnVisibility'),
 		},
 	)
+	const needsCompactDefaultsMigration = useMemo(
+		() =>
+			typeof window !== 'undefined' &&
+			window.localStorage.getItem(defaultsMigrationKey) === null &&
+			Object.values(columnVisibility).every(Boolean),
+		[columnVisibility, defaultsMigrationKey],
+	)
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		window.localStorage.setItem(defaultsMigrationKey, '1')
+		if (needsCompactDefaultsMigration) setColumnVisibility(defaultColumnVisibility)
+	}, [defaultColumnVisibility, defaultsMigrationKey, needsCompactDefaultsMigration, setColumnVisibility])
 
 	const mergedColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
 		() => ({
 			...defaultColumnVisibility,
-			...columnVisibility,
+			...(needsCompactDefaultsMigration ? defaultColumnVisibility : columnVisibility),
 			actions: true,
 		}),
-		[columnVisibility, defaultColumnVisibility],
+		[columnVisibility, defaultColumnVisibility, needsCompactDefaultsMigration],
 	)
 
 	const columnOptions = useMemo<ColumnOption[]>(

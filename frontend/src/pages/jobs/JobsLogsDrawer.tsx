@@ -1,24 +1,14 @@
 import { CopyOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Input, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Input, Tag, Typography } from 'antd'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 
 import { OverlaySheet } from '../../components/OverlaySheet'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
+import { parseJobLogLine, type ParsedJobLogLine } from './jobLogParsing'
 import styles from './JobsLogsDrawer.module.css'
 import type { JobsLogSeveritySummary } from './useJobsLogsState'
 
-type ParsedLogLine = {
-	line: string
-	lineNumber: number
-	timestamp: string | null
-	level: 'error' | 'warn' | 'info' | 'debug' | 'plain'
-	levelLabel: string | null
-	message: string
-}
-
-const LOG_LINE_PATTERN =
-	/^(?<timestamp>\[?\d{4}-\d{2}-\d{2}[^\s\]]*\]?|\[[^\]]+\])\s+(?<level>trace|debug|info|warn|warning|error|fatal)\b[: -]*(?<message>.*)$/i
 const ESTIMATED_LOG_ROW_HEIGHT_PX = 58
 const LOG_VIRTUALIZER_INITIAL_RECT = { width: 720, height: 480 }
 const LOG_PARSE_CACHE_LIMIT = 4096
@@ -28,7 +18,7 @@ function getParsedLogCacheKey(line: string, lineNumber: number) {
 	return `${lineNumber}\u0000${line}`
 }
 
-function trimParsedLogLineCache(cache: Map<string, ParsedLogLine>) {
+function trimParsedLogLineCache(cache: Map<string, ParsedJobLogLine>) {
 	if (cache.size <= LOG_PARSE_CACHE_LIMIT) return
 	const deleteCount = cache.size - LOG_PARSE_CACHE_RETAINED
 	let deleted = 0
@@ -36,40 +26,6 @@ function trimParsedLogLineCache(cache: Map<string, ParsedLogLine>) {
 		cache.delete(key)
 		deleted += 1
 		if (deleted >= deleteCount) break
-	}
-}
-
-function parseLogLine(line: string, lineNumber: number): ParsedLogLine {
-	const match = LOG_LINE_PATTERN.exec(line)
-	if (match?.groups) {
-		const rawLevel = match.groups.level.toLowerCase()
-		const level =
-			rawLevel === 'error' || rawLevel === 'fatal'
-				? 'error'
-				: rawLevel === 'warn' || rawLevel === 'warning'
-					? 'warn'
-					: rawLevel === 'info'
-						? 'info'
-						: 'debug'
-		return {
-			line,
-			lineNumber,
-			timestamp: match.groups.timestamp ?? null,
-			level,
-			levelLabel: rawLevel.toUpperCase(),
-			message: match.groups.message || line,
-		}
-	}
-
-	const normalized = line.toLowerCase()
-	const fallbackLevel = normalized.includes('error') || normalized.includes('fatal') ? 'error' : normalized.includes('warn') ? 'warn' : 'plain'
-	return {
-		line,
-		lineNumber,
-		timestamp: null,
-		level: fallbackLevel,
-		levelLabel: fallbackLevel === 'plain' ? null : fallbackLevel.toUpperCase(),
-		message: line,
 	}
 }
 
@@ -157,7 +113,7 @@ export function JobsLogsDrawer(props: Props) {
 		visibleLogText,
 		searchInputWidth,
 	} = props
-	const parsedLogLineCacheRef = useRef<Map<string, ParsedLogLine>>(new Map())
+	const parsedLogLineCacheRef = useRef<Map<string, ParsedJobLogLine>>(new Map())
 	const [logViewportElement, setLogViewportElement] = useState<HTMLDivElement | null>(null)
 	const getVisibleLogLineNumber = useCallback(
 		(index: number) => visibleLogLineNumbers?.[index] ?? index + 1,
@@ -173,7 +129,7 @@ export function JobsLogsDrawer(props: Props) {
 			const cached = parsedLogLineCacheRef.current.get(cacheKey)
 			if (cached) return cached
 
-			const parsed = parseLogLine(line, lineNumber)
+			const parsed = parseJobLogLine(line, lineNumber)
 			parsedLogLineCacheRef.current.set(cacheKey, parsed)
 			trimParsedLogLineCache(parsedLogLineCacheRef.current)
 			return parsed
@@ -239,13 +195,15 @@ export function JobsLogsDrawer(props: Props) {
 			width={typeof drawerWidth === 'number' ? `${drawerWidth}px` : drawerWidth}
 			extra={
 				<div className={styles.drawerExtra}>
-					<Button icon={<ReloadOutlined />} disabled={!activeLogJobId} loading={isLogsLoading} onClick={onRefresh}>
-						Refresh
+					<Button icon={<ReloadOutlined />} disabled={!activeLogJobId} loading={isLogsLoading} onClick={onRefresh} aria-label="Refresh job logs">
+						<span className={styles.refreshLabel}>Refresh</span>
 					</Button>
-					<div className={styles.drawerExtraGroup}>
-						<Typography.Text type="secondary">Follow</Typography.Text>
-						<ToggleSwitch checked={followLogs} onChange={onFollowLogsChange} ariaLabel="Follow job logs" />
-					</div>
+					{activeLogLines > 0 ? (
+						<div className={styles.drawerExtraGroup}>
+							<Typography.Text type="secondary">Follow</Typography.Text>
+							<ToggleSwitch checked={followLogs} onChange={onFollowLogsChange} ariaLabel="Follow job logs" />
+						</div>
+					) : null}
 				</div>
 			}
 		>
@@ -265,8 +223,9 @@ export function JobsLogsDrawer(props: Props) {
 							style={{ marginBottom: 12 }}
 						/>
 					) : null}
-					<div className={styles.toolbar}>
-						<Input
+					{activeLogLines > 0 ? (
+						<div className={styles.toolbar}>
+							<Input
 							allowClear
 							placeholder="Search logs (contains)"
 							aria-label="Search logs"
@@ -283,21 +242,27 @@ export function JobsLogsDrawer(props: Props) {
 						{latestErrorIndex >= 0 ? (
 							<Button onClick={() => logVirtualizer.scrollToIndex(latestErrorIndex, { align: 'center' })}>Jump to latest error</Button>
 						) : null}
-					</div>
+						</div>
+					) : null}
 					<Typography.Text type="secondary" className={styles.metaLine} role="status" aria-live="polite" aria-atomic="true">
 						Lines: {activeLogLines.toLocaleString()}
 						{normalizedLogSearchQuery ? ` · Matches: ${visibleLogEntries.length.toLocaleString()}` : ''}
 						{visibleLogSeveritySummary.error ? ` · Errors: ${visibleLogSeveritySummary.error.toLocaleString()}` : ''}
 						{visibleLogSeveritySummary.warn ? ` · Warnings: ${visibleLogSeveritySummary.warn.toLocaleString()}` : ''}
 					</Typography.Text>
-					<div ref={setLogViewportRef} className={styles.logViewport} role="region" aria-label="Job log output" tabIndex={0}>
-						{normalizedLogSearchQuery && visibleLogEntries.length === 0 ? (
-							<Typography.Text type="secondary" className={styles.logEmpty}>
-								No matching log lines.
-							</Typography.Text>
-						) : (
-							<div className={styles.logList} style={{ height: virtualizedLogHeight }}>
-								{virtualLogItems.map((virtualItem) => {
+					{!isLogsLoading && activeLogLines === 0 ? (
+						<div className={styles.emptyLogs}>
+							<Empty description="No log output was recorded for this job. Open Details to review its result and metadata." />
+						</div>
+					) : (
+						<div ref={setLogViewportRef} className={styles.logViewport} role="region" aria-label="Job log output" tabIndex={0}>
+							{normalizedLogSearchQuery && visibleLogEntries.length === 0 ? (
+								<Typography.Text type="secondary" className={styles.logEmpty}>
+									No matching log lines.
+								</Typography.Text>
+							) : (
+								<div className={styles.logList} style={{ height: virtualizedLogHeight }}>
+									{virtualLogItems.map((virtualItem) => {
 									const entry = getParsedVisibleEntry(virtualItem.index)
 									if (!entry) return null
 									return (
@@ -320,10 +285,11 @@ export function JobsLogsDrawer(props: Props) {
 											</div>
 										</div>
 									)
-								})}
-							</div>
-						)}
-					</div>
+									})}
+								</div>
+							)}
+						</div>
+					)}
 				</>
 			) : (
 				<Typography.Text type="secondary">Select a job</Typography.Text>

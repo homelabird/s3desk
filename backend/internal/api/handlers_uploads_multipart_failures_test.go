@@ -451,7 +451,7 @@ func TestCommitUploadDirectUsesVerifiedObjectMetadata(t *testing.T) {
 		},
 	})
 
-	st, _, srv, _ := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, true)
+	st, _, srv, dataDir := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, true)
 	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
 	upload := createUploadSessionForMode(t, srv, profile.ID, "direct")
 	expectedSize := int64(7)
@@ -478,6 +478,13 @@ func TestCommitUploadDirectUsesVerifiedObjectMetadata(t *testing.T) {
 		t.Fatalf("expected job type %q, got %q", jobs.JobTypeTransferDirectUpload, job.Type)
 	}
 	requireImmediateUploadPayload(t, job, "file.bin", "incoming/file.bin", 7, 1)
+	jobLog, err := os.ReadFile(filepath.Join(dataDir, "logs", "jobs", created.JobID+".log"))
+	if err != nil {
+		t.Fatalf("read direct upload job log: %v", err)
+	}
+	if body := string(jobLog); !strings.Contains(body, " INFO direct upload completed: 1 object(s), 7 bytes to s3://test-bucket/incoming") {
+		t.Fatalf("unexpected direct upload job log: %s", body)
+	}
 
 	indexed, err := st.SearchObjectIndex(context.Background(), profile.ID, store.SearchObjectIndexInput{
 		Bucket: "test-bucket",

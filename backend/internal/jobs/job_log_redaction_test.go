@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"s3desk/internal/models"
 	"s3desk/internal/ws"
@@ -24,6 +25,12 @@ func TestWriteJobLogRedactsStoredAndRealtimeMessages(t *testing.T) {
 	m.writeJobLog(&buf, "job-redact", "error", "rclone failed secret_access_key=stored-secret request id req-1")
 
 	stored := buf.String()
+	if _, err := time.Parse(time.RFC3339Nano, strings.Fields(stored)[0]); err != nil {
+		t.Fatalf("stored log timestamp: %v", err)
+	}
+	if !strings.Contains(stored, " ERROR ") {
+		t.Fatalf("stored log missing canonical level: %s", stored)
+	}
 	if strings.Contains(stored, "stored-secret") {
 		t.Fatalf("stored log leaked secret: %s", stored)
 	}

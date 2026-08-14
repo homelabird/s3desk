@@ -4,10 +4,30 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 )
 
 const jobLogTruncateMarginBytes = 256 * 1024
+
+func formatJobLogLine(level, message string) []byte {
+	return []byte(time.Now().UTC().Format(time.RFC3339Nano) + " " + strings.ToUpper(strings.TrimSpace(level)) + " " + message + "\n")
+}
+
+func (m *Manager) AppendJobLog(jobID, level, message string) error {
+	logDir := filepath.Join(m.dataDir, "logs", "jobs")
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
+		return err
+	}
+	w, err := openJobLogWriter(filepath.Join(logDir, jobID+".log"), m.logMaxBytes)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = w.Close() }()
+	return m.writeJobLog(w, jobID, level, message)
+}
 
 type jobLogWriter struct {
 	mu       sync.Mutex
