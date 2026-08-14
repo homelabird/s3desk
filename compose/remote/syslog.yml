@@ -1,0 +1,17 @@
+# Optional Docker-only overlay that forwards S3Desk application logs.
+# Keep the application on structured stdout; Docker owns transport and buffering.
+services:
+  s3desk:
+    environment:
+      LOG_FORMAT: "json"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      JOB_LOG_EMIT_STDOUT: "${JOB_LOG_EMIT_STDOUT:-false}"
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "${SYSLOG_ADDRESS:?set SYSLOG_ADDRESS, preferably tcp+tls://host:6514}"
+        syslog-format: "rfc5424micro"
+        syslog-facility: "daemon"
+        tag: "s3desk/{{.Name}}"
+        mode: "non-blocking"
+        max-buffer-size: "${SYSLOG_MAX_BUFFER_SIZE:-4m}"

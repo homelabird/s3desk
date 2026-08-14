@@ -10,7 +10,9 @@ Usage:
 
 Stacks:
   remote           Remote/Postgres stack
+  remote-syslog    Remote/Postgres stack with Docker syslog forwarding
   caddy            Remote/Postgres stack with Caddy
+  caddy-syslog     Remote/Postgres/Caddy stack with Docker syslog forwarding
   dev              Local build stack
   demo             Seeded demo stack
   e2e              API/provider E2E stack
@@ -18,6 +20,7 @@ Stacks:
 
 Examples:
   ./scripts/compose.sh remote up -d
+  SYSLOG_ADDRESS=tcp+tls://logs.example.com:6514 ./scripts/compose.sh remote-syslog up -d
   ./scripts/compose.sh caddy logs -f caddy s3desk
   ./scripts/compose.sh dev up --build -d
   ./scripts/compose.sh demo up --build -d
@@ -124,9 +127,14 @@ require_non_empty_setting() {
 }
 
 declare -a COMPOSE_FILES=()
+REQUIRED_PROVIDER=""
 case "${STACK}" in
-  remote|prod)
+  remote|prod|remote-syslog|prod-syslog)
     COMPOSE_FILES=("compose/remote/compose.yml")
+    if [[ "${STACK}" == *-syslog ]]; then
+      COMPOSE_FILES+=("compose/remote/syslog.yml")
+      REQUIRED_PROVIDER="docker"
+    fi
     require_strong_api_token
     require_non_placeholder_secret ENCRYPTION_KEY
     require_non_placeholder_secret POSTGRES_PASSWORD
@@ -136,8 +144,12 @@ case "${STACK}" in
       require_non_placeholder_public_host EXTERNAL_BASE_URL
     fi
     ;;
-  caddy|remote-caddy)
+  caddy|remote-caddy|caddy-syslog|remote-caddy-syslog)
     COMPOSE_FILES=("compose/remote/caddy.yml")
+    if [[ "${STACK}" == *-syslog ]]; then
+      COMPOSE_FILES+=("compose/remote/syslog.yml")
+      REQUIRED_PROVIDER="docker"
+    fi
     require_strong_api_token
     require_non_placeholder_secret ENCRYPTION_KEY
     require_non_placeholder_secret POSTGRES_PASSWORD
@@ -166,6 +178,13 @@ case "${STACK}" in
 esac
 
 preferred_provider="${S3DESK_COMPOSE_PROVIDER:-auto}"
+if [[ "${REQUIRED_PROVIDER}" == "docker" ]]; then
+  if [[ "${preferred_provider}" != "auto" && "${preferred_provider}" != "docker" ]]; then
+    echo "${STACK} requires Docker because Podman has no syslog logging driver" >&2
+    exit 1
+  fi
+  preferred_provider="docker"
+fi
 
 select_compose_cmd() {
   case "${preferred_provider}" in

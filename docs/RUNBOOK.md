@@ -18,6 +18,7 @@ Containerized defaults:
 - SQLite image stores data under `/data`
 - `./scripts/compose.sh dev` is loopback-only and meant for local work
 - `./scripts/compose.sh remote` is the hardened Postgres-backed remote stack
+- `./scripts/compose.sh remote-syslog` adds Docker-native remote syslog forwarding
 - `./scripts/compose.sh caddy` adds public HTTPS in front of the remote stack
 - remote stack requires explicit `S3DESK_BIND_ADDRESS`, `API_TOKEN`, `ENCRYPTION_KEY`, and `POSTGRES_PASSWORD`
 
@@ -145,6 +146,50 @@ Common failures:
   `ALLOWED_HOSTS` is missing the browser-facing hostname
 - remote-address `403`:
   traffic is bypassing the intended reverse-proxy path
+
+## Remote Log Forwarding
+
+S3Desk writes structured logs to stdout. Do not add a syslog client to the
+application or a per-pod sidecar just to move those logs.
+
+For a Docker Compose deployment, set a remote receiver and use the optional
+syslog stack. Only the `s3desk` service is forwarded; Postgres and Caddy keep
+their normal local logging configuration.
+
+```bash
+export SYSLOG_ADDRESS='tcp+tls://logs.example.com:6514'
+./scripts/compose.sh remote-syslog up -d
+# Or, with Caddy:
+./scripts/compose.sh caddy-syslog up -d
+```
+
+The overlay forces `LOG_FORMAT=json`, uses RFC 5424 with microsecond timestamps,
+and enables Docker's non-blocking delivery with a configurable `4m` buffer.
+When that buffer fills, new log messages can be dropped instead of blocking the
+application. Set `SYSLOG_MAX_BUFFER_SIZE` to tune that tradeoff. Existing
+containers must be recreated before a logging-driver change takes effect.
+The receiver must be reachable when Docker creates the container; otherwise
+Docker rejects startup while initializing the logging driver. If application
+startup must be independent of the remote receiver, keep the default local
+driver and forward it with one host-managed collector instead.
+
+Use `tcp+tls://` for logs crossing an untrusted network. Docker validates the
+remote certificate by default. If the receiver uses a private CA, add the
+Docker host path as `syslog-tls-ca-cert` in a deployment-local Compose override;
+that path belongs to the Docker daemon host, not the S3Desk container. Do not
+set `syslog-tls-skip-verify=true` in production.
+
+`JOB_LOG_EMIT_STDOUT=false` remains the default because job output can be noisy.
+Set it to `true` only when those detailed job lines are approved to leave the
+host. The application's existing secret redaction still applies, but forwarded
+logs remain operational data and need receiver-side access control and
+retention limits.
+
+The syslog Compose stacks intentionally require Docker. Podman supports
+`journald`, not the Docker `syslog` driver; forward the host journal with
+rsyslog, Fluent Bit, Vector, or another host-managed agent. On Kubernetes, keep
+`server.logFormat=json` and use one node-level logging agent as a DaemonSet.
+The chart needs no S3Desk sidecar for log forwarding.
 
 ## Health Checks
 
