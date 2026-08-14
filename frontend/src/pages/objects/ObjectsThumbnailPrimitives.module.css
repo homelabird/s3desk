@@ -41,7 +41,7 @@
   border-radius: 999px;
   border: 1px solid var(--s3d-color-border);
   background: var(--s3d-color-bg-elevated);
-  font-size: 11px;
+  font-size: var(--s3d-font-size-xs);
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -49,9 +49,13 @@
 
 .objectThumbnailPlaceholderLabel {
   max-width: 100%;
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
   line-height: 1.35;
   color: var(--s3d-color-text);
+}
+
+.objectThumbnailImage {
+  background: var(--s3d-media-checkerboard);
 }
 
 .listThumbnailFrame {

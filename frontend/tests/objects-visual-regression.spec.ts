@@ -45,7 +45,23 @@ test.describe('Objects visual regression @visual', () => {
 		await expect(grid).toBeVisible()
 		await expect(page.getByAltText('Thumbnail of preview.png')).toBeVisible()
 		await expect(objectsListRow(page, 'reports/mobile/a-very-long-object-key-that-should-wrap-on-mobile-without-causing-horizontal-overflow-or-clipped-actions.log')).toBeVisible()
+		const firstRow = await grid.locator('[role="listitem"]').evaluateAll((items) =>
+			items.slice(0, 4).map((item) => {
+				const rect = item.getBoundingClientRect() // e2e-geometry-allow verifies the requested four-column mobile grid
+				return { left: rect.left, right: rect.right, top: rect.top }
+			}),
+		)
+		expect(firstRow).toHaveLength(4)
+		expect(new Set(firstRow.map(({ top }) => Math.round(top))).size).toBe(1)
+		expect(firstRow.at(-1)?.right ?? 391).toBeLessThanOrEqual(390)
 
 		await expect(grid).toHaveScreenshot('objects-mobile-grid-density.png', visualScreenshotOptions)
+
+		await page.setViewportSize({ width: 320, height: 568 })
+		await expect.poll(() => grid.locator('[role="listitem"]').evaluateAll((items) => {
+			const cards = items.slice(0, 4).map((item) => item.getBoundingClientRect()) // e2e-geometry-allow verifies the four-column floor at the narrowest supported viewport
+			return cards.length === 4 && new Set(cards.map(({ top }) => Math.round(top))).size === 1 && (cards.at(-1)?.right ?? 321) <= 320
+		})).toBe(true)
+		await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true) // e2e-geometry-allow verifies the denser grid does not create page overflow
 	})
 })

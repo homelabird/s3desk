@@ -119,6 +119,36 @@ describe('useObjectsListKeydown', () => {
 		expect(args.onSelectAllLoaded).toHaveBeenCalledTimes(1)
 	})
 
+	it('uses app clipboard shortcuts unless the user is copying selected text', () => {
+		const args = createArgs()
+		const { result } = renderHook(() => useObjectsListKeydown(args))
+
+		for (const [key, callback] of [
+			['c', args.onCopySelection],
+			['x', args.onCopySelection],
+			['v', args.onPasteSelection],
+		] as const) {
+			const event = createKeyboardEvent(key, { ctrlKey: true })
+			act(() => result.current(event))
+			expect(event.preventDefault).toHaveBeenCalledTimes(1)
+			expect(callback).toHaveBeenCalled()
+		}
+
+		const currentTarget = document.createElement('div')
+		const text = document.createTextNode('alpha.txt')
+		currentTarget.appendChild(text)
+		document.body.appendChild(currentTarget)
+		const selection = window.getSelection()
+		selection?.selectAllChildren(currentTarget)
+		const copyEvent = createKeyboardEvent('c', { ctrlKey: true, currentTarget, target: currentTarget })
+		act(() => result.current(copyEvent))
+
+		expect(copyEvent.preventDefault).not.toHaveBeenCalled()
+		expect(args.onCopySelection).toHaveBeenCalledTimes(2)
+		selection?.removeAllRanges()
+		currentTarget.remove()
+	})
+
 	it('opens the selected object context menu from keyboard menu shortcuts', () => {
 		const args = createArgs()
 		const { result } = renderHook(() => useObjectsListKeydown(args))

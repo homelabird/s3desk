@@ -40,9 +40,9 @@ export function useObjectsContextMenuMenu(args: UseObjectsContextMenuMenuArgs) {
 		globalActionMap,
 		isAdvanced,
 		objectByKey,
+		selectionActionMap,
 		selectedCount,
 		selectedKeys,
-		selectionActionMap,
 		selectionContextMenuActions,
 	} = args
 
@@ -109,7 +109,12 @@ export function useObjectsContextMenuMenu(args: UseObjectsContextMenuMenuArgs) {
 			const menuActions =
 				selectedCount > 1 && selectedKeys.has(contextMenuState.key)
 					? selectionContextMenuActions
-					: getObjectActions(contextMenuState.key, item?.size)
+					: trimActionDividers([
+							selectionActionMap.get('copy_selected_keys'),
+							selectionActionMap.get('cut_selected_keys'),
+							{ type: 'divider' as const },
+							...getObjectActions(contextMenuState.key, item?.size),
+						].filter(isDefined))
 			return withContextMenuClassName(buildActionMenu(menuActions, isAdvanced))
 		}
 		return null
@@ -122,6 +127,7 @@ export function useObjectsContextMenuMenu(args: UseObjectsContextMenuMenuArgs) {
 		isAdvanced,
 		listContextMenu,
 		objectByKey,
+		selectionActionMap,
 		selectedCount,
 		selectedKeys,
 		selectionContextMenuActions,

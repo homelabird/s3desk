@@ -195,7 +195,7 @@
 
 .objectsOverlayTitle {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--s3d-font-size-lg);
   font-weight: 700;
 }
 
@@ -278,10 +278,10 @@
 }
 
 .treeCompactActionButton {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  width: var(--s3d-control-size-sm);
+  height: var(--s3d-control-size-sm);
+  min-width: var(--s3d-control-size-sm);
+  min-height: var(--s3d-control-size-sm);
   padding: 0 !important;
 }
 
@@ -291,10 +291,10 @@
   }
 
   .treeCompactActionButton {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: var(--s3d-control-size-touch);
+    height: var(--s3d-control-size-touch);
+    min-width: var(--s3d-control-size-touch);
+    min-height: var(--s3d-control-size-touch);
   }
 }
 
@@ -405,13 +405,13 @@
 }
 
 .inlineAlertTitle {
-  font-size: 14px;
+  font-size: var(--s3d-font-size-base);
   line-height: 1.35;
 }
 
 .inlineAlertDescription {
   color: var(--s3d-color-text-secondary);
-  font-size: 13px;
+  font-size: var(--s3d-font-size-md);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
@@ -424,8 +424,8 @@
 }
 
 .detailsCollapsedButton {
-  width: 32px;
-  height: 32px;
+  width: var(--s3d-control-size-md);
+  height: var(--s3d-control-size-md);
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
@@ -434,7 +434,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: var(--s3d-icon-size-sm);
   font-weight: 700;
   transition:
     border-color var(--s3d-transition-fast),
@@ -474,8 +474,8 @@
 
   .toolbarTopRow :global(.ant-btn),
   .toolbarHintWrap :global(.ant-btn) {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--s3d-control-size-touch);
+    min-height: var(--s3d-control-size-touch);
   }
 
   .objectsOverlayPanelLeft,
@@ -497,10 +497,10 @@
   }
 
   .objectsOverlayClose {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: var(--s3d-control-size-touch);
+    height: var(--s3d-control-size-touch);
+    min-width: var(--s3d-control-size-touch);
+    min-height: var(--s3d-control-size-touch);
   }
 
   .objectsOverlayPanel[data-compact-mobile='true'] {
@@ -537,7 +537,7 @@
   }
 
   .pageTitle {
-    font-size: 24px !important;
+    font-size: var(--s3d-font-size-display) !important;
     line-height: 1.12 !important;
   }
 

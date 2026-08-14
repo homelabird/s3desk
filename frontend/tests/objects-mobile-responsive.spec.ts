@@ -51,7 +51,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		await expect(page.getByTestId('objects-page-header')).toBeVisible()
 		await expect(page.getByTestId('objects-list-controls-root')).toBeVisible()
-		await expect(page.getByText('s3://objects-mobile-bucket/')).toBeVisible()
+		await expect(page.getByText('s3://objects-mobile-bucket/')).toHaveCount(0)
+		await expect(page.getByRole('navigation', { name: 'Location breadcrumb' })).toHaveCount(0)
 		await expect(page.getByLabel('Search current folder')).toBeVisible()
 		await expect(objectsListRow(page, 'alpha.txt')).toBeVisible()
 		await expect(objectsListRow(page, 'preview.png')).toBeVisible()
@@ -140,9 +141,10 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const card = objectsListRow(page, 'preview.png')
 		await expect(card).toBeVisible()
-		const previewButton = card.getByRole('button', { name: 'Open large preview for preview.png' })
-		await expect(previewButton).toBeVisible()
-		await previewButton.click()
+		await card.getByRole('button', { name: 'Object actions for preview.png' }).click()
+		const cardMenu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Open large preview' }) }).last()
+		await expect(cardMenu.getByRole('menuitem', { name: 'Add favorite for preview.png' })).toBeVisible()
+		await cardMenu.getByRole('menuitem', { name: 'Open large preview' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		await expect(modal).toBeVisible()
@@ -193,11 +195,15 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await reportsTreeItem.click()
 
 		await expect(drawer).toHaveCount(0)
-		await expect(page.getByText('s3://objects-mobile-bucket/reports/')).toBeVisible()
+		const breadcrumb = page.getByRole('navigation', { name: 'Location breadcrumb' })
+		await expect(breadcrumb).toBeVisible()
+		await expect(breadcrumb).toContainText('reports')
+		await expect(page.getByText('s3://objects-mobile-bucket/reports/')).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Go back' })).toBeEnabled()
 		await expect(page.getByRole('button', { name: 'Go up' })).toBeEnabled()
 		await page.getByRole('button', { name: 'Go back' }).click()
-		await expect(page.getByText('s3://objects-mobile-bucket/')).toBeVisible()
+		await expect(breadcrumb).toHaveCount(0)
+		await expect(page.getByText('s3://objects-mobile-bucket/')).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Go forward' })).toBeEnabled()
 	})
 

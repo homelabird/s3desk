@@ -46,7 +46,6 @@ export function buildPrefixActions(deps: ObjectsActionDeps, targetPrefix: string
 		icon: <EditOutlined />,
 		keywords: 'rename folder',
 		enabled: canUsePrefixActions,
-		audience: 'advanced',
 		run: () => deps.onOpenRenamePrefix(targetPrefix),
 	}
 	const deleteAction: UIAction = {
@@ -56,7 +55,6 @@ export function buildPrefixActions(deps: ObjectsActionDeps, targetPrefix: string
 		keywords: 'delete remove rm folder',
 		danger: true,
 		enabled: canUsePrefixActions,
-		audience: 'advanced',
 		run: () => deps.onConfirmDeletePrefixAsJob(false, targetPrefix),
 	}
 	const copyJobAction: UIAction = {
@@ -65,7 +63,6 @@ export function buildPrefixActions(deps: ObjectsActionDeps, targetPrefix: string
 		icon: <SnippetsOutlined />,
 		keywords: 'copy cp folder job',
 		enabled: canUsePrefixActions,
-		audience: 'advanced',
 		run: () => deps.onOpenCopyPrefix('copy', targetPrefix),
 	}
 	const moveJobAction: UIAction = {
@@ -75,7 +72,6 @@ export function buildPrefixActions(deps: ObjectsActionDeps, targetPrefix: string
 		keywords: 'move mv folder job',
 		danger: true,
 		enabled: canUsePrefixActions,
-		audience: 'advanced',
 		run: () => deps.onOpenCopyPrefix('move', targetPrefix),
 	}
 	const downloadToDeviceAction: UIAction = {

@@ -4,6 +4,7 @@ import { buildObjectsScreenListViewState } from './buildObjectsScreenListViewSta
 import { logObjectsDebug } from './objectsPageDebug'
 import { useObjectsAutoScan } from './useObjectsAutoScan'
 import { useObjectsListKeydownHandler } from './useObjectsListKeydownHandler'
+import { useObjectsMarqueeSelection } from './useObjectsMarqueeSelection'
 import type { ObjectsScreenArgs } from './objectsScreenTypes'
 import { useObjectsScreenCommandPalette } from './useObjectsScreenCommandPalette'
 import { useObjectsScreenListInteractions } from './useObjectsScreenListInteractions'
@@ -87,7 +88,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		autoScanReady,
 		setAutoScanReadyKey,
 	} = paneVm
-	const { rowVirtualizer, listScrollerRef, virtualItems } = viewportState
+	const { rowVirtualizer, listScrollerEl, listScrollerRef, scrollContainerRef, virtualItems } = viewportState
 	const { detailsKey, detailsMeta, detailsMetaQuery, preview, loadPreview, cancelPreview, canCancelPreview } = previewState
 	const interactions = useObjectsScreenListInteractions({
 		props,
@@ -100,6 +101,19 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		previewState,
 		viewportState,
 		refresh: args.refresh,
+	})
+	const closeContextMenu = interactions.closeContextMenu
+	const handleMarqueeStart = useCallback(
+		() => closeContextMenu(undefined, 'marquee_selection'),
+		[closeContextMenu],
+	)
+	useObjectsMarqueeSelection({
+		enabled: !!bucket,
+		listElement: listScrollerEl,
+		scrollContainerRef,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+		onStart: handleMarqueeStart,
 	})
 	const viewState = buildObjectsScreenListViewState({
 		props,

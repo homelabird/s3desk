@@ -66,7 +66,7 @@ export function actionToMenuItem(action: UIAction | undefined, overrides?: MenuI
 	const label = action.shortcut ? (
 		<span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
 			<span>{action.label}</span>
-			<span style={{ opacity: 0.6, fontSize: 12, whiteSpace: 'nowrap' }}>{action.shortcut}</span>
+			<span style={{ opacity: 0.6, fontSize: 'var(--s3d-font-size-sm)', whiteSpace: 'nowrap' }}>{action.shortcut}</span>
 		</span>
 	) : (
 		action.label

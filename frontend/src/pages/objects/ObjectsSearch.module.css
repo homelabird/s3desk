@@ -15,9 +15,9 @@
   --objects-search-table-modified-width: 180px;
   --objects-search-table-actions-width: 164px;
   --objects-search-table-action-gap: 6px;
-  --objects-search-table-button-min-height: 32px;
+  --objects-search-table-button-min-height: var(--s3d-control-size-md);
   --objects-search-table-button-padding-inline: 10px;
-  --objects-search-table-button-font-size: 13px;
+  --objects-search-table-button-font-size: var(--s3d-font-size-md);
   display: flex;
   flex-direction: column;
   gap: var(--objects-search-content-gap);
@@ -31,7 +31,7 @@
 }
 
 .globalSearchSectionTitle {
-  font-size: 14px;
+  font-size: var(--s3d-font-size-base);
   font-weight: 700;
 }
 
@@ -60,13 +60,13 @@
 
 .drawerCompactField,
 .drawerCompactField:global(.ant-input-affix-wrapper) {
-  min-height: 32px;
+  min-height: var(--s3d-control-size-md);
   align-items: center;
 }
 
 .drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input),
 .globalSearchCompactButton {
-  min-height: 32px;
+  min-height: var(--s3d-control-size-md);
 }
 
 .drawerActions {
@@ -107,13 +107,13 @@
 
 .globalSearchNumberInput,
 .globalSearchDateInput {
-  min-height: 32px;
+  min-height: var(--s3d-control-size-md);
   border: 1px solid var(--s3d-color-border-input);
   border-radius: 6px;
   background: var(--s3d-color-bg-input);
   color: inherit;
   padding: 4px 10px;
-  font-size: 14px;
+  font-size: var(--s3d-font-size-base);
   line-height: 1.5715;
 }
 
@@ -210,7 +210,7 @@
   flex-wrap: wrap;
   gap: 6px 12px;
   color: var(--s3d-color-text-secondary);
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
 }
 
 .globalSearchResultMetaItem {
@@ -236,8 +236,8 @@
 }
 
 .globalSearchResultIconButton {
-  min-width: 28px;
-  width: 28px;
+  min-width: var(--s3d-control-size-sm);
+  width: var(--s3d-control-size-sm);
   padding-inline: 0 !important;
 }
 
@@ -248,7 +248,7 @@
 }
 
 .globalSearchCheckboxRow {
-  min-height: 32px;
+  min-height: var(--s3d-control-size-md);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -300,7 +300,7 @@
   text-align: left;
   padding: var(--objects-search-table-cell-block-padding) var(--objects-search-table-cell-inline-padding);
   border-bottom: 1px solid var(--s3d-color-border);
-  font-size: 13px;
+  font-size: var(--s3d-font-size-md);
   line-height: 1.25;
   vertical-align: middle;
 }
@@ -324,7 +324,7 @@
 .globalSearchTd {
   padding: var(--objects-search-table-cell-block-padding) var(--objects-search-table-cell-inline-padding);
   border-bottom: 1px solid var(--s3d-color-border);
-  font-size: 13px;
+  font-size: var(--s3d-font-size-md);
   line-height: 1.25;
   vertical-align: middle;
 }
@@ -365,8 +365,8 @@
 }
 
 .globalSearchTableIconButton {
-  min-width: 32px;
-  width: 32px;
+  min-width: var(--s3d-control-size-md);
+  width: var(--s3d-control-size-md);
   padding-inline: 0 !important;
 }
 
@@ -399,7 +399,7 @@
 .globalSearchDateText {
   display: inline-block;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
   line-height: 1.25;
 }
 
@@ -420,7 +420,7 @@
     --objects-search-table-actions-width: 148px;
     --objects-search-table-action-gap: 4px;
     --objects-search-table-button-padding-inline: 8px;
-    --objects-search-table-button-font-size: 12px;
+    --objects-search-table-button-font-size: var(--s3d-font-size-sm);
   }
 
   .globalSearchTableMd {
@@ -436,7 +436,7 @@
   .globalSearchResultIconButton,
   .globalSearchResultPrimaryButton,
   .globalSearchResultSecondaryButton {
-    min-height: 44px;
+    min-height: var(--s3d-control-size-touch);
   }
 }
 
@@ -461,7 +461,7 @@
     --objects-search-table-cell-inline-padding: 10px;
     --objects-search-table-modified-width: 168px;
     --objects-search-table-actions-width: 152px;
-    --objects-search-table-button-min-height: 28px;
+    --objects-search-table-button-min-height: var(--s3d-control-size-sm);
     --objects-search-table-button-padding-inline: 9px;
   }
 
@@ -490,14 +490,14 @@
   }
 
   .globalSearchTableActionRow :global(.ant-btn.ant-btn-sm) {
-    min-height: 28px !important;
+    min-height: var(--s3d-control-size-sm) !important;
     padding-inline: 4px !important;
-    font-size: 12px !important;
+    font-size: var(--s3d-font-size-sm) !important;
   }
 
   .globalSearchTableIconButton {
-    min-width: 28px;
-    width: 28px;
+    min-width: var(--s3d-control-size-sm);
+    width: var(--s3d-control-size-sm);
   }
 }
 
@@ -531,7 +531,7 @@
   }
 
   .globalSearchSectionTitle {
-    font-size: 13px;
+    font-size: var(--s3d-font-size-md);
   }
 
   .globalSearchButtonRow,
@@ -543,15 +543,15 @@
   .globalSearchCheckboxRow,
   .drawerCompactField:global(.ant-input-affix-wrapper),
   .drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
-    min-height: 44px;
+    min-height: var(--s3d-control-size-touch);
   }
 
   .drawerCompactField,
   .globalSearchNumberInput,
   .globalSearchDateInput,
   .globalSearchCompactButton {
-    min-height: 44px;
-    font-size: 13px;
+    min-height: var(--s3d-control-size-touch);
+    font-size: var(--s3d-font-size-md);
   }
 
   .globalSearchNumberInput,
@@ -560,12 +560,12 @@
   }
 
   .globalSearchResultsMeta {
-    font-size: 12px;
+    font-size: var(--s3d-font-size-sm);
   }
 
   .globalSearchResultMeta {
     gap: 5px 10px;
-    font-size: 11px;
+    font-size: var(--s3d-font-size-xs);
   }
 
   .globalSearchResultActions {
@@ -645,7 +645,7 @@
   .globalSearchNumberInput,
   .globalSearchDateInput,
   .globalSearchCompactButton {
-    font-size: 12px;
+    font-size: var(--s3d-font-size-sm);
   }
 
   .globalSearchCompactButton {
@@ -659,7 +659,7 @@
 
   .globalSearchResultsMeta,
   .globalSearchIndexHint {
-    font-size: 11px;
+    font-size: var(--s3d-font-size-xs);
   }
 
   .globalSearchVirtualCard {
@@ -674,11 +674,11 @@
 
   .globalSearchResultMeta {
     gap: 4px 8px;
-    font-size: 10px;
+    font-size: var(--s3d-font-size-xs);
   }
 
   .globalSearchResultIconButton {
-    min-width: 44px;
-    width: 44px;
+    min-width: var(--s3d-control-size-touch);
+    width: var(--s3d-control-size-touch);
   }
 }

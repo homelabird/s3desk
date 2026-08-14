@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -107,7 +107,7 @@ describe('ObjectsBucketPicker', () => {
 		expect(screen.getByRole('button', { name: 'Bucket: bucket-a' })).toHaveAttribute('aria-expanded', 'false')
 	})
 
-	it('closes the mobile picker and clears the search query when the scope changes', () => {
+	it('closes the mobile picker and clears the search query when the scope changes', async () => {
 		const onChange = vi.fn()
 		const { rerender } = render(
 			<ObjectsBucketPicker
@@ -128,7 +128,7 @@ describe('ObjectsBucketPicker', () => {
 		const searchInput = screen.getByTestId('objects-bucket-picker-mobile-search')
 		const trigger = screen.getByTestId('objects-bucket-picker-mobile-trigger')
 		const drawer = screen.getByTestId('objects-bucket-picker-mobile-drawer')
-		expect(searchInput).toHaveFocus()
+		await waitFor(() => expect(searchInput).toHaveFocus())
 		expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
 		expect(trigger).toHaveAttribute('aria-expanded', 'true')
 		expect(trigger).toHaveAttribute('aria-controls', drawer.id)

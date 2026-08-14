@@ -120,6 +120,30 @@ async function stubObjectsApi(page: Page, items: ObjectItem[]) {
 }
 
 test.describe('Objects context menus', () => {
+	test('simple mode exposes file-manager actions from row and empty-area right clicks', async ({ page }) => {
+		await stubObjectsApi(page, buildObjectItems(3))
+		await seedStorage(page, { objectsUIMode: 'simple' })
+		await gotoObjectsPage(page)
+
+		await objectsListRow(page, 'video-1.mp4').click({ button: 'right' })
+		const menu = objectsContextMenu(page)
+		await expect(menu.getByRole('menuitem', { name: /Copy.*Ctrl\/Cmd\+C/ })).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: /Cut.*Ctrl\/Cmd\+X/ })).toBeVisible()
+
+		await page.getByRole('heading', { name: 'Objects' }).click()
+		const scroller = page.getByRole('list', { name: 'Objects list' })
+		await scroller.evaluate((element) => {
+			const rect = element.getBoundingClientRect() // e2e-geometry-allow targets empty list space for a native contextmenu event
+			element.dispatchEvent(new MouseEvent('contextmenu', {
+				bubbles: true,
+				cancelable: true,
+				clientX: rect.left + 12,
+				clientY: rect.bottom - 12,
+			}))
+		})
+		await expect(menu.getByRole('menuitem', { name: /Paste.*Ctrl\/Cmd\+V/ })).toBeVisible()
+	})
+
 	test('list menu still launches a real action in a short viewport', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(12))
 		await seedStorage(page)

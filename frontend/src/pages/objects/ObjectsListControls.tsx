@@ -222,7 +222,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			<div className={styles.breadcrumbRow}>
 				<div className={styles.breadcrumbLeft}>
 					<div className={styles.listControlsLocationStack}>
-						{location ? (
+						{location && !props.isCompact ? (
 							<div className={styles.listControlsLocationRow}>
 								<span className={styles.listControlsLocationCode} title={location}>
 									{location}
@@ -240,9 +240,17 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 								) : null}
 							</div>
 						) : null}
-						{renderBreadcrumb(props.breadcrumbItems)}
+						{!props.isCompact || props.prefix ? renderBreadcrumb(props.breadcrumbItems) : null}
 					</div>
 				</div>
+				{props.isCompact && props.isAdvanced ? (
+					<span
+						className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}
+						data-testid="objects-list-controls-compact-meta"
+					>
+						{props.visiblePrefixCount} folders, {props.visibleFileCount} files
+					</span>
+				) : null}
 			</div>
 
 			{props.isCompact ? (
@@ -262,13 +270,6 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						</div>
 						{viewModeToggle}
 					</div>
-					{props.isAdvanced ? (
-						<div className={styles.listControlsCompactMeta} data-testid="objects-list-controls-compact-meta">
-							<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
-								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
-							</span>
-						</div>
-					) : null}
 					{searchStatus}
 				</div>
 			) : (

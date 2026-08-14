@@ -168,10 +168,10 @@ test.describe('Objects context menu with keyboard selection', () => {
 		await list.press('ContextMenu')
 
 		const menu = objectsContextMenu(page)
-		const downloadItem = menu.getByRole('menuitem', { name: 'Download (client)' })
+		const copyItem = menu.getByRole('menuitem', { name: /Copy.*Ctrl\/Cmd\+C/ })
 		const renameItem = menu.getByRole('menuitem', { name: 'Rename (F2)…' })
 		await expect(menu).toBeVisible()
-		await expect(downloadItem).toBeFocused()
+		await expect(copyItem).toBeFocused()
 
 		await page.keyboard.press('r')
 		await expect(renameItem).toBeFocused()

@@ -172,8 +172,8 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	)
 
 	const uploadButtonMobile = renderHinted(
-		<Button size="small" icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload} aria-label="Upload">
-			{buildMenuButtonLabel('Upload…', props.showLabels)}
+		<Button type="primary" size="small" icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload} aria-label="Upload">
+			Upload
 		</Button>,
 		uploadTooltipText,
 	)
@@ -206,7 +206,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						aria-haspopup="menu"
 						aria-expanded={open}
 					>
-						{buildMenuButtonLabel(moreButtonText, props.showLabels)}
+						{buildMenuButtonLabel(moreButtonText, props.showLabels || !props.isDesktop)}
 					</Button>
 				</Badge>
 			)}

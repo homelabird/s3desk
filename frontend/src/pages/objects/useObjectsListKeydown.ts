@@ -33,7 +33,7 @@ const objectsListShortcutIgnoredTargetSelector = [
 	'input',
 	'select',
 	'textarea',
-	'[contenteditable="true"]',
+	'[contenteditable]:not([contenteditable="false"])',
 	'[role="button"]',
 	'[role="menuitem"]',
 ].join(',')
@@ -48,10 +48,20 @@ function isObjectsListShortcutIgnoredTarget(e: React.KeyboardEvent<HTMLDivElemen
 	return Boolean(interactive && currentTarget.contains(interactive))
 }
 
+function hasSelectedTextWithin(element: Element): boolean {
+	const selection = window.getSelection?.()
+	if (!selection || selection.isCollapsed || !selection.toString()) return false
+	return Boolean(
+		(selection.anchorNode && element.contains(selection.anchorNode))
+		|| (selection.focusNode && element.contains(selection.focusNode)),
+	)
+}
+
 export function useObjectsListKeydown(args: UseObjectsListKeydownArgs) {
 	return useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>) => {
 			if (isObjectsListShortcutIgnoredTarget(e)) return
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && hasSelectedTextWithin(e.currentTarget)) return
 			if (e.key === 'Escape') {
 				if (args.contextMenuOpen) {
 					e.preventDefault()

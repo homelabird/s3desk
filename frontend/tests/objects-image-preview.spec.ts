@@ -54,6 +54,13 @@ const svgPreview = `
 </svg>
 `.trim()
 
+const transparentContrastPreview = `data:image/svg+xml,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180">
+  <text x="16" y="72" fill="black" font-size="48">BLACK</text>
+  <text x="16" y="144" fill="white" font-size="48">WHITE</text>
+</svg>
+`.trim())}`
+
 const fixtures: ObjectFixture[] = [
 	{
 		key: 'hero.png',
@@ -220,7 +227,8 @@ test.describe('Objects image preview', () => {
 
 		const card = rowFor(page, 'hero.png')
 		await expect(card).toBeVisible()
-		await card.getByRole('button', { name: 'Open large preview for hero.png' }).click()
+		await card.getByRole('button', { name: 'Object actions for hero.png' }).click()
+		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		const stage = modal.getByTestId('objects-image-viewer-stage')
@@ -259,6 +267,48 @@ test.describe('Objects image preview', () => {
 
 		await expect(page.getByTestId('objects-image-viewer-modal')).toBeVisible()
 		await expect(page.getByTestId('objects-image-viewer-image')).toBeVisible()
+	})
+
+	test('transparent previews keep the same neutral canvas in both themes', async ({ page }) => {
+		await stubObjectsImagePreviewApi(page, fixtures)
+		await seedStorage(page)
+		await gotoObjectsPage(page)
+
+		const heroRow = rowFor(page, 'hero.png')
+		await expect(heroRow).toBeVisible()
+		await heroRow.getByRole('button', { name: /Object actions/ }).evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
+		await page.getByRole('menuitem', { name: /Open large preview/i }).click()
+
+		const stage = page.getByTestId('objects-image-viewer-stage')
+		const image = page.getByTestId('objects-image-viewer-image')
+		await expect(image).toBeVisible()
+		await image.evaluate((element, src) => {
+			;(element as HTMLImageElement).src = src
+		}, transparentContrastPreview)
+		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).complete)).toBe(true)
+		const lightCanvas = await stage.evaluate((element) => getComputedStyle(element).backgroundImage)
+		expect(lightCanvas).toContain('rgb(133, 141, 150)')
+		expect(lightCanvas).toContain('rgb(116, 124, 134)')
+		await expect(image).toHaveCSS('filter', 'none')
+
+		await page.getByRole('button', { name: 'Close', exact: true }).click()
+		await page.getByRole('button', { name: 'App menu' }).click()
+		await page.getByRole('menuitem', { name: /Dark mode/i }).click()
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+
+		await heroRow.getByRole('button', { name: /Object actions/ }).evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
+		await page.getByRole('menuitem', { name: /Open large preview/i }).click()
+		await expect(image).toBeVisible()
+		await image.evaluate((element, src) => {
+			;(element as HTMLImageElement).src = src
+		}, transparentContrastPreview)
+		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).complete)).toBe(true)
+		expect(await stage.evaluate((element) => getComputedStyle(element).backgroundImage)).toBe(lightCanvas)
+		await expect(image).toHaveCSS('filter', 'none')
 	})
 
 	test('list thumbnail opens an actionable mobile fallback for oversized images', async ({ page }) => {

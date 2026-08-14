@@ -3,6 +3,7 @@ import { Space, Typography } from 'antd'
 import { CloudUploadOutlined } from '@ant-design/icons'
 
 import { ObjectsDropZoneCard, ObjectsListPane, ObjectsListScroller, ObjectsListTop } from './ObjectsListPane'
+import styles from './ObjectsListView.module.css'
 
 type ObjectsListSectionProps = {
 	controls: ReactNode
@@ -74,7 +75,7 @@ export function ObjectsListSection({
 							}}
 						>
 							<Space orientation="vertical" align="center" size="small">
-								<CloudUploadOutlined style={{ fontSize: 32, color: 'var(--s3d-color-primary)' }} />
+								<CloudUploadOutlined className={styles.uploadDropIcon} />
 								<Typography.Text>
 									Drop to upload to <Typography.Text code>{uploadDropLabel}</Typography.Text>
 								</Typography.Text>

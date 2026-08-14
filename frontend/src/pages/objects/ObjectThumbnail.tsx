@@ -109,7 +109,6 @@ export function ObjectThumbnail(props: ObjectThumbnailProps) {
 		height: props.size,
 		borderRadius: 4,
 		objectFit: props.fit ?? 'cover',
-		background: 'var(--s3d-color-bg-disabled)',
 		border: '1px solid var(--s3d-color-border)',
 		flex: '0 0 auto',
 	}
@@ -130,5 +129,5 @@ export function ObjectThumbnail(props: ObjectThumbnailProps) {
 		)
 	}
 
-	return <img src={url} style={style} loading="lazy" alt={props.altText ?? `Thumbnail of ${fileName}`} width={props.size} height={props.size} />
+	return <img src={url} className={styles.objectThumbnailImage} style={style} loading="lazy" alt={props.altText ?? `Thumbnail of ${fileName}`} width={props.size} height={props.size} />
 }

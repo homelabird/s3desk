@@ -153,7 +153,7 @@
 
 .panelToggleChevron {
   color: var(--s3d-color-text-secondary);
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
   line-height: 1;
 }
 

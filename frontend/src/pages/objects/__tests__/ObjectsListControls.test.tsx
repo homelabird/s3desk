@@ -128,13 +128,29 @@ describe('ObjectsListControls', () => {
 		render(<ObjectsListControls {...props} />)
 
 		expect(screen.getByTestId('objects-list-controls-compact-footer')).toBeInTheDocument()
-		expect(screen.getByTestId('objects-list-controls-compact-meta')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-list-controls-compact-meta')).toHaveTextContent('3 folders, 12 files')
+		expect(screen.queryByText('s3://media/clips/trailer/')).not.toBeInTheDocument()
+		expect(screen.getByRole('navigation', { name: 'Location breadcrumb' })).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Copy location' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go to path' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Bookmark this location' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Search bucket$/ })).toBeInTheDocument()
 		expect(screen.queryByText('Search here, or use Search bucket for the whole bucket.')).not.toBeInTheDocument()
+	})
+
+	it('omits duplicate root location chrome in compact mode', () => {
+		const props = buildProps({
+			isCompact: true,
+			prefix: '',
+			breadcrumbItems: [{ title: '(root)' }],
+		})
+
+		render(<ObjectsListControls {...props} />)
+
+		expect(screen.queryByText('s3://media/')).not.toBeInTheDocument()
+		expect(screen.queryByRole('navigation', { name: 'Location breadcrumb' })).not.toBeInTheDocument()
+		expect(screen.getByTestId('objects-list-controls-compact-meta')).toHaveTextContent('3 folders, 12 files')
 	})
 
 	it('keeps capped search guidance compact on mid-width layouts without duplicating the indexed CTA', () => {

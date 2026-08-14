@@ -85,18 +85,19 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 
   const compactGrid = typeof window !== "undefined" && window.innerWidth <= 768;
   const narrowGrid = typeof window !== "undefined" && window.innerWidth <= 480;
-  const gridPadding = compactGrid ? 8 : 12;
-  const gridGap = narrowGrid ? 8 : compactGrid ? 10 : 14;
+  const gridPadding = narrowGrid ? 4 : compactGrid ? 8 : 12;
+  const gridGap = narrowGrid ? 4 : compactGrid ? 10 : 14;
   const gridMinCardWidth = narrowGrid ? 144 : compactGrid ? 152 : 210;
-  const gridColumnCount = Math.max(
+  const responsiveGridColumnCount = Math.max(
     1,
     Math.floor(
       (Math.max(0, gridWidth - gridPadding * 2) + gridGap) /
         (gridMinCardWidth + gridGap),
     ),
   );
+  const gridColumnCount = compactGrid ? Math.max(4, responsiveGridColumnCount) : responsiveGridColumnCount;
   const gridRowCount = Math.ceil(props.rows.length / gridColumnCount);
-  const estimatedGridRowHeight = compactGrid ? 300 : 360;
+  const estimatedGridRowHeight = narrowGrid ? 156 : compactGrid ? 300 : 360;
   const gridVirtualizer = useVirtualizer({
     count: props.viewMode === "grid" ? gridRowCount : 0,
     getScrollElement: () => gridScrollContainerRef.current,

@@ -37,7 +37,7 @@
   border: 1px solid var(--s3d-color-border);
   border-radius: 999px;
   background: color-mix(in srgb, var(--s3d-color-bg-secondary) 82%, transparent);
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
   line-height: 1.25;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -54,7 +54,7 @@
 }
 
 .imageViewerToolbarButton {
-  min-height: 32px;
+  min-height: var(--s3d-control-size-md);
   color: var(--s3d-color-text) !important;
 }
 
@@ -71,9 +71,7 @@
   overflow: hidden;
   border: 1px solid var(--s3d-color-border-strong);
   border-radius: var(--s3d-radius-lg);
-  background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--s3d-color-primary-bg) 46%, transparent), transparent 48%),
-    linear-gradient(135deg, var(--s3d-color-bg-code), var(--s3d-color-bg-secondary));
+  background: var(--s3d-media-checkerboard);
   touch-action: none;
 }
 
@@ -190,7 +188,7 @@
   .imageViewerMetaBadge {
     min-height: 22px;
     padding: 1px 7px;
-    font-size: 11px;
+    font-size: var(--s3d-font-size-xs);
   }
 
   .imageViewerImage {
@@ -205,7 +203,7 @@
   }
 
   .imageViewerToolbarButton {
-    min-height: 44px;
+    min-height: var(--s3d-control-size-touch);
   }
 }
 
@@ -219,7 +217,7 @@
   }
 
   .imageViewerMetaBadge {
-    font-size: 10px;
+    font-size: var(--s3d-font-size-xs);
     line-height: 1.2;
   }
 

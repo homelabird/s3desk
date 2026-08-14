@@ -10,7 +10,7 @@ import gridStyles from './ObjectsGridCards.module.css'
 import listStyles from './ObjectsListView.module.css'
 import { LazyObjectThumbnail } from './ObjectThumbnailLazy'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
-import { buildActionMenu } from './objectsActions'
+import { buildActionMenu, type UIAction } from './objectsActions'
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
 import { GRID_CARD_THUMBNAIL_PX } from './objectsPageConstants'
 import { displayNameForKey, isThumbnailKey } from './objectsListUtils'
@@ -90,16 +90,24 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			const sizeLabel = formatBytes(object.size)
 			const timeLabel = formatDateTime(object.lastModified, { showSeconds: false })
 			const metaLabel = `${sizeLabel} \u00b7 ${timeLabel}`
-			const useSelectionMenu = selectedCount > 1 && selectedKeys.has(key)
-			const menu = withContextMenuClassName(
-				buildActionMenu(useSelectionMenu ? selectionContextMenuActions : getObjectActions(key, object.size), isAdvanced),
-			)
-			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key)
-			const canOpenPreview = canShowThumbnail
 			const isSelected = selectedKeys.has(key)
 			const isFavorite = favoriteKeys.has(key)
 			const favoriteDisabled = favoritePendingKeys.has(key) || isOffline || !profileId || !bucket || !objectCrudSupported
 			const favoriteLabel = isFavorite ? `Remove favorite for ${displayName}` : `Add favorite for ${displayName}`
+			const favoriteAction: UIAction = {
+				id: 'toggle_favorite',
+				label: favoriteLabel,
+				icon: isFavorite ? <StarFilled /> : <StarOutlined />,
+				enabled: !favoriteDisabled,
+				run: () => toggleFavorite(key),
+			}
+			const useSelectionMenu = selectedCount > 1 && isSelected
+			const menu = withContextMenuClassName(buildActionMenu(
+				useSelectionMenu ? selectionContextMenuActions : [favoriteAction, { type: 'divider' }, ...getObjectActions(key, object.size)],
+				isAdvanced,
+			))
+			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key)
+			const canOpenPreview = canShowThumbnail
 			const buttonMenuOpen =
 				contextMenuState.open &&
 				contextMenuState.kind === 'object' &&
@@ -121,6 +129,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 						onDragStart={(event) => onRowDragStartObjects(event, key)}
 						onDragEnd={clearDndHover}
 						data-objects-row="true"
+						data-object-key={key}
 						role="group"
 						aria-label={`Object ${displayName}`}
 					>
@@ -140,6 +149,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 									size="small"
 									type="text"
 									className={gridStyles.gridCardIconButton}
+									data-grid-favorite-action="true"
 									icon={isFavorite ? <StarFilled className={listStyles.listRowFavoriteIcon} /> : <StarOutlined />}
 									disabled={favoriteDisabled}
 									aria-label={favoriteLabel}

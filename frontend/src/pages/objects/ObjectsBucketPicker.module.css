@@ -26,7 +26,7 @@
 .bucketPickerDesktopTrigger {
   width: 100%;
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--s3d-control-size-default);
   justify-content: flex-start;
 }
 
@@ -138,7 +138,7 @@
 
 .bucketPickerSearchInput {
   width: 100%;
-  min-height: 44px;
+  min-height: var(--s3d-control-size-touch);
   border: 1px solid var(--s3d-color-border-input);
   border-radius: 12px;
   background: var(--s3d-color-bg-input);
@@ -163,7 +163,7 @@
   background: var(--s3d-color-bg-elevated);
   color: inherit;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--s3d-font-size-md);
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -219,7 +219,7 @@
   align-items: center;
   border-radius: 999px;
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--s3d-font-size-xs);
   line-height: 1.4;
   font-weight: 600;
 }
@@ -235,7 +235,7 @@
 }
 
 .bucketPickerTrigger {
-  min-height: 48px;
+  min-height: var(--s3d-control-size-touch-lg);
   justify-content: space-between;
 }
 
@@ -250,14 +250,14 @@
 .bucketPickerDesktopPlaceholder,
 .bucketPickerTriggerValue,
 .bucketPickerTriggerPlaceholder {
-  font-size: 14px;
+  font-size: var(--s3d-font-size-base);
   line-height: 1.35;
 }
 
 .bucketPickerTriggerHint,
 .bucketPickerSectionLabel,
 .bucketPickerSectionHint {
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
 }
 
 .bucketPickerTriggerHint {
@@ -358,7 +358,7 @@
 
 .bucketPickerCurrentIcon {
   color: var(--s3d-color-focus);
-  font-size: 16px;
+  font-size: var(--s3d-font-size-lg);
 }
 
 .bucketPickerEmpty {
@@ -372,17 +372,17 @@
 
 @media (max-width: 640px) {
   .bucketPickerTrigger {
-    min-height: 44px;
+    min-height: var(--s3d-control-size-touch);
     padding: 8px 10px;
     gap: 10px;
   }
 
   .bucketPickerTriggerValue,
   .bucketPickerTriggerPlaceholder {
-    font-size: 13px;
+    font-size: var(--s3d-font-size-md);
   }
 
   .bucketPickerTriggerHint {
-    font-size: 11px;
+    font-size: var(--s3d-font-size-xs);
   }
 }

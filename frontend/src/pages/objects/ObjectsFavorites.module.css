@@ -13,7 +13,7 @@
 .favoritesTitleSummary {
   min-width: 0;
   flex: 1 1 auto;
-  font-size: 11px;
+  font-size: var(--s3d-font-size-xs);
   line-height: 1.2;
   color: var(--s3d-color-text-secondary);
   white-space: nowrap;
@@ -111,7 +111,7 @@
 
 .favoritesStar {
   color: var(--s3d-color-star);
-  font-size: 11px;
+  font-size: var(--s3d-font-size-xs);
 }
 
 .favoritesItemName,
@@ -124,12 +124,12 @@
 }
 
 .favoritesItemName {
-  font-size: 13px;
+  font-size: var(--s3d-font-size-md);
   line-height: 1.2;
 }
 
 .favoritesItemPath {
-  font-size: 11px;
+  font-size: var(--s3d-font-size-xs);
   line-height: 1.15;
 }
 
@@ -150,7 +150,7 @@
 
 @media (max-width: 768px) {
   .favoritesTitleSummary {
-    font-size: 10px;
+    font-size: var(--s3d-font-size-xs);
   }
 
   .favoritesPane {
@@ -162,15 +162,15 @@
   }
 
   .favoritesControl {
-    min-height: 44px;
+    min-height: var(--s3d-control-size-touch);
   }
 
   .favoritesControlLabel {
-    font-size: 13px;
+    font-size: var(--s3d-font-size-md);
   }
 
   .favoritesItem {
-    min-height: 44px;
+    min-height: var(--s3d-control-size-touch);
     padding: 5px 9px;
     border-radius: 18px;
   }
@@ -191,7 +191,7 @@
   }
 
   .favoritesControlLabel {
-    font-size: 12px;
+    font-size: var(--s3d-font-size-sm);
   }
 
   .favoritesItem {

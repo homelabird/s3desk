@@ -154,8 +154,8 @@ describe('ObjectsToolbar', () => {
 		expect(detailsButton).toHaveAttribute('aria-controls', 'objects-details-drawer')
 	})
 
-	it('hides inactive mobile history and details actions until context is available', () => {
-		render(<ObjectsToolbar {...buildProps({ isDesktop: false, showLabels: true })} />)
+	it('keeps primary mobile actions visible while hiding unavailable contextual actions', () => {
+		render(<ObjectsToolbar {...buildProps({ isDesktop: false, showLabels: false })} />)
 
 		expect(screen.queryByRole('button', { name: 'Go back' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go forward' })).not.toBeInTheDocument()
@@ -163,7 +163,8 @@ describe('ObjectsToolbar', () => {
 		expect(screen.queryByRole('button', { name: 'Folders' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument()
-		expect(screen.getByRole('button', { name: 'Upload' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Upload' })).toHaveTextContent('Upload')
+		expect(screen.getByRole('button', { name: 'More actions' })).toHaveTextContent('More')
 	})
 
 	it('shows mobile details when objects are selected', () => {

@@ -80,6 +80,26 @@ describe('buildObjectsActionCatalog', () => {
 		expect(simpleCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Show workspace tools')
 	})
 
+	it('keeps file-manager clipboard and folder actions visible in simple mode', () => {
+		const catalog = buildCatalog({ isAdvanced: false, selectedCount: 1 })
+		const selectionActions = catalog.selectionActionsAll.filter((action) => !action.audience)
+		const prefixActionIds = catalog.getPrefixActions('docs/').flatMap((action) =>
+			'type' in action || action.audience ? [] : [action.id],
+		)
+
+		expect(selectionActions.map((action) => action.id)).toEqual(expect.arrayContaining([
+			'copy_selected_keys',
+			'cut_selected_keys',
+			'paste_keys',
+		]))
+		expect(prefixActionIds).toEqual(expect.arrayContaining([
+			'rename',
+			'copyJob',
+			'moveJob',
+			'delete',
+		]))
+	})
+
 	it('keeps details unavailable until there is object context or an open details panel', () => {
 		const idleCatalog = buildCatalog({ selectedCount: 0, detailsVisible: false })
 		const selectedCatalog = buildCatalog({ selectedCount: 1, detailsVisible: false })

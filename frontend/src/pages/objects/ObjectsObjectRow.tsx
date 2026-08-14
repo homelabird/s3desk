@@ -88,6 +88,7 @@ export function ObjectsObjectRow({
 				onDragEnd={onDragEnd}
 				className={innerClassName}
 				data-objects-row="true"
+				data-object-key={objectKey}
 			>
 				<div className={styles.listRowCheckboxCell}>
 					<Checkbox checked={isSelected} onClick={onCheckboxClick} aria-label={`Select ${displayName}`} />

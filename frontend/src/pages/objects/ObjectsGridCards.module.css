@@ -7,7 +7,7 @@
 }
 
 .gridCardPreviewFrame {
-  min-height: 148px;
+  min-height: var(--objects-grid-preview-min-height);
 }
 
 .gridCardBodyActions {
@@ -18,12 +18,14 @@
 }
 
 .gridCardKindLabel {
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
   line-height: 1.2;
   color: var(--s3d-color-text-secondary);
 }
 
 .gridContent {
+  --objects-grid-media-min-height: 164px;
+  --objects-grid-preview-min-height: 148px;
   position: relative;
   padding: 12px;
 }
@@ -119,8 +121,8 @@
 }
 
 .gridCardIconButton {
-  min-width: 28px;
-  min-height: 28px;
+  min-width: var(--s3d-control-size-sm);
+  min-height: var(--s3d-control-size-sm);
   padding: 0 !important;
   flex: 0 0 auto;
 }
@@ -135,7 +137,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 164px;
+  min-height: var(--objects-grid-media-min-height);
   padding: 8px;
   border-radius: 12px;
   border: 1px solid var(--s3d-color-border);
@@ -152,7 +154,7 @@
 }
 
 .gridCardMediaPlaceholder {
-  min-height: 148px;
+  min-height: var(--objects-grid-preview-min-height);
   flex-direction: column;
   gap: 8px;
   color: var(--s3d-color-text-secondary);
@@ -160,7 +162,7 @@
 
 .gridCardFolderIcon,
 .gridCardFileIcon {
-  font-size: 34px;
+  font-size: var(--s3d-icon-size-xl);
 }
 
 .gridCardFolderIcon {
@@ -204,7 +206,7 @@
 
 .gridCardMetaLine {
   display: block;
-  font-size: 12px;
+  font-size: var(--s3d-font-size-sm);
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
@@ -212,11 +214,12 @@
 }
 
 .gridCardPreviewActionButton {
-  min-height: 28px;
+  min-height: var(--s3d-control-size-sm);
 }
 
 @media (max-width: 768px) {
   .gridContent {
+    --objects-grid-media-min-height: 126px;
     padding: 8px;
   }
 
@@ -225,78 +228,74 @@
     padding: 9px;
   }
 
-  .gridCardMedia {
-    min-height: 126px;
-  }
-
   .gridCardIconButton,
   .gridCardPreviewActionButton {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--s3d-control-size-touch);
+    min-height: var(--s3d-control-size-touch);
     padding-inline: 8px !important;
   }
 }
 
 @media (max-width: 480px) {
   .gridContent {
-    padding: 8px;
+    --objects-grid-media-min-height: 0;
+    --objects-grid-preview-min-height: 0;
+    padding: 4px;
   }
 
   .gridCard {
-    gap: 7px;
-    padding: 8px;
-    border-radius: 12px;
+    position: relative;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 9px;
   }
 
-  .gridCardTopRow,
-  .gridCardMediaPlaceholder {
-    gap: 6px;
+  .gridCardTopRow {
+    position: absolute;
+    z-index: 1;
+    top: 4px;
+    right: 4px;
   }
 
-  .gridCardTopActions {
-    gap: 2px;
+  .gridCardCheckboxWrap,
+  .gridCardKindLabel,
+  .gridCardIconButton[data-grid-favorite-action='true'] {
+    display: none;
   }
 
   .gridCardMedia {
-    min-height: 112px;
-    padding: 6px;
-    border-radius: 10px;
+    aspect-ratio: 1;
+    padding: 3px;
+    border-radius: 7px;
   }
 
   .gridCardPreviewFrame,
   .gridCardMediaPlaceholder {
-    min-height: 100px;
+    height: 100%;
+  }
+
+  .gridCardPreviewFrame :global(img),
+  .gridCardPreviewFrame :global([role='img']) {
+    width: 100% !important;
+    height: 100% !important;
   }
 
   .gridCardFolderIcon,
   .gridCardFileIcon {
-    font-size: 28px;
+    font-size: var(--s3d-icon-size-lg);
   }
 
   .gridCardBody {
-    gap: 3px;
+    gap: 0;
   }
 
   .gridCardTitle {
-    font-size: 13px;
-    line-height: 1.28;
+    font-size: var(--s3d-font-size-xs);
+    line-height: 1.2;
   }
 
   .gridCardMetaLine,
-  .gridCardKindLabel {
-    font-size: 11px;
-    line-height: 1.25;
-  }
-
   .gridCardBodyActions {
-    margin-top: 2px;
-  }
-
-  .gridCardPreviewActionButton {
-    padding-inline: 6px !important;
-  }
-
-  .gridCardPreviewActionButton :global(.ant-btn-icon + span) {
     display: none;
   }
 }
