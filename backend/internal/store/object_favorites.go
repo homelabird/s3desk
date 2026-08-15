@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"time"
@@ -11,26 +12,78 @@ import (
 	"s3desk/internal/models"
 )
 
-func (s *Store) ListObjectFavorites(ctx context.Context, profileID, bucket string) ([]models.ObjectFavorite, error) {
+var ErrInvalidObjectFavoriteCursor = errors.New("invalid object favorite cursor")
+
+type ObjectFavoritesFilter struct {
+	Prefix string
+	Limit  int
+	Cursor string
+}
+
+func (s *Store) ListObjectFavorites(ctx context.Context, profileID, bucket string, filter ObjectFavoritesFilter) ([]models.ObjectFavorite, *string, error) {
 	bucket = strings.TrimSpace(bucket)
 	if bucket == "" {
-		return nil, errors.New("bucket is required")
+		return nil, nil, errors.New("bucket is required")
+	}
+	filter.Prefix = strings.TrimSpace(filter.Prefix)
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 200 {
+		limit = 200
 	}
 
 	var rows []objectFavoriteRow
-	if err := s.db.WithContext(ctx).
+	query := s.db.WithContext(ctx).
 		Select("object_key", "created_at").
-		Where("profile_id = ? AND bucket = ?", profileID, bucket).
-		Order("created_at DESC").
+		Where("profile_id = ? AND bucket = ?", profileID, bucket)
+	if filter.Prefix != "" {
+		query = query.Where(`object_key LIKE ? ESCAPE '\'`, escapeLike(filter.Prefix)+"%")
+	}
+	if filter.Cursor != "" {
+		createdAt, objectKey, err := decodeObjectFavoriteCursor(filter.Cursor)
+		if err != nil {
+			return nil, nil, err
+		}
+		query = query.Where("created_at < ? OR (created_at = ? AND object_key > ?)", createdAt, createdAt, objectKey)
+	}
+	if err := query.
+		Order("created_at DESC, object_key ASC").
+		Limit(limit + 1).
 		Find(&rows).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
+	}
 	out := make([]models.ObjectFavorite, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, models.ObjectFavorite{Key: row.ObjectKey, CreatedAt: row.CreatedAt})
 	}
-	return out, nil
+	if !hasMore || len(rows) == 0 {
+		return out, nil, nil
+	}
+	cursor := encodeObjectFavoriteCursor(rows[len(rows)-1].CreatedAt, rows[len(rows)-1].ObjectKey)
+	return out, &cursor, nil
+}
+
+func encodeObjectFavoriteCursor(createdAt, objectKey string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(createdAt + "\n" + objectKey))
+}
+
+func decodeObjectFavoriteCursor(cursor string) (string, string, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(cursor))
+	if err != nil {
+		return "", "", ErrInvalidObjectFavoriteCursor
+	}
+	createdAt, objectKey, ok := strings.Cut(string(decoded), "\n")
+	if !ok || createdAt == "" || objectKey == "" {
+		return "", "", ErrInvalidObjectFavoriteCursor
+	}
+	return createdAt, objectKey, nil
 }
 
 func (s *Store) AddObjectFavorite(ctx context.Context, profileID, bucket, key string) (models.ObjectFavorite, error) {

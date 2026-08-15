@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"s3desk/internal/db"
@@ -36,7 +38,7 @@ func newTestStoreAt(t *testing.T, sqlitePath string) *Store {
 	return st
 }
 
-func createTestProfile(t *testing.T, st *Store) models.Profile {
+func createTestProfile(t testing.TB, st *Store) models.Profile {
 	t.Helper()
 	endpoint := "http://localhost:9000"
 	region := "us-east-1"
@@ -139,11 +141,47 @@ func TestListObjectFavorites(t *testing.T) {
 		t.Fatalf("add favorite b: %v", err)
 	}
 
-	favs, err := st.ListObjectFavorites(ctx, profile.ID, "mybucket")
+	favs, nextCursor, err := st.ListObjectFavorites(ctx, profile.ID, "mybucket", ObjectFavoritesFilter{})
 	if err != nil {
 		t.Fatalf("list favorites: %v", err)
 	}
+	if nextCursor != nil {
+		t.Fatalf("unexpected next cursor: %q", *nextCursor)
+	}
 	if len(favs) != 2 {
 		t.Fatalf("expected 2 favorites, got %d", len(favs))
+	}
+}
+
+func TestListObjectFavoritesFiltersAndPaginates(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	for _, key := range []string{"docs/a.txt", "images/a.png", "docs/b.txt"} {
+		if _, err := st.AddObjectFavorite(ctx, profile.ID, "mybucket", key); err != nil {
+			t.Fatalf("add favorite %q: %v", key, err)
+		}
+	}
+
+	first, cursor, err := st.ListObjectFavorites(ctx, profile.ID, "mybucket", ObjectFavoritesFilter{Prefix: "docs/", Limit: 1})
+	if err != nil {
+		t.Fatalf("list first page: %v", err)
+	}
+	if len(first) != 1 || cursor == nil {
+		t.Fatalf("first page=%v cursor=%v, want one item and cursor", first, cursor)
+	}
+	second, next, err := st.ListObjectFavorites(ctx, profile.ID, "mybucket", ObjectFavoritesFilter{Prefix: "docs/", Limit: 1, Cursor: *cursor})
+	if err != nil {
+		t.Fatalf("list second page: %v", err)
+	}
+	if len(second) != 1 || next != nil {
+		t.Fatalf("second page=%v next=%v, want one final item", second, next)
+	}
+	if first[0].Key == second[0].Key || !strings.HasPrefix(first[0].Key, "docs/") || !strings.HasPrefix(second[0].Key, "docs/") {
+		t.Fatalf("unexpected paginated keys: %q, %q", first[0].Key, second[0].Key)
+	}
+
+	if _, _, err := st.ListObjectFavorites(ctx, profile.ID, "mybucket", ObjectFavoritesFilter{Cursor: "invalid"}); !errors.Is(err, ErrInvalidObjectFavoriteCursor) {
+		t.Fatalf("invalid cursor error=%v", err)
 	}
 }

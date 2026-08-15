@@ -1445,6 +1445,14 @@ paths:
           in: query
           required: false
           schema: { type: boolean }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 200 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: OK
@@ -3027,7 +3035,7 @@ components:
       properties:
         bucket: { type: string }
         prefix: { type: string }
-        count: { type: integer }
+        count: { type: integer, description: Number of favorites returned in this page. }
         keys:
           type: array
           items: { type: string }
@@ -3035,6 +3043,7 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/FavoriteObjectItem" }
+        nextCursor: { type: string, description: Opaque cursor for the next page. }
 
     ListObjectsResponse:
       type: object

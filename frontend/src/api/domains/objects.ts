@@ -183,15 +183,33 @@ export function listObjectFavorites(
 	request: RequestFn,
 	args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean },
 ): Promise<ObjectFavoritesResponse> {
-	const params = new URLSearchParams()
-	if (args.prefix) params.set('prefix', args.prefix)
-	if (typeof args.hydrate === 'boolean') params.set('hydrate', String(args.hydrate))
-	const qs = params.toString()
-	return request(
-		`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites${qs ? `?${qs}` : ''}`,
-		{ method: 'GET' },
-		{ profileId: args.profileId },
-	)
+	return (async () => {
+		const keys: string[] = []
+		const items: ObjectFavoritesResponse['items'] = []
+		let response: ObjectFavoritesResponse | undefined
+		let cursor: string | undefined
+		do {
+			const params = new URLSearchParams({ limit: '200' })
+			if (args.prefix) params.set('prefix', args.prefix)
+			if (typeof args.hydrate === 'boolean') params.set('hydrate', String(args.hydrate))
+			if (cursor) params.set('cursor', cursor)
+			response = await request<ObjectFavoritesResponse>(
+				`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites?${params.toString()}`,
+				{ method: 'GET' },
+				{ profileId: args.profileId },
+			)
+			keys.push(...response.keys)
+			items.push(...response.items)
+			cursor = response.nextCursor
+		} while (cursor)
+		return {
+			...response!,
+			count: keys.length,
+			keys,
+			items,
+			nextCursor: undefined,
+		}
+	})()
 }
 
 export function createObjectFavorite(request: RequestFn, args: { profileId: string; bucket: string; key: string }): Promise<ObjectFavorite> {

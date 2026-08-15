@@ -605,12 +605,13 @@ type FavoriteObjectItem struct {
 }
 
 type ObjectFavoritesResponse struct {
-	Bucket   string               `json:"bucket"`
-	Prefix   string               `json:"prefix,omitempty"`
-	Count    int                  `json:"count"`
-	Keys     []string             `json:"keys"`
-	Hydrated bool                 `json:"hydrated"`
-	Items    []FavoriteObjectItem `json:"items"`
+	Bucket     string               `json:"bucket"`
+	Prefix     string               `json:"prefix,omitempty"`
+	Count      int                  `json:"count"`
+	Keys       []string             `json:"keys"`
+	Hydrated   bool                 `json:"hydrated"`
+	Items      []FavoriteObjectItem `json:"items"`
+	NextCursor *string              `json:"nextCursor,omitempty"`
 }
 
 type ListObjectsResponse struct {

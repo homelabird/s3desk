@@ -2319,6 +2319,8 @@ export interface paths {
                 query?: {
                     prefix?: string;
                     hydrate?: boolean;
+                    limit?: number;
+                    cursor?: string;
                 };
                 header: {
                     "X-Profile-Id": components["parameters"]["XProfileId"];
@@ -3908,10 +3910,13 @@ export interface components {
         ObjectFavoritesResponse: {
             bucket: string;
             prefix?: string;
+            /** @description Number of favorites returned in this page. */
             count: number;
             keys: string[];
             hydrated: boolean;
             items: components["schemas"]["FavoriteObjectItem"][];
+            /** @description Opaque cursor for the next page. */
+            nextCursor?: string;
         };
         ListObjectsResponse: {
             bucket: string;

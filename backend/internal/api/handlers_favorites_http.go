@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/store"
 )
 
 type objectFavoritesHTTPError struct {
@@ -44,24 +46,24 @@ func buildObjectFavoritesRcloneErrorContext() rcloneAPIErrorContext {
 	}
 }
 
-func (svc objectFavoritesHTTPService) prepareListObjectFavorites(metric *storageMetric, r *http.Request) (models.ProfileSecrets, string, string, string, bool, error) {
+func (svc objectFavoritesHTTPService) prepareListObjectFavorites(metric *storageMetric, r *http.Request) (models.ProfileSecrets, string, string, store.ObjectFavoritesFilter, bool, error) {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
 		metric.SetStatus("missing_profile")
-		return models.ProfileSecrets{}, "", "", "", false, newObjectFavoritesHTTPError(http.StatusBadRequest, "missing_profile", "profile is required", nil)
+		return models.ProfileSecrets{}, "", "", store.ObjectFavoritesFilter{}, false, newObjectFavoritesHTTPError(http.StatusBadRequest, "missing_profile", "profile is required", nil)
 	}
 	metric.SetProvider(string(secrets.Provider))
 
 	profileID := r.Header.Get("X-Profile-Id")
 	if profileID == "" {
 		metric.SetStatus("missing_profile")
-		return models.ProfileSecrets{}, "", "", "", false, newObjectFavoritesHTTPError(http.StatusBadRequest, "missing_profile", "X-Profile-Id header is required", nil)
+		return models.ProfileSecrets{}, "", "", store.ObjectFavoritesFilter{}, false, newObjectFavoritesHTTPError(http.StatusBadRequest, "missing_profile", "X-Profile-Id header is required", nil)
 	}
 
 	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
 	if bucket == "" {
 		metric.SetStatus("invalid_request")
-		return models.ProfileSecrets{}, "", "", "", false, newObjectFavoritesHTTPError(http.StatusBadRequest, "invalid_request", "bucket is required", nil)
+		return models.ProfileSecrets{}, "", "", store.ObjectFavoritesFilter{}, false, newObjectFavoritesHTTPError(http.StatusBadRequest, "invalid_request", "bucket is required", nil)
 	}
 
 	hydrate := true
@@ -69,27 +71,41 @@ func (svc objectFavoritesHTTPService) prepareListObjectFavorites(metric *storage
 		parsed, parseErr := strconv.ParseBool(raw)
 		if parseErr != nil {
 			metric.SetStatus("invalid_request")
-			return models.ProfileSecrets{}, "", "", "", false, newObjectFavoritesHTTPError(http.StatusBadRequest, "invalid_request", "hydrate must be a boolean", map[string]any{"hydrate": raw})
+			return models.ProfileSecrets{}, "", "", store.ObjectFavoritesFilter{}, false, newObjectFavoritesHTTPError(http.StatusBadRequest, "invalid_request", "hydrate must be a boolean", map[string]any{"hydrate": raw})
 		}
 		hydrate = parsed
 	}
 
-	return secrets, profileID, bucket, strings.TrimSpace(r.URL.Query().Get("prefix")), hydrate, nil
+	limit := 200
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed < 1 || parsed > 200 {
+			metric.SetStatus("invalid_request")
+			return models.ProfileSecrets{}, "", "", store.ObjectFavoritesFilter{}, false, newObjectFavoritesHTTPError(http.StatusBadRequest, "invalid_request", "limit must be between 1 and 200", map[string]any{"limit": raw})
+		}
+		limit = parsed
+	}
+	return secrets, profileID, bucket, store.ObjectFavoritesFilter{
+		Prefix: strings.TrimSpace(r.URL.Query().Get("prefix")),
+		Limit:  limit,
+		Cursor: strings.TrimSpace(r.URL.Query().Get("cursor")),
+	}, hydrate, nil
 }
 
-func buildObjectFavoritesListResponse(bucket, prefix string, keys []string) models.ObjectFavoritesResponse {
+func buildObjectFavoritesListResponse(bucket, prefix string, keys []string, nextCursor *string) models.ObjectFavoritesResponse {
 	return models.ObjectFavoritesResponse{
-		Bucket:   bucket,
-		Prefix:   prefix,
-		Count:    len(keys),
-		Keys:     append([]string(nil), keys...),
-		Hydrated: false,
-		Items:    []models.FavoriteObjectItem{},
+		Bucket:     bucket,
+		Prefix:     prefix,
+		Count:      len(keys),
+		Keys:       append([]string(nil), keys...),
+		Hydrated:   false,
+		Items:      []models.FavoriteObjectItem{},
+		NextCursor: nextCursor,
 	}
 }
 
 func (svc objectFavoritesHTTPService) executeList(metric *storageMetric, r *http.Request) (*models.ObjectFavoritesResponse, error, string, rcloneAPIErrorContext, map[string]any, error) {
-	secrets, profileID, bucket, prefix, hydrate, err := svc.prepareListObjectFavorites(metric, r)
+	secrets, profileID, bucket, filter, hydrate, err := svc.prepareListObjectFavorites(metric, r)
 	if err != nil {
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, err
 	}
@@ -98,20 +114,21 @@ func (svc objectFavoritesHTTPService) executeList(metric *storageMetric, r *http
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectFavoritesHTTPError(http.StatusInternalServerError, "internal_error", "failed to list favorites", map[string]any{"error": "store is not configured"})
 	}
 
-	favorites, err := svc.server.store.ListObjectFavorites(r.Context(), profileID, bucket)
+	favorites, nextCursor, err := svc.server.store.ListObjectFavorites(r.Context(), profileID, bucket, filter)
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidObjectFavoriteCursor) {
+			metric.SetStatus("invalid_request")
+			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectFavoritesHTTPError(http.StatusBadRequest, "invalid_request", "cursor is invalid", nil)
+		}
 		metric.SetStatus("internal_error")
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectFavoritesHTTPError(http.StatusInternalServerError, "internal_error", "failed to list favorites", map[string]any{"error": err.Error()})
 	}
 
 	keys := make([]string, 0, len(favorites))
 	for _, fav := range favorites {
-		if prefix != "" && !strings.HasPrefix(fav.Key, prefix) {
-			continue
-		}
 		keys = append(keys, fav.Key)
 	}
-	response := buildObjectFavoritesListResponse(bucket, prefix, keys)
+	response := buildObjectFavoritesListResponse(bucket, filter.Prefix, keys, nextCursor)
 	if len(keys) == 0 || !hydrate {
 		metric.SetStatus("db_only")
 		return &response, nil, "", rcloneAPIErrorContext{}, nil, nil
@@ -162,9 +179,6 @@ func (svc objectFavoritesHTTPService) executeList(metric *storageMetric, r *http
 
 	items := make([]models.FavoriteObjectItem, 0, len(keys))
 	for _, fav := range favorites {
-		if prefix != "" && !strings.HasPrefix(fav.Key, prefix) {
-			continue
-		}
 		entry, ok := entries[fav.Key]
 		if !ok {
 			continue
