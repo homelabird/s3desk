@@ -1,5 +1,5 @@
 import { ProfilesPageShell } from './profiles/ProfilesPageShell'
-import { useProfilesPageCompositionState } from './profiles/useProfilesPageCompositionState'
+import { useProfilesPageState } from './profiles/useProfilesPageState'
 
 type Props = {
 	apiToken: string
@@ -8,10 +8,10 @@ type Props = {
 }
 
 export function ProfilesPage(props: Props) {
-	const composition = useProfilesPageCompositionState({
+	const shell = useProfilesPageState({
 		apiToken: props.apiToken,
 		profileId: props.profileId,
 		setProfileId: props.setProfileId,
 	})
-	return <ProfilesPageShell {...composition.shell} />
+	return <ProfilesPageShell {...shell} />
 }

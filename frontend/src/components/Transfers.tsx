@@ -1,9 +1,5 @@
-import { DownloadOutlined } from '@ant-design/icons'
-import { Badge, Button, type ButtonProps } from 'antd'
-import type { ReactNode } from 'react'
 import { Suspense, lazy, useEffect } from 'react'
 
-import { TransfersContexts, useTransfersCommands, useTransfersSummary } from './useTransfers'
 import { useTransfersRuntimeController } from './transfers/useTransfersRuntimeController'
 import { useTransfersRuntimeNotifications } from './transfers/useTransfersRuntimeNotifications'
 import type {
@@ -18,40 +14,12 @@ const TransfersRuntimeUiHost = lazy(async () => {
 	return { default: m.TransfersRuntimeUiHost }
 })
 
-type TransfersProviderProps = {
-	apiToken: string
-	uploadDirectStream?: boolean
-	uploadCapabilityByProfileId?: UploadCapabilityByProfileId
-	children: ReactNode
-}
-
 export type TransfersRuntimeBridgeProps = {
 	apiToken: string
 	uploadDirectStream?: boolean
 	uploadCapabilityByProfileId?: UploadCapabilityByProfileId
 	onSnapshotChange: (snapshot: TransfersRuntimeSnapshot) => void
 	onApiChange: (api: TransfersRuntimeApi | null) => void
-}
-
-export function TransfersProvider(props: TransfersProviderProps) {
-	const notifications = useTransfersRuntimeNotifications()
-	const controller = useTransfersRuntimeController({
-		apiToken: props.apiToken,
-		uploadDirectStream: props.uploadDirectStream,
-		uploadCapabilityByProfileId: props.uploadCapabilityByProfileId,
-		notifications,
-	})
-
-	return (
-		<TransfersContexts value={controller.ctx}>
-			{props.children}
-			{controller.uiState.isOpen ? (
-				<Suspense fallback={null}>
-					<TransfersRuntimeUiHost uiState={controller.uiState} uiActions={controller.uiActions} />
-				</Suspense>
-			) : null}
-		</TransfersContexts>
-	)
 }
 
 export function TransfersRuntimeBridge(props: TransfersRuntimeBridgeProps) {
@@ -78,26 +46,6 @@ export function TransfersRuntimeBridge(props: TransfersRuntimeBridgeProps) {
 			<TransfersRuntimeUiHost uiState={controller.uiState} uiActions={controller.uiActions} />
 		</Suspense>
 	) : null
-}
-
-export function TransfersButton(props: { showLabel?: boolean; ariaLabel?: string; type?: ButtonProps['type']; className?: string } = {}) {
-	const transfers = useTransfersCommands()
-	const summary = useTransfersSummary()
-	return (
-		<Button
-			type={props.type}
-			className={props.className}
-			aria-label={props.ariaLabel ?? 'Transfers'}
-			icon={
-				<Badge count={summary.activeTransferCount} size="small" showZero={false}>
-					<DownloadOutlined />
-				</Badge>
-			}
-			onClick={() => transfers.openTransfers()}
-		>
-			{props.showLabel ? 'Transfers' : null}
-		</Button>
-	)
 }
 
 function buildRuntimeApi(ctx: TransfersContextValue): TransfersRuntimeApi {

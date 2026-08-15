@@ -1,5 +1,5 @@
 import { BucketsPageRouteShell } from './buckets/BucketsPageRouteShell'
-import { useBucketsPageCompositionState } from './buckets/useBucketsPageCompositionState'
+import { useBucketsPageState } from './buckets/useBucketsPageState'
 
 type Props = {
 	apiToken: string
@@ -7,7 +7,7 @@ type Props = {
 }
 
 export function BucketsPage(props: Props) {
-	const composition = useBucketsPageCompositionState(props)
+	const state = useBucketsPageState(props)
 
-	return <BucketsPageRouteShell {...composition} />
+	return <BucketsPageRouteShell apiToken={props.apiToken} profileId={props.profileId} shell={state.shell} />
 }

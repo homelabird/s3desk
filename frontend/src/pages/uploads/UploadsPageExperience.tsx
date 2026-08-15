@@ -1,5 +1,6 @@
+import { buildUploadsPagePresentationProps } from './buildUploadsPagePresentationProps'
 import { UploadsPageShell } from './UploadsPageShell'
-import { useUploadsPageCompositionState } from './useUploadsPageCompositionState'
+import { useUploadsPageState } from './useUploadsPageState'
 
 type Props = {
 	apiToken: string
@@ -7,7 +8,7 @@ type Props = {
 }
 
 export function UploadsPageExperience(props: Props) {
-	const composition = useUploadsPageCompositionState(props)
+	const state = useUploadsPageState(props)
 
-	return <UploadsPageShell presentation={composition.presentation} />
+	return <UploadsPageShell presentation={buildUploadsPagePresentationProps(state)} />
 }
