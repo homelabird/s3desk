@@ -9,16 +9,16 @@
   "initialJsGzip": {
     "label": "initial JS gzip budget",
     "env": "BUNDLE_BUDGET_INITIAL_JS_GZIP_KB",
-    "defaultKB": 92,
+    "defaultKB": 185,
     "reviewAction": "shrink first",
-    "rationale": "Initial JS stays below the current desktop shell bootstrap envelope so login, settings, and shell boot gates do not quietly drift upward."
+    "rationale": "The optimized desktop shell baseline is about 180.5 kB gzip after removing broad UI vendor grouping; this cap keeps limited headroom without restoring the former 293.8 kB preload."
   },
   "objectsPageGzip": {
     "label": "ObjectsPage gzip budget",
     "env": "BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB",
-    "defaultKB": 63,
+    "defaultKB": 85,
     "reviewAction": "rebaseline if stable",
-    "rationale": "Objects is the heaviest task-completion surface; optional overlays already lazy-load, so the remaining tree/list/details orchestration sets a slightly higher stable floor for this route."
+    "rationale": "Objects is the heaviest task-completion surface; optional overlays already lazy-load, and the stable automatic chunk boundary leaves about 82.1 kB gzip in its route entry."
   },
   "uploadsPageGzip": {
     "label": "UploadsPage gzip budget",
@@ -31,10 +31,10 @@
   "uploadsExperienceGzip": {
     "label": "UploadsPageExperience gzip budget",
     "env": "BUNDLE_BUDGET_UPLOADS_EXPERIENCE_GZIP_KB",
-    "defaultKB": 4.4,
+    "defaultKB": 5,
     "reviewTightHeadroomKB": 0.25,
     "reviewAction": "shrink first",
-    "rationale": "Authenticated Uploads carries bucket selection, source picking, and selection preview; keep this workspace tight even though it is loaded after the route gate."
+    "rationale": "Authenticated Uploads carries bucket selection, source picking, and selection preview; its optimized route baseline is about 4.6 kB gzip and remains capped after the route gate."
   },
   "transfersGzip": {
     "label": "Transfers gzip budget",

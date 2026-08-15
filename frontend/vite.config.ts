@@ -13,10 +13,6 @@ const OPTIONAL_INITIAL_UI_CHUNK_MARKERS = [
 ] as const
 
 function chunkGroupForModule(id: string): string | undefined {
-	// Rollup CommonJS interop helpers can get deduped into arbitrary chunks.
-	// Keep them in a core chunk so optional libraries (like YAML) don't get pulled
-	// into the initial bundle via helper re-exports.
-	if (id.includes('commonjsHelpers')) return 'vendor-misc'
 	if (!id.includes('node_modules/')) return undefined
 	// Keep antd's CSS-in-JS deps out of the /profiles light-shell preload.
 	if (
@@ -58,15 +54,6 @@ function chunkGroupForModule(id: string): string | undefined {
 	) {
 		return 'vendor-ui-tabs'
 	}
-	// Keep antd + rc-* in the same chunk to avoid cross-chunk circular init ordering issues.
-	if (
-		id.includes('/node_modules/antd/') ||
-		id.includes('/node_modules/@ant-design/') ||
-		id.includes('/node_modules/@rc-component/') ||
-		id.includes('/node_modules/rc-')
-	) {
-		return 'vendor-ui'
-	}
 	// Keep virtualization libs out of the base tanstack chunk so /profiles stays light.
 	if (id.includes('/node_modules/@tanstack/virtual-core/') || id.includes('/node_modules/@tanstack/react-virtual/')) {
 		return 'vendor-tanstack-virtual'
@@ -76,7 +63,7 @@ function chunkGroupForModule(id: string): string | undefined {
 	if (id.includes('/node_modules/react-router/')) return 'vendor-react-router'
 	if (id.includes('/node_modules/react/') || id.includes('/node_modules/scheduler/')) return 'vendor-react'
 	if (id.includes('/node_modules/dayjs/') || id.includes('/node_modules/yaml/')) return 'vendor-data'
-	return 'vendor-misc'
+	return undefined
 }
 
 const DEFAULT_DEV_PROXY_TARGET = 'http://127.0.0.1:8080'
