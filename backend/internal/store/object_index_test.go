@@ -6,7 +6,44 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+
+	"gorm.io/gorm"
 )
+
+func TestSearchObjectIndexOnlyProbesIndexAfterEmptyResult(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	if err := st.UpsertObjectIndexBatch(ctx, profile.ID, "bucket-a", []ObjectIndexEntry{{Key: "existing/file.txt", Size: 12}}, "2026-08-15T00:00:00Z"); err != nil {
+		t.Fatalf("seed object index: %v", err)
+	}
+
+	queries := 0
+	const callback = "test_search_object_index_query_count"
+	if err := st.db.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "object_index" {
+			queries++
+		}
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = st.db.Callback().Query().Remove(callback) })
+
+	if _, err := st.SearchObjectIndex(ctx, profile.ID, SearchObjectIndexInput{Bucket: "bucket-a", Query: "existing"}); err != nil {
+		t.Fatalf("search matching object: %v", err)
+	}
+	if queries != 1 {
+		t.Fatalf("matching search queries=%d, want 1", queries)
+	}
+
+	queries = 0
+	if _, err := st.SearchObjectIndex(ctx, profile.ID, SearchObjectIndexInput{Bucket: "bucket-a", Query: "missing"}); err != nil {
+		t.Fatalf("search indexed bucket with no match: %v", err)
+	}
+	if queries != 2 {
+		t.Fatalf("empty search queries=%d, want search plus index probe", queries)
+	}
+}
 
 func TestSummarizeObjectIndexReturnsZeroSummaryForMissingPrefixInIndexedBucket(t *testing.T) {
 	st := newTestStore(t)

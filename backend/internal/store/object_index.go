@@ -183,18 +183,6 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 		tokens = []string{in.Query}
 	}
 
-	var probe objectIndexRow
-	if err := s.db.WithContext(ctx).
-		Select("object_key").
-		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket).
-		Limit(1).
-		Take(&probe).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.SearchObjectsResponse{}, ErrObjectIndexNotFound
-		}
-		return models.SearchObjectsResponse{}, err
-	}
-
 	query := s.db.WithContext(ctx).
 		Model(&objectIndexRow{}).
 		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket)
@@ -248,6 +236,19 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 		Limit(limit + 1).
 		Find(&rows).Error; err != nil {
 		return models.SearchObjectsResponse{}, err
+	}
+	if len(rows) == 0 {
+		var probe objectIndexRow
+		if err := s.db.WithContext(ctx).
+			Select("object_key").
+			Where("profile_id = ? AND bucket = ?", profileID, in.Bucket).
+			Limit(1).
+			Take(&probe).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return models.SearchObjectsResponse{}, ErrObjectIndexNotFound
+			}
+			return models.SearchObjectsResponse{}, err
+		}
 	}
 
 	for _, row := range rows {
