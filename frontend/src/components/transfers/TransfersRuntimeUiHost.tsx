@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useNavigate } from 'react-router'
 
-import { TransfersDrawerHost } from './TransfersDrawerHost'
+import { TransfersDrawer } from './TransfersDrawer'
 import type { TransfersRuntimeUiActions, TransfersRuntimeUiState } from './useTransfersRuntimeController'
 import { useTransfersDrawerProps } from './useTransfersDrawerProps'
 
@@ -35,5 +35,5 @@ export function TransfersRuntimeUiHost({ uiState, uiActions }: TransfersRuntimeU
 		onOpenJobs: handleOpenJobs,
 	})
 
-	return <TransfersDrawerHost {...drawerProps} />
+	return <TransfersDrawer {...drawerProps} />
 }
