@@ -257,7 +257,25 @@ describe('ObjectsPagePanes', () => {
 
 		expect(screen.queryByTestId('objects-tree-section')).not.toBeInTheDocument()
 		expect(screen.queryByTestId('objects-details-section')).not.toBeInTheDocument()
+		expect(screen.queryByTestId('objects-context-menu-portal')).not.toBeInTheDocument()
 		expect(screen.getByTestId('objects-list-content')).toBeInTheDocument()
+	})
+
+	it('mounts the lazy context-menu portal only when its runtime props are ready', () => {
+		const props = buildProps()
+		render(
+			<ObjectsPagePanes
+				{...props}
+				contextMenuPortalProps={{
+					...props.contextMenuPortalProps,
+					contextMenuVisible: true,
+					contextMenuProps: { items: [] },
+					contextMenuStyle: { left: 12, top: 24 },
+				}}
+			/>,
+		)
+
+		expect(screen.getByTestId('objects-context-menu-portal')).toBeInTheDocument()
 	})
 
 	it('renders the list wrapper with the shared layout pane class', () => {
