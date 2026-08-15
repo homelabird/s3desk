@@ -389,6 +389,47 @@ npm --prefix frontend run check:e2e:geometry
 - 장식 SVG와 switch 내부 thumb의 강제 확대
 - axe/Playwright와 중복되는 새 접근성 도구 도입
 
+## 2026-08-16 Chrome 모바일 플랫폼 표준 후속 검사
+
+### 공식 기준 대조
+
+- Apple HIG는 화면 크기·방향 변화에 적응하고 safe area를 존중하며 iOS 기본 제어 크기 `44×44pt`를 목표로 하도록 안내한다.
+- Apple의 Safari 안내는 `viewport-fit=cover`를 사용할 때 `env(safe-area-inset-*)`로 센서 하우징과 둥근 모서리를 피하도록 설명한다.
+- Google web.dev는 `width=device-width, initial-scale=1` viewport, 사용자 확대를 막는 `maximum-scale`/`user-scalable=no` 회피, 수평 overflow 없는 반응형 레이아웃을 권장한다.
+- Google의 모바일 터치 지침은 `48×48` CSS px 타깃을 권장한다. 현재 핵심 7개 화면은 이 하한 미달이 없다.
+
+공식 문서:
+
+- [Apple HIG — Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
+- [Apple HIG — Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+- [Apple — Design for Safari 15](https://developer.apple.com/videos/play/wwdc2021/10029/)
+- [Google — Responsive web design basics](https://web.dev/articles/responsive-web-design-basics)
+- [Google — Accessible tap targets](https://web.dev/articles/accessible-tap-targets)
+- [Chrome DevTools Protocol — Safe-area emulation](https://chromedevtools.github.io/devtools-protocol/tot/Emulation/#method-setSafeAreaInsetsOverride)
+
+### 확인·개선 결과
+
+1. `viewport-fit=cover`와 하단 overlay는 safe area를 사용했지만, 모바일 앱 헤더·본문 좌우·로그인 shell·skip link는 inset을 소비하지 않았다.
+2. Chrome CDP에서 `top 44px`, 좌우 `24px`, bottom `34px`를 주입하면 앱 헤더 top padding은 기존 `5px`에 머물렀다.
+3. 공용 shell padding에 `env(safe-area-inset-*)`를 적용했다. 수정 후 헤더 `49px`, 좌우 `24px`, main bottom `34px`가 계산됐다.
+4. safe-area top을 처음 반영했을 때 숨겨진 skip link가 화면 위에 `7px` 노출되는 것을 성공 스크린샷에서 추가 발견했다. inset을 포함한 전체 높이만큼 이동하도록 수정해 비포커스 상태의 bottom을 `0px` 이하로 고정했다.
+5. `prefers-reduced-motion: reduce`에서도 Ant 버튼 9개가 `150ms` transition을 유지했다. 공용 reduced-motion 규칙에서 해당 전환을 제거했고 런타임 active motion 후보가 0개가 됐다.
+6. viewport metadata, 확대 허용, Apple touch icon, touch-capable Chrome context, portrait safe area, landscape 회전 후 핵심 작업과 수평 overflow를 전용 회귀 검사로 고정했다.
+
+### 현재 검증 결과
+
+- Apple/Google 전용 Chrome 모바일 표준 검사: `8/8` 통과 — iPhone 13·Pixel 7 Chromium 프로젝트.
+- 전체 모바일 작업 흐름: `100/100` 통과 (`--workers=4`).
+- axe·다크 모드·320px reflow/48px target·포커스·이미지 접근성·Objects desktop density 통합 검사: `72/72` 통과.
+- 디자인 시각 회귀: `10/10` 통과.
+- typecheck, ESLint, CSS token, import-cycle 검사 통과.
+- Objects desktop density spec의 현재 경로 검증을 compact UI의 활성 workspace/breadcrumb 계약에 맞추고, 즐겨찾기 fixture를 pagination·`keys`/`items` 응답 계약에 맞춰 `16/16` 통과했다.
+- 기존 `mobile-smoke` 2개와 `objects-marquee-selection` 2개의 의도된 geometry probe를 표식해 geometry 정책 검사가 통과했다.
+
+### 판정
+
+Chrome 모바일 에뮬레이션으로 확인 가능한 Apple/Google 공통 기준인 적응형 portrait/landscape 레이아웃, 확대 가능한 viewport, safe area 소비, 48px touch target, reduced motion, 320px reflow, 접근 가능한 이름·역할·대비는 검사 범위에서 통과했다. Safari/WebKit 렌더링, 실제 iPhone/Android 센서 영역, VoiceOver/TalkBack, OS 글자 확대와 운영 데이터는 이 결과로 증명하지 않는다.
+
 ## 준수 판정 경계
 
 이 리포트는 현재 로컬 소스, fixture 기반 Chromium 렌더링, axe와 Playwright 결과를 근거로 한다. 다음을 증명하지 않는다.
