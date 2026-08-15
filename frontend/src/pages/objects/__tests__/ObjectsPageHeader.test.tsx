@@ -55,6 +55,7 @@ describe('ObjectsPageHeader', () => {
 	it('renders the lazy toolbar section and upload source sheet shell', () => {
 		render(<ObjectsPageHeader {...buildProps({ uploadSourceOpen: true })} />)
 
+		expect(screen.getByRole('heading', { level: 1, name: 'Objects' })).toBeInTheDocument()
 		expect(screen.getByTestId('objects-toolbar-section')).toBeInTheDocument()
 		expect(screen.getByTestId('upload-source-sheet')).toHaveAttribute('data-open', 'true')
 	})

@@ -15,7 +15,7 @@ describe('PageHeader', () => {
 		)
 
 		expect(screen.getByText('Transfer')).toBeInTheDocument()
-		expect(screen.getByRole('heading', { level: 2, name: 'Uploads' })).toBeInTheDocument()
+		expect(screen.getByRole('heading', { level: 1, name: 'Uploads' })).toBeInTheDocument()
 		expect(screen.getByText('Queue selected files from this device.')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Open Transfers' })).toBeInTheDocument()
 	})

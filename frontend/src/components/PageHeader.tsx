@@ -11,7 +11,7 @@ type PageHeaderProps = {
 	titleLevel?: 1 | 2 | 3 | 4 | 5
 }
 
-export function PageHeader({ eyebrow, title, subtitle, actions, titleLevel = 2 }: PageHeaderProps) {
+export function PageHeader({ eyebrow, title, subtitle, actions, titleLevel = 1 }: PageHeaderProps) {
 	return (
 		<section className={styles.header}>
 			<div className={styles.copy}>

@@ -16,7 +16,7 @@ describe('PageSection', () => {
 			</PageSection>,
 		)
 
-		expect(screen.getByRole('heading', { level: 3, name: 'Selection' })).toBeInTheDocument()
+		expect(screen.getByRole('heading', { level: 2, name: 'Selection' })).toBeInTheDocument()
 		expect(screen.getByText('Choose files or folders from this device.')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Open picker' })).toBeInTheDocument()
 		expect(screen.getByText('Section body')).toBeInTheDocument()

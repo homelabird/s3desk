@@ -42,7 +42,7 @@ export function ObjectsPageHeader({
 	return (
 		<>
 			<div className={styles.pageHeader} data-testid="objects-page-header">
-				<Typography.Title level={2} className={styles.pageTitle}>
+				<Typography.Title level={1} className={styles.pageTitle}>
 					Objects
 				</Typography.Title>
 				{!uploadSupported ? (
