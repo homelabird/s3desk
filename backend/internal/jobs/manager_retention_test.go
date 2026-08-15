@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,11 +11,62 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
+
 	"s3desk/internal/db"
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
+
+func TestCleanupOrphanJobLogsBatchesDatabaseReads(t *testing.T) {
+	manager, st, _, gormDB, profile, dataDir := newManagerConsistencyFixture(t)
+	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
+		Type:    JobTypeS3DeleteObjects,
+		Payload: map[string]any{"bucket": "test", "keys": []string{"kept"}},
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	logDir := filepath.Join(dataDir, "logs", "jobs")
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
+		t.Fatalf("create log directory: %v", err)
+	}
+	kept := filepath.Join(logDir, job.ID+".log")
+	if err := os.WriteFile(kept, []byte("kept"), 0o600); err != nil {
+		t.Fatalf("write kept log: %v", err)
+	}
+	for i := 0; i < 501; i++ {
+		path := filepath.Join(logDir, fmt.Sprintf("orphan-%03d.log", i))
+		if err := os.WriteFile(path, []byte("orphan"), 0o600); err != nil {
+			t.Fatalf("write orphan log: %v", err)
+		}
+	}
+
+	queries := 0
+	const callback = "test_cleanup_orphan_job_logs_query_count"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "jobs" {
+			queries++
+		}
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = gormDB.Callback().Query().Remove(callback) })
+
+	manager.cleanupOrphanJobLogs(context.Background())
+
+	if queries != 2 {
+		t.Fatalf("job queries=%d, want 2 batches for 502 job IDs", queries)
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Fatalf("kept log removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(logDir, "orphan-000.log")); !os.IsNotExist(err) {
+		t.Fatalf("orphan log still exists or stat failed: %v", err)
+	}
+}
 
 func TestCleanupExpiredJobLogs(t *testing.T) {
 	dataDir := t.TempDir()

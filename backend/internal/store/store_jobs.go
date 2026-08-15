@@ -79,6 +79,16 @@ type JobFilter struct {
 	Cursor    *string
 }
 
+type JobState struct {
+	Status     models.JobStatus
+	FinishedAt *string
+}
+
+type JobWithProfile struct {
+	ProfileID string
+	Job       models.Job
+}
+
 func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (models.JobsListResponse, error) {
 	limit := f.Limit
 	if limit <= 0 {
@@ -244,6 +254,24 @@ func (s *Store) JobExists(ctx context.Context, jobID string) (bool, error) {
 	return count > 0, nil
 }
 
+func (s *Store) ListJobStatesByIDs(ctx context.Context, ids []string) (map[string]JobState, error) {
+	states := make(map[string]JobState, len(ids))
+	for start := 0; start < len(ids); start += 500 {
+		end := min(start+500, len(ids))
+		var rows []jobRow
+		if err := s.db.WithContext(ctx).
+			Select("id", "status", "finished_at").
+			Where("id IN ?", ids[start:end]).
+			Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			states[row.ID] = JobState{Status: models.JobStatus(row.Status), FinishedAt: row.FinishedAt}
+		}
+	}
+	return states, nil
+}
+
 func (s *Store) GetJobByID(ctx context.Context, jobID string) (profileID string, job models.Job, ok bool, err error) {
 	var row jobRow
 	if err := s.db.WithContext(ctx).
@@ -350,6 +378,26 @@ func (s *Store) ListJobIDsByStatus(ctx context.Context, status models.JobStatus)
 		return nil, err
 	}
 	return ids, nil
+}
+
+func (s *Store) ListJobsByStatus(ctx context.Context, status models.JobStatus) ([]JobWithProfile, error) {
+	var rows []jobRow
+	if err := s.db.WithContext(ctx).
+		Where("status = ?", string(status)).
+		Order("id ASC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	jobs := make([]JobWithProfile, 0, len(rows))
+	for _, row := range rows {
+		job, err := jobFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, JobWithProfile{ProfileID: row.ProfileID, Job: job})
+	}
+	return jobs, nil
 }
 
 func (s *Store) MarkRunningJobsFailed(ctx context.Context, errorMessage string) error {

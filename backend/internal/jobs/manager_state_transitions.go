@@ -16,21 +16,15 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 	// configs belong to a stopped process and can be removed immediately.
 	m.cleanupStartupAPIRcloneConfigs(ctx)
 
-	runningIDs, err := m.store.ListJobIDsByStatus(ctx, models.JobStatusRunning)
+	runningJobs, err := m.store.ListJobsByStatus(ctx, models.JobStatusRunning)
 	if err != nil {
 		return err
 	}
-	if len(runningIDs) > 0 {
+	if len(runningJobs) > 0 {
 		msg := "server restarted"
 		code := ErrorCodeServerRestarted
-		for _, id := range runningIDs {
-			profileID, job, ok, err := m.store.GetJobByID(ctx, id)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				continue
-			}
+		for _, stored := range runningJobs {
+			profileID, job, id := stored.ProfileID, stored.Job, stored.Job.ID
 			finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 			if err := m.finalizeJob(id, models.JobStatusFailed, &finishedAt, &msg, &code); err != nil {
 				if errors.Is(err, ErrJobStatusConflict) {
@@ -62,19 +56,13 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 			})
 		}
 	}
-	queuedIDs, err := m.store.ListJobIDsByStatus(ctx, models.JobStatusQueued)
+	queuedJobs, err := m.store.ListJobsByStatus(ctx, models.JobStatusQueued)
 	if err != nil {
 		return err
 	}
-	supportedIDs := make([]string, 0, len(queuedIDs))
-	for _, id := range queuedIDs {
-		profileID, job, ok, err := m.store.GetJobByID(ctx, id)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			continue
-		}
+	supportedIDs := make([]string, 0, len(queuedJobs))
+	for _, stored := range queuedJobs {
+		profileID, job, id := stored.ProfileID, stored.Job, stored.Job.ID
 		if m.IsSupportedJobType(job.Type) {
 			supportedIDs = append(supportedIDs, id)
 			continue

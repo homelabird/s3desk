@@ -308,6 +308,14 @@ func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
 	if len(jobIDs) == 0 {
 		return
 	}
+	ids := make([]string, 0, len(jobIDs))
+	for jobID := range jobIDs {
+		ids = append(ids, jobID)
+	}
+	states, err := m.store.ListJobStatesByIDs(ctx, ids)
+	if err != nil {
+		return
+	}
 
 	cutoff := time.Now().Add(-m.jobLogRetention)
 	for jobID := range jobIDs {
@@ -316,10 +324,8 @@ func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
 			return
 		default:
 		}
-		callCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		_, job, ok, err := m.store.GetJobByID(callCtx, jobID)
-		cancel()
-		if err != nil || !ok || job.FinishedAt == nil {
+		job, ok := states[jobID]
+		if !ok || job.FinishedAt == nil {
 			continue
 		}
 		finishedAt, err := time.Parse(time.RFC3339Nano, *job.FinishedAt)
@@ -338,13 +344,13 @@ func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
 		return
 	}
 
+	filesByJobID := make(map[string][]string)
 	for _, ent := range entries {
 		if ent.IsDir() {
 			continue
 		}
 		name := ent.Name()
 		jobID := ""
-		isRcloneConf := false
 		switch {
 		case strings.HasSuffix(name, ".log"):
 			jobID = strings.TrimSuffix(name, ".log")
@@ -352,27 +358,30 @@ func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
 			jobID = strings.TrimSuffix(name, ".cmd")
 		case strings.HasSuffix(name, ".rclone.conf"):
 			jobID = strings.TrimSuffix(name, ".rclone.conf")
-			isRcloneConf = true
 		default:
 			continue
 		}
 		if jobID == "" {
 			continue
 		}
-		if isRcloneConf {
-			_, job, ok, err := m.store.GetJobByID(ctx, jobID)
-			if err == nil && ok && job.Status == models.JobStatusRunning {
+		filesByJobID[jobID] = append(filesByJobID[jobID], name)
+	}
+	ids := make([]string, 0, len(filesByJobID))
+	for jobID := range filesByJobID {
+		ids = append(ids, jobID)
+	}
+	states, err := m.store.ListJobStatesByIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	for jobID, names := range filesByJobID {
+		state, exists := states[jobID]
+		for _, name := range names {
+			if exists && (!strings.HasSuffix(name, ".rclone.conf") || state.Status == models.JobStatusRunning) {
 				continue
 			}
 			_ = os.Remove(filepath.Join(logDir, name))
-			continue
 		}
-
-		exists, err := m.store.JobExists(ctx, jobID)
-		if err != nil || exists {
-			continue
-		}
-		_ = os.Remove(filepath.Join(logDir, name))
 	}
 }
 
@@ -383,6 +392,7 @@ func (m *Manager) cleanupOrphanJobArtifacts(ctx context.Context) {
 		return
 	}
 
+	filesByJobID := make(map[string][]string)
 	for _, ent := range entries {
 		if ent.IsDir() {
 			continue
@@ -399,11 +409,23 @@ func (m *Manager) cleanupOrphanJobArtifacts(ctx context.Context) {
 			continue
 		}
 
-		exists, err := m.store.JobExists(ctx, jobID)
-		if err != nil || exists {
+		filesByJobID[jobID] = append(filesByJobID[jobID], name)
+	}
+	ids := make([]string, 0, len(filesByJobID))
+	for jobID := range filesByJobID {
+		ids = append(ids, jobID)
+	}
+	states, err := m.store.ListJobStatesByIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	for jobID, names := range filesByJobID {
+		if _, exists := states[jobID]; exists {
 			continue
 		}
-		_ = os.Remove(filepath.Join(artifactDir, name))
+		for _, name := range names {
+			_ = os.Remove(filepath.Join(artifactDir, name))
+		}
 	}
 }
 
@@ -414,6 +436,7 @@ func (m *Manager) cleanupOrphanStagingDirs(ctx context.Context) {
 		return
 	}
 
+	ids := make([]string, 0, len(entries))
 	for _, ent := range entries {
 		if !ent.IsDir() {
 			continue
@@ -422,10 +445,15 @@ func (m *Manager) cleanupOrphanStagingDirs(ctx context.Context) {
 		if uploadID == "" {
 			continue
 		}
-		exists, err := m.store.UploadSessionExists(ctx, uploadID)
-		if err != nil || exists {
-			continue
+		ids = append(ids, uploadID)
+	}
+	existing, err := m.store.ExistingUploadSessionIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	for _, uploadID := range ids {
+		if _, exists := existing[uploadID]; !exists {
+			_ = os.RemoveAll(filepath.Join(stagingDir, uploadID))
 		}
-		_ = os.RemoveAll(filepath.Join(stagingDir, uploadID))
 	}
 }

@@ -196,6 +196,24 @@ func (s *Store) UploadSessionExists(ctx context.Context, uploadID string) (bool,
 	return count > 0, nil
 }
 
+func (s *Store) ExistingUploadSessionIDs(ctx context.Context, ids []string) (map[string]struct{}, error) {
+	existing := make(map[string]struct{}, len(ids))
+	for start := 0; start < len(ids); start += 500 {
+		end := min(start+500, len(ids))
+		var found []string
+		if err := s.db.WithContext(ctx).
+			Model(&uploadSessionRow{}).
+			Where("id IN ?", ids[start:end]).
+			Pluck("id", &found).Error; err != nil {
+			return nil, err
+		}
+		for _, id := range found {
+			existing[id] = struct{}{}
+		}
+	}
+	return existing, nil
+}
+
 func (s *Store) ListUploadSessionsByProfile(ctx context.Context, profileID string, limit int) ([]UploadSession, error) {
 	if limit <= 0 {
 		limit = 1000
