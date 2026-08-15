@@ -33,6 +33,7 @@ describe('ProfilesOnboardingCard', () => {
 	it('keeps the visible setup checklist focused on profile creation and selection', () => {
 		renderOnboardingCard()
 
+		expect(screen.getByRole('heading', { level: 2, name: 'Getting started' })).toBeInTheDocument()
 		expect(screen.getByText('Create a storage profile')).toBeInTheDocument()
 		expect(screen.getByText('Choose the active profile')).toBeInTheDocument()
 		expect(screen.getByRole('link', { name: 'Open buckets' })).toBeInTheDocument()

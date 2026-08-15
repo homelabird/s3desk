@@ -59,7 +59,7 @@ export function ProfilesOnboardingCard(props: Props) {
 	return (
 		<section className={styles.onboardingCard} aria-label="Getting started">
 			<div className={styles.onboardingHeader}>
-				<Typography.Title level={5} className={styles.onboardingTitle}>
+				<Typography.Title level={2} className={styles.onboardingTitle}>
 					Getting started
 				</Typography.Title>
 				<Typography.Text type="secondary">Create a profile, select it, then open your objects.</Typography.Text>

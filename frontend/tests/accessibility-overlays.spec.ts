@@ -475,6 +475,14 @@ test.describe('overlay accessibility scans', () => {
 		await expectNoA11yViolations(page, page.locator('body'))
 	})
 
+	test('Profiles onboarding has no whole-page axe violations', async ({ page }) => {
+		await installProfilesBucketsMobileResponsiveFixtures(page, { profiles: [], buckets: [] })
+		await seedProfilesBucketsMobileResponsiveStorage(page, { profileId: '' })
+		await gotoProfilesPage(page, { ready: (scope) => scope.getByRole('heading', { level: 2, name: 'Getting started' }) })
+
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
 	test('Buckets page has no whole-page axe violations', async ({ page }) => {
 		await page.setViewportSize({ width: 1440, height: 900 })
 		await setupBucketsA11yPage(page)

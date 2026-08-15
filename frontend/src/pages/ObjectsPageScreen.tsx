@@ -184,7 +184,7 @@ export function ObjectsPageScreen(props: Props) {
 
 	return (
 		<div className={styles.page}>
-			<Suspense fallback={<h2 style={{ margin: 0 }}>Objects</h2>}>
+			<Suspense fallback={<h1 style={{ margin: 0 }}>Objects</h1>}>
 				<ObjectsPageHeader
 					uploadSupported={uploadSupported}
 					uploadDisabledReason={uploadDisabledReason}
