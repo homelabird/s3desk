@@ -552,6 +552,10 @@ body::after {
     transition-delay: 0ms !important;
     transition-duration: 1ms !important;
   }
+
+  .ant-btn {
+    transition: none !important;
+  }
 }
 
 .sr-only {

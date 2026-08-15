@@ -78,7 +78,7 @@ export default defineConfig({
 				browserName: 'chromium',
 			},
 			testMatch:
-				/(?:mobile-smoke|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
+				/(?:mobile-smoke|mobile-platform-standards|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
 		},
 		{
 			name: 'mobile-pixel-7',
@@ -86,7 +86,7 @@ export default defineConfig({
 				...devices['Pixel 7'],
 			},
 			testMatch:
-				/(?:mobile-smoke|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
+				/(?:mobile-smoke|mobile-platform-standards|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
 		},
 		...(includeFirefox
 			? [{

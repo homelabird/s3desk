@@ -45,15 +45,15 @@
 
 .skipLink {
 	position: absolute;
-	top: 8px;
-	left: 8px;
+	top: max(8px, env(safe-area-inset-top));
+	left: max(8px, env(safe-area-inset-left));
 	z-index: 1200;
 	padding: 8px 12px;
 	border-radius: 6px;
 	background: var(--s3d-color-primary);
 	color: #fff;
 	text-decoration: none;
-	transform: translateY(-200%);
+	transform: translateY(calc(-100% - max(8px, env(safe-area-inset-top))));
 	transition: transform 120ms ease;
 }
 
@@ -68,7 +68,10 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: 24px;
+	padding-top: max(24px, env(safe-area-inset-top));
+	padding-right: max(24px, env(safe-area-inset-right));
+	padding-bottom: max(24px, env(safe-area-inset-bottom));
+	padding-left: max(24px, env(safe-area-inset-left));
 }
 
 .fullWidth {
@@ -192,13 +195,17 @@
 }
 
 .headerPadMd {
-	padding-inline: 16px;
-	padding-block: 8px;
+	padding-top: calc(8px + env(safe-area-inset-top));
+	padding-right: max(16px, env(safe-area-inset-right));
+	padding-bottom: 8px;
+	padding-left: max(16px, env(safe-area-inset-left));
 }
 
 .headerPadSm {
-	padding-inline: 12px;
-	padding-block: 10px;
+	padding-top: calc(10px + env(safe-area-inset-top));
+	padding-right: max(12px, env(safe-area-inset-right));
+	padding-bottom: 10px;
+	padding-left: max(12px, env(safe-area-inset-left));
 }
 
 .headerActions {
@@ -230,10 +237,14 @@
 
 .contentPadMd {
 	padding: 16px;
+	padding-right: max(16px, env(safe-area-inset-right));
+	padding-left: max(16px, env(safe-area-inset-left));
 }
 
 .contentPadSm {
 	padding: 12px;
+	padding-right: max(12px, env(safe-area-inset-right));
+	padding-left: max(12px, env(safe-area-inset-left));
 }
 
 .mainScroll {
@@ -272,8 +283,10 @@
 	}
 
 	.headerPadSm {
-		padding-inline: 10px;
-		padding-block: 8px;
+		padding-top: calc(8px + env(safe-area-inset-top));
+		padding-right: max(10px, env(safe-area-inset-right));
+		padding-bottom: 8px;
+		padding-left: max(10px, env(safe-area-inset-left));
 	}
 
 	.headerActions {
@@ -287,6 +300,8 @@
 
 	.contentPadSm {
 		padding: 10px;
+		padding-right: max(10px, env(safe-area-inset-right));
+		padding-left: max(10px, env(safe-area-inset-left));
 	}
 
 	.mobileBrandButton,
@@ -309,8 +324,10 @@
 	}
 
 	.headerPadSm {
-		padding-inline: 8px;
-		padding-block: 5px;
+		padding-top: calc(5px + env(safe-area-inset-top));
+		padding-right: max(8px, env(safe-area-inset-right));
+		padding-bottom: 5px;
+		padding-left: max(8px, env(safe-area-inset-left));
 	}
 
 	.headerTopRow,
@@ -320,5 +337,7 @@
 
 	.contentPadSm {
 		padding: 8px;
+		padding-right: max(8px, env(safe-area-inset-right));
+		padding-left: max(8px, env(safe-area-inset-left));
 	}
 }
