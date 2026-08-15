@@ -44,8 +44,8 @@ test('selects objects with a Windows-style marquee and auto-scrolls at the viewp
 	const grid = page.getByTestId('objects-grid-content')
 	const cards = grid.locator('[data-object-key]')
 	await expect(cards.first()).toBeVisible()
-	const gridBox = await grid.boundingBox()
-	const secondBox = await cards.nth(1).boundingBox()
+	const gridBox = await grid.boundingBox() // e2e-geometry-allow supplies the marquee drag start within the rendered grid
+	const secondBox = await cards.nth(1).boundingBox() // e2e-geometry-allow supplies the marquee drag end across the second rendered card
 	if (!gridBox || !secondBox) throw new Error('missing grid geometry')
 
 	await page.mouse.move(gridBox.x + 2, gridBox.y + 2)

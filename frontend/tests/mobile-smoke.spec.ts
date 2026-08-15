@@ -158,8 +158,8 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await expectMinTouchTarget(appMenuButton)
 		const headerGeometry = await appHeader.evaluate((header) => {
 			const headerRect = header.getBoundingClientRect() // e2e-geometry-allow verifies the stacked header owns both rows
-			const profileRect = header.querySelector('[data-testid="app-header-profile-row"]')?.getBoundingClientRect()
-			const mainRect = document.querySelector('main[data-scroll-container="app-content"]')?.getBoundingClientRect()
+			const profileRect = header.querySelector('[data-testid="app-header-profile-row"]')?.getBoundingClientRect() // e2e-geometry-allow verifies the stacked profile row remains inside the app header
+			const mainRect = document.querySelector('main[data-scroll-container="app-content"]')?.getBoundingClientRect() // e2e-geometry-allow verifies main content starts after the stacked app header
 			return {
 				headerBottom: headerRect.bottom,
 				profileBottom: profileRect?.bottom ?? 0,

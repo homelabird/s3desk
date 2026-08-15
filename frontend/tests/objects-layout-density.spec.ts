@@ -74,6 +74,17 @@ function buildSearchCapItems(count: number) {
 	})
 }
 
+function activeWorkspaceTab(page: Page, bucketName: string, prefix = '') {
+	const label = prefix ? `${bucketName}/${prefix}` : bucketName
+	return page.getByTestId('objects-toolbar-tabs').getByRole('button', { name: label, exact: true, pressed: true })
+}
+
+function currentPrefixCrumb(page: Page, prefix: string) {
+	const segment = prefix.split('/').filter(Boolean).at(-1)
+	if (!segment) throw new Error('prefix must contain a path segment')
+	return page.getByRole('navigation', { name: 'Location breadcrumb' }).getByRole('button', { name: `${segment}/`, exact: true })
+}
+
 async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
 	const box = await locator.boundingBox() // e2e-geometry-allow validates public touch-target height contract
 	expect(box?.height ?? 0).toBeGreaterThanOrEqual(minHeight)
@@ -149,7 +160,7 @@ async function stubObjectsAdaptiveApi(
 		},
 		{
 			method: 'GET',
-			path: /\/api\/v1\/buckets\/[^/]+\/objects\/favorites$/,
+			path: /\/api\/v1\/buckets\/[^/]+\/objects\/favorites(?:\?.*)?$/,
 			handler: ({ url }) => {
 				const bucketName = url.pathname.match(/^\/api\/v1\/buckets\/([^/]+)\/objects\/favorites$/)?.[1] ?? ''
 				if (!availableBuckets.includes(bucketName)) {
@@ -160,15 +171,14 @@ async function stubObjectsAdaptiveApi(
 				}
 				const hydrate = url.searchParams.get('hydrate') === 'true'
 				return {
-					json: hydrate
-						? { bucket: bucketName, prefix: '', count: favoriteItems.length, hydrated: true, items: favoriteItems }
-						: {
-								bucket: bucketName,
-								prefix: '',
-								count: favoriteItems.length,
-								hydrated: false,
-								keys: favoriteItems.map((item) => item.key),
-							},
+					json: {
+						bucket: bucketName,
+						prefix: '',
+						count: favoriteItems.length,
+						hydrated: hydrate,
+						keys: favoriteItems.map((item) => item.key),
+						items: hydrate ? favoriteItems : [],
+					},
 				}
 			},
 		},
@@ -272,23 +282,25 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByTestId('objects-toolbar-desktop-nav')).toBeVisible()
 		await expect(page.getByTestId('objects-toolbar-desktop-actions')).toBeVisible()
 		await expect(objectsBucketPickerDesktop(page)).toBeVisible()
-		await expect(page.getByRole('button', { name: bucket, exact: true })).toHaveAttribute('aria-pressed', 'true')
+		await expect(activeWorkspaceTab(page, bucket)).toHaveAttribute('aria-pressed', 'true')
 
-		await page.getByRole('button', { name: `${bucket}/reports/`, exact: true }).click()
-		await expect(page.getByRole('button', { name: `${bucket}/reports/`, exact: true })).toHaveAttribute('aria-pressed', 'true')
-		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
+		await page
+			.getByTestId('objects-toolbar-tabs')
+			.getByRole('button', { name: `${bucket}/reports/`, exact: true, pressed: false })
+			.click()
+		await expect(activeWorkspaceTab(page, bucket, 'reports/')).toHaveAttribute('aria-pressed', 'true')
 
 		await expect(page.getByRole('button', { name: 'Go back' })).toBeEnabled()
 		await page.getByRole('button', { name: 'Go back' }).click()
-		await expect(page.getByText(`s3://${bucket}/`)).toBeVisible()
+		await expect(activeWorkspaceTab(page, bucket)).toHaveAttribute('aria-pressed', 'true')
 
 		await expect(page.getByRole('button', { name: 'Go forward' })).toBeEnabled()
 		await page.getByRole('button', { name: 'Go forward' }).click()
-		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
+		await expect(activeWorkspaceTab(page, bucket, 'reports/')).toHaveAttribute('aria-pressed', 'true')
 
 		await expect(page.getByRole('button', { name: 'Go up' })).toBeEnabled()
 		await page.getByRole('button', { name: 'Go up' }).click()
-		await expect(page.getByText(`s3://${bucket}/`)).toBeVisible()
+		await expect(activeWorkspaceTab(page, bucket)).toHaveAttribute('aria-pressed', 'true')
 	})
 
 	test('shows tab overflow affordance on mid-width desktops when many locations are open', async ({ page }) => {
@@ -375,7 +387,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 
 		await expect(popover).toHaveCount(0)
 		await expect(objectsBucketPickerDesktop(page)).toHaveAttribute('title', bucket)
-		await expect(page.getByText(`s3://${bucket}/`)).toBeVisible()
+		await expect(activeWorkspaceTab(page, bucket)).toHaveAttribute('aria-pressed', 'true')
 	})
 
 	test('uses compact desktop action buttons on mid-width screens', async ({ page }) => {
@@ -478,7 +490,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 
 		await openPrefixButton.click()
 		await expect(drawer).toHaveCount(0)
-		await expect(page.getByText(`s3://${bucket}/reports/2024/mobile-density-review/`)).toBeVisible()
+		await expect(currentPrefixCrumb(page, 'reports/2024/mobile-density-review/')).toBeVisible()
 	})
 
 	test('keeps global search results within the drawer on tablet widths', async ({ page }) => {
@@ -554,7 +566,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await item.click()
 
 		await expect(drawer).toHaveCount(0)
-		await expect(page.getByText(`s3://${bucket}/reports/2024/`)).toBeVisible()
+		await expect(currentPrefixCrumb(page, 'reports/2024/')).toBeVisible()
 		await expect(objectsSelectionCheckbox(page, 'summary.txt')).toBeChecked()
 		await expect(page.getByText('Content Type')).toBeVisible()
 		await expect(page.getByText('reports/2024/summary.txt')).toBeVisible()
@@ -592,7 +604,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await childRow.getByRole('button', { name: 'reports', exact: true }).click()
 
 		await expect(drawer).toHaveCount(0)
-		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
+		await expect(currentPrefixCrumb(page, 'reports/')).toBeVisible()
 		await expect(objectsSelectionCheckbox(page, 'quarterly.csv')).toBeVisible()
 	})
 
@@ -676,7 +688,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await reportsRow.getByRole('button', { name: 'reports', exact: true }).click()
 
 		await expect(drawer).toHaveCount(0)
-		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
+		await expect(currentPrefixCrumb(page, 'reports/')).toBeVisible()
 		await expect(objectsSelectionCheckbox(page, 'quarterly.csv')).toBeVisible()
 	})
 
@@ -693,7 +705,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(favoriteItem).toBeVisible()
 		await favoriteItem.click()
 
-		await expect(page.getByText(`s3://${bucket}/reports/2024/`)).toBeVisible()
+		await expect(currentPrefixCrumb(page, 'reports/2024/')).toBeVisible()
 		await expect(objectsSelectionCheckbox(page, 'summary.txt')).toBeChecked()
 		await expect(page.getByText('Content Type')).toBeVisible()
 		await expect(page.getByText('reports/2024/summary.txt')).toBeVisible()

@@ -272,7 +272,7 @@ async function setupJobsDesktopA11yPage(page: Page) {
 	await installJobsMobileResponsiveFixtures(page)
 	await seedJobsMobileResponsiveStorage(page)
 	await gotoJobsPage(page)
-	await expect(page.getByText('job-queued')).toBeVisible()
+	await expect(page.getByRole('button', { name: 'Details for job job-queued' })).toBeVisible()
 }
 
 async function setupUploadsDesktopA11yPage(page: Page) {
@@ -655,9 +655,8 @@ test.describe('overlay accessibility scans', () => {
 
 		await page.getByRole('button', { name: /Grid/i }).click()
 		await expect(page.getByTestId('objects-grid-content')).toBeVisible()
-		const previewButton = objectsListRow(page, 'preview.png').getByRole('button', { name: 'Open large preview for preview.png' })
-		await expect(previewButton).toBeVisible()
-		await previewButton.click()
+		await objectsListRow(page, 'preview.png').getByRole('button', { name: 'Object actions for preview.png' }).click()
+		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		await expect(modal).toBeVisible()

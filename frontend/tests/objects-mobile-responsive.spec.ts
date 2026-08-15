@@ -299,9 +299,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const row = objectsListRow(page, 'preview.png')
 		await expect(row).toBeVisible()
-		const previewButton = row.getByRole('button', { name: 'Open large preview for preview.png' })
-		await expect(previewButton).toBeVisible()
-		await previewButton.click()
+		await row.getByRole('button', { name: 'Object actions for preview.png' }).click()
+		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		await expect(modal).toBeVisible()
@@ -324,9 +323,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const row = objectsListRow(page, 'preview.png')
 		await expect(row).toBeVisible()
-		const previewButton = row.getByRole('button', { name: 'Open large preview for preview.png' })
-		await expect(previewButton).toBeVisible()
-		await previewButton.click()
+		await row.getByRole('button', { name: 'Object actions for preview.png' }).click()
+		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		const stage = modal.getByTestId('objects-image-viewer-stage')
