@@ -87,7 +87,6 @@ function BucketNotEmptyDialog(props: {
 					Browse the objects first or create a delete job to empty it.
 				</Typography.Text>
 				<Button
-					type="link"
 					onClick={() => {
 						closeAndRemember()
 						props.onOpenObjects()

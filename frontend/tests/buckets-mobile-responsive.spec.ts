@@ -75,6 +75,23 @@ async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
 }
 
 test.describe('@mobile-responsive Buckets mobile workflows', () => {
+	test('keeps short bucket actions on one row at the 320px mobile floor', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 568 })
+		await setupBucketsPage(page)
+
+		const bucketCard = getBucketCard(page, primaryBucket)
+		const openButton = bucketCard.getByRole('button', { name: `Open objects for bucket ${primaryBucket}` })
+		const manageButton = bucketCard.getByRole('button', { name: `Manage bucket ${primaryBucket}` })
+		const [openBox, manageBox] = await Promise.all([
+			openButton.boundingBox(), // e2e-geometry-allow compares compact-card action rows at the narrow mobile floor
+			manageButton.boundingBox(), // e2e-geometry-allow compares compact-card action rows at the narrow mobile floor
+		])
+
+		expect(Math.abs((openBox?.y ?? 0) - (manageBox?.y ?? 0))).toBeLessThanOrEqual(2)
+		await expectMinTouchHeight(openButton, 48)
+		await expectMinTouchHeight(manageButton, 48)
+	})
+
 	test('opens and closes the create bucket flow on mobile', async ({ page }) => {
 		await setupBucketsPage(page)
 

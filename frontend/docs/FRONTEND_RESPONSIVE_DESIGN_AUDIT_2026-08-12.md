@@ -96,3 +96,23 @@ Planned improvement:
 ## Proof Boundary
 
 The fixtures prove frontend layout and interaction behavior with deterministic mocked data. They do not prove production-scale provider content, authenticated deployment behavior, browser engines outside the configured Chromium projects, or device-specific safe-area behavior on physical hardware.
+
+## 2026-08-16 Chrome Mobile Follow-up
+
+### Finding — Buckets over-stacked short card actions at `320px`
+
+- Chromium mobile emulation reproduced `Open` and `Manage` on separate full-width rows at `320 x 568`; their vertical positions differed by `56px`.
+- Both labels fit on one row while preserving the required touch size, so the `max-width: 380px` forced-column rule added height without improving reachability or readability.
+- Removed that redundant override and kept the existing flex layout. The actions now share one row with at most `2px` vertical variance and retain a minimum `48px` touch height.
+- Added a rendered geometry and touch-target regression test at the `320px` mobile floor.
+
+### Validation
+
+- Responsive workflows: `89/92` passed in the initial 12-worker run; the three failures were render-time/page-ready thresholds under parallel load. All affected scenarios passed when isolated with one worker (`4/4`, iPhone 13 and Pixel 7 projects).
+- WCAG `1.4.10` reflow and target audit at `320 CSS px`: `7/7` passed, including Buckets with no targets below `48px`.
+- Design-audit visual regression: `10/10` passed.
+- Typecheck, ESLint, CSS-token validation, and import-cycle validation passed.
+
+### Proof Boundary
+
+This follow-up proves deterministic mocked-data behavior in Playwright's Chromium mobile emulation. It does not prove Safari/WebKit, Firefox, physical-device safe areas, authenticated provider behavior, deployment, or production content distributions.
