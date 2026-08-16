@@ -100,15 +100,21 @@ func TestPortableRoundTripIncludesObjectIndexReplacements(t *testing.T) {
 		Size:          42,
 		IndexedAt:     now,
 	}
-	if err := source.db.Create(&want).Error; err != nil {
+	rows := make([]objectIndexReplacementRow, 251)
+	rows[0] = want
+	for i := 1; i < len(rows); i++ {
+		rows[i] = want
+		rows[i].ObjectKey = "pending/" + ulid.Make().String()
+	}
+	if err := source.db.CreateInBatches(rows, 250).Error; err != nil {
 		t.Fatalf("seed object index replacement: %v", err)
 	}
 	bundle, err := source.ExportPortableEntityFiles(ctx)
 	if err != nil {
 		t.Fatalf("export portable entities: %v", err)
 	}
-	if bundle.EntityFiles["object_index_replacements"].Count != 1 {
-		t.Fatalf("exported replacement count=%d, want 1", bundle.EntityFiles["object_index_replacements"].Count)
+	if bundle.EntityFiles["object_index_replacements"].Count != len(rows) {
+		t.Fatalf("exported replacement count=%d, want %d", bundle.EntityFiles["object_index_replacements"].Count, len(rows))
 	}
 	entityFiles := make(map[string][]byte, len(bundle.EntityFiles))
 	for name, file := range bundle.EntityFiles {
@@ -120,11 +126,11 @@ func TestPortableRoundTripIncludesObjectIndexReplacements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("import portable entities: %v", err)
 	}
-	if counts.ObjectIndexReplacements != 1 {
-		t.Fatalf("imported replacement count=%d, want 1", counts.ObjectIndexReplacements)
+	if counts.ObjectIndexReplacements != len(rows) {
+		t.Fatalf("imported replacement count=%d, want %d", counts.ObjectIndexReplacements, len(rows))
 	}
 	var got objectIndexReplacementRow
-	if err := destination.db.First(&got).Error; err != nil {
+	if err := destination.db.Where("replacement_id = ? AND profile_id = ? AND bucket = ? AND object_key = ?", want.ReplacementID, want.ProfileID, want.Bucket, want.ObjectKey).Take(&got).Error; err != nil {
 		t.Fatalf("load imported object index replacement: %v", err)
 	}
 	if got.ReplacementID != want.ReplacementID || got.ObjectKey != want.ObjectKey || got.Size != want.Size {
