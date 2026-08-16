@@ -46,8 +46,11 @@ import type {
 	ServerBackupConfidentialityMode,
 	ServerBackupDownloadOptions,
 	ServerBackupScope,
+	ServerBackupTransferRequest,
+	ServerBackupTransferResponse,
 	ServerPortableImportResponse,
 	ServerRestoreResponse,
+	ServerRestoreTransferRequest,
 	ServerStagedRestoreListResponse,
 	UploadChunkState,
 	UploadCreateRequest,
@@ -103,6 +106,12 @@ export function createServerSubFacade(deps: SubFacadeDeps) {
 		},
 		restoreServerBackup(file: File, password?: string): Promise<ServerRestoreResponse> {
 			return serverDomain.restoreServerBackup(deps.requestFn, file, password)
+		},
+		transferServerBackup(body: ServerBackupTransferRequest): Promise<ServerBackupTransferResponse> {
+			return serverDomain.transferServerBackup(deps.requestFn, body)
+		},
+		transferServerRestore(body: ServerRestoreTransferRequest): Promise<ServerRestoreResponse> {
+			return serverDomain.transferServerRestore(deps.requestFn, body)
 		},
 		previewPortableImport(file: File, password?: string): Promise<ServerPortableImportResponse> {
 			return serverDomain.previewPortableImport(deps.requestFn, file, password)

@@ -391,6 +391,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/server/backup/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export a server backup to remote storage
+         * @description Creates the same validated backup bundle as `GET /server/backup`, then copies it to an existing object-storage profile, an FTP server, or an NFS path already mounted on the server. NFS paths are constrained by `ALLOWED_LOCAL_DIRS`. FTP is plain FTP; use encrypted backup confidentiality when the network is not trusted.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ServerBackupTransferRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerBackupTransferResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+                502: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server/restore/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch and stage a server backup from remote storage
+         * @description Fetches one backup bundle from an existing object-storage profile, FTP server, or mounted NFS path, enforces the restore size limit, and passes it through the same checksum, signature, encryption, preflight, and stage-only restore flow as `POST /server/restore`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ServerRestoreTransferRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerRestoreResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
+                502: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/server/import-portable/preview": {
         parameters: {
             query?: never;
@@ -4481,6 +4584,53 @@ export interface components {
             applyPlan: string[];
             helperCommand?: string;
             warnings?: string[];
+        };
+        ServerBackupTransferLocation: {
+            /** @enum {string} */
+            protocol: "object_storage" | "ftp" | "nfs";
+            /** @description Existing object-storage profile ID; required for `object_storage`. */
+            profileId?: string;
+            /** @description Object-storage bucket or container; required for `object_storage`. */
+            bucket?: string;
+            /** @description Object key, FTP file path, or mounted NFS file path. On export, a trailing slash appends the generated backup filename. */
+            path: string;
+            /** @description FTP host; required for `ftp`. */
+            host?: string;
+            /** @default 21 */
+            port: number;
+            /** @description FTP username; required for `ftp`. */
+            username?: string;
+            /** @description FTP password. It is passed to rclone through stdin-protected temporary configuration and is never returned. */
+            password?: string;
+        };
+        ServerBackupTransferRequest: {
+            /**
+             * @default full
+             * @enum {string}
+             */
+            scope: "full" | "cache_metadata" | "portable";
+            /**
+             * @default clear
+             * @enum {string}
+             */
+            confidentiality: "clear" | "encrypted";
+            /** @description Optional operator password for an encrypted bundle. */
+            backupPassword?: string;
+            includeThumbnails?: boolean;
+            location: components["schemas"]["ServerBackupTransferLocation"];
+        };
+        ServerRestoreTransferRequest: {
+            /** @description Optional password used to decrypt the fetched bundle. */
+            backupPassword?: string;
+            location: components["schemas"]["ServerBackupTransferLocation"];
+        };
+        ServerBackupTransferResponse: {
+            /** @enum {string} */
+            protocol: "object_storage" | "ftp" | "nfs";
+            location: string;
+            filename: string;
+            /** Format: int64 */
+            sizeBytes: number;
         };
         ServerRestoreValidation: {
             preflightChecked: boolean;

@@ -296,6 +296,70 @@ paths:
         "413":
           $ref: "#/components/responses/ErrorResponse"
 
+  /server/backup/transfer:
+    post:
+      tags: [System]
+      summary: Export a server backup to remote storage
+      description: Creates the same validated backup bundle as `GET /server/backup`, then copies it to an existing object-storage profile, an FTP server, or an NFS path already mounted on the server. NFS paths are constrained by `ALLOWED_LOCAL_DIRS`. FTP is plain FTP; use encrypted backup confidentiality when the network is not trusted.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerBackupTransferRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerBackupTransferResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "502":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /server/restore/transfer:
+    post:
+      tags: [System]
+      summary: Fetch and stage a server backup from remote storage
+      description: Fetches one backup bundle from an existing object-storage profile, FTP server, or mounted NFS path, enforces the restore size limit, and passes it through the same checksum, signature, encryption, preflight, and stage-only restore flow as `POST /server/restore`.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerRestoreTransferRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerRestoreResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/ErrorResponse"
+        "502":
+          $ref: "#/components/responses/ErrorResponse"
+
   /server/import-portable/preview:
     post:
       tags: [System]
@@ -3860,6 +3924,78 @@ components:
         warnings:
           type: array
           items: { type: string }
+
+    ServerBackupTransferLocation:
+      type: object
+      required: [protocol, path]
+      properties:
+        protocol:
+          type: string
+          enum: [object_storage, ftp, nfs]
+        profileId:
+          type: string
+          description: Existing object-storage profile ID; required for `object_storage`.
+        bucket:
+          type: string
+          description: Object-storage bucket or container; required for `object_storage`.
+        path:
+          type: string
+          description: Object key, FTP file path, or mounted NFS file path. On export, a trailing slash appends the generated backup filename.
+        host:
+          type: string
+          description: FTP host; required for `ftp`.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          default: 21
+        username:
+          type: string
+          description: FTP username; required for `ftp`.
+        password:
+          type: string
+          description: FTP password. It is passed to rclone through stdin-protected temporary configuration and is never returned.
+
+    ServerBackupTransferRequest:
+      type: object
+      required: [location]
+      properties:
+        scope:
+          type: string
+          enum: [full, cache_metadata, portable]
+          default: full
+        confidentiality:
+          type: string
+          enum: [clear, encrypted]
+          default: clear
+        backupPassword:
+          type: string
+          description: Optional operator password for an encrypted bundle.
+        includeThumbnails:
+          type: boolean
+        location:
+          $ref: "#/components/schemas/ServerBackupTransferLocation"
+
+    ServerRestoreTransferRequest:
+      type: object
+      required: [location]
+      properties:
+        backupPassword:
+          type: string
+          description: Optional password used to decrypt the fetched bundle.
+        location:
+          $ref: "#/components/schemas/ServerBackupTransferLocation"
+
+    ServerBackupTransferResponse:
+      type: object
+      required: [protocol, location, filename, sizeBytes]
+      properties:
+        protocol:
+          type: string
+          enum: [object_storage, ftp, nfs]
+        location: { type: string }
+        filename: { type: string }
+        sizeBytes: { type: integer, format: int64 }
 
     ServerRestoreValidation:
       type: object

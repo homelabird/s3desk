@@ -125,6 +125,14 @@ export type ServerMigrationManifest =
   components["schemas"]["ServerMigrationManifest"];
 export type ServerRestoreResponse =
   components["schemas"]["ServerRestoreResponse"];
+export type ServerBackupTransferLocation =
+  components["schemas"]["ServerBackupTransferLocation"];
+export type ServerBackupTransferRequest =
+  components["schemas"]["ServerBackupTransferRequest"];
+export type ServerRestoreTransferRequest =
+  components["schemas"]["ServerRestoreTransferRequest"];
+export type ServerBackupTransferResponse =
+  components["schemas"]["ServerBackupTransferResponse"];
 export type ServerStagedRestore =
   components["schemas"]["ServerStagedRestore"];
 export type ServerStagedRestoreListResponse =

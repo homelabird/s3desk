@@ -7,6 +7,7 @@ import { appFeedback } from '../lib/appFeedback'
 import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
 import { OverlaySheet } from './OverlaySheet'
 import { SidebarBackupExportSection } from './SidebarBackupExportSection'
+import { SidebarBackupRemoteSection } from './SidebarBackupRemoteSection'
 import { SidebarPortableImportSection } from './SidebarPortableImportSection'
 import { SidebarRestoreBundleSection } from './SidebarRestoreBundleSection'
 import { SidebarStagedRestoresSection } from './SidebarStagedRestoresSection'
@@ -14,7 +15,7 @@ import { useBackupDrawerState } from './useBackupDrawerState'
 import { useStagedRestoreInventory } from './useStagedRestoreInventory'
 import styles from './SidebarBackupAction.module.css'
 
-type BackupDrawerTask = 'export' | 'restore' | 'portable' | 'cleanup'
+type BackupDrawerTask = 'export' | 'restore' | 'remote' | 'portable' | 'cleanup'
 
 export type SidebarBackupDrawerProps = {
 	api: APIClientShape
@@ -70,6 +71,7 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 		exportSummary,
 		protectionSummary,
 		backupEncryptionAvailable,
+		backupConfidentiality,
 		backupExportCapability,
 		restoreStagingCapability,
 		loadingScope,
@@ -151,6 +153,9 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 					<Button type={activeTask === 'restore' ? 'primary' : 'default'} onClick={() => setActiveTask('restore')}>
 						Stage restore
 					</Button>
+					<Button type={activeTask === 'remote' ? 'primary' : 'default'} onClick={() => setActiveTask('remote')}>
+						Remote storage
+					</Button>
 					<Button type={activeTask === 'portable' ? 'primary' : 'default'} onClick={() => setActiveTask('portable')}>
 						Import portable bundle
 					</Button>
@@ -192,6 +197,22 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 						restoreValidation={restoreValidation}
 						onRestoreFileSelect={handleRestoreFileSelect}
 						onCopy={handleCopy}
+					/>
+				) : null}
+				{activeTask === 'remote' ? (
+					<SidebarBackupRemoteSection
+						api={props.api}
+						backupScope={backupScope}
+						confidentiality={backupConfidentiality}
+						backupPassword={backupProtection === 'password' ? backupPassword : undefined}
+						exportBlockedReason={backupProtection === 'password'
+							? (!backupPassword ? 'Enter a backup password in Export backup first.' : backupPassword !== backupPasswordConfirm ? 'Backup password confirmation does not match.' : undefined)
+							: undefined}
+						onRestoreStaged={async (result) => {
+							setRestoreResult(result)
+							await refreshStagedRestores()
+							props.onActionComplete?.()
+						}}
 					/>
 				) : null}
 				{activeTask === 'portable' ? (

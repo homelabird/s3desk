@@ -121,6 +121,43 @@ func ValidateRequestURL(field string, parsed *url.URL, allowRemote bool) error {
 	return validateParsedURL(field, parsed, allowRemote, true)
 }
 
+// ResolveHost validates a non-HTTP endpoint and pins it to one vetted IP so a
+// subprocess cannot resolve a different address after validation.
+func ResolveHost(field, rawHost string, allowRemote bool) (string, error) {
+	host := normalizeHost(strings.Trim(rawHost, "[]"))
+	if host == "" {
+		return "", fmt.Errorf("%s is required", field)
+	}
+	if _, blocked := blockedHosts[host]; blocked {
+		return "", fmt.Errorf("%s points to a blocked metadata host", field)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if err := validateEndpointIP(field, ip, allowRemote); err != nil {
+			return "", err
+		}
+		return ip.String(), nil
+	}
+	if canonical, err := lookupEndpointCNAME(host); err == nil {
+		canonical = normalizeHost(canonical)
+		if _, blocked := blockedHosts[canonical]; blocked {
+			return "", fmt.Errorf("%s points to a blocked metadata host", field)
+		}
+		if allowRemote && (canonical == "localhost" || strings.HasSuffix(canonical, ".localhost")) {
+			return "", fmt.Errorf("%s must not target localhost when remote access is enabled", field)
+		}
+	}
+	addrs, err := lookupEndpointIPAddr(host)
+	if err != nil || len(addrs) == 0 {
+		return "", fmt.Errorf("%s host could not be resolved", field)
+	}
+	for _, addr := range addrs {
+		if err := validateEndpointIP(field, addr.IP, allowRemote); err != nil {
+			return "", err
+		}
+	}
+	return addrs[0].IP.String(), nil
+}
+
 func validateParsedURL(field string, parsed *url.URL, allowRemote bool, allowQuery bool) error {
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme != "http" && scheme != "https" {

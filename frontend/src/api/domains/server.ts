@@ -1,5 +1,5 @@
 import type { RequestOptions } from '../retryTransport'
-import type { BootstrapResponse, MetaResponse, ServerPortableImportResponse, ServerRestoreResponse, ServerStagedRestoreListResponse } from '../types'
+import type { BootstrapResponse, MetaResponse, ServerBackupTransferRequest, ServerBackupTransferResponse, ServerPortableImportResponse, ServerRestoreResponse, ServerRestoreTransferRequest, ServerStagedRestoreListResponse } from '../types'
 
 type RequestFn = <T>(path: string, init: RequestInit, options?: RequestOptions) => Promise<T>
 
@@ -22,6 +22,22 @@ export function getBootstrap(request: RequestFn): Promise<BootstrapResponse> {
 
 export function restoreServerBackup(request: RequestFn, file: File, password?: string): Promise<ServerRestoreResponse> {
 	return request('/server/restore', { method: 'POST', body: buildBundleForm(file, password) })
+}
+
+export function transferServerBackup(request: RequestFn, body: ServerBackupTransferRequest): Promise<ServerBackupTransferResponse> {
+	return request('/server/backup/transfer', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body),
+	})
+}
+
+export function transferServerRestore(request: RequestFn, body: ServerRestoreTransferRequest): Promise<ServerRestoreResponse> {
+	return request('/server/restore/transfer', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body),
+	})
 }
 
 export function previewPortableImport(request: RequestFn, file: File, password?: string): Promise<ServerPortableImportResponse> {

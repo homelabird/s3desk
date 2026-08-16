@@ -30,6 +30,26 @@ func TestValidateURLRejectsLocalhostCNAMEWhenRemoteEnabled(t *testing.T) {
 	}
 }
 
+func TestResolveHostPinsValidatedAddress(t *testing.T) {
+	lookups := 0
+	restore := SetLookupHooksForTest(
+		func(context.Context, string) (string, error) { return "", errors.New("no cname") },
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			lookups++
+			if host != "ftp.example.test" {
+				t.Fatalf("host=%q, want ftp.example.test", host)
+			}
+			return []net.IPAddr{{IP: net.ParseIP("192.0.2.10")}}, nil
+		},
+	)
+	t.Cleanup(restore)
+
+	got, err := ResolveHost("FTP host", "ftp.example.test", false)
+	if err != nil || got != "192.0.2.10" || lookups != 1 {
+		t.Fatalf("ResolveHost()=(%q, %v), lookups=%d; want (192.0.2.10, nil), 1 lookup", got, err, lookups)
+	}
+}
+
 func TestValidateURLRejectsResolvedIPv6LoopbackOrLinkLocalWhenRemoteEnabled(t *testing.T) {
 	tests := []struct {
 		name string

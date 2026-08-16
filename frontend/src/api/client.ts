@@ -28,6 +28,10 @@ export type {
 	ServerBackupConfidentialityMode,
 	ServerBackupDownloadOptions,
 	ServerBackupScope,
+	ServerBackupTransferLocation,
+	ServerBackupTransferRequest,
+	ServerBackupTransferResponse,
+	ServerRestoreTransferRequest,
 } from './types'
 export type { APIClientShape } from './clientContracts'
 
