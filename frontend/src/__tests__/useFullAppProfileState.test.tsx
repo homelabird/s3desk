@@ -23,16 +23,17 @@ function buildApi(
 }
 
 describe('useFullAppProfileState', () => {
-	it('does not request profiles until server authentication succeeds', async () => {
+	it('does not request bootstrap or profiles before a token is available', () => {
+		const getBootstrap = vi.fn()
 		const listProfiles = vi.fn()
-		const api = buildApi(vi.fn().mockRejectedValue(new Error('unauthorized')), listProfiles)
+		const api = buildApi(getBootstrap, listProfiles)
 
-		const { result } = renderHook(
+		renderHook(
 			() => useFullAppProfileState({ api, apiToken: '', pathname: '/' }),
 			{ wrapper },
 		)
 
-		await waitFor(() => expect(result.current.metaQuery.isError).toBe(true))
+		expect(getBootstrap).not.toHaveBeenCalled()
 		expect(listProfiles).not.toHaveBeenCalled()
 	})
 

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../api/client'
 import { FullAppBootstrapGate } from '../FullAppBootstrapGate'
+import { ThemeModeProvider } from '../themeMode'
 
 type RenderGateOptions = {
 	metaPending?: boolean
@@ -11,25 +12,35 @@ type RenderGateOptions = {
 	profileGate?: ReactNode
 	profilesPending?: boolean
 	onRetry?: () => void
+	apiToken?: string
 }
 
 function renderGate(options: RenderGateOptions = {}) {
 	return render(
-		<FullAppBootstrapGate
-			metaPending={options.metaPending ?? false}
-			metaError={options.metaError ?? null}
-			onRetry={options.onRetry ?? vi.fn()}
-			apiToken="token-a"
-			setApiToken={vi.fn()}
-			profileGate={options.profileGate ?? null}
-			profilesPending={options.profilesPending ?? false}
-		>
-			<div data-testid="shell-content">shell content</div>
-		</FullAppBootstrapGate>,
+		<ThemeModeProvider>
+			<FullAppBootstrapGate
+				metaPending={options.metaPending ?? false}
+				metaError={options.metaError ?? null}
+				onRetry={options.onRetry ?? vi.fn()}
+				apiToken={options.apiToken ?? 'token-a'}
+				setApiToken={vi.fn()}
+				profileGate={options.profileGate ?? null}
+				profilesPending={options.profilesPending ?? false}
+			>
+				<div data-testid="shell-content">shell content</div>
+			</FullAppBootstrapGate>
+		</ThemeModeProvider>,
 	)
 }
 
 describe('FullAppBootstrapGate', () => {
+	it('renders login immediately when no token is available', async () => {
+		renderGate({ apiToken: '', metaPending: true })
+
+		expect(await screen.findByLabelText(/API Token/)).toBeInTheDocument()
+		expect(screen.queryByTestId('shell-content')).not.toBeInTheDocument()
+	})
+
 	it('renders the backend error panel and retries for 403 responses', () => {
 		const onRetry = vi.fn()
 

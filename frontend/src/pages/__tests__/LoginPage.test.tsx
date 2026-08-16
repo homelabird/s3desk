@@ -52,6 +52,14 @@ describe('LoginPage', () => {
 		expect(onClearSavedToken).toHaveBeenCalledTimes(1)
 	})
 
+	it('provides the username field expected by password managers', () => {
+		renderLoginPage()
+
+		const username = document.querySelector('input[name="username"]')
+		expect(username).toHaveAttribute('autocomplete', 'username')
+		expect(username).toHaveValue('api-token')
+	})
+
 	it('clears the input when the saved token is removed by the auth gate', () => {
 		render(<LoginPageHarness />)
 

@@ -2,7 +2,7 @@ import { Alert, Button, Space, Spin, Typography } from 'antd'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 
 import { APIError } from './api/client'
-import { renderUnauthorizedAuthGate } from './app/RequireAuth'
+import { renderAuthGate } from './app/RequireAuth'
 import { BrandLockup } from './components/BrandLockup'
 import styles from './FullAppInner.module.css'
 
@@ -62,17 +62,17 @@ export function FullAppBootstrapGate({
 	profilesPending,
 	children,
 }: FullAppBootstrapGateProps) {
+	const authGate = renderAuthGate({
+		error: metaError,
+		apiToken,
+		setApiToken,
+		fallback: renderFullscreenSpinner(),
+	})
+	if (authGate) return authGate
+
 	if (metaPending) return renderFullscreenSpinner()
 
 	if (metaError) {
-		const unauthorizedGate = renderUnauthorizedAuthGate({
-			error: metaError,
-			apiToken,
-			setApiToken,
-			fallback: renderFullscreenSpinner(),
-		})
-		if (unauthorizedGate) return unauthorizedGate
-
 		return (
 			<div className={styles.fullscreenCenter}>
 				<div className={styles.errorPanel}>

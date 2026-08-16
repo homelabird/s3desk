@@ -66,6 +66,16 @@ export function TokenLoginPanel(props: TokenLoginPanelProps) {
 					}}
 					className={styles.form}
 				>
+					<input
+						type="text"
+						name="username"
+						value="api-token"
+						autoComplete="username"
+						className="sr-only"
+						tabIndex={-1}
+						aria-hidden="true"
+						readOnly
+					/>
 					<FormField label="API Token" required htmlFor={inputId}>
 						<Input.Password
 							id={inputId}

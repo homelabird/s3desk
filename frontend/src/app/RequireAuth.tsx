@@ -7,14 +7,14 @@ const LoginPage = lazy(async () => {
 	return { default: m.LoginPage }
 })
 
-export function renderUnauthorizedAuthGate(args: {
+export function renderAuthGate(args: {
 	error: unknown
 	apiToken: string
 	setApiToken: Dispatch<SetStateAction<string>>
 	fallback: ReactNode
 }) {
 	const { error, apiToken, setApiToken, fallback } = args
-	if (!(error instanceof APIError) || error.status !== 401) {
+	if (apiToken && (!(error instanceof APIError) || error.status !== 401)) {
 		return null
 	}
 

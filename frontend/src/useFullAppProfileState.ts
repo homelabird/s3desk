@@ -83,6 +83,7 @@ export function useFullAppProfileState({
 			queryClient.setQueryData(queryKeys.profiles.list(apiToken), bootstrap.profiles)
 			return bootstrap.meta
 		},
+		enabled: !!apiToken,
 		retry: false,
 	})
 	const profilesQuery = useQuery({
