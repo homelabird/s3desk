@@ -71,24 +71,7 @@ func (svc profileDeleteHTTPService) prepareDeleteProfile(r *http.Request) profil
 
 func (svc profileDeleteHTTPService) cancelAndWaitForJobs(ctx context.Context, profileID string) error {
 	for {
-		queuedIDs, err := svc.server.store.ListJobIDsByProfileAndStatus(ctx, profileID, models.JobStatusQueued)
-		if err != nil {
-			if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return newProfileDeletePreparationError(
-					http.StatusConflict,
-					"conflict",
-					"profile has active jobs; cancel them before deleting the profile",
-					nil,
-				)
-			}
-			return newProfileDeletePreparationError(
-				http.StatusInternalServerError,
-				"internal_error",
-				"failed to inspect profile jobs",
-				map[string]any{"error": err.Error()},
-			)
-		}
-		runningIDs, err := svc.server.store.ListJobIDsByProfileAndStatus(ctx, profileID, models.JobStatusRunning)
+		queuedIDs, runningIDs, err := svc.server.store.ListActiveJobIDsByProfile(ctx, profileID)
 		if err != nil {
 			if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return newProfileDeletePreparationError(
@@ -111,26 +94,15 @@ func (svc profileDeleteHTTPService) cancelAndWaitForJobs(ctx context.Context, pr
 
 		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		code := jobs.ErrorCodeCanceled
-		for _, id := range queuedIDs {
-			_, err := svc.server.store.UpdateJobStatusIfCurrent(
-				ctx,
-				id,
-				[]models.JobStatus{models.JobStatusQueued},
-				models.JobStatusCanceled,
-				nil,
-				&finishedAt,
-				nil,
-				nil,
-				&code,
+		if err := svc.server.store.CancelQueuedJobsByIDs(ctx, profileID, queuedIDs, finishedAt, code); err != nil {
+			return newProfileDeletePreparationError(
+				http.StatusInternalServerError,
+				"internal_error",
+				"failed to cancel profile jobs",
+				map[string]any{"error": err.Error()},
 			)
-			if err != nil {
-				return newProfileDeletePreparationError(
-					http.StatusInternalServerError,
-					"internal_error",
-					"failed to cancel profile job",
-					map[string]any{"error": err.Error()},
-				)
-			}
+		}
+		for _, id := range queuedIDs {
 			if svc.server.jobs != nil {
 				svc.server.jobs.Cancel(id)
 			}

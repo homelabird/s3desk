@@ -2,54 +2,19 @@ package store
 
 import (
 	"context"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"s3desk/internal/db"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
 	"s3desk/internal/models"
 )
 
 func TestListJobsFiltersAndCursor(t *testing.T) {
-	dataDir := t.TempDir()
-	gormDB, err := db.Open(db.Config{
-		Backend:    db.BackendSQLite,
-		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
-	})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	sqlDB, err := gormDB.DB()
-	if err != nil {
-		t.Fatalf("open sql db: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	st, err := New(gormDB, Options{})
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-
-	endpoint := "http://localhost:9000"
-	region := "us-east-1"
-	accessKey := "access"
-	secretKey := "secret"
-	forcePathStyle := false
-
-	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
-		Provider:              models.ProfileProviderS3Compatible,
-		Name:                  "test",
-		Endpoint:              &endpoint,
-		Region:                &region,
-		AccessKeyID:           &accessKey,
-		SecretAccessKey:       &secretKey,
-		ForcePathStyle:        &forcePathStyle,
-		PreserveLeadingSlash:  false,
-		TLSInsecureSkipVerify: false,
-	})
-	if err != nil {
-		t.Fatalf("create profile: %v", err)
-	}
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
 
 	ctx := context.Background()
 	job1, err := st.CreateJob(ctx, profile.ID, CreateJobInput{
@@ -181,73 +146,21 @@ func TestCreateJobPersistsInitialCompletionState(t *testing.T) {
 	}
 }
 
-func TestListJobsSkipsCorruptedPayload(t *testing.T) {
-	dataDir := t.TempDir()
-	gormDB, err := db.Open(db.Config{
-		Backend:    db.BackendSQLite,
-		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
-	})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	sqlDB, err := gormDB.DB()
-	if err != nil {
-		t.Fatalf("open sql db: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	st, err := New(gormDB, Options{})
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-
-	endpoint := "http://localhost:9000"
-	region := "us-east-1"
-	accessKey := "access"
-	secretKey := "secret"
-	forcePathStyle := false
-
-	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
-		Provider:              models.ProfileProviderS3Compatible,
-		Name:                  "test",
-		Endpoint:              &endpoint,
-		Region:                &region,
-		AccessKeyID:           &accessKey,
-		SecretAccessKey:       &secretKey,
-		ForcePathStyle:        &forcePathStyle,
-		PreserveLeadingSlash:  false,
-		TLSInsecureSkipVerify: false,
-	})
-	if err != nil {
-		t.Fatalf("create profile: %v", err)
-	}
+func TestListJobsFailsOnCorruptedPayload(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
 
 	ctx := context.Background()
-	goodJob, err := st.CreateJob(ctx, profile.ID, CreateJobInput{
-		Type:    "test",
-		Payload: map[string]any{"key": "good"},
-	})
-	if err != nil {
-		t.Fatalf("create good job: %v", err)
-	}
-
-	// Insert a row with corrupted payload JSON directly via GORM.
-	if err := gormDB.Exec(
+	if err := st.db.Exec(
 		"INSERT INTO jobs (id, profile_id, type, status, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
 		"CORRUPT01", profile.ID, "test", "queued", "not-valid-json", time.Now().UTC().Format(time.RFC3339Nano),
 	).Error; err != nil {
 		t.Fatalf("insert corrupted row: %v", err)
 	}
 
-	resp, err := st.ListJobs(ctx, profile.ID, JobFilter{Limit: 10})
-	if err != nil {
-		t.Fatalf("list jobs should not fail: %v", err)
-	}
-	if len(resp.Items) != 1 {
-		t.Fatalf("expected 1 valid job, got %d", len(resp.Items))
-	}
-	if resp.Items[0].ID != goodJob.ID {
-		t.Fatalf("expected job ID %q, got %q", goodJob.ID, resp.Items[0].ID)
+	_, err := st.ListJobs(ctx, profile.ID, JobFilter{Limit: 10})
+	if err == nil || !strings.Contains(err.Error(), `decode job "CORRUPT01"`) {
+		t.Fatalf("expected contextual decode error, got %v", err)
 	}
 }
 
@@ -295,4 +208,160 @@ func TestUpdateJobStatusIfCurrentGuardsExpectedStatus(t *testing.T) {
 	if got.FinishedAt != nil {
 		t.Fatalf("expected finishedAt to remain nil, got %q", *got.FinishedAt)
 	}
+}
+
+func TestListAndCancelActiveProfileJobsInTwoStatements(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	otherProfile := createTestProfile(t, st)
+	ctx := context.Background()
+
+	queued, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("create queued job: %v", err)
+	}
+	queued2, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("create second queued job: %v", err)
+	}
+	running, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("create running job: %v", err)
+	}
+	if err := st.UpdateJobStatus(ctx, running.ID, models.JobStatusRunning, nil, nil, nil, nil, nil); err != nil {
+		t.Fatalf("mark job running: %v", err)
+	}
+	other, err := st.CreateJob(ctx, otherProfile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("create other profile job: %v", err)
+	}
+
+	queries, updates := 0, 0
+	const (
+		queryCallback  = "test_list_active_jobs_query_count"
+		updateCallback = "test_cancel_queued_jobs_update_count"
+	)
+	if err := st.db.Callback().Query().Before("gorm:query").Register(queryCallback, func(*gorm.DB) { queries++ }); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	if err := st.db.Callback().Update().Before("gorm:update").Register(updateCallback, func(*gorm.DB) { updates++ }); err != nil {
+		t.Fatalf("register update callback: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = st.db.Callback().Query().Remove(queryCallback)
+		_ = st.db.Callback().Update().Remove(updateCallback)
+	})
+
+	queuedIDs, runningIDs, err := st.ListActiveJobIDsByProfile(ctx, profile.ID)
+	if err != nil {
+		t.Fatalf("list active jobs: %v", err)
+	}
+	if queries != 1 {
+		t.Fatalf("query statements=%d, want 1", queries)
+	}
+	canceled := make(map[string]struct{}, len(queuedIDs))
+	for _, id := range queuedIDs {
+		canceled[id] = struct{}{}
+	}
+	if len(canceled) != 2 {
+		t.Fatalf("queued IDs=%v, want %s and %s", queuedIDs, queued.ID, queued2.ID)
+	}
+	if _, ok := canceled[queued.ID]; !ok {
+		t.Fatalf("queued IDs=%v, missing %s", queuedIDs, queued.ID)
+	}
+	if _, ok := canceled[queued2.ID]; !ok {
+		t.Fatalf("queued IDs=%v, missing %s", queuedIDs, queued2.ID)
+	}
+	if len(runningIDs) != 1 || runningIDs[0] != running.ID {
+		t.Fatalf("running IDs=%v, want [%s]", runningIDs, running.ID)
+	}
+
+	finishedAt := "2026-08-16T00:00:00Z"
+	if err := st.CancelQueuedJobsByIDs(ctx, profile.ID, queuedIDs, finishedAt, "canceled"); err != nil {
+		t.Fatalf("cancel queued jobs: %v", err)
+	}
+	if updates != 1 {
+		t.Fatalf("update statements=%d, want 1", updates)
+	}
+
+	for _, tc := range []struct {
+		profileID string
+		jobID     string
+		status    models.JobStatus
+	}{
+		{profile.ID, queued.ID, models.JobStatusCanceled},
+		{profile.ID, queued2.ID, models.JobStatusCanceled},
+		{profile.ID, running.ID, models.JobStatusRunning},
+		{otherProfile.ID, other.ID, models.JobStatusQueued},
+	} {
+		job, ok, err := st.GetJob(ctx, tc.profileID, tc.jobID)
+		if err != nil || !ok || job.Status != tc.status {
+			t.Fatalf("job %s = (%s, %v, %v), want %s", tc.jobID, job.Status, ok, err, tc.status)
+		}
+	}
+}
+
+func TestDeleteFinishedJobsBeforeDeletesOldestBatchInOneStatement(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+
+	oldest, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("create oldest job: %v", err)
+	}
+	newer, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("create newer job: %v", err)
+	}
+	active, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{}})
+	if err != nil {
+		t.Fatalf("create active job: %v", err)
+	}
+	oldestFinished := "2026-08-14T00:00:00Z"
+	newerFinished := "2026-08-15T00:00:00Z"
+	if err := st.UpdateJobStatus(ctx, oldest.ID, models.JobStatusSucceeded, nil, &oldestFinished, nil, nil, nil); err != nil {
+		t.Fatalf("finish oldest job: %v", err)
+	}
+	if err := st.UpdateJobStatus(ctx, newer.ID, models.JobStatusFailed, nil, &newerFinished, nil, nil, nil); err != nil {
+		t.Fatalf("finish newer job: %v", err)
+	}
+
+	counter := &sqlStatementCounter{Interface: logger.Discard}
+	st.db = st.db.Session(&gorm.Session{Logger: counter})
+
+	ids, err := st.DeleteFinishedJobsBefore(ctx, "2026-08-16T00:00:00Z", 1)
+	if err != nil {
+		t.Fatalf("delete finished jobs: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != oldest.ID {
+		t.Fatalf("deleted IDs=%v, want [%s]", ids, oldest.ID)
+	}
+	if counter.statements != 1 {
+		t.Fatalf("SQL statements=%d, want 1", counter.statements)
+	}
+
+	for _, tc := range []struct {
+		jobID string
+		want  bool
+	}{
+		{oldest.ID, false},
+		{newer.ID, true},
+		{active.ID, true},
+	} {
+		_, ok, err := st.GetJob(ctx, profile.ID, tc.jobID)
+		if err != nil || ok != tc.want {
+			t.Fatalf("job %s exists=%v err=%v, want exists=%v", tc.jobID, ok, err, tc.want)
+		}
+	}
+}
+
+type sqlStatementCounter struct {
+	logger.Interface
+	statements int
+}
+
+func (c *sqlStatementCounter) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	c.statements++
+	c.Interface.Trace(ctx, begin, fc, err)
 }

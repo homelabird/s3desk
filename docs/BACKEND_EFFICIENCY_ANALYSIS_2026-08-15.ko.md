@@ -19,6 +19,17 @@
 - search baseline: 재현 가능한 Go benchmark를 추가하고 SQLite/PostgreSQL 16에서 1천/10만/100만 row를 측정했다.
 - search query count: index 존재 probe를 검색 전에 항상 실행하지 않고, 검색 결과가 비었을 때만 실행하도록 변경했다. 일치 결과 경로는 DB query 2개에서 1개로 줄었고 회귀 테스트로 고정했다.
 
+## 2026-08-16 추가 실행 현황
+
+- profile 삭제의 active-job 처리를 `queued`/`running`별 2회 조회와 queued job별 `UPDATE`에서, active job 1회 조회와 queued job 최대 500개당 batch `UPDATE` 1회로 변경했다. running job만 남은 polling 구간은 주기당 DB statement가 2개에서 1개로 줄었다.
+- `ListJobs`가 손상된 payload JSON을 조용히 건너뛰던 동작을 제거했다. 손상 row가 pagination 결과와 cursor를 일부만 반환하는 대신 job ID가 포함된 오류로 즉시 드러난다.
+- 기존 `TestListJobsSkipsCorruptedPayload`는 결함을 정상 계약으로 고정하던 테스트 역설이었다. 공용 store fixture를 재사용하는 fail-fast 회귀 테스트로 교체해 중복 setup 100줄을 제거했다.
+- batch 회귀 테스트는 queued job을 복수로 구성하고, 대상 상태 변경·running/다른 profile 보존·`SELECT 1회 + UPDATE 1회`를 함께 검증한다. 단일 fixture라서 N+1 구현도 통과하는 거짓 양성을 피한다.
+- job retention은 삭제 대상을 먼저 조회한 뒤 별도 삭제하던 2-statement 경로를 `DELETE ... WHERE id IN (subquery) RETURNING id` 1회로 합쳤다. 최대 1,000개 batch와 삭제 ID 반환을 유지하면서 selection과 delete가 한 SQL에서 원자적으로 실행된다.
+- `ListJobs`는 `limit+1`번째 cursor sentinel의 payload를 decode하거나 별도 ID slice로 복사하지 않는다. page에 노출되는 `limit`개만 decode하고 기존 cursor 계약을 유지한다.
+- retention 회귀 테스트는 GORM callback 수가 아니라 실제 driver trace를 세어 1 SQL을 검증한다. subquery 조립 callback까지 statement로 오인하는 거짓 양성을 피했다.
+- 추가 index, cache, background worker는 도입하지 않았다. 현재 경로는 기존 `profile_id` index와 queue 상한을 사용하며, 복합 index의 이득을 증명할 운영 cardinality나 query-plan 근거가 없다.
+
 ## 범위와 증거 수준
 
 - 범위: `backend/internal/api`, `backend/internal/jobs`, `backend/internal/store`, DB schema/index, Prometheus 계측
@@ -26,7 +37,7 @@
 - 제외: frontend의 현재 미커밋 변경, 실제 provider 성능, 배포 환경의 PostgreSQL/스토리지 latency
 - 한계: 이 문서는 현재 소스에서 확정할 수 있는 비용 구조 분석이다. 운영 p95/p99, CPU, DB wait, provider latency 개선을 증명한 benchmark 보고서는 아니다.
 
-## Findings
+## 개선 전 Findings
 
 ### P1 — maintenance가 artifact 수만큼 DB를 직렬 조회한다
 

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/oklog/ulid/v2"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"s3desk/internal/models"
 )
@@ -117,13 +119,6 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 		query = query.Where("id < ?", *f.Cursor)
 	}
 
-	resp := models.JobsListResponse{
-		Items: make([]models.Job, 0),
-	}
-	var (
-		jobIDs   []string
-		jobCount int
-	)
 	var rows []jobRow
 	if err := query.
 		Order("id DESC").
@@ -131,22 +126,22 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 		Find(&rows).Error; err != nil {
 		return models.JobsListResponse{}, err
 	}
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
+	}
 
+	resp := models.JobsListResponse{Items: make([]models.Job, 0, len(rows))}
 	for _, row := range rows {
 		job, err := jobFromRow(row)
 		if err != nil {
-			continue
+			return models.JobsListResponse{}, fmt.Errorf("decode job %q: %w", row.ID, err)
 		}
-
-		jobCount++
-		if jobCount <= limit {
-			resp.Items = append(resp.Items, job)
-			jobIDs = append(jobIDs, job.ID)
-		}
+		resp.Items = append(resp.Items, job)
 	}
 
-	if len(jobIDs) == limit && jobCount > limit {
-		last := jobIDs[len(jobIDs)-1]
+	if hasMore {
+		last := rows[len(rows)-1].ID
 		resp.NextCursor = &last
 	}
 	return resp, nil
@@ -188,8 +183,7 @@ func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano 
 		limit = 1000
 	}
 
-	ids := make([]string, 0, limit)
-	if err := s.db.WithContext(ctx).
+	query := s.db.WithContext(ctx).
 		Model(&jobRow{}).
 		Select("id").
 		Where("finished_at IS NOT NULL").
@@ -200,20 +194,20 @@ func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano 
 			string(models.JobStatusCanceled),
 		}).
 		Order("finished_at ASC").
-		Limit(limit).
-		Pluck("id", &ids).Error; err != nil {
-		return nil, err
-	}
-	if len(ids) == 0 {
-		return nil, nil
-	}
+		Limit(limit)
 
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.Where("id IN ?", ids).Delete(&jobRow{}).Error
-	}); err != nil {
+	var rows []jobRow
+	if err := s.db.WithContext(ctx).
+		Clauses(clause.Returning{Columns: []clause.Column{{Name: "id"}}}).
+		Where("id IN (?)", query).
+		Delete(&rows).Error; err != nil {
 		return nil, err
 	}
 
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
 	return ids, nil
 }
 
@@ -230,17 +224,26 @@ func (s *Store) ListJobIDsByProfile(ctx context.Context, profileID string) ([]st
 	return ids, nil
 }
 
-func (s *Store) ListJobIDsByProfileAndStatus(ctx context.Context, profileID string, status models.JobStatus) ([]string, error) {
-	var ids []string
+func (s *Store) ListActiveJobIDsByProfile(ctx context.Context, profileID string) (queued, running []string, err error) {
+	var rows []jobRow
 	if err := s.db.WithContext(ctx).
-		Model(&jobRow{}).
-		Select("id").
-		Where("profile_id = ? AND status = ?", profileID, string(status)).
+		Select("id", "status").
+		Where("profile_id = ? AND status IN ?", profileID, []string{
+			string(models.JobStatusQueued),
+			string(models.JobStatusRunning),
+		}).
 		Order("id ASC").
-		Pluck("id", &ids).Error; err != nil {
-		return nil, err
+		Find(&rows).Error; err != nil {
+		return nil, nil, err
 	}
-	return ids, nil
+	for _, row := range rows {
+		if models.JobStatus(row.Status) == models.JobStatusQueued {
+			queued = append(queued, row.ID)
+		} else {
+			running = append(running, row.ID)
+		}
+	}
+	return queued, running, nil
 }
 
 func (s *Store) JobExists(ctx context.Context, jobID string) (bool, error) {
@@ -336,6 +339,24 @@ func (s *Store) UpdateJobStatusIfCurrent(ctx context.Context, jobID string, expe
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func (s *Store) CancelQueuedJobsByIDs(ctx context.Context, profileID string, ids []string, finishedAt, errorCode string) error {
+	updates := map[string]any{
+		"status":      string(models.JobStatusCanceled),
+		"finished_at": finishedAt,
+		"error_code":  errorCode,
+	}
+	for start := 0; start < len(ids); start += 500 {
+		end := min(start+500, len(ids))
+		if err := s.db.WithContext(ctx).
+			Model(&jobRow{}).
+			Where("profile_id = ? AND id IN ? AND status = ?", profileID, ids[start:end], string(models.JobStatusQueued)).
+			Updates(updates).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func jobStatusUpdateMap(status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string, errorCode *string) (map[string]any, error) {
