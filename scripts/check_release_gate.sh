@@ -34,6 +34,7 @@ ENV_DEFAULTS="${ROOT}/.env"
 ENV_EXAMPLE="${ROOT}/.env.example"
 DEMO_COMPOSE="${ROOT}/compose/demo/compose.yml"
 PORTABLE_SMOKE_COMPOSE="${ROOT}/compose/test/portable-smoke.yml"
+PORTABLE_SMOKE_ANSIBLE="${ROOT}/ansible/portable-migration-smoke.yml"
 UPGRADE_COMPATIBILITY_SCRIPT="${ROOT}/scripts/run_container_legacy_db_smoke.sh"
 POSTGRES_UPGRADE_COMPATIBILITY_SCRIPT="${ROOT}/scripts/run_container_legacy_postgres_smoke.sh"
 GO_TOOLCHAIN_CHECK="${ROOT}/scripts/check_go_toolchain.py"
@@ -187,6 +188,10 @@ if [[ ! -f "${DEMO_COMPOSE}" ]]; then
 fi
 if [[ ! -f "${PORTABLE_SMOKE_COMPOSE}" ]]; then
   echo "[release-gate] compose/test/portable-smoke.yml not found" >&2
+  exit 1
+fi
+if [[ ! -f "${PORTABLE_SMOKE_ANSIBLE}" ]]; then
+  echo "[release-gate] ansible/portable-migration-smoke.yml not found" >&2
   exit 1
 fi
 if [[ ! -f "${UPGRADE_COMPATIBILITY_SCRIPT}" ]]; then
@@ -558,6 +563,12 @@ require_text "${TESTING_DOC}" "before Docker Hub or Helm publication" "GitLab pu
 require_text "${TESTING_DOC}" "python3 scripts/check_gitlab_publish_dag.py" "GitLab publish DAG testing command"
 require_text "${TESTING_DOC}" "publish_dockerhub\` -> \`release_image_smoke\` -> \`publish_helm_chart\` -> \`deploy_release_helm" "GitLab Helm publish ordering testing documentation"
 require_text "${TESTING_DOC}" "bash scripts/run_portable_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_smoke.sh && bash scripts/run_portable_sqlite_to_postgres_smoke.sh" "canonical backup-portable smoke testing command"
+require_text "${TESTING_DOC}" "ansible-playbook ansible/portable-migration-smoke.yml" "Ansible backup-portable smoke command"
+require_text "${PORTABLE_SMOKE_ANSIBLE}" "scripts/run_portable_failure_smoke.sh" "Ansible sqlite-to-postgres failure smoke"
+require_text "${PORTABLE_SMOKE_ANSIBLE}" "scripts/run_portable_postgres_to_sqlite_failure_smoke.sh" "Ansible postgres-to-sqlite failure smoke"
+require_text "${PORTABLE_SMOKE_ANSIBLE}" "scripts/run_portable_postgres_to_sqlite_smoke.sh" "Ansible postgres-to-sqlite smoke"
+require_text "${PORTABLE_SMOKE_ANSIBLE}" "scripts/run_portable_sqlite_to_postgres_smoke.sh" "Ansible sqlite-to-postgres smoke"
+require_text "${GITLAB_CI}" "ansible-playbook ansible/portable-migration-smoke.yml" "GitLab Ansible portable smoke execution"
 require_text "${TESTING_DOC}" "Evidence \`## Smoke Results\` must use the exact \`bash scripts/...\` labels" "canonical backup-portable smoke result labels"
 require_no_text "${TESTING_DOC}" "./scripts/run_portable_" "non-canonical portable smoke script invocation in testing docs"
 require_text "${TESTING_DOC}" "## Upgrade Compatibility" "upgrade compatibility testing section"

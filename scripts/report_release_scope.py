@@ -193,6 +193,7 @@ def release_unit_for(path: str) -> str:
         return "release-scope-tooling"
     if (
         path.startswith(".github/")
+        or path.startswith("ansible/")
         or path.startswith("charts/")
         or path.startswith("compose/")
         or path.startswith("deploy/")

@@ -1,57 +1,76 @@
 # S3Desk
 
-S3Desk is a self-hosted dashboard for multi-provider object storage.
+S3Desk is a self-hosted web interface for managing buckets, objects, transfers, and access settings across object-storage providers.<br>
+It supports AWS S3, S3-compatible storage, Azure Blob, Google Cloud Storage, and OCI Object Storage.
 
-## Usage
+## Quick start
 
-Use the local scripts as the entrypoint. The detailed operator and release docs stay under `docs/`.
+Docker or Podman with Compose is required.
 
-## Quick Start
+```bash
+DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo up --build -d
+```
 
-- Local demo: `DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo up --build -d`
-- LAN demo: `DEMO_PUBLIC_HOST=192.168.0.227 ./scripts/compose.sh demo up --build -d`
+Open <http://127.0.0.1:8080>. To expose the demo on a LAN, replace `127.0.0.1` with the host's LAN IP:
 
-`DEMO_PUBLIC_HOST` is required on every demo invocation and must be an IP address or hostname without a scheme, port, or path. Non-local hosts automatically bind the dashboard and MinIO to `0.0.0.0`; local hosts remain on `127.0.0.1`. Set the bind variables only when an interface intentionally needs a different address.
+```bash
+DEMO_PUBLIC_HOST=192.168.0.227 ./scripts/compose.sh demo up --build -d
+```
 
-## Storage Credentials
+Stop the demo:
 
-Create a least-privilege credential in the provider console, then add a profile in S3Desk. S3Desk does not create provider keys.
+```bash
+DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo down
+```
 
-| Provider | Get credentials | Enter in S3Desk |
+## Remote deployment
+
+```bash
+cp .env.example .env.local
+# Edit .env.local, then load it into the shell.
+set -a; . ./.env.local; set +a
+./scripts/compose.sh remote up -d
+```
+
+Set these values before starting: `API_TOKEN`, `ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, `S3DESK_BIND_ADDRESS`, `ALLOWED_HOSTS`, and `ALLOWED_LOCAL_DIRS`. Use `./scripts/compose.sh caddy up -d` for the Caddy stack.
+
+```bash
+./scripts/compose.sh remote ps
+./scripts/compose.sh remote logs -f
+./scripts/compose.sh remote down
+```
+
+## Storage credentials
+
+Add a profile in S3Desk with a least-privilege credential created by the provider.
+
+| Provider | Credential source | Required fields |
 | --- | --- | --- |
-| AWS S3 | [Create IAM user access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-keys-admin-managed.html) | `Access Key ID`, `Secret`, and `Region`; add `Session Token` only for temporary credentials and leave `Endpoint` empty. |
-| S3-compatible | Ask the provider console or storage administrator for an S3 API key. | `Access Key ID`, `Secret`, `Endpoint`, and `Region`; add `Session Token` when issued and enable path-style mode only when required. |
-| Azure Blob Storage | [View storage account keys](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) | `Storage Account Name` and `Account Key`. Azure ARM fields are optional and only needed for management features such as immutability editing. |
-| Google Cloud Storage | [Create a service-account JSON key](https://cloud.google.com/iam/docs/keys-create-delete) | Paste the downloaded JSON into `Service Account JSON` and enter the numeric `Project Number`. Anonymous mode is only for public access. |
-| OCI Object Storage | [Create an API signing key and config](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm) | Enter `Region`, `Namespace`, and `Compartment OCID`; provide the OCI `Config File`/`Config Profile` when the backend cannot use its default config. |
+| AWS S3 | [IAM access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-keys-admin-managed.html) | `Access Key ID`, `Secret`, `Region` |
+| S3-compatible | Provider console or storage administrator | `Access Key ID`, `Secret`, `Endpoint`, `Region` |
+| Azure Blob | [Storage account keys](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) | `Storage Account Name`, `Account Key` |
+| Google Cloud Storage | [Service-account JSON key](https://cloud.google.com/iam/docs/keys-create-delete) | `Service Account JSON`, `Project Number` |
+| OCI Object Storage | [API signing key and config](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm) | `Region`, `Namespace`, `Compartment OCID`, OCI config |
 
-For container deployments, mount the OCI config and private key into the backend and use the container path (for example, `/data/oci/config`). Treat all keys as secrets, grant only the required bucket permissions, and rotate or revoke them if exposed.
+Provider-specific optional fields and container mounts are documented in [Provider configuration](docs/PROVIDERS.md).
 
-### Run
+## Development and verification
 
-- `./scripts/dev.sh`
-- `./scripts/compose.sh demo up --build -d`
-- `./scripts/compose.sh remote up -d`
-- `./scripts/compose.sh caddy up -d`
+```bash
+./scripts/dev.sh
+./scripts/build.sh
+./scripts/check.sh
+ansible-playbook ansible/portable-migration-smoke.yml
+```
 
-### Build and Verify
-- `./scripts/build.sh`
-- `./scripts/check.sh`
-- `helm upgrade --install s3desk ./charts/s3desk`
-
-### Cleanup
-- `./scripts/compose.sh remote down`
-- `./scripts/compose.sh caddy down`
-
-## Detailed Guides
+## Documentation
 
 - [Operations and deployment](docs/RUNBOOK.md)
 - [Testing and checklists](docs/TESTING.md)
+- [PostgreSQL and SQLite backup/restore](docs/PORTABLE_BACKUP.md)
 - [Release gate](docs/RELEASE_GATE.md)
-- [Provider configuration](docs/PROVIDERS.md)
-- [Backup and restore](docs/PORTABLE_BACKUP.md)
-- [Helm chart details](charts/s3desk/README.md)
-- [All docs index](docs/README.md)
+- [Helm chart](charts/s3desk/README.md)
+- [Documentation index](docs/README.md)
 
 ## License
 

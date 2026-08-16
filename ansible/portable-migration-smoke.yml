@@ -1,0 +1,70 @@
+---
+- name: Verify SQLite and PostgreSQL portable migration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    portable_smoke_root: "{{ playbook_dir }}/.."
+    portable_smoke_scripts:
+      - scripts/run_portable_failure_smoke.sh
+      - scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
+      - scripts/run_portable_postgres_to_sqlite_smoke.sh
+      - scripts/run_portable_sqlite_to_postgres_smoke.sh
+    portable_smoke_run_encrypted: false
+    portable_smoke_password: "{{ lookup('ansible.builtin.env', 'PORTABLE_BUNDLE_PASSWORD') }}"
+
+  tasks:
+    - name: Require an executing playbook
+      ansible.builtin.assert:
+        that: not ansible_check_mode
+        fail_msg: Portable migration assurance must execute without --check.
+
+    - name: Check canonical smoke scripts
+      ansible.builtin.stat:
+        path: "{{ portable_smoke_root }}/{{ item }}"
+      loop: "{{ portable_smoke_scripts }}"
+      loop_control:
+        label: "{{ item }}"
+      register: portable_smoke_script_files
+
+    - name: Require canonical smoke scripts
+      ansible.builtin.assert:
+        that: item.stat.exists and item.stat.isreg
+        fail_msg: "Missing portable migration smoke script: {{ item.item }}"
+      loop: "{{ portable_smoke_script_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Run canonical portable migration smoke
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ portable_smoke_root }}/{{ item }}"
+        chdir: "{{ portable_smoke_root }}"
+      loop: "{{ portable_smoke_scripts }}"
+      loop_control:
+        label: "{{ item }}"
+      changed_when: false
+
+    - name: Require password for encrypted migration smoke
+      ansible.builtin.assert:
+        that: portable_smoke_password | length > 0
+        fail_msg: Set PORTABLE_BUNDLE_PASSWORD when portable_smoke_run_encrypted=true.
+      when: portable_smoke_run_encrypted | bool
+
+    - name: Run encrypted portable migration smoke
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ portable_smoke_root }}/{{ item }}"
+        chdir: "{{ portable_smoke_root }}"
+      environment:
+        PORTABLE_BUNDLE_CONFIDENTIALITY: encrypted
+        PORTABLE_BUNDLE_PASSWORD: "{{ portable_smoke_password }}"
+      loop:
+        - scripts/run_portable_postgres_to_sqlite_smoke.sh
+        - scripts/run_portable_sqlite_to_postgres_smoke.sh
+      loop_control:
+        label: "{{ item }}"
+      changed_when: false
+      when: portable_smoke_run_encrypted | bool

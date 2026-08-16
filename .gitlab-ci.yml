@@ -12,6 +12,7 @@ workflow:
       when: never
     - changes:
         - .gitlab-ci.yml
+        - ansible/**/*
         - .gitleaks.toml
         - .golangci.*
         - .trivyignore
@@ -97,6 +98,7 @@ variables:
   GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
   GOVULNCHECK_VERSION: "v1.1.4"
   PODMAN_COMPOSE_VERSION: "1.5.0"
+  ANSIBLE_CORE_VERSION: "2.18.7"
   GOLANGCI_LINT_VERSION: "v1.64.8"
   GOLANGCI_LINT_CONFIG: ".golangci.yml"
   GO_COVERAGE_MIN_TOTAL: "50.0"
@@ -1207,6 +1209,7 @@ portable_migration_smoke:
   rules:
     - changes:
         - Containerfile.local
+        - ansible/**/*
         - backend/**/*
         - compose/test/portable-smoke.yml
         - scripts/compose.sh
@@ -1221,12 +1224,10 @@ portable_migration_smoke:
     CONTAINERS_NETWORK_BACKEND: "slirp4netns"
   before_script:
     - bash scripts/ci_podman_compose.sh
+    - python3 -m pip install --no-cache-dir "ansible-core==${ANSIBLE_CORE_VERSION}"
   script:
     - podman --version
-    - bash scripts/run_portable_failure_smoke.sh
-    - bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
-    - bash scripts/run_portable_postgres_to_sqlite_smoke.sh
-    - bash scripts/run_portable_sqlite_to_postgres_smoke.sh
+    - ansible-playbook ansible/portable-migration-smoke.yml
 
 release_postgres_smoke:
   stage: test

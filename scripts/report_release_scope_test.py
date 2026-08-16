@@ -25,6 +25,7 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertEqual(MODULE.release_unit_for(".golangci.yml"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("Containerfile.local"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("Containerfile.deploy"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("ansible/portable-migration-smoke.yml"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("deploy/caddy/Caddyfile"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("k8s/s3desk-caddy.yaml"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("scripts/Caddyfile"), "release-gate-ci-deploy")

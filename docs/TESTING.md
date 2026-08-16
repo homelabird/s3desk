@@ -569,6 +569,18 @@ These are the concrete portable backup/import validation paths.
 bash scripts/run_portable_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_smoke.sh && bash scripts/run_portable_sqlite_to_postgres_smoke.sh
 ```
 
+The equivalent Ansible assurance runs the same canonical scripts and is the path used by GitLab CI:
+
+```bash
+ansible-playbook ansible/portable-migration-smoke.yml
+```
+
+Add successful encrypted round trips when required:
+
+```bash
+PORTABLE_BUNDLE_PASSWORD=operator-secret ansible-playbook ansible/portable-migration-smoke.yml -e portable_smoke_run_encrypted=true
+```
+
 The portable smoke stack verifies:
 
 - source fixture creation through the public API on either sqlite or postgres
