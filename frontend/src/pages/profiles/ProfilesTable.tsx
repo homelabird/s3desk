@@ -30,7 +30,7 @@ export function ProfilesTable(props: ProfilesTableProps) {
 	const screens = Grid.useBreakpoint()
 	const useCompactList = !screens.lg
 	const { hostRef, items: virtualItems, measureElement, paddingBottom, paddingTop } =
-		useAppContentVirtualizer(props.rows.length, useCompactList ? 270 : 82)
+		useAppContentVirtualizer(props.rows.length, useCompactList ? 240 : 82)
 
 	const buildRowMenu = (row: ProfileTableRowViewModel): MenuProps => ({
 		items: [
@@ -115,7 +115,7 @@ export function ProfilesTable(props: ProfilesTableProps) {
 											</span>
 										) : null}
 									</div>
-									<Typography.Text type="secondary" className={styles.mobileId}>
+									<Typography.Text type="secondary" className={styles.mobileId} title={row.profile.id}>
 										{row.profile.id}
 									</Typography.Text>
 								</div>

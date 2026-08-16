@@ -331,6 +331,9 @@
 
 .mobileId {
 	display: block;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .mobileMetaGrid {
@@ -418,6 +421,22 @@
 
 	.mobileCardTop {
 		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.mobileActionRow {
+		align-items: stretch;
+	}
+
+	.mobileActionRow > * {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+
+	.mobileActionRow :global(.ant-btn) {
+		width: 100%;
+		min-height: 44px;
+		justify-content: center;
 	}
 }
 
@@ -428,23 +447,6 @@
 
 	.mobileCard {
 		padding: 16px;
-	}
-}
-
-@media (max-width: 380px) {
-	.mobileActionRow {
-		flex-direction: column;
-		align-items: stretch;
-	}
-
-	.mobileActionRow > * {
-		width: 100%;
-	}
-
-	.mobileActionRow :global(.ant-btn) {
-		width: 100%;
-		min-height: 44px;
-		justify-content: center;
 	}
 }
 

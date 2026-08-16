@@ -130,12 +130,6 @@
 	overflow-wrap: anywhere;
 }
 
-@media (max-width: 640px) {
-	.mobileMetaGrid {
-		grid-template-columns: minmax(0, 1fr);
-	}
-}
-
 @media (max-width: 480px) {
 	.tableWrap {
 		border-radius: var(--s3d-radius-sm);
@@ -145,8 +139,21 @@
 		padding: 16px;
 	}
 
-	.mobileActionRow :global(.ant-btn) {
-		min-height: 44px;
+	.mobileActionRow .actionGroup {
+		width: 100%;
+		flex-wrap: nowrap;
+	}
+
+	.mobileActionRow .actionGroup > :global(.ant-btn),
+	.mobileActionRow .actionGroup > span {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+
+	.mobileActionRow .actionGroup :global(.ant-btn) {
+		width: 100%;
+		min-height: 48px;
+		justify-content: center;
 	}
 }
 
@@ -157,6 +164,7 @@
 	}
 
 	.mobileMetaGrid {
+		grid-template-columns: minmax(0, 1fr);
 		gap: 10px;
 	}
 

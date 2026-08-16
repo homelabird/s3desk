@@ -1,5 +1,6 @@
+import { FullscreenExitOutlined, FullscreenOutlined } from '@ant-design/icons'
 import { Alert, Button, Spin, Typography } from 'antd'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import type { Job } from '../../api/types'
 import { PageSection } from '../../components/PageSection'
@@ -41,6 +42,7 @@ export type JobsTableSectionProps = {
 }
 
 export function JobsTableSection(props: JobsTableSectionProps) {
+	const [isExpanded, setIsExpanded] = useState(false)
 	const {
 		jobsError,
 		sortedJobs,
@@ -65,6 +67,18 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 		isFetchingNextPage,
 		onTableContainerRef,
 	} = props
+	useEffect(() => {
+		if (!isExpanded) return
+		const restore = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') setIsExpanded(false)
+		}
+		window.addEventListener('keydown', restore)
+		return () => window.removeEventListener('keydown', restore)
+	}, [isExpanded])
+
+	const visibleTableHeight = isExpanded
+		? Math.max(240, (typeof window === 'undefined' ? tableScrollY : window.innerHeight) - 72)
+		: tableScrollY
 	const emptyState = (
 		<JobsEmptyState
 			isOffline={isOffline}
@@ -83,10 +97,21 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 
 			<PageSection
 				title="History"
+				className={isExpanded ? styles.expandedSection : undefined}
+				bodyClassName={isExpanded ? styles.expandedBody : undefined}
 				actions={
-					sortedJobs.length ? (
-						<Typography.Text type="secondary">{sortedJobs.length.toLocaleString()} visible</Typography.Text>
-					) : null
+					<>
+						{sortedJobs.length ? (
+							<Typography.Text type="secondary">{sortedJobs.length.toLocaleString()} visible</Typography.Text>
+						) : null}
+						<Button
+							type="text"
+							icon={isExpanded ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+							aria-label={isExpanded ? 'Restore History panel' : 'Expand History panel'}
+							aria-pressed={isExpanded}
+							onClick={() => setIsExpanded((current) => !current)}
+						/>
+					</>
 				}
 				flush
 			>
@@ -101,7 +126,7 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 						) : (
 							<JobsMobileList
 								jobs={sortedJobs}
-								height={tableScrollY}
+								height={visibleTableHeight}
 								getJobSummary={getJobSummary}
 								renderJobActions={renderJobActions}
 							/>
@@ -110,7 +135,7 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 						<JobsDesktopTable
 							jobs={sortedJobs}
 							columns={columns}
-							tableScrollY={tableScrollY}
+							tableScrollY={visibleTableHeight}
 							isLoading={isLoading}
 							emptyState={emptyState}
 							sortState={sortState}

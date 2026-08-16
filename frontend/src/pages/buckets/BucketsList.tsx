@@ -22,7 +22,7 @@ export type BucketsListProps = {
 
 export function BucketsList(props: BucketsListProps) {
 	const { hostRef, items: virtualItems, measureElement, paddingBottom, paddingTop } =
-		useAppContentVirtualizer(props.buckets.length, props.useCompactList ? 210 : 70)
+		useAppContentVirtualizer(props.buckets.length, props.useCompactList ? 180 : 70)
 
 	return (
 		<div className={styles.tableWrap}>

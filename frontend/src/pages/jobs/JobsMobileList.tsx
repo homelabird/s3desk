@@ -26,7 +26,7 @@ export function JobsMobileList({
   const virtualizer = useVirtualizer({
     count: jobs.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 260,
+    estimateSize: () => 220,
     overscan: 4,
   });
   const measuredItems = virtualizer.getVirtualItems();
@@ -37,21 +37,22 @@ export function JobsMobileList({
         : jobs.slice(0, 20).map((_, index) => ({
             index,
             key: index,
-            start: index * 260,
-            size: 260,
-            end: (index + 1) * 260,
+            start: index * 220,
+            size: 220,
+            end: (index + 1) * 220,
             lane: 0,
           })),
     [jobs, measuredItems],
   );
   const totalSize =
-    measuredItems.length > 0 ? virtualizer.getTotalSize() : jobs.length * 260;
+    measuredItems.length > 0 ? virtualizer.getTotalSize() : jobs.length * 220;
 
   return (
     <div
       ref={scrollRef}
       className={styles.mobileList}
       role="list"
+      aria-label="Job history"
       style={{ maxHeight: height }}
     >
       <div
@@ -87,10 +88,10 @@ export function JobsMobileList({
                         {jobTypeLabel(job.type)}
                       </Typography.Text>
                     </div>
-                    <Typography.Paragraph className={styles.mobileSummary}>
+                    <Typography.Paragraph className={styles.mobileSummary} title={summary}>
                       {summary}
                     </Typography.Paragraph>
-                    <Typography.Text code className={styles.mobileJobId}>
+                    <Typography.Text code className={styles.mobileJobId} title={job.id}>
                       {job.id}
                     </Typography.Text>
                   </div>

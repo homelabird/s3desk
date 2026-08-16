@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router'
 import { ensureDomShims } from '../../../test/domShims'
 import type { Job } from '../../../api/types'
 import { JobsTableSection } from '../JobsTableSection'
+import styles from '../JobsTableSection.module.css'
 
 beforeAll(() => {
 	ensureDomShims()
@@ -50,9 +51,24 @@ describe('JobsTableSection', () => {
 
 		expect(screen.getByText('No activity yet.')).toBeInTheDocument()
 		expect(screen.getByText('Uploads and other background work will appear here.')).toBeInTheDocument()
-		expect(screen.queryByRole('button')).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Expand History panel' })).toBeInTheDocument()
 		expect(screen.queryByRole('link')).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'New delete job' })).not.toBeInTheDocument()
+	})
+
+	it('expands and restores the History panel', () => {
+		renderJobsTableSection()
+
+		const expandButton = screen.getByRole('button', { name: 'Expand History panel' })
+		expect(expandButton).toHaveAttribute('aria-pressed', 'false')
+		fireEvent.click(expandButton)
+
+		const restoreButton = screen.getByRole('button', { name: 'Restore History panel' })
+		expect(restoreButton).toHaveAttribute('aria-pressed', 'true')
+		expect(screen.getByRole('heading', { name: 'History' }).closest('section')).toHaveClass(styles.expandedSection)
+
+		fireEvent.keyDown(window, { key: 'Escape' })
+		expect(screen.getByRole('button', { name: 'Expand History panel' })).toHaveAttribute('aria-pressed', 'false')
 	})
 
 	it('uses filtered empty state actions when filters hide all loaded jobs', () => {
