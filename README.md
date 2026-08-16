@@ -3,7 +3,7 @@
 S3Desk is a self-hosted web interface for managing buckets, objects, transfers, and access settings across object-storage providers.<br>
 It supports AWS S3, S3-compatible storage, Azure Blob, Google Cloud Storage, and OCI Object Storage.
 
-![Basic demo flow](frontend/docs/assets/gifs/latest.gif)
+![Basic demo flow](frontend/docs/assets/gifs/20260816-231756/objects-live-flow-demo.gif)
 
 ## Quick start
 
