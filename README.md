@@ -5,7 +5,7 @@ It supports AWS S3, S3-compatible storage, Azure Blob, Google Cloud Storage, and
 
 ![Basic demo flow](frontend/docs/assets/gifs/20260816-231756/objects-live-flow-demo.gif)
 
-_(Demo animation is intentionally slowed to 3x for clearer click-by-click walkthrough)_
+_(Demo animation is intentionally slowed to 5x for clearer click-by-click walkthrough; initial wait-time is shortened by skipping the first 2 seconds of recording.)_
 
 ## Quick start
 
