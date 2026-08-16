@@ -3,6 +3,8 @@
 S3Desk is a self-hosted web interface for managing buckets, objects, transfers, and access settings across object-storage providers.<br>
 It supports AWS S3, S3-compatible storage, Azure Blob, Google Cloud Storage, and OCI Object Storage.
 
+![Basic demo flow](frontend/docs/assets/gifs/latest.gif)
+
 ## Quick start
 
 Docker or Podman with Compose is required.
@@ -46,10 +48,10 @@ Add a profile in S3Desk with a least-privilege credential created by the provide
 
 | Provider | Credential source | Required fields |
 | --- | --- | --- |
-| AWS S3 | [IAM access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-keys-admin-managed.html) | `Access Key ID`, `Secret`, `Region` |
+| AWS S3 (beta) | [IAM access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-keys-admin-managed.html) | `Access Key ID`, `Secret`, `Region` |
 | S3-compatible | Provider console or storage administrator | `Access Key ID`, `Secret`, `Endpoint`, `Region` |
-| Azure Blob | [Storage account keys](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) | `Storage Account Name`, `Account Key` |
-| Google Cloud Storage | [Service-account JSON key](https://cloud.google.com/iam/docs/keys-create-delete) | `Service Account JSON`, `Project Number` |
+| Azure Blob (beta) | [Storage account keys](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) | `Storage Account Name`, `Account Key` |
+| Google Cloud Storage (beta) | [Service-account JSON key](https://cloud.google.com/iam/docs/keys-create-delete) | `Service Account JSON`, `Project Number` |
 | OCI Object Storage | [API signing key and config](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm) | `Region`, `Namespace`, `Compartment OCID`, OCI config |
 
 Provider-specific optional fields and container mounts are documented in [Provider configuration](docs/PROVIDERS.md).
