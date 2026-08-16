@@ -19,7 +19,7 @@
 
 .dropZoneCard {
   border: 1px solid var(--s3d-color-border-strong);
-  border-radius: var(--s3d-radius-sm);
+  border-radius: var(--s3d-radius-lg);
   overflow: hidden;
   position: relative;
   display: flex;
@@ -84,9 +84,9 @@
 }
 
 .listHeaderRow {
-  padding: 8px 12px;
+  padding: 9px 14px;
   border-bottom: 1px solid var(--s3d-color-border);
-  background: var(--s3d-gradient-section);
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 76%, var(--s3d-color-bg-card));
   min-width: 0;
   overflow: hidden;
 }
@@ -142,6 +142,21 @@
 .listHeaderSortButton {
   min-height: var(--s3d-control-size-xs) !important;
   line-height: 1.2;
+  width: max-content;
+  max-width: 100%;
+  justify-self: start;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.listHeaderSortButton:focus-visible {
+  background: var(--s3d-color-primary-bg) !important;
+}
+
+.listHeaderSortButtonActive,
+.listHeaderSortButtonActive .listHeaderLabel {
+  color: var(--s3d-color-primary) !important;
+  font-weight: 600;
 }
 
 .listHeaderLabel,
@@ -153,13 +168,23 @@
   justify-self: end;
 }
 
+.listHeaderActionsIcon {
+  width: var(--s3d-control-size-xs);
+  height: var(--s3d-control-size-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 76%, transparent);
+}
+
 .listRowShell {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   min-height: var(--objects-row-min-height, auto);
-  padding: 6px 12px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--s3d-color-border-soft);
   transform: translateY(var(--objects-row-offset, 0px));
   transition: background var(--s3d-transition-fast);
@@ -173,6 +198,13 @@
 .listRowInteractive,
 .breadcrumbNav {
   min-width: 0;
+}
+
+.listRowInteractive {
+  border-radius: var(--s3d-radius-sm);
+  transition:
+    background var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast);
 }
 
 .listRowInteractive:hover {
@@ -240,6 +272,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.listRowParentLabel {
+  color: var(--s3d-color-primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 700;
 }
 
 .listRowBodyButton {
@@ -247,7 +286,7 @@
   max-width: 100%;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   border: none;
   border-radius: 6px;
   padding: 0;
@@ -284,8 +323,53 @@
   color: var(--s3d-color-primary);
 }
 
+.listRowFolderIconWrap,
+.listRowFileIconWrap {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--s3d-color-border-soft);
+  border-radius: var(--s3d-radius-sm);
+}
+
+.listRowFolderIconWrap {
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 24%, var(--s3d-color-border-soft));
+  background: color-mix(in srgb, var(--s3d-color-primary-light) 42%, var(--s3d-color-bg-elevated));
+}
+
+.listRowFileIconWrap {
+  color: var(--s3d-color-text-secondary);
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, var(--s3d-color-bg-elevated));
+}
+
+.listRowPrefixIcon,
+.listRowFileIcon {
+  font-size: var(--s3d-icon-size-sm);
+}
+
 .listRowFavoriteIcon {
   color: var(--s3d-color-star);
+}
+
+.listRowFavoriteButton,
+.listRowMenuButton {
+  color: var(--s3d-color-text-secondary);
+  border-radius: var(--s3d-radius-sm);
+}
+
+.listRowFavoriteButton:hover,
+.listRowMenuButton:hover {
+  color: var(--s3d-color-primary) !important;
+  background: var(--s3d-color-primary-bg) !important;
+}
+
+.listRowAuxActions :global(.ant-btn) {
+  border: 1px solid var(--s3d-color-border-soft);
+  border-radius: var(--s3d-radius-sm);
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 82%, transparent);
 }
 
 .listRowMetaCompact {
@@ -451,6 +535,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-lg);
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 90%, var(--s3d-color-bg-secondary));
+  box-shadow: var(--s3d-shadow-sm);
 }
 
 .listControlsStack {
@@ -617,6 +706,10 @@
   max-width: 100%;
 }
 
+.listControlsSearchInputFull.listControlsSearchInputFull > :global(input.ant-input) {
+  min-height: 0 !important;
+}
+
 .listControlsSearchInput {
   width: min(100%, 320px);
 }
@@ -781,7 +874,11 @@
 @media (max-width: 480px) {
   .breadcrumbRow,
   .listControlsSection {
-    gap: 6px;
+    gap: 4px;
+  }
+
+  .listControlsSection {
+    padding: 6px 8px;
   }
 
   .listControlsLocationStack,
@@ -812,7 +909,7 @@
 
   .listControlsStack,
   .listRowNameCell {
-    gap: 5px;
+    gap: 4px;
   }
 
   .selectionBarActions {
@@ -820,22 +917,52 @@
   }
 
   .listControlsCompactActions {
-    width: 100%;
     min-width: var(--s3d-control-size-touch);
-    min-height: var(--s3d-control-size-touch);
+    min-height: 24px;
+  }
+
+  .listControlsCompactFooter {
+    gap: 6px;
+  }
+
+  .listControlsCompactActions,
+  .listControlsViewToggle {
+    gap: 6px;
+  }
+
+  .listControlsCompactActions :global(.ant-btn),
+  .listControlsViewToggle :global(.ant-btn) {
+    min-height: 24px !important;
+    height: 24px !important;
+    padding-inline: 6px;
+    font-size: var(--s3d-font-size-xs);
   }
 
   .listControlsCompactActions :global(.ant-btn) {
-    flex: 1 1 160px;
+    flex: 0 1 auto;
   }
 
   .listGridCompact {
-    grid-template-columns: 22px minmax(0, 1fr) 44px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
     gap: 5px;
   }
 
+  .listRowCheckboxCell :global(.ant-checkbox-wrapper),
+  .listHeaderGrid > :global(.ant-checkbox-wrapper) {
+    width: var(--s3d-control-size-touch);
+    min-width: var(--s3d-control-size-touch);
+    height: var(--s3d-control-size-touch);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .listRowAuxActions {
+    display: none;
+  }
+
   .listRowShell {
-    padding: 5px 8px;
+    padding: 7px 8px;
   }
 
   .listRowMetaCompact {
@@ -901,17 +1028,10 @@
     width: 100%;
   }
 
-  .listControlsCompactFooter,
   .listControlsCompactActions,
   .listControlsViewToggle {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-  }
-
-  .listControlsCompactActions,
-  .listControlsViewToggle {
-    grid-column: 1 / -1;
+    display: flex;
+    width: auto;
   }
 
   .selectionBarActions {
@@ -920,7 +1040,7 @@
 
   .listControlsCompactActions :global(.ant-btn),
   .listControlsViewToggle :global(.ant-btn) {
-    width: 100%;
+    width: auto;
     justify-content: center;
   }
 

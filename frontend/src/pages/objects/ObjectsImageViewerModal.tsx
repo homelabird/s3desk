@@ -131,6 +131,9 @@ function ObjectsImageViewerModalSession({
 					handlePointerEnd={panZoom.handlePointerEnd}
 					handlePointerMove={panZoom.handlePointerMove}
 					handleStageKeyDown={panZoom.handleStageKeyDown}
+					handleTouchEnd={panZoom.handleTouchEnd}
+					handleTouchMove={panZoom.handleTouchMove}
+					handleTouchStart={panZoom.handleTouchStart}
 					imagePreviewTooLarge={imagePreviewTooLarge}
 					imageRef={panZoom.imageRef}
 					isMetaFetching={isMetaFetching}

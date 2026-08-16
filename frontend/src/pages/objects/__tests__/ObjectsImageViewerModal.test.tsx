@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import styles from '../ObjectsImageViewer.module.css'
@@ -318,5 +318,65 @@ describe('ObjectsImageViewerModal', () => {
 
 		fireEvent.keyDown(stage, { key: 'ArrowRight', shiftKey: true })
 		expect(image).toHaveStyle({ transform: 'translate3d(80px, -40px, 0) scale(1.5)' })
+	})
+
+	it('zooms the preview with the mouse wheel', async () => {
+		render(
+			<ObjectsImageViewerModal
+				open
+				isMobile={false}
+				objectKey="hero.png"
+				isMetaFetching={false}
+				objectMeta={{ key: 'hero.png', contentType: 'image/png', size: 1_048_576 } as never}
+				preview={{ key: 'hero.png', status: 'ready', kind: 'image', contentType: 'image/png', url: 'blob:hero' }}
+				onLoadPreview={vi.fn()}
+				onCancelPreview={vi.fn()}
+				canCancelPreview={false}
+				onClose={vi.fn()}
+				onDownload={vi.fn()}
+				onPresign={vi.fn()}
+				isPresignLoading={false}
+			/>,
+		)
+
+		const stage = await screen.findByTestId('objects-image-viewer-stage')
+		const image = screen.getByTestId('objects-image-viewer-image')
+
+		const zoomInEvent = createEvent.wheel(stage, { deltaY: -100, cancelable: true })
+		fireEvent(stage, zoomInEvent)
+		expect(zoomInEvent.defaultPrevented).toBe(true)
+		expect(image).toHaveStyle({ transform: 'translate3d(0px, 0px, 0) scale(1.5)' })
+
+		fireEvent.wheel(stage, { deltaY: 100 })
+		expect(image).toHaveStyle({ transform: 'translate3d(0px, 0px, 0) scale(1)' })
+	})
+
+	it('zooms the mobile preview with a two-finger pinch', async () => {
+		render(
+			<ObjectsImageViewerModal
+				open
+				isMobile
+				objectKey="hero.png"
+				isMetaFetching={false}
+				objectMeta={{ key: 'hero.png', contentType: 'image/png', size: 1_048_576 } as never}
+				preview={{ key: 'hero.png', status: 'ready', kind: 'image', contentType: 'image/png', url: 'blob:hero' }}
+				onLoadPreview={vi.fn()}
+				onCancelPreview={vi.fn()}
+				canCancelPreview={false}
+				onClose={vi.fn()}
+				onDownload={vi.fn()}
+				onPresign={vi.fn()}
+				isPresignLoading={false}
+			/>,
+		)
+
+		const stage = await screen.findByTestId('objects-image-viewer-stage')
+		const image = screen.getByTestId('objects-image-viewer-image')
+		const firstTouch = { clientX: 0, clientY: 0 }
+
+		fireEvent.touchStart(stage, { touches: [firstTouch, { clientX: 100, clientY: 0 }] })
+		fireEvent.touchMove(stage, { touches: [firstTouch, { clientX: 200, clientY: 0 }] })
+
+		expect(image).toHaveStyle({ transform: 'translate3d(0px, 0px, 0) scale(2)' })
 	})
 })

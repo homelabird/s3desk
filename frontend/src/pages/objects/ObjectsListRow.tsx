@@ -1,2 +1,2 @@
 export { ObjectsObjectRow } from './ObjectsObjectRow'
-export { ObjectsPrefixRow } from './ObjectsPrefixRow'
+export { ObjectsParentRow, ObjectsPrefixRow } from './ObjectsPrefixRow'

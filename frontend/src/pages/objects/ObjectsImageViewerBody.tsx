@@ -1,5 +1,11 @@
 import { Alert, Empty, Spin, Typography } from 'antd'
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
+import type {
+	KeyboardEvent as ReactKeyboardEvent,
+	PointerEvent as ReactPointerEvent,
+	ReactNode,
+	RefObject,
+	TouchEvent as ReactTouchEvent,
+} from 'react'
 
 import type { ObjectMeta } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
@@ -17,6 +23,9 @@ type ObjectsImageViewerBodyProps = {
 	handlePointerEnd: (event: ReactPointerEvent<HTMLDivElement>) => void
 	handlePointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void
 	handleStageKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void
+	handleTouchEnd: (event: ReactTouchEvent<HTMLDivElement>) => void
+	handleTouchMove: (event: ReactTouchEvent<HTMLDivElement>) => void
+	handleTouchStart: (event: ReactTouchEvent<HTMLDivElement>) => void
 	imagePreviewTooLarge: boolean
 	imageRef: RefObject<HTMLImageElement | null>
 	isMetaFetching: boolean
@@ -40,6 +49,9 @@ export function ObjectsImageViewerBody({
 	handlePointerEnd,
 	handlePointerMove,
 	handleStageKeyDown,
+	handleTouchEnd,
+	handleTouchMove,
+	handleTouchStart,
 	imagePreviewTooLarge,
 	imageRef,
 	isMetaFetching,
@@ -176,6 +188,10 @@ export function ObjectsImageViewerBody({
 				onPointerMove={handlePointerMove}
 				onPointerUp={handlePointerEnd}
 				onPointerCancel={handlePointerEnd}
+				onTouchStart={handleTouchStart}
+				onTouchMove={handleTouchMove}
+				onTouchEnd={handleTouchEnd}
+				onTouchCancel={handleTouchEnd}
 			>
 				{thumbnail && !visualPreviewReady ? <div className={styles.imageViewerThumbnailLayer}>{thumbnail}</div> : null}
 				{preview?.status === 'loading' || (open && !preview && !visualPreviewReady) ? (

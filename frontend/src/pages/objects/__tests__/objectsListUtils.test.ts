@@ -27,6 +27,33 @@ describe('matchesSearchTokens', () => {
 })
 
 describe('buildObjectRows', () => {
+	it('prepends a parent entry only below the bucket root', () => {
+		const nestedRows = buildObjectRows({
+			pages: [makePage([], [])],
+			favoriteItems: [],
+			favoritesOnly: false,
+			favoriteKeys: new Set(),
+			prefix: 'notes/drafts/',
+			searchTokens: ['missing'],
+			searchTokensNormalized: ['missing'],
+			extFilter: '',
+			minSize: null,
+			maxSize: null,
+			minModifiedMs: null,
+			maxModifiedMs: null,
+			typeFilter: 'all',
+			sort: 'name_asc',
+			favoritesFirst: false,
+		})
+
+		expect(nestedRows).toEqual([{ kind: 'parent', prefix: 'notes/' }])
+		expect(buildObjectRows({ ...{
+			pages: [makePage([], [])], favoriteItems: [], favoritesOnly: false, favoriteKeys: new Set<string>(),
+			prefix: '', searchTokens: [], searchTokensNormalized: [], extFilter: '', minSize: null, maxSize: null,
+			minModifiedMs: null, maxModifiedMs: null, typeFilter: 'all' as const, sort: 'name_asc' as const, favoritesFirst: false,
+		} })).toEqual([])
+	})
+
 	it('filters by extension and type', () => {
 		const items = [
 			makeItem('a/file1.txt', 10),

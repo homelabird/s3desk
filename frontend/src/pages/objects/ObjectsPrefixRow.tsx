@@ -1,4 +1,4 @@
-import { FolderOutlined } from '@ant-design/icons'
+import { ArrowUpOutlined, FolderOutlined } from '@ant-design/icons'
 import { Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import type { DragEvent, MouseEvent, ReactNode } from 'react'
@@ -27,6 +27,56 @@ type ObjectsPrefixRowProps = BaseRowProps & {
 	onDropTargetDragOver?: (e: DragEvent<HTMLDivElement>) => void
 	onDropTargetDragLeave?: (e: DragEvent<HTMLDivElement>) => void
 	onDropTargetDrop?: (e: DragEvent<HTMLDivElement>) => void
+}
+
+type ObjectsParentRowProps = Omit<BaseRowProps, 'canDragDrop'> & {
+	onOpen: () => void
+}
+
+export function ObjectsParentRow({
+	offset,
+	listGridClassName,
+	isCompact,
+	rowMinHeight,
+	virtualRowIndex,
+	measureElement,
+	onOpen,
+}: ObjectsParentRowProps) {
+	return (
+		<div
+			ref={measureElement}
+			data-index={virtualRowIndex}
+			style={rowStyle(offset, rowMinHeight)}
+			className={styles.listRowShell}
+			role="listitem"
+		>
+			<div
+				className={joinClassNames(styles.listRowInteractive, styles.listRowClickable, styles.listGridBase, listGridClassName)}
+				data-objects-row="true"
+				data-testid="objects-parent-row"
+				onClick={onOpen}
+			>
+				<div />
+				<div className={styles.listRowNameCell}>
+					<button type="button" className={styles.listRowBodyButton} aria-label="Open parent folder">
+						<span className={styles.listRowFolderIconWrap} aria-hidden="true">
+							<ArrowUpOutlined className={styles.listRowPrefixIcon} />
+						</span>
+						<Typography.Text className={`${styles.listRowTextEllipsis} ${styles.listRowParentLabel}`}>../</Typography.Text>
+					</button>
+				</div>
+				{isCompact ? (
+					<div />
+				) : (
+					<>
+						<div />
+						<div />
+						<div />
+					</>
+				)}
+			</div>
+		</div>
+	)
 }
 
 export function ObjectsPrefixRow({
@@ -86,7 +136,9 @@ export function ObjectsPrefixRow({
 				<div />
 				<div className={styles.listRowNameCell}>
 					<button type="button" className={styles.listRowBodyButton} aria-label={`Open prefix ${displayName}`}>
-						<FolderOutlined className={styles.listRowPrefixIcon} />
+						<span className={styles.listRowFolderIconWrap} aria-hidden="true">
+							<FolderOutlined className={styles.listRowPrefixIcon} />
+						</span>
 						<Typography.Text className={styles.listRowTextEllipsis}>{highlightText(displayName)}</Typography.Text>
 					</button>
 				</div>

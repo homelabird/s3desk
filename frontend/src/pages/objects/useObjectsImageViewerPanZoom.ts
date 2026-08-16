@@ -5,6 +5,7 @@ import {
 	useState,
 	type KeyboardEvent as ReactKeyboardEvent,
 	type PointerEvent as ReactPointerEvent,
+	type TouchEvent as ReactTouchEvent,
 } from 'react'
 
 import { clampNumber } from './objectsListUtils'
@@ -24,6 +25,18 @@ export type ImageViewerDragState = {
 	startX: number
 	startY: number
 	origin: ImageViewerPanOffset
+}
+
+type ImageViewerPinchState = {
+	distance: number
+	scale: number
+}
+
+function getTouchDistance(touches: ReactTouchEvent<HTMLDivElement>['touches']): number {
+	const first = touches[0]
+	const second = touches[1]
+	if (!first || !second) return 0
+	return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)
 }
 
 function clampPanOffset(
@@ -51,11 +64,13 @@ export function useObjectsImageViewerPanZoom(visualPreviewReady: boolean) {
 	const [dragState, setDragState] = useState<ImageViewerDragState | null>(null)
 	const stageRef = useRef<HTMLDivElement | null>(null)
 	const imageRef = useRef<HTMLImageElement | null>(null)
+	const pinchStateRef = useRef<ImageViewerPinchState | null>(null)
 
 	const resetView = useCallback(() => {
 		setScale(IMAGE_VIEWER_MIN_SCALE)
 		setOffset({ x: 0, y: 0 })
 		setDragState(null)
+		pinchStateRef.current = null
 	}, [])
 
 	useEffect(() => {
@@ -65,6 +80,44 @@ export function useObjectsImageViewerPanZoom(visualPreviewReady: boolean) {
 	const updateScale = useCallback((nextScale: number) => {
 		const normalized = Math.round(nextScale * 100) / 100
 		setScale(clampNumber(normalized, IMAGE_VIEWER_MIN_SCALE, IMAGE_VIEWER_MAX_SCALE))
+	}, [])
+
+	useEffect(() => {
+		const stage = stageRef.current
+		if (!stage || !visualPreviewReady) return
+		const handleWheel = (event: WheelEvent) => {
+			if (event.deltaY === 0) return
+			event.preventDefault()
+			updateScale(scale + (event.deltaY < 0 ? IMAGE_VIEWER_SCALE_STEP : -IMAGE_VIEWER_SCALE_STEP))
+		}
+		stage.addEventListener('wheel', handleWheel, { passive: false })
+		return () => stage.removeEventListener('wheel', handleWheel)
+	}, [scale, updateScale, visualPreviewReady])
+
+	const handleTouchStart = useCallback(
+		(event: ReactTouchEvent<HTMLDivElement>) => {
+			if (!visualPreviewReady || event.touches.length !== 2) return
+			const distance = getTouchDistance(event.touches)
+			if (distance <= 0) return
+			setDragState(null)
+			pinchStateRef.current = { distance, scale }
+		},
+		[scale, visualPreviewReady],
+	)
+
+	const handleTouchMove = useCallback(
+		(event: ReactTouchEvent<HTMLDivElement>) => {
+			const pinchState = pinchStateRef.current
+			if (!pinchState || event.touches.length !== 2) return
+			const distance = getTouchDistance(event.touches)
+			if (distance <= 0) return
+			updateScale(pinchState.scale * (distance / pinchState.distance))
+		},
+		[updateScale],
+	)
+
+	const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLDivElement>) => {
+		if (event.touches.length < 2) pinchStateRef.current = null
 	}, [])
 
 	const handlePointerDown = useCallback(
@@ -145,6 +198,9 @@ export function useObjectsImageViewerPanZoom(visualPreviewReady: boolean) {
 		handlePointerEnd,
 		handlePointerMove,
 		handleStageKeyDown,
+		handleTouchEnd,
+		handleTouchMove,
+		handleTouchStart,
 		imageRef,
 		offset,
 		resetView,

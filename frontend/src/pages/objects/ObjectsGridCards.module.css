@@ -84,6 +84,14 @@
     transform var(--s3d-transition-fast);
 }
 
+.gridCardParentButton {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .gridCard:hover {
   border-color: color-mix(in srgb, var(--s3d-color-primary) 45%, var(--s3d-color-border) 55%);
   box-shadow: var(--s3d-shadow-md);

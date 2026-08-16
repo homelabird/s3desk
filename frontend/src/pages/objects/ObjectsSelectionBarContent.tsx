@@ -1,5 +1,5 @@
 import { Button, Dropdown, Typography } from 'antd'
-import { DeleteOutlined, DownloadOutlined, EllipsisOutlined } from '@ant-design/icons'
+import { DeleteOutlined, DownloadOutlined, MoreOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 
 import styles from './ObjectsListView.module.css'
@@ -91,7 +91,7 @@ export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProp
 						<Button
 							size="small"
 							className={`${styles.selectionBarButton} ${styles.selectionBarMoreButton}`}
-							icon={<EllipsisOutlined />}
+							icon={<MoreOutlined />}
 							aria-label="Selection tools"
 							aria-haspopup="menu"
 							aria-expanded={selectionToolsOpen}

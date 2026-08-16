@@ -9,6 +9,7 @@ import {
 	ObjectsObjectRowItem,
 	ObjectsPrefixRowItem,
 } from './ObjectsListRowItems'
+import { ObjectsParentRow } from './ObjectsPrefixRow'
 import type { UIActionOrDivider } from './objectsActions'
 import type {
 	ContextMenuMatch,
@@ -195,6 +196,22 @@ export function useObjectsRowRenderers({
 		],
 	)
 
+	const renderParentRow = useCallback(
+		(parentPrefix: string, offset: number, rowIndex: number) => (
+			<ObjectsParentRow
+				key={`parent:${parentPrefix}`}
+				offset={offset}
+				rowMinHeight={isCompactList ? rowHeightCompactPx : rowHeightWidePx}
+				virtualRowIndex={rowIndex}
+				measureElement={measureElement}
+				listGridClassName={listGridClassName}
+				isCompact={isCompactList}
+				onOpen={() => onOpenPrefix(parentPrefix)}
+			/>
+		),
+		[isCompactList, listGridClassName, measureElement, onOpenPrefix, rowHeightCompactPx, rowHeightWidePx],
+	)
+
 	const renderObjectRow = useCallback(
 		(object: ObjectItem, offset: number, rowIndex: number) => {
 			const key = object.key
@@ -289,10 +306,11 @@ export function useObjectsRowRenderers({
 		],
 	)
 
-	return {
+		return {
 		handleListScrollerScroll,
 		handleListScrollerWheel,
 		renderPrefixRow,
+		renderParentRow,
 		renderObjectRow,
 	}
 }

@@ -1,4 +1,4 @@
-import { EllipsisOutlined } from '@ant-design/icons'
+import { MoreOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 import type { MenuProps } from 'antd'
 import type { CSSProperties } from 'react'
@@ -50,8 +50,8 @@ export function renderRowMenu(
 				<Button
 					size="small"
 					type="text"
-					className={buttonClassName}
-					icon={<EllipsisOutlined />}
+					className={joinClassNames(styles.listRowMenuButton, buttonClassName)}
+					icon={<MoreOutlined />}
 					aria-label={label}
 					aria-haspopup="menu"
 					aria-expanded={open}

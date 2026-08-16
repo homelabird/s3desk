@@ -48,7 +48,7 @@ export function useObjectsPresign({
 				profileId: profileId!,
 				bucket,
 				key: req.key,
-				proxy: downloadLinkProxyEnabled || !presignedDownloadSupported,
+				proxy: true,
 				size: req.size,
 				lastModified: req.lastModified,
 			}),

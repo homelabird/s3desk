@@ -1,5 +1,5 @@
 import { Button, Checkbox, Space, Typography } from 'antd'
-import { CaretDownOutlined, CaretUpOutlined, EllipsisOutlined } from '@ant-design/icons'
+import { ArrowDownOutlined, ArrowUpOutlined, MoreOutlined } from '@ant-design/icons'
 
 import styles from './ObjectsListView.module.css'
 import { ObjectsListHeaderRow } from './ObjectsListPane'
@@ -19,6 +19,13 @@ type ObjectsListHeaderProps = {
 
 export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 	const sortLabelGap = props.isCompact ? 3 : 4
+	const nameSortDir = props.sortDirForColumn('name')
+	const sizeSortDir = props.sortDirForColumn('size')
+	const timeSortDir = props.sortDirForColumn('time')
+	const sortClassName = (direction: 'asc' | 'desc' | null) =>
+		`${styles.listHeaderSortButton} ${direction ? styles.listHeaderSortButtonActive : ''}`.trim()
+	const sortAriaLabel = (label: string, direction: 'asc' | 'desc' | null) =>
+		direction ? `Sort by ${label}, currently ${direction === 'asc' ? 'ascending' : 'descending'}` : `Sort by ${label}`
 
 	return (
 		<ObjectsListHeaderRow>
@@ -33,60 +40,63 @@ export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 				<Button
 					type="text"
 					size="small"
-					className={styles.listHeaderSortButton}
+					className={sortClassName(nameSortDir)}
 					onClick={() => props.onToggleSort('name')}
+					aria-label={sortAriaLabel('Name', nameSortDir)}
 					style={{ padding: 0, height: 'auto' }}
 				>
 					<Space size={sortLabelGap}>
 						<Typography.Text type="secondary" className={styles.listHeaderLabel}>
 							Name
 						</Typography.Text>
-						{props.sortDirForColumn('name') === 'asc' ? (
-							<CaretUpOutlined />
-						) : props.sortDirForColumn('name') === 'desc' ? (
-							<CaretDownOutlined />
+						{nameSortDir === 'asc' ? (
+							<ArrowUpOutlined aria-hidden="true" />
+						) : nameSortDir === 'desc' ? (
+							<ArrowDownOutlined aria-hidden="true" />
 						) : null}
 					</Space>
 				</Button>
 				{props.isCompact ? (
-					<Typography.Text type="secondary" className={styles.listHeaderEndCell}>
-						<EllipsisOutlined />
+					<Typography.Text type="secondary" className={`${styles.listHeaderEndCell} ${styles.listHeaderActionsIcon}`}>
+						<MoreOutlined aria-hidden="true" />
 					</Typography.Text>
 				) : (
 					<>
 						<Button
 							type="text"
 							size="small"
-							className={styles.listHeaderSortButton}
+							className={sortClassName(sizeSortDir)}
 							onClick={() => props.onToggleSort('size')}
-							style={{ padding: 0, height: 'auto', textAlign: 'right' }}
+							aria-label={sortAriaLabel('Size', sizeSortDir)}
+							style={{ padding: 0, height: 'auto', textAlign: 'right', justifySelf: 'end' }}
 						>
 							<Space size={sortLabelGap}>
 								<Typography.Text type="secondary" className={styles.listHeaderLabel}>
 									Size
 								</Typography.Text>
-								{props.sortDirForColumn('size') === 'asc' ? (
-									<CaretUpOutlined />
-								) : props.sortDirForColumn('size') === 'desc' ? (
-									<CaretDownOutlined />
+								{sizeSortDir === 'asc' ? (
+									<ArrowUpOutlined aria-hidden="true" />
+								) : sizeSortDir === 'desc' ? (
+									<ArrowDownOutlined aria-hidden="true" />
 								) : null}
 							</Space>
 						</Button>
 						<Button
 							type="text"
 							size="small"
-							className={styles.listHeaderSortButton}
+							className={sortClassName(timeSortDir)}
 							onClick={() => props.onToggleSort('time')}
+							aria-label={sortAriaLabel('Last modified', timeSortDir)}
 							style={{ padding: 0, height: 'auto' }}
 						>
 							<Space size={sortLabelGap}>
 								<Typography.Text type="secondary" className={styles.listHeaderLabel}>
 									Last modified
 								</Typography.Text>
-								{props.sortDirForColumn('time') === 'asc' ? (
-									<CaretUpOutlined />
-								) : props.sortDirForColumn('time') === 'desc' ? (
-									<CaretDownOutlined />
+								{timeSortDir === 'asc' ? (
+									<ArrowUpOutlined aria-hidden="true" />
+								) : timeSortDir === 'desc' ? (
+									<ArrowDownOutlined aria-hidden="true" />
 								) : null}
 							</Space>
 						</Button>

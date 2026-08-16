@@ -20,8 +20,10 @@ describe('ObjectsListContent', () => {
 				onClearSearch={vi.fn()}
 				viewMode="list"
 				renderPrefixRow={vi.fn()}
+				renderParentRow={vi.fn()}
 				renderObjectRow={vi.fn()}
 				renderPrefixGridItem={vi.fn()}
+				renderParentGridItem={vi.fn()}
 				renderObjectGridItem={vi.fn()}
 			/>,
 		)
@@ -54,10 +56,12 @@ describe('ObjectsListContent', () => {
 				onClearSearch={vi.fn()}
 				viewMode="grid"
 				renderPrefixRow={vi.fn()}
+				renderParentRow={vi.fn()}
 				renderObjectRow={vi.fn()}
 				renderPrefixGridItem={(prefix) => (
 					<div key={prefix}>grid-prefix:{prefix}</div>
 				)}
+				renderParentGridItem={(prefix) => <div key={`parent:${prefix}`}>grid-parent:{prefix || '/'}</div>}
 				renderObjectGridItem={(object) => (
 					<div key={object.key}>grid-object:{object.key}</div>
 				)}
@@ -94,8 +98,10 @@ describe('ObjectsListContent', () => {
 				onClearSearch={vi.fn()}
 				viewMode="grid"
 				renderPrefixRow={vi.fn()}
+				renderParentRow={vi.fn()}
 				renderObjectRow={vi.fn()}
 				renderPrefixGridItem={vi.fn()}
+				renderParentGridItem={vi.fn()}
 				renderObjectGridItem={(object) => (
 					<div key={object.key}>{object.key}</div>
 				)}
@@ -150,8 +156,10 @@ describe('ObjectsListContent', () => {
 				onClearSearch={vi.fn()}
 				viewMode="list"
 				renderPrefixRow={renderPrefixRow}
+				renderParentRow={vi.fn()}
 				renderObjectRow={renderObjectRow}
 				renderPrefixGridItem={vi.fn()}
+				renderParentGridItem={vi.fn()}
 				renderObjectGridItem={vi.fn()}
 			/>,
 		)

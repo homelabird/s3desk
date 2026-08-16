@@ -3,6 +3,7 @@ import { parseTimeMs } from '../../lib/format'
 import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
 
 export type ObjectRow =
+	| { kind: 'parent'; prefix: string }
 	| { kind: 'prefix'; prefix: string }
 	| { kind: 'object'; object: ObjectItem }
 
@@ -265,7 +266,7 @@ export function buildObjectRows(args: BuildObjectRowsArgs): ObjectRow[] {
 			)
 		: null
 
-	const out: ObjectRow[] = []
+	const out: ObjectRow[] = activePrefix ? [{ kind: 'parent', prefix: parentPrefixFromKey(activePrefix) }] : []
 	for (const p of sortedPrefixes) out.push({ kind: 'prefix', prefix: p })
 	if (orderedItems) {
 		for (const obj of orderedItems.favorites) out.push({ kind: 'object', object: obj })

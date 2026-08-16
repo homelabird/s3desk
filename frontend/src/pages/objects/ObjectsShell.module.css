@@ -422,7 +422,7 @@
 .detailsCollapsed {
   align-items: center;
   justify-content: center;
-  background: var(--s3d-gradient-section);
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 72%, transparent);
 }
 
 .detailsCollapsedButton {
@@ -447,6 +447,21 @@
 .detailsCollapsedButton:hover {
   background: var(--s3d-color-bg-card);
   color: var(--s3d-color-text);
+}
+
+@media (min-width: 769px) {
+  .page {
+    gap: 14px;
+  }
+
+  .pageHeader {
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--s3d-color-border);
+    border-radius: var(--s3d-radius-lg);
+    background: var(--s3d-gradient-surface);
+    box-shadow: var(--s3d-shadow-sm);
+  }
 }
 
 .detailsCollapsedButton:focus-visible {

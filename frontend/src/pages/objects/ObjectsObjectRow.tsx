@@ -1,4 +1,4 @@
-import { StarFilled, StarOutlined } from '@ant-design/icons'
+import { FileOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 import { Button, Checkbox, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import type { DragEvent, MouseEvent, ReactNode } from 'react'
@@ -99,7 +99,7 @@ export function ObjectsObjectRow({
 						<Button
 							type="text"
 							size="small"
-							className={isCompact ? styles.listRowIconButton : undefined}
+							className={joinClassNames(styles.listRowFavoriteButton, isCompact && styles.listRowIconButton)}
 							icon={isFavorite ? <StarFilled className={styles.listRowFavoriteIcon} /> : <StarOutlined />}
 							onClick={(event) => {
 								event.stopPropagation()
@@ -110,7 +110,13 @@ export function ObjectsObjectRow({
 							title={favoriteLabel}
 						/>
 						<button type="button" className={styles.listRowBodyButton} aria-label={`Select object ${displayName}`} aria-pressed={isSelected}>
-							{thumbnail ? <span className={styles.listRowThumbnailWrap}>{thumbnail}</span> : null}
+							{thumbnail ? (
+								<span className={styles.listRowThumbnailWrap}>{thumbnail}</span>
+							) : (
+								<span className={styles.listRowFileIconWrap} aria-hidden="true">
+									<FileOutlined className={styles.listRowFileIcon} />
+								</span>
+							)}
 							<Typography.Text className={styles.listRowTextEllipsis} title={objectKey}>
 								{highlightText(displayName)}
 							</Typography.Text>

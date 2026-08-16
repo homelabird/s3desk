@@ -1,4 +1,9 @@
+import { ArrowUpOutlined } from '@ant-design/icons'
+import { Typography } from 'antd'
+import { useCallback } from 'react'
+
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
+import styles from './ObjectsGridCards.module.css'
 import { useObjectsObjectGridRenderer } from './useObjectsObjectGridRenderer'
 import { useObjectsPrefixGridRenderer } from './useObjectsPrefixGridRenderer'
 
@@ -43,6 +48,29 @@ export function useObjectsGridRenderers({
 	favoritePendingKeys,
 	toggleFavorite,
 }: UseObjectsGridRenderersArgs) {
+	const renderParentGridItem = useCallback(
+		(parentPrefix: string) => (
+			<div key={`parent:${parentPrefix}`} className={styles.gridCardShell} role="listitem">
+				<button
+					type="button"
+					className={`${styles.gridCard} ${styles.gridCardParentButton}`}
+					aria-label="Open parent folder"
+					data-testid="objects-parent-grid-item"
+					onClick={() => onOpenPrefix(parentPrefix)}
+				>
+					<div className={styles.gridCardTopRow}>
+						<Typography.Text type="secondary" className={styles.gridCardKindLabel}>Parent folder</Typography.Text>
+					</div>
+					<div className={`${styles.gridCardMedia} ${styles.gridCardMediaFolder}`} aria-hidden="true">
+						<ArrowUpOutlined className={styles.gridCardFolderIcon} />
+					</div>
+					<Typography.Text className={styles.gridCardTitle}>../</Typography.Text>
+					<Typography.Text type="secondary" className={styles.gridCardMetaLine}>Go up one level</Typography.Text>
+				</button>
+			</div>
+		),
+		[onOpenPrefix],
+	)
 	const renderPrefixGridItem = useObjectsPrefixGridRenderer({
 		canDragDrop,
 		isAdvanced,
@@ -98,6 +126,7 @@ export function useObjectsGridRenderers({
 	})
 
 	return {
+		renderParentGridItem,
 		renderPrefixGridItem,
 		renderObjectGridItem,
 	}

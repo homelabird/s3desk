@@ -30,6 +30,11 @@ type ObjectsListContentProps = {
   canClearSearch: boolean;
   onClearSearch: () => void;
   viewMode: ObjectsViewMode;
+  renderParentRow: (
+    prefix: string,
+    offset: number,
+    rowIndex: number,
+  ) => ReactNode;
   renderPrefixRow: (
     prefix: string,
     offset: number,
@@ -41,6 +46,7 @@ type ObjectsListContentProps = {
     rowIndex: number,
   ) => ReactNode;
   renderPrefixGridItem: (prefix: string) => ReactNode;
+  renderParentGridItem: (prefix: string) => ReactNode;
   renderObjectGridItem: (object: ObjectItem) => ReactNode;
   showLoadMore?: boolean;
   loadMoreLabel?: string;
@@ -147,6 +153,8 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
             props.virtualItems.map((vi) => {
               const row = props.rows[vi.index];
               if (!row) return null;
+              if (row.kind === "parent")
+                return props.renderParentRow(row.prefix, vi.start, vi.index);
               if (row.kind === "prefix")
                 return props.renderPrefixRow(row.prefix, vi.start, vi.index);
               return props.renderObjectRow(row.object, vi.start, vi.index);
@@ -176,7 +184,9 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
                   {props.rows
                     .slice(firstIndex, firstIndex + gridColumnCount)
                     .map((row) =>
-                      row.kind === "prefix"
+                      row.kind === "parent"
+                        ? props.renderParentGridItem(row.prefix)
+                        : row.kind === "prefix"
                         ? props.renderPrefixGridItem(row.prefix)
                         : props.renderObjectGridItem(row.object),
                     )}

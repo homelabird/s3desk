@@ -140,6 +140,7 @@ export function useObjectsScreenListRendering({
 		handleListScrollerScroll,
 		handleListScrollerWheel,
 		renderPrefixRow,
+		renderParentRow,
 		renderObjectRow,
 		handleTreePrefixContextMenu,
 	} = useObjectsPageListInteractions({
@@ -252,7 +253,7 @@ export function useObjectsScreenListRendering({
 		},
 	})
 
-	const { renderPrefixGridItem, renderObjectGridItem } = useObjectsGridRenderers({
+	const { renderParentGridItem, renderPrefixGridItem, renderObjectGridItem } = useObjectsGridRenderers({
 		api,
 		apiToken: props.apiToken,
 		profileId: props.profileId,
@@ -331,6 +332,8 @@ export function useObjectsScreenListRendering({
 		openObjectContextMenu,
 		renderObjectGridItem,
 		renderObjectRow,
+		renderParentGridItem,
+		renderParentRow,
 		renderPrefixGridItem,
 		renderPrefixRow,
 		selectionActionMap,

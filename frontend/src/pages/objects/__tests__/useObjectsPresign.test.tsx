@@ -30,9 +30,9 @@ function buildWrapper() {
 }
 
 describe('useObjectsPresign', () => {
-	it('passes known object metadata hints to download-url generation', async () => {
+	it('always requests a same-origin proxy URL with known object metadata hints', async () => {
 		const getObjectDownloadURL = vi.fn().mockResolvedValue({
-			url: 'https://example.com/download',
+			url: 'http://localhost/download-proxy?sig=test',
 			expiresAt: '2026-03-11T00:00:00Z',
 		})
 		const api = createMockApiClient({
@@ -48,8 +48,8 @@ describe('useObjectsPresign', () => {
 					apiToken: 'token-a',
 					profileId: 'profile-1',
 					bucket: 'bucket-a',
-					downloadLinkProxyEnabled: true,
-					presignedDownloadSupported: false,
+					downloadLinkProxyEnabled: false,
+					presignedDownloadSupported: true,
 				}),
 			{ wrapper: buildWrapper() },
 		)
@@ -74,7 +74,7 @@ describe('useObjectsPresign', () => {
 		expect(result.current.presignOpen).toBe(true)
 		expect(result.current.presign).toEqual({
 			key: 'photos/cat.jpg',
-			url: 'https://example.com/download',
+			url: 'http://localhost/download-proxy?sig=test',
 			expiresAt: '2026-03-11T00:00:00Z',
 		})
 	})

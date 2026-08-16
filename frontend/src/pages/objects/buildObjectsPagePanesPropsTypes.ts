@@ -124,8 +124,10 @@ export type BuildObjectsPagePanesPropsArgs = {
 	canClearSearch: boolean
 	handleClearSearch: () => void
 	renderPrefixRow: ContentProps['renderPrefixRow']
+	renderParentRow: ContentProps['renderParentRow']
 	renderObjectRow: ContentProps['renderObjectRow']
 	renderPrefixGridItem: ContentProps['renderPrefixGridItem']
+	renderParentGridItem: ContentProps['renderParentGridItem']
 	renderObjectGridItem: ContentProps['renderObjectGridItem']
 	showLoadMore: boolean
 	loadMoreLabel: string

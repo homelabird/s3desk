@@ -116,14 +116,14 @@
   --objects-pane-body-inline-padding: 8px;
   --objects-pane-body-top-padding: 6px;
   --objects-pane-body-bottom-padding: 8px;
-  border: 1px solid var(--s3d-color-border);
-  border-radius: var(--s3d-radius-sm);
+  border: 1px solid var(--s3d-color-border-strong);
+  border-radius: var(--s3d-radius-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 95%, transparent);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--s3d-gradient-surface);
+  box-shadow: var(--s3d-shadow-sm);
   transition: box-shadow var(--s3d-transition-normal);
 }
 

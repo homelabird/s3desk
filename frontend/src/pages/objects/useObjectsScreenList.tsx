@@ -278,6 +278,8 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		refetchDetailsMeta: detailsMetaQuery.refetch,
 		renderObjectGridItem: interactions.renderObjectGridItem,
 		renderObjectRow: interactions.renderObjectRow,
+		renderParentGridItem: interactions.renderParentGridItem,
+		renderParentRow: interactions.renderParentRow,
 		renderPrefixGridItem: interactions.renderPrefixGridItem,
 		renderPrefixRow: interactions.renderPrefixRow,
 		resetFilters: viewState.resetFilters,

@@ -3,7 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import styles from '../ObjectsListView.module.css'
-import { ObjectsObjectRow, ObjectsPrefixRow } from '../ObjectsListRow'
+import { ObjectsListHeader } from '../ObjectsListHeader'
+import { ObjectsObjectRow, ObjectsParentRow, ObjectsPrefixRow } from '../ObjectsListRow'
 
 const originalResizeObserver = globalThis.ResizeObserver
 
@@ -67,6 +68,28 @@ describe('ObjectsListRow', () => {
 
 		fireEvent.click(screen.getByText('cat.png'))
 		expect(onClick).toHaveBeenCalledTimes(1)
+	})
+
+	it('keeps sort direction explicit while decorative header icons stay out of the accessible name', () => {
+		const onToggleSort = vi.fn()
+
+		render(
+			<ObjectsListHeader
+				isCompact
+				listGridClassName={styles.listGridCompact}
+				allLoadedSelected={false}
+				someLoadedSelected={false}
+				hasRows
+				onToggleSelectAll={vi.fn()}
+				sortDirForColumn={(column) => (column === 'name' ? 'asc' : null)}
+				onToggleSort={onToggleSort}
+			/>,
+		)
+
+		const sortButton = screen.getByRole('button', { name: 'Sort by Name, currently ascending' })
+		expect(screen.queryByRole('img', { name: 'arrow-up' })).not.toBeInTheDocument()
+		fireEvent.click(sortButton)
+		expect(onToggleSort).toHaveBeenCalledWith('name')
 	})
 
 	it('keeps wide object rows on a five-column contract when preview actions are present', () => {
@@ -150,6 +173,7 @@ describe('ObjectsListRow', () => {
 
 		const rowButton = screen.getByRole('button', { name: 'Select object cat.png' })
 		expect(rowButton).toHaveAttribute('aria-pressed', 'false')
+		expect(rowButton.querySelector(`.${styles.listRowFileIconWrap}`)).toBeInTheDocument()
 		fireEvent.click(rowButton)
 		expect(onClick).toHaveBeenCalledTimes(1)
 		expect(onCheckboxClick).not.toHaveBeenCalled()
@@ -188,6 +212,7 @@ describe('ObjectsListRow', () => {
 
 		const row = screen.getByTestId('objects-prefix-drop-target-archive%2F')
 		const bodyButton = screen.getByRole('button', { name: 'Open prefix archive/' })
+		expect(bodyButton.querySelector(`.${styles.listRowFolderIconWrap}`)).toBeInTheDocument()
 		expect(row).not.toHaveAttribute('role', 'button')
 		expect(row).not.toHaveAttribute('tabindex')
 		expect(row.className).toContain(styles.listRowDropActive)
@@ -199,6 +224,26 @@ describe('ObjectsListRow', () => {
 		expect(onDropTargetDragOver).toHaveBeenCalledTimes(1)
 		expect(onDropTargetDragLeave).toHaveBeenCalledTimes(1)
 		expect(onDropTargetDrop).toHaveBeenCalledTimes(1)
+		expect(onOpen).toHaveBeenCalledTimes(1)
+	})
+
+	it('renders parent navigation without object actions', () => {
+		const onOpen = vi.fn()
+		render(
+			<ObjectsParentRow
+				offset={0}
+				rowMinHeight={72}
+				listGridClassName={styles.listGridWide}
+				isCompact={false}
+				onOpen={onOpen}
+			/>,
+		)
+
+		const row = screen.getByTestId('objects-parent-row')
+		expect(row.children).toHaveLength(5)
+		expect(screen.getByText('../')).toBeInTheDocument()
+		expect(screen.queryByLabelText(/actions/i)).not.toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: 'Open parent folder' }))
 		expect(onOpen).toHaveBeenCalledTimes(1)
 	})
 })
