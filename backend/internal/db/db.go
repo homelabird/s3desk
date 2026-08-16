@@ -28,6 +28,7 @@ type schemaMigration struct {
 var schemaMigrationRegistry = []schemaMigration{
 	{ID: "001_core_schema", Apply: applyCoreSchemaMigration},
 	{ID: "002_legacy_column_backfills", Apply: applyLegacyColumnBackfills},
+	{ID: "003_query_path_indexes", Apply: applyQueryPathIndexes},
 }
 
 var portableDataTableNames = []string{
@@ -351,6 +352,23 @@ func applyLegacyColumnBackfills(db *gorm.DB) error {
 	// Index used by ListJobs (profile_id is always filtered) when error_code filtering is enabled.
 	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_jobs_profile_id_error_code ON jobs(profile_id, error_code);`).Error; err != nil {
 		return err
+	}
+	return nil
+}
+
+func applyQueryPathIndexes(db *gorm.DB) error {
+	stmts := []string{
+		`CREATE INDEX IF NOT EXISTS idx_jobs_profile_status_id ON jobs(profile_id, status, id);`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_profile_type_id ON jobs(profile_id, type, id);`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_profile_error_code_id ON jobs(profile_id, error_code, id);`,
+		`CREATE INDEX IF NOT EXISTS idx_upload_sessions_profile_created_id ON upload_sessions(profile_id, created_at, id);`,
+		`CREATE INDEX IF NOT EXISTS idx_upload_multipart_profile_upload_path ON upload_multipart_uploads(profile_id, upload_id, path);`,
+		`CREATE INDEX IF NOT EXISTS idx_object_favorites_profile_bucket_created_key ON object_favorites(profile_id, bucket, created_at DESC, object_key ASC);`,
+	}
+	for _, stmt := range stmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }

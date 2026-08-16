@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -50,7 +51,20 @@ type PortableValidationOptions struct {
 var ErrPortableImportActiveJobs = errors.New("portable import cannot replace data while destination jobs are queued or running")
 
 func (s *Store) ExportPortableEntityFiles(ctx context.Context) (PortableExportBundle, error) {
-	tx := s.db.WithContext(ctx)
+	var bundle PortableExportBundle
+	var txOptions *sql.TxOptions
+	if s.db.Dialector.Name() == "postgres" {
+		txOptions = &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true}
+	}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		bundle, err = exportPortableEntityFiles(tx)
+		return err
+	}, txOptions)
+	return bundle, err
+}
+
+func exportPortableEntityFiles(tx *gorm.DB) (PortableExportBundle, error) {
 	files := map[string]PortableEntityFile{}
 
 	profiles, err := orderedRows[profileRow](tx, "id")

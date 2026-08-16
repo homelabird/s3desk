@@ -40,7 +40,7 @@ func applySecurityHeaders(w http.ResponseWriter, prepared securityHeadersPrepare
 	if h.Get("Cross-Origin-Resource-Policy") == "" {
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 	}
-	if h.Get("Origin-Agent-Cluster") == "" {
+	if h.Get("Origin-Agent-Cluster") == "" && prepared.trustworthyOrigin {
 		h.Set("Origin-Agent-Cluster", "?1")
 	}
 	if h.Get("Permissions-Policy") == "" {

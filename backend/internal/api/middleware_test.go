@@ -31,6 +31,9 @@ func TestSecurityHeaders_Default(t *testing.T) {
 	if got := rr.Header().Get("Cross-Origin-Opener-Policy"); got != "same-origin" {
 		t.Fatalf("Cross-Origin-Opener-Policy=%q, want %q", got, "same-origin")
 	}
+	if got := rr.Header().Get("Origin-Agent-Cluster"); got != "?1" {
+		t.Fatalf("Origin-Agent-Cluster=%q, want %q", got, "?1")
+	}
 	if got := rr.Header().Get("Cross-Origin-Resource-Policy"); got != "same-origin" {
 		t.Fatalf("Cross-Origin-Resource-Policy=%q, want %q", got, "same-origin")
 	}
@@ -54,6 +57,9 @@ func TestSecurityHeaders_SkipsCOOPOnUntrustedOrigin(t *testing.T) {
 
 	if got := rr.Header().Get("Cross-Origin-Opener-Policy"); got != "" {
 		t.Fatalf("Cross-Origin-Opener-Policy=%q, want empty", got)
+	}
+	if got := rr.Header().Get("Origin-Agent-Cluster"); got != "" {
+		t.Fatalf("Origin-Agent-Cluster=%q, want empty", got)
 	}
 	if got := rr.Header().Get("Cross-Origin-Resource-Policy"); got != "same-origin" {
 		t.Fatalf("Cross-Origin-Resource-Policy=%q, want %q", got, "same-origin")

@@ -3,14 +3,134 @@ package store
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"gorm.io/gorm"
 
 	"s3desk/internal/models"
 )
+
+func TestExportPortableEntityFilesUsesConsistentSnapshot(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "s3desk.db")
+	reader := newTestStoreAt(t, dbPath)
+	writer := newTestStoreAt(t, dbPath)
+	profile := createTestProfile(t, reader)
+	ctx := context.Background()
+
+	var once sync.Once
+	var writeErr error
+	if err := reader.db.Callback().Query().After("gorm:query").Register("test:insert_job_after_profiles", func(tx *gorm.DB) {
+		if tx.Statement.Table == "profiles" {
+			once.Do(func() {
+				_, writeErr = writer.CreateJob(ctx, profile.ID, CreateJobInput{Type: "snapshot-probe", Payload: map[string]any{}})
+			})
+		}
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+
+	bundle, err := reader.ExportPortableEntityFiles(ctx)
+	if err != nil {
+		t.Fatalf("export portable entities: %v", err)
+	}
+	if writeErr != nil {
+		t.Fatalf("insert concurrent job: %v", writeErr)
+	}
+	jobs, err := parsePortableRows[jobRow](bundle.EntityFiles["jobs"].Data)
+	if err != nil {
+		t.Fatalf("parse exported jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("exported jobs=%d, want snapshot before concurrent insert", len(jobs))
+	}
+	ids, err := writer.ListJobIDsByProfile(ctx, profile.ID)
+	if err != nil {
+		t.Fatalf("list persisted jobs: %v", err)
+	}
+	if len(ids) != 1 {
+		t.Fatalf("persisted jobs=%d, want concurrent insert committed", len(ids))
+	}
+}
+
+func TestImportPortableEntityFilesReplaceRollsBackOnInsertFailure(t *testing.T) {
+	ctx := context.Background()
+	source := newTestStore(t)
+	createTestProfile(t, source)
+	bundle, err := source.ExportPortableEntityFiles(ctx)
+	if err != nil {
+		t.Fatalf("export source entities: %v", err)
+	}
+	entityFiles := make(map[string][]byte, len(bundle.EntityFiles))
+	for name, file := range bundle.EntityFiles {
+		entityFiles[name] = file.Data
+	}
+
+	destination := newTestStore(t)
+	original := createTestProfile(t, destination)
+	if err := destination.db.Exec(`CREATE TRIGGER fail_portable_profile_insert BEFORE INSERT ON profiles BEGIN SELECT RAISE(ABORT, 'forced insert failure'); END;`).Error; err != nil {
+		t.Fatalf("create failure trigger: %v", err)
+	}
+	if _, err := destination.ImportPortableEntityFilesReplace(ctx, entityFiles, t.TempDir()); err == nil {
+		t.Fatal("expected forced insert failure")
+	}
+	got, ok, err := destination.GetProfile(ctx, original.ID)
+	if err != nil {
+		t.Fatalf("get original profile after rollback: %v", err)
+	}
+	if !ok || got.ID != original.ID {
+		t.Fatalf("original profile after rollback=%+v, ok=%v", got, ok)
+	}
+}
+
+func TestPortableRoundTripIncludesObjectIndexReplacements(t *testing.T) {
+	ctx := context.Background()
+	source := newTestStore(t)
+	profile := createTestProfile(t, source)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	want := objectIndexReplacementRow{
+		ReplacementID: ulid.Make().String(),
+		ProfileID:     profile.ID,
+		Bucket:        "bucket-a",
+		ObjectKey:     "pending/object.txt",
+		Size:          42,
+		IndexedAt:     now,
+	}
+	if err := source.db.Create(&want).Error; err != nil {
+		t.Fatalf("seed object index replacement: %v", err)
+	}
+	bundle, err := source.ExportPortableEntityFiles(ctx)
+	if err != nil {
+		t.Fatalf("export portable entities: %v", err)
+	}
+	if bundle.EntityFiles["object_index_replacements"].Count != 1 {
+		t.Fatalf("exported replacement count=%d, want 1", bundle.EntityFiles["object_index_replacements"].Count)
+	}
+	entityFiles := make(map[string][]byte, len(bundle.EntityFiles))
+	for name, file := range bundle.EntityFiles {
+		entityFiles[name] = file.Data
+	}
+
+	destination := newTestStore(t)
+	counts, err := destination.ImportPortableEntityFilesReplace(ctx, entityFiles, t.TempDir())
+	if err != nil {
+		t.Fatalf("import portable entities: %v", err)
+	}
+	if counts.ObjectIndexReplacements != 1 {
+		t.Fatalf("imported replacement count=%d, want 1", counts.ObjectIndexReplacements)
+	}
+	var got objectIndexReplacementRow
+	if err := destination.db.First(&got).Error; err != nil {
+		t.Fatalf("load imported object index replacement: %v", err)
+	}
+	if got.ReplacementID != want.ReplacementID || got.ObjectKey != want.ObjectKey || got.Size != want.Size {
+		t.Fatalf("imported replacement=%+v, want %+v", got, want)
+	}
+}
 
 func TestImportPortableEntityFilesReplaceRejectsUnsafeJobIDs(t *testing.T) {
 	t.Parallel()

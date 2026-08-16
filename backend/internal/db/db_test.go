@@ -108,6 +108,39 @@ func TestPortableDataTableNamesExistInMigratedSchema(t *testing.T) {
 	}
 }
 
+func TestQueryPathIndexesExistInMigratedSchema(t *testing.T) {
+	dir := t.TempDir()
+	gormDB, err := Open(Config{
+		Backend:    BackendSQLite,
+		SQLitePath: filepath.Join(dir, "test.db"),
+	})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("get sql.DB: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	indexes := []struct {
+		table string
+		name  string
+	}{
+		{table: "jobs", name: "idx_jobs_profile_status_id"},
+		{table: "jobs", name: "idx_jobs_profile_type_id"},
+		{table: "jobs", name: "idx_jobs_profile_error_code_id"},
+		{table: "upload_sessions", name: "idx_upload_sessions_profile_created_id"},
+		{table: "upload_multipart_uploads", name: "idx_upload_multipart_profile_upload_path"},
+		{table: "object_favorites", name: "idx_object_favorites_profile_bucket_created_key"},
+	}
+	for _, index := range indexes {
+		if !gormDB.Migrator().HasIndex(index.table, index.name) {
+			t.Errorf("index %q missing from table %q", index.name, index.table)
+		}
+	}
+}
+
 func TestOpenMigratesLegacySQLiteSchemaAndPreservesRecords(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "s3desk.db")

@@ -266,6 +266,12 @@ func spaHandler(staticDir string) http.HandlerFunc {
 			return
 		}
 
+		if rel == "assets" || strings.HasPrefix(rel, "assets/") {
+			w.Header().Set("Cache-Control", "no-cache")
+			http.NotFound(w, r)
+			return
+		}
+
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, indexPath)
 	}

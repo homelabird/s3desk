@@ -78,6 +78,27 @@ func TestUIStaticCachePolicy(t *testing.T) {
 	}
 }
 
+func TestUIMissingAssetReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	handler := newPublicRoutesHandler(t, false)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/assets/missing-hash.js", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusNotFound)
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+		t.Fatalf("Content-Type=%q, want text/plain", got)
+	}
+	if strings.Contains(rr.Body.String(), "<!doctype html>") {
+		t.Fatalf("missing asset returned SPA index: %q", rr.Body.String())
+	}
+}
+
 func TestPublicRoutesRequireLocalHostByDefault(t *testing.T) {
 	t.Parallel()
 
