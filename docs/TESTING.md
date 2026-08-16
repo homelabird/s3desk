@@ -574,7 +574,7 @@ The portable smoke stack verifies:
 - source fixture creation through the public API on either sqlite or postgres
 - portable backup export from the configured source backend
 - preview and import on the configured target backend
-- imported `profiles`, `profile_connection_options`, `jobs`, `upload_sessions`, `upload_multipart_uploads`, `upload_objects`, `object_favorites`, and `object_index`
+- imported `profiles`, `profile_connection_options`, `jobs`, `upload_sessions`, `upload_multipart_uploads`, `upload_objects`, `object_favorites`, `object_index`, and `object_index_replacements`
 - thumbnail asset copy into the target `DATA_DIR`
 - incomplete multipart metadata stays incomplete after import and still rejects `commit`
 

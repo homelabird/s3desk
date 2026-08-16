@@ -8,7 +8,10 @@ Use the local scripts as the entrypoint. The detailed operator and release docs 
 
 ## Quick Start
 
-- `cp .env.example .env.local && ./scripts/compose.sh demo up --build -d`
+- Local demo: `DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo up --build -d`
+- LAN demo: `DEMO_PUBLIC_HOST=192.168.0.227 ./scripts/compose.sh demo up --build -d`
+
+`DEMO_PUBLIC_HOST` is required on every demo invocation and must be an IP address or hostname without a scheme, port, or path. Non-local hosts automatically bind the dashboard and MinIO to `0.0.0.0`; local hosts remain on `127.0.0.1`. Set the bind variables only when an interface intentionally needs a different address.
 
 ## Storage Credentials
 

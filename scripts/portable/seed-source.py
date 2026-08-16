@@ -294,6 +294,7 @@ def main():
             "upload_multipart_uploads": 1,
             "upload_objects": 1,
             "object_index": 1,
+            "object_index_replacements": 0,
             "object_favorites": 1,
         },
     }

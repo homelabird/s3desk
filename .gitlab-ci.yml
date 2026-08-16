@@ -1199,6 +1199,35 @@ api_integration:
       - artifacts/api_integration/
     expire_in: 14 days
 
+portable_migration_smoke:
+  stage: test
+  image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"
+  interruptible: true
+  tags: *heavy_tags
+  rules:
+    - changes:
+        - Containerfile.local
+        - backend/**/*
+        - compose/test/portable-smoke.yml
+        - scripts/compose.sh
+        - scripts/portable/**/*
+        - scripts/run_portable_*_smoke.sh
+    - when: never
+  variables:
+    STORAGE_DRIVER: "vfs"
+    CONTAINERS_STORAGE_DRIVER: "vfs"
+    BUILDAH_ISOLATION: "chroot"
+    PODMAN_NETWORK_BACKEND: "slirp4netns"
+    CONTAINERS_NETWORK_BACKEND: "slirp4netns"
+  before_script:
+    - bash scripts/ci_podman_compose.sh
+  script:
+    - podman --version
+    - bash scripts/run_portable_failure_smoke.sh
+    - bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
+    - bash scripts/run_portable_postgres_to_sqlite_smoke.sh
+    - bash scripts/run_portable_sqlite_to_postgres_smoke.sh
+
 release_postgres_smoke:
   stage: test
   image: "quay.io/podman/stable@sha256:dbdc5e9fdc3c9e89fb842ffa56a1545437884bc39d619352214093dba169a8f1"

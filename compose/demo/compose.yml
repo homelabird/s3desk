@@ -7,8 +7,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-demo-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-demo-minio-secret}
     ports:
-      - "${MINIO_BIND_HOST:-127.0.0.1}:${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_BIND_HOST:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${MINIO_BIND_HOST:-${S3DESK_BIND_HOST:-127.0.0.1}}:${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_BIND_HOST:-${S3DESK_BIND_HOST:-127.0.0.1}}:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio-demo-data:/data
 
@@ -33,7 +33,7 @@ services:
     environment:
       DEMO_PUBLIC_HOST: ${DEMO_PUBLIC_HOST:-127.0.0.1}
       DEMO_ALLOW_REMOTE: "${DEMO_ALLOW_REMOTE:-true}"
-      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-127.0.0.1}
+      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-${S3DESK_BIND_HOST:-127.0.0.1}}
       MINIO_API_PORT: ${MINIO_API_PORT:-9000}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-demo-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-demo-minio-secret}
@@ -57,33 +57,15 @@ services:
       - minio
     ports:
       - "${S3DESK_BIND_HOST:-127.0.0.1}:${S3DESK_PORT:-8080}:8080"
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-          allowed_hosts="$${ALLOWED_HOSTS:-}"
-          case ",$$allowed_hosts," in
-            *,s3desk,*) ;;
-            *)
-              if [ -n "$$allowed_hosts" ]; then
-                allowed_hosts="$$allowed_hosts,s3desk"
-              else
-                allowed_hosts="s3desk"
-              fi
-              ;;
-          esac
-          export ALLOWED_HOSTS="$$allowed_hosts"
-          exec /app/s3desk-server
     environment:
       DEMO_PUBLIC_HOST: ${DEMO_PUBLIC_HOST:-127.0.0.1}
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "${DEMO_ALLOW_REMOTE:-true}"
-      # The entrypoint appends `s3desk` so internal seed traffic still works even when
-      # DEMO_ALLOWED_HOSTS is overridden by the caller.
-      ALLOWED_HOSTS: "${DEMO_ALLOWED_HOSTS:-127.0.0.1,localhost,::1,s3desk}"
+      # Always include the browser-facing host and the internal seed hostname.
+      ALLOWED_HOSTS: "${DEMO_ALLOWED_HOSTS:-127.0.0.1,localhost,::1},${DEMO_PUBLIC_HOST:-127.0.0.1},s3desk"
       API_TOKEN: ${API_TOKEN:-s3desk-demo-local-only-token-0123456789abcdef012345}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
-      EXTERNAL_BASE_URL: ${DEMO_EXTERNAL_BASE_URL:-http://127.0.0.1:8080}
+      EXTERNAL_BASE_URL: "${DEMO_EXTERNAL_BASE_URL:-http://${DEMO_PUBLIC_HOST:-127.0.0.1}:${S3DESK_PORT:-8080}}"
       DB_BACKEND: "sqlite"
       DATA_DIR: "/data"
       ALLOWED_LOCAL_DIRS: "${ALLOWED_LOCAL_DIRS:-/tmp}"
@@ -118,7 +100,7 @@ services:
       DEMO_ALLOW_REMOTE: "${DEMO_ALLOW_REMOTE:-true}"
       S3DESK_BIND_HOST: ${S3DESK_BIND_HOST:-127.0.0.1}
       S3DESK_PORT: ${S3DESK_PORT:-8080}
-      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-127.0.0.1}
+      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-${S3DESK_BIND_HOST:-127.0.0.1}}
       MINIO_API_PORT: ${MINIO_API_PORT:-9000}
       DEMO_PUBLIC_HOST: ${DEMO_PUBLIC_HOST:-}
       API_TOKEN: ${API_TOKEN:-s3desk-demo-local-only-token-0123456789abcdef012345}

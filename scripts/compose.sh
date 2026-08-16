@@ -23,7 +23,7 @@ Examples:
   SYSLOG_ADDRESS=tcp+tls://logs.example.com:6514 ./scripts/compose.sh remote-syslog up -d
   ./scripts/compose.sh caddy logs -f caddy s3desk
   ./scripts/compose.sh dev up --build -d
-  ./scripts/compose.sh demo up --build -d
+  DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo up --build -d
   ./scripts/compose.sh e2e run --rm runner
 EOF
 }
@@ -126,6 +126,24 @@ require_non_empty_setting() {
   fi
 }
 
+require_explicit_demo_public_host() {
+  if [[ ! -v DEMO_PUBLIC_HOST || -z "${DEMO_PUBLIC_HOST//[[:space:]]/}" ]]; then
+    echo "DEMO_PUBLIC_HOST must be provided explicitly for demo (IP address or hostname)" >&2
+    echo "example: DEMO_PUBLIC_HOST=192.168.0.227 ./scripts/compose.sh demo up -d" >&2
+    exit 1
+  fi
+  if [[ "${DEMO_PUBLIC_HOST}" == *://* || "${DEMO_PUBLIC_HOST}" == */* || "${DEMO_PUBLIC_HOST}" == *:* || ! "${DEMO_PUBLIC_HOST}" =~ ^[[:alnum:]]([[:alnum:].-]*[[:alnum:]])?$ ]]; then
+    echo "DEMO_PUBLIC_HOST must be an IP address or hostname without a scheme, port, or path" >&2
+    exit 1
+  fi
+  if [[ -z "${S3DESK_BIND_HOST:-}" ]]; then
+    case "${DEMO_PUBLIC_HOST,,}" in
+      localhost|*.localhost|127.*) export S3DESK_BIND_HOST=127.0.0.1 ;;
+      *) export S3DESK_BIND_HOST=0.0.0.0 ;;
+    esac
+  fi
+}
+
 declare -a COMPOSE_FILES=()
 REQUIRED_PROVIDER=""
 case "${STACK}" in
@@ -162,6 +180,7 @@ case "${STACK}" in
     COMPOSE_FILES=("compose/dev/compose.yml")
     ;;
   demo)
+    require_explicit_demo_public_host
     COMPOSE_FILES=("compose/demo/compose.yml")
     ;;
   e2e|test-e2e)
