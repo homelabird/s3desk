@@ -132,11 +132,17 @@ func TestQueryPathIndexesExistInMigratedSchema(t *testing.T) {
 		{table: "jobs", name: "idx_jobs_profile_error_code_id"},
 		{table: "upload_sessions", name: "idx_upload_sessions_profile_created_id"},
 		{table: "upload_multipart_uploads", name: "idx_upload_multipart_profile_upload_path"},
+		{table: "object_index_replacements", name: "idx_object_index_replacements_profile"},
 		{table: "object_favorites", name: "idx_object_favorites_profile_bucket_created_key"},
 	}
 	for _, index := range indexes {
 		if !gormDB.Migrator().HasIndex(index.table, index.name) {
 			t.Errorf("index %q missing from table %q", index.name, index.table)
+		}
+	}
+	for _, obsolete := range []string{"idx_jobs_type", "idx_jobs_profile_id_error_code", "idx_upload_sessions_profile_id", "idx_upload_multipart_uploads_upload_id", "idx_object_index_profile_bucket_key", "idx_object_index_replacements_lookup", "idx_object_favorites_profile_bucket_created_at"} {
+		if gormDB.Migrator().HasIndex("", obsolete) {
+			t.Errorf("obsolete index %q still exists", obsolete)
 		}
 	}
 }

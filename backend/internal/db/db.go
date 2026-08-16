@@ -363,7 +363,16 @@ func applyQueryPathIndexes(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_jobs_profile_error_code_id ON jobs(profile_id, error_code, id);`,
 		`CREATE INDEX IF NOT EXISTS idx_upload_sessions_profile_created_id ON upload_sessions(profile_id, created_at, id);`,
 		`CREATE INDEX IF NOT EXISTS idx_upload_multipart_profile_upload_path ON upload_multipart_uploads(profile_id, upload_id, path);`,
+		`CREATE INDEX IF NOT EXISTS idx_object_index_replacements_profile ON object_index_replacements(profile_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_object_favorites_profile_bucket_created_key ON object_favorites(profile_id, bucket, created_at DESC, object_key ASC);`,
+		`DROP INDEX IF EXISTS idx_jobs_type;`,
+		`DROP INDEX IF EXISTS idx_jobs_profile_id_error_code;`,
+		`DROP INDEX IF EXISTS idx_upload_sessions_profile_id;`,
+		`DROP INDEX IF EXISTS idx_upload_multipart_uploads_profile_id;`,
+		`DROP INDEX IF EXISTS idx_upload_multipart_uploads_upload_id;`,
+		`DROP INDEX IF EXISTS idx_object_index_profile_bucket_key;`,
+		`DROP INDEX IF EXISTS idx_object_index_replacements_lookup;`,
+		`DROP INDEX IF EXISTS idx_object_favorites_profile_bucket_created_at;`,
 	}
 	for _, stmt := range stmts {
 		if err := db.Exec(stmt).Error; err != nil {
