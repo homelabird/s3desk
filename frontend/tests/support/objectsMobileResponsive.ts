@@ -137,9 +137,12 @@ export async function installObjectsMobileResponsiveFixtures(page: Page) {
 			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/download-url`,
 			handler: ({ url }) => {
 				const key = url.searchParams.get('key') ?? previewImageKey
+				const downloadUrl = url.searchParams.get('proxy') === 'true'
+					? `${url.origin}/download-proxy?key=${encodeURIComponent(key)}&sig=test`
+					: `${url.origin}/__test__/preview/${encodeURIComponent(key)}`
 				return {
 					json: {
-						url: `${url.origin}/__test__/preview/${encodeURIComponent(key)}`,
+						url: downloadUrl,
 						expiresAt: '2024-01-01T01:00:00Z',
 					},
 				}

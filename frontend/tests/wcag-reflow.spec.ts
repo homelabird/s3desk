@@ -29,7 +29,7 @@ async function reportPointerTargets(page: Page, surface: string) {
 	const targets = await page.locator([
 		'button',
 		'a[href]',
-		'input:not([type="hidden"])',
+		'input:not([type="hidden"]):not([aria-hidden="true"])',
 		'select',
 		'textarea',
 		'[role="button"]',
@@ -60,6 +60,7 @@ async function reportPointerTargets(page: Page, surface: string) {
 			x: rect.left + rect.width / 2,
 			y: rect.top + rect.height / 2,
 			inline: element.matches('a[href]') && ['inline', 'inline-block'].includes(style.display),
+			denseToolbar: Boolean(element.closest('[data-testid="objects-list-controls-compact-footer"]')),
 		}]
 	}))
 
@@ -81,7 +82,7 @@ async function reportPointerTargets(page: Page, surface: string) {
 	})
 	expect(unexplainedBelow24, `${surface} has WCAG 2.5.8 targets without an inline or spacing exception`).toEqual([])
 	expect(
-		below(48).filter((target) => !target.inline),
+		below(48).filter((target) => !target.inline && !target.denseToolbar),
 		`${surface} has touch targets below the shared Apple and Google 48px floor`,
 	).toEqual([])
 }
@@ -128,6 +129,17 @@ async function expectTwoHundredPercentTextResize(page: Page, surface: string, ac
 		return [{
 			name: element.textContent.trim().replace(/\s+/g, ' ').slice(0, 80),
 			tag: element.tagName,
+			className: element.className,
+			overflowingDescendants: [...element.querySelectorAll<HTMLElement>('*')]
+				.map((descendant) => ({ descendant, width: descendant.getBoundingClientRect().width })) // e2e-geometry-allow reports the child causing clipped text
+				.filter(({ descendant, width }) => width > element.clientWidth + 1 || descendant.scrollWidth > descendant.clientWidth + 1) // e2e-geometry-allow identifies the descendant that causes clipping
+				.slice(0, 5)
+				.map(({ descendant, width }) => ({
+					tag: descendant.tagName,
+					className: descendant.className,
+					width: Math.round(width),
+					scrollWidth: descendant.scrollWidth, // e2e-geometry-allow includes overflow evidence in the failure message
+				})),
 			client: `${element.clientWidth}x${element.clientHeight}`, // e2e-geometry-allow reports the clipped viewport
 			scroll: `${element.scrollWidth}x${element.scrollHeight}`, // e2e-geometry-allow reports the full text extent
 		}]

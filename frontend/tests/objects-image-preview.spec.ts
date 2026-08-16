@@ -193,6 +193,12 @@ function rowFor(page: Page, key: string) {
 
 test.describe('Objects image preview', () => {
 	test('details panel viewer supports zoom and reset controls', async ({ page }) => {
+		const passiveListenerErrors: string[] = []
+		page.on('console', (message) => {
+			if (message.text().includes('Unable to preventDefault inside passive event listener')) {
+				passiveListenerErrors.push(message.text())
+			}
+		})
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
 		await gotoObjectsPage(page)
@@ -214,6 +220,12 @@ test.describe('Objects image preview', () => {
 		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).toContain('scale(1.5)')
 		await page.getByTestId('objects-image-viewer-reset').click()
 		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).toContain('scale(1)')
+
+		const stage = page.getByTestId('objects-image-viewer-stage')
+		await stage.hover()
+		await page.mouse.wheel(0, -100)
+		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).toContain('scale(1.5)')
+		expect(passiveListenerErrors).toEqual([])
 	})
 
 	test('mobile viewer keeps the stage focusable and supports keyboard panning @visual', async ({ page }) => {
@@ -311,15 +323,15 @@ test.describe('Objects image preview', () => {
 		await expect(image).toHaveCSS('filter', 'none')
 	})
 
-	test('list thumbnail opens an actionable mobile fallback for oversized images', async ({ page }) => {
+	test('mobile object actions open an actionable fallback for oversized images', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
 		await gotoObjectsPage(page)
 
-		const oversizedThumbnailTrigger = page.getByRole('button', { name: 'Open large preview for oversized.png', exact: true })
-		await expect(oversizedThumbnailTrigger).toBeVisible()
-		await oversizedThumbnailTrigger.click()
+		const oversizedRow = rowFor(page, 'oversized.png')
+		await oversizedRow.getByRole('button', { name: 'Object actions for oversized.png' }).click()
+		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		await expect(modal).toBeVisible()

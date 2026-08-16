@@ -71,6 +71,28 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 			.toBe(true)
 	})
 
+	test('History panel expands to the viewport and restores', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await gotoJobsPage(page)
+
+		const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'History' }) })
+		const expandButton = page.getByRole('button', { name: 'Expand History panel' })
+		await expectMinTouchHeight(expandButton)
+		await expandButton.click()
+
+		await expect(page.getByRole('button', { name: 'Restore History panel' })).toHaveAttribute('aria-pressed', 'true')
+		await expect
+			.poll(async () => {
+				const box = await section.boundingBox() // e2e-geometry-allow verifies the expanded panel fills the viewport
+				return box ? [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)] : null
+			})
+			.toEqual([0, 0, 390, 844])
+
+		await page.keyboard.press('Escape')
+		await expect(page.getByRole('button', { name: 'Expand History panel' })).toHaveAttribute('aria-pressed', 'false')
+		await expect.poll(async () => (await section.boundingBox())?.y ?? 0).toBeGreaterThan(0) // e2e-geometry-allow verifies the restored panel returns below the app header
+	})
+
 	test('mobile filters persist across reopen and can reset', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoJobsPage(page)

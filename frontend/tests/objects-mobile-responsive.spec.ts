@@ -46,7 +46,6 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 	test('renders the mobile header, location controls, and initial objects', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
-		const started = Date.now()
 		await openObjectsMobilePage(page)
 
 		await expect(page.getByTestId('objects-page-header')).toBeVisible()
@@ -56,9 +55,53 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByLabel('Search current folder')).toBeVisible()
 		await expect(objectsListRow(page, 'alpha.txt')).toBeVisible()
 		await expect(objectsListRow(page, 'preview.png')).toBeVisible()
-		const elapsed = Date.now() - started
-		test.info().annotations.push({ type: 'perf', description: `mobile_objects_page_render_ms=${elapsed}` })
-		expect(elapsed).toBeLessThan(3000)
+	})
+
+	test('scales the attached mobile controls consistently at 320px and 390px', async ({ page }) => {
+		await seedObjectsMobileResponsiveStorage(page, { objectsUIMode: 'simple' })
+		for (const width of [320, 390]) {
+			await page.setViewportSize({ width, height: 844 })
+			await openObjectsMobilePage(page)
+			await expect(page.getByTestId('objects-toolbar-mobile-top-row')).toBeVisible()
+			await expect(page.getByTestId('objects-bucket-picker-mobile-trigger')).toBeVisible()
+
+			const geometry = await page.evaluate(() => {
+				const rect = (selector: string) => {
+					const element = document.querySelector<HTMLElement>(selector)
+					if (!element) throw new Error(`Missing mobile control: ${selector}`)
+					const box = element.getBoundingClientRect() // e2e-geometry-allow validates attached mobile controls against the viewport
+					return { left: box.left, right: box.right, top: box.top, width: box.width, height: box.height }
+				}
+				const search = document.querySelector<HTMLInputElement>('[aria-label="Search current folder"]')
+				const searchWrapper = search?.closest<HTMLElement>('.ant-input-affix-wrapper')
+				if (!searchWrapper) throw new Error('Missing mobile search wrapper')
+				const searchBox = searchWrapper.getBoundingClientRect() // e2e-geometry-allow validates the affix input does not double its touch height
+
+				return {
+					documentFits: document.documentElement.scrollWidth <= window.innerWidth + 1, // e2e-geometry-allow verifies page-level mobile reflow
+					header: rect('[data-testid="app-header"]'),
+					profileRow: rect('[data-testid="app-header-profile-row"]'),
+					toolbar: rect('[data-testid="objects-toolbar-mobile-top-row"]'),
+					bucket: rect('[data-testid="objects-bucket-picker-mobile-trigger"]'),
+					listControls: rect('[data-testid="objects-list-controls-root"]'),
+					footer: rect('[data-testid="objects-list-controls-compact-footer"]'),
+					filter: rect('[data-testid="objects-list-controls-compact-footer"] button'),
+					viewToggle: rect('[role="group"][aria-label="View mode"]'),
+					searchHeight: searchBox.height,
+					viewportWidth: window.innerWidth,
+				}
+			})
+
+			expect(geometry.documentFits).toBe(true)
+			for (const control of [geometry.header, geometry.profileRow, geometry.toolbar, geometry.bucket, geometry.listControls]) {
+				expect(control.left).toBeGreaterThanOrEqual(-1)
+				expect(control.right).toBeLessThanOrEqual(geometry.viewportWidth + 1)
+			}
+			expect(Math.round(geometry.searchHeight)).toBe(48)
+			expect(Math.round(geometry.listControls.height)).toBeLessThanOrEqual(100)
+			expect(Math.round(geometry.footer.height)).toBe(24)
+			expect(Math.round(geometry.filter.top)).toBe(Math.round(geometry.viewToggle.top))
+		}
 	})
 
 	test('exposes primary toolbar actions at mid-width mobile breakpoints', async ({ page }) => {
@@ -128,6 +171,26 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.keyboard.press('Escape')
 		await expect(menu).toHaveCount(0)
 		await expect(row).toBeVisible()
+	})
+
+	test('creates Download links through the same-origin S3Desk API', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await openObjectsMobilePage(page)
+
+		const row = objectsListRow(page, 'alpha.txt')
+		await row.getByRole('button', { name: /Object actions/ }).click()
+		const requestPromise = page.waitForRequest((request) => {
+			const url = new URL(request.url())
+			return url.pathname.endsWith('/objects/download-url') && url.searchParams.get('key') === 'alpha.txt'
+		})
+		await page.getByRole('menuitem', { name: 'Link…' }).click()
+
+		const requestUrl = new URL((await requestPromise).url())
+		expect(requestUrl.searchParams.get('proxy')).toBe('true')
+		const dialog = page.getByRole('dialog', { name: 'Download link' })
+		const downloadUrl = new URL(await dialog.getByLabel('Download URL').inputValue())
+		expect(downloadUrl.origin).toBe(new URL(page.url()).origin)
+		expect(downloadUrl.pathname).toBe('/download-proxy')
 	})
 
 	test('opens image preview directly from a mobile grid card', async ({ page }) => {

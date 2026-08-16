@@ -9,6 +9,14 @@ import { gotoProfilesPage } from './support/ui'
 test.describe('@mobile-responsive Login mobile workflows', () => {
 	test('login succeeds on a narrow mobile viewport', async ({ page }) => {
 		const validToken = 'valid-token'
+		const bootstrapStatuses: number[] = []
+		const passwordFormWarnings: string[] = []
+		page.on('response', (response) => {
+			if (new URL(response.url()).pathname === '/api/v1/bootstrap') bootstrapStatuses.push(response.status())
+		})
+		page.on('console', (message) => {
+			if (message.text().includes('Password forms should have')) passwordFormWarnings.push(message.text())
+		})
 
 		await seedLoginMobileResponsiveStorage(page, '')
 		await installLoginMobileResponsiveFixtures(page, [validToken])
@@ -18,6 +26,8 @@ test.describe('@mobile-responsive Login mobile workflows', () => {
 		})
 
 		await expect(page.getByRole('heading', { name: 'S3Desk' })).toBeVisible()
+		expect(bootstrapStatuses).toEqual([])
+		expect(passwordFormWarnings).toEqual([])
 		await page.getByPlaceholder('API_TOKEN').fill(validToken)
 		await page.getByRole('button', { name: 'Login' }).click()
 		await expect(page.getByText('No profiles yet')).toBeVisible({ timeout: 10_000 })
