@@ -9,19 +9,8 @@ import { useJobsLogsState } from './useJobsLogsState'
 import { useJobsUploadDetails } from './useJobsUploadDetails'
 
 export type JobsOverlaysHostCreateFlow = {
-	createOpen: boolean
-	createDownloadOpen: boolean
 	createDeleteOpen: boolean
-	onCloseCreate: () => void
-	onCloseDownload: () => void
 	onCloseDelete: () => void
-	onSubmitCreate: (values: {
-		bucket: string
-		prefix: string
-		files: File[]
-		label?: string
-	}) => void
-	onSubmitDownload: (values: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
 	onSubmitDelete: (values: {
 		bucket: string
 		prefix: string
@@ -31,11 +20,7 @@ export type JobsOverlaysHostCreateFlow = {
 		exclude: string[]
 		dryRun: boolean
 	}) => void
-	uploadLoading: boolean
-	downloadLoading: boolean
 	deleteLoading: boolean
-	uploadSupported: boolean
-	uploadUnsupportedReason: string | null
 	bucketLookupErrorDescription?: string | null
 }
 
@@ -97,20 +82,10 @@ export function JobsOverlaysHost(props: JobsOverlaysHostProps) {
 		layout,
 	} = props
 	const {
-		createOpen,
-		createDownloadOpen,
 		createDeleteOpen,
-		onCloseCreate,
-		onCloseDownload,
 		onCloseDelete,
-		onSubmitCreate,
-		onSubmitDownload,
 		onSubmitDelete,
-		uploadLoading,
-		downloadLoading,
 		deleteLoading,
-		uploadSupported,
-		uploadUnsupportedReason,
 		bucketLookupErrorDescription,
 	} = createFlow
 	const { bucket, onBucketChange, bucketOptions, deleteBucket, deletePrefill } = bucketState
@@ -201,21 +176,11 @@ export function JobsOverlaysHost(props: JobsOverlaysHostProps) {
 			<JobsCreateModals
 				apiToken={apiToken}
 				profileId={profileId}
-				createOpen={createOpen}
-				createDownloadOpen={createDownloadOpen}
 				createDeleteOpen={createDeleteOpen}
-				onCloseCreate={onCloseCreate}
-				onCloseDownload={onCloseDownload}
 				onCloseDelete={onCloseDelete}
-				onSubmitCreate={onSubmitCreate}
-				onSubmitDownload={onSubmitDownload}
 				onSubmitDelete={onSubmitDelete}
-				uploadLoading={uploadLoading}
-				downloadLoading={downloadLoading}
 				deleteLoading={deleteLoading}
 				isOffline={isOffline}
-				uploadSupported={uploadSupported}
-				uploadUnsupportedReason={uploadUnsupportedReason}
 				bucketLookupErrorDescription={bucketLookupErrorDescription}
 				bucket={bucket}
 				onBucketChange={onBucketChange}

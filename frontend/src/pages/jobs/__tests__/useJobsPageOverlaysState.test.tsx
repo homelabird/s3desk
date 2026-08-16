@@ -8,8 +8,6 @@ function buildArgs(overrides: Partial<Parameters<typeof useJobsPageOverlaysState
     bucket: 'bucket-a',
     bucketOptions: [{ label: 'bucket-a', value: 'bucket-a' }],
     createDeleteOpen: false,
-    createDownloadOpen: false,
-    createOpen: false,
     deleteJobMutation: {
       mutateAsync: vi.fn().mockResolvedValue(undefined),
       isPending: false,
@@ -18,30 +16,20 @@ function buildArgs(overrides: Partial<Parameters<typeof useJobsPageOverlaysState
     deletingJobId: null,
     detailsJobId: null,
     detailsOpen: false,
-    deviceDownloadLoading: false,
-    deviceUploadLoading: false,
     createDeletePending: false,
     logClearRequest: { jobIds: [], nonce: 0 },
     logDrawerRequest: { jobId: null, nonce: 0 },
-    uploadSupported: true,
-    uploadDisabledReason: null,
     isDesktop: true,
     isWideSearch: true,
     borderColor: '#ddd',
     backgroundColor: '#fff',
     borderRadius: 12,
     cancelDeleteRequests: vi.fn(),
-    cancelDownloadRequests: vi.fn(),
     openLogsForJob: vi.fn(),
     setBucket: vi.fn(),
-    setCreateDeleteOpen: vi.fn(),
-    setCreateDownloadOpen: vi.fn(),
-    setCreateOpen: vi.fn(),
     setDetailsOpen: vi.fn(),
     setLogDrawerRequest: vi.fn(),
     submitCreateDelete: vi.fn(),
-    submitCreateDownload: vi.fn(),
-    submitCreateUpload: vi.fn(),
     ...overrides,
   }
 }
@@ -51,8 +39,6 @@ describe('useJobsPageOverlaysState', () => {
     const args = buildArgs({
       createDeleteOpen: true,
       deleteJobPrefill: { bucket: 'bucket-b', prefix: 'logs/', deleteAll: true },
-      uploadSupported: false,
-      uploadDisabledReason: 'Uploads unavailable.',
       isDesktop: false,
       isWideSearch: false,
     })
@@ -61,8 +47,6 @@ describe('useJobsPageOverlaysState', () => {
 
     expect(result.current.hasOpenOverlay).toBe(true)
     expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(true)
-    expect(result.current.overlaysHost.createFlow.uploadSupported).toBe(false)
-    expect(result.current.overlaysHost.createFlow.uploadUnsupportedReason).toBe('Uploads unavailable.')
     expect(result.current.overlaysHost.bucketState.deleteBucket).toBe('bucket-b')
     expect(result.current.overlaysHost.bucketState.deletePrefill).toEqual({
       prefix: 'logs/',
@@ -121,36 +105,16 @@ describe('useJobsPageOverlaysState', () => {
 
   it('proxies create-flow submit and close actions to the supplied handlers', () => {
     const cancelDeleteRequests = vi.fn()
-    const cancelDownloadRequests = vi.fn()
-    const setCreateOpen = vi.fn()
-    const submitCreateUpload = vi.fn()
-    const submitCreateDownload = vi.fn()
     const submitCreateDelete = vi.fn()
     const args = buildArgs({
       cancelDeleteRequests,
-      cancelDownloadRequests,
-      setCreateOpen,
-      submitCreateUpload,
-      submitCreateDownload,
       submitCreateDelete,
     })
 
     const { result } = renderHook(() => useJobsPageOverlaysState(args))
 
     act(() => {
-      result.current.overlaysHost.createFlow.onCloseCreate()
-      result.current.overlaysHost.createFlow.onCloseDownload()
       result.current.overlaysHost.createFlow.onCloseDelete()
-      result.current.overlaysHost.createFlow.onSubmitCreate({
-        bucket: 'bucket-a',
-        prefix: '',
-        files: [],
-      })
-      result.current.overlaysHost.createFlow.onSubmitDownload({
-        bucket: 'bucket-a',
-        prefix: '',
-        dirHandle: { name: 'downloads' } as FileSystemDirectoryHandle,
-      })
       result.current.overlaysHost.createFlow.onSubmitDelete({
         bucket: 'bucket-a',
         prefix: '',
@@ -162,11 +126,7 @@ describe('useJobsPageOverlaysState', () => {
       })
     })
 
-    expect(setCreateOpen).toHaveBeenCalledWith(false)
-    expect(cancelDownloadRequests).toHaveBeenCalled()
     expect(cancelDeleteRequests).toHaveBeenCalled()
-    expect(submitCreateUpload).toHaveBeenCalled()
-    expect(submitCreateDownload).toHaveBeenCalled()
     expect(submitCreateDelete).toHaveBeenCalled()
   })
 })

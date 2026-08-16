@@ -4,12 +4,10 @@ import styles from './JobsTableSection.module.css'
 
 type Props = {
 	isOffline: boolean
-	uploadSupported: boolean
 	filtersDirty: boolean
 	onResetFilters: () => void
 	eventsConnected: boolean
 	onRetryRealtime: () => void
-	onOpenCreateUpload: () => void
 }
 
 export function JobsEmptyState({
@@ -23,7 +21,7 @@ export function JobsEmptyState({
 	const hint = filtersDirty
 		? 'Reset filters to return to the broader activity view.'
 		: eventsConnected
-			? 'Uploads and other background work will appear here.'
+			? 'Background jobs and transfer activity will appear here.'
 			: 'Realtime is disconnected. Retry to resume live updates.'
 
 	return (

@@ -1,10 +1,8 @@
-import { CloudUploadOutlined, FilterOutlined, MoreOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
+import { FilterOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import { Alert, Button, Checkbox, Grid, Space, Tag, Typography, type MenuProps } from 'antd'
 import { useEffect, useState } from 'react'
 
-import { uploadsUnsupportedHint } from '../../lib/actionHints'
 import { DatalistInput } from '../../components/DatalistInput'
-import { MenuPopover } from '../../components/MenuPopover'
 import { NativeSelect } from '../../components/NativeSelect'
 import { OverlaySheet } from '../../components/OverlaySheet'
 import { PageHeader } from '../../components/PageHeader'
@@ -26,16 +24,16 @@ export type JobsToolbarProps = {
 	scopeKey: string
 	activeProfileName?: string | null
 	isOffline: boolean
-	uploadSupported: boolean
-	uploadDisabledReason: string | null
+	uploadSupported?: boolean
+	uploadDisabledReason?: string | null
 	bucketLookupErrorDescription?: string | null
 	eventsConnected: boolean
 	eventsTransport: 'ws' | 'sse' | null
 	eventsRetryCount: number
 	eventsRetryThreshold: number
 	onRetryRealtime: () => void
-	onOpenCreateUpload: () => void
-	topActionsMenu: MenuProps
+	onOpenCreateUpload?: () => void
+	topActionsMenu?: MenuProps
 	statusFilter: JobsStatusFilter
 	onStatusFilterChange: (next: JobsStatusFilter) => void
 	searchFilterNormalized: string
@@ -95,8 +93,6 @@ export function JobsToolbar(props: JobsToolbarProps) {
 	const failedJobsAvailable = props.jobsStatusSummary.failed > 0
 	const troubleshootingClean =
 		!props.isOffline &&
-		props.uploadSupported &&
-		!props.bucketLookupErrorDescription &&
 		props.eventsConnected &&
 		!failedJobsAvailable
 	const showQueueControls = props.jobsCount > 0 || props.filtersDirty
@@ -183,22 +179,6 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						<Button icon={<ReloadOutlined />} onClick={props.onRefreshJobs} loading={props.jobsRefreshing} disabled={props.isOffline}>
 							Refresh
 						</Button>
-						<Button
-							type="primary"
-							icon={<CloudUploadOutlined />}
-							onClick={props.onOpenCreateUpload}
-							disabled={props.isOffline || !props.uploadSupported}
-							aria-label="Upload from device"
-						>
-							Upload
-						</Button>
-						<MenuPopover menu={props.topActionsMenu} align="end" scopeKey={props.scopeKey}>
-							{({ toggle, open }) => (
-								<Button icon={<MoreOutlined />} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-									More job actions
-								</Button>
-							)}
-						</MenuPopover>
 					</Space>
 				}
 			/>
@@ -223,22 +203,6 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						/>
 					) : null}
 					{props.isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
-					{!props.uploadSupported ? (
-						<Alert
-									type="info"
-									showIcon
-									title="Upload actions are disabled for this provider"
-									description={props.uploadDisabledReason ?? uploadsUnsupportedHint()}
-						/>
-					) : null}
-					{props.bucketLookupErrorDescription ? (
-						<Alert
-									type="warning"
-									showIcon
-									title="Bucket lookup unavailable"
-									description="Bucket suggestions are unavailable. Type a bucket name manually when creating a job."
-						/>
-					) : null}
 					{!props.eventsConnected && !props.isOffline ? (
 						<Alert
 									type="warning"

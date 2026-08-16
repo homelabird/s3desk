@@ -3,118 +3,20 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ensureDomShims } from '../../../test/domShims'
-import { selectLocalFolderFirstHint } from '../../../lib/secureContext'
-import { CreateJobModal } from '../CreateJobModal'
 import { DeletePrefixJobModal } from '../DeletePrefixJobModal'
-import { DownloadJobModal } from '../DownloadJobModal'
 
-const { messageError, messageInfo, messageWarning } = vi.hoisted(() => ({
-	messageError: vi.fn(),
-	messageInfo: vi.fn(),
-	messageWarning: vi.fn(),
-}))
+const { messageError } = vi.hoisted(() => ({ messageError: vi.fn() }))
 
 vi.mock('antd', async () => {
 	const actual = await vi.importActual<typeof import('antd')>('antd')
-	return {
-		...actual,
-		message: {
-			...actual.message,
-			error: (...args: unknown[]) => messageError(...args),
-			info: (...args: unknown[]) => messageInfo(...args),
-			warning: (...args: unknown[]) => messageWarning(...args),
-		},
-	}
+	return { ...actual, message: { ...actual.message, error: (...args: unknown[]) => messageError(...args) } }
 })
 
-const getDevicePickerSupportMock = vi.fn()
+beforeAll(() => ensureDomShims())
+beforeEach(() => messageError.mockReset())
 
-vi.mock('../../../lib/deviceFs', async () => {
-	const actual = await vi.importActual<typeof import('../../../lib/deviceFs')>('../../../lib/deviceFs')
-	return {
-		...actual,
-		getDevicePickerSupport: (...args: unknown[]) => getDevicePickerSupportMock(...args),
-		getDirectorySelectionSupport: () => ({ ok: true, mode: 'input' }),
-	}
-})
-
-vi.mock('../../../components/LocalDevicePathInput', () => ({
-	LocalDevicePathInput: (props: { id?: string; placeholder?: string; disabled?: boolean; value?: string }) => (
-		<input
-			id={props.id}
-			readOnly
-			placeholder={props.placeholder}
-			disabled={props.disabled}
-			value={props.value ?? ''}
-		/>
-	),
-}))
-
-beforeAll(() => {
-	ensureDomShims()
-})
-
-beforeEach(() => {
-	messageError.mockReset()
-	messageInfo.mockReset()
-	messageWarning.mockReset()
-	getDevicePickerSupportMock.mockReturnValue({ ok: true })
-	Object.defineProperty(window, 'matchMedia', {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: query.includes('min-width'),
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			addListener: vi.fn(),
-			removeListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	})
-})
-
-describe('Jobs create modal feedback', () => {
-	it('names upload modal text inputs from their visible labels', () => {
-		render(
-			<CreateJobModal
-				profileId="profile-1"
-				open
-				onCancel={vi.fn()}
-				onSubmit={vi.fn()}
-				loading={false}
-				isOffline={false}
-				uploadSupported
-				uploadUnsupportedReason={null}
-				bucket="bucket-a"
-				setBucket={vi.fn()}
-				bucketOptions={[]}
-			/>,
-		)
-
-		expect(screen.getByRole('textbox', { name: 'Prefix (optional)' })).toBeInTheDocument()
-	})
-
-	it('names download modal text inputs from their visible labels', () => {
-		render(
-			<DownloadJobModal
-				profileId="profile-1"
-				open
-				onCancel={vi.fn()}
-				onSubmit={vi.fn()}
-				loading={false}
-				isOffline={false}
-				bucket="bucket-a"
-				setBucket={vi.fn()}
-				bucketOptions={[]}
-			/>,
-		)
-
-		expect(screen.getByRole('textbox', { name: 'Prefix (optional)' })).toBeInTheDocument()
-		expect(screen.getByRole('textbox', { name: 'Local destination folder' })).toBeInTheDocument()
-	})
-
-	it('names delete modal text inputs from their visible labels', () => {
+describe('Jobs delete modal feedback', () => {
+	function renderModal() {
 		render(
 			<DeletePrefixJobModal
 				open
@@ -128,75 +30,19 @@ describe('Jobs create modal feedback', () => {
 				prefill={null}
 			/>,
 		)
+	}
 
+	it('names destructive job fields from their visible labels', () => {
+		renderModal()
 		expect(screen.getByRole('textbox', { name: 'Prefix' })).toBeInTheDocument()
 		expect(screen.getByRole('textbox', { name: 'Include patterns (one per line)' })).toBeInTheDocument()
 		expect(screen.getByRole('textbox', { name: 'Exclude patterns (one per line)' })).toBeInTheDocument()
-
 		fireEvent.click(screen.getByRole('switch', { name: 'Delete ALL objects in bucket' }))
-
 		expect(screen.getByRole('textbox', { name: 'Type "DELETE" to confirm' })).toBeInTheDocument()
 	})
 
-	it('routes upload validation feedback through the shared jobs catalog', () => {
-		render(
-			<CreateJobModal
-				profileId="profile-1"
-				open
-				onCancel={vi.fn()}
-				onSubmit={vi.fn()}
-				loading={false}
-				isOffline={false}
-				uploadSupported={false}
-				uploadUnsupportedReason="Object API is unavailable."
-				bucket="bucket-a"
-				setBucket={vi.fn()}
-				bucketOptions={[]}
-			/>,
-		)
-
-		const form = screen.getByRole('combobox', { name: 'Bucket' }).closest('form')
-		if (!form) throw new Error('expected upload form')
-		fireEvent.submit(form)
-		expect(messageWarning).toHaveBeenCalledWith('Object API is unavailable.')
-	})
-
-	it('routes download validation feedback through the shared jobs catalog', () => {
-		render(
-			<DownloadJobModal
-				profileId="profile-1"
-				open
-				onCancel={vi.fn()}
-				onSubmit={vi.fn()}
-				loading={false}
-				isOffline={false}
-				bucket="bucket-a"
-				setBucket={vi.fn()}
-				bucketOptions={[]}
-			/>,
-		)
-
-		const form = screen.getByRole('combobox', { name: 'Bucket' }).closest('form')
-		if (!form) throw new Error('expected download form')
-		fireEvent.submit(form)
-		expect(messageInfo).toHaveBeenCalledWith(selectLocalFolderFirstHint())
-	})
-
 	it('routes delete-prefix validation feedback through the shared jobs catalog', () => {
-		render(
-			<DeletePrefixJobModal
-				open
-				onCancel={vi.fn()}
-				onSubmit={vi.fn()}
-				loading={false}
-				isOffline={false}
-				bucket="bucket-a"
-				setBucket={vi.fn()}
-				bucketOptions={[]}
-				prefill={null}
-			/>,
-		)
-
+		renderModal()
 		const form = screen.getByRole('combobox', { name: 'Bucket' }).closest('form')
 		if (!form) throw new Error('expected delete form')
 		fireEvent.submit(form)

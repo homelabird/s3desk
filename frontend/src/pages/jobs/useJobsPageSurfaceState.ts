@@ -35,11 +35,7 @@ export function useJobsPageSurfaceState({
     legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'bucket'),
   })
 
-  const [createOpen, setCreateOpen] = useState(false)
   const [createDeleteOpen, setCreateDeleteOpen] = useState(() => initialDeletePrefill !== null)
-  const [createDownloadOpen, setCreateDownloadOpen] = useState(false)
-  const [deviceUploadLoading, setDeviceUploadLoading] = useState(false)
-  const [deviceDownloadLoading, setDeviceDownloadLoading] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [detailsJobId, setDetailsJobId] = useState<string | null>(null)
   const [logDrawerRequest, setLogDrawerRequest] = useState<JobsLogDrawerRequestState>({ jobId: null, nonce: 0 })
@@ -48,7 +44,6 @@ export function useJobsPageSurfaceState({
   const [sortState, setSortState] = useState<SortState>(null)
 
   const previousScopeKeyRef = useRef<string | null | undefined>(undefined)
-  const downloadRequestTokenRef = useRef(0)
   const createDeleteRequestTokenRef = useRef(0)
   const currentScopeKey = `${apiToken || '__no_server__'}:${profileId ?? '__no_profile__'}`
 
@@ -61,13 +56,8 @@ export function useJobsPageSurfaceState({
     if (previousScopeKeyRef.current === currentScopeKey) return
 
     previousScopeKeyRef.current = currentScopeKey
-    downloadRequestTokenRef.current += 1
     createDeleteRequestTokenRef.current += 1
-    setCreateOpen(false)
     setCreateDeleteOpen(false)
-    setCreateDownloadOpen(false)
-    setDeviceUploadLoading(false)
-    setDeviceDownloadLoading(false)
     setDeleteJobPrefill(null)
     setDetailsOpen(false)
     setDetailsJobId(null)
@@ -75,23 +65,6 @@ export function useJobsPageSurfaceState({
     setLogClearRequest((prev) => ({ jobIds: [], nonce: prev.nonce + 1 }))
   }, [currentScopeKey])
   /* eslint-enable react-hooks/set-state-in-effect */
-
-  const beginDownloadRequest = useCallback(() => {
-    const token = downloadRequestTokenRef.current + 1
-    downloadRequestTokenRef.current = token
-    return token
-  }, [])
-
-  const isCurrentDownloadRequest = useCallback(
-    (token: number) => downloadRequestTokenRef.current === token,
-    [],
-  )
-
-  const cancelDownloadRequests = useCallback(() => {
-    downloadRequestTokenRef.current += 1
-    setCreateDownloadOpen(false)
-    setDeviceDownloadLoading(false)
-  }, [])
 
   const beginDeleteRequest = useCallback(() => {
     const token = createDeleteRequestTokenRef.current + 1
@@ -126,20 +99,13 @@ export function useJobsPageSurfaceState({
 
   return {
     beginDeleteRequest,
-    beginDownloadRequest,
     bucket,
     cancelDeleteRequests,
-    cancelDownloadRequests,
     createDeleteOpen,
-    createDownloadOpen,
-    createOpen,
     deleteJobPrefill,
     detailsJobId,
     detailsOpen,
-    deviceDownloadLoading,
-    deviceUploadLoading,
     isCurrentDeleteRequest,
-    isCurrentDownloadRequest,
     logClearRequest,
     logDrawerRequest,
     openDeleteJobModal,
@@ -147,14 +113,10 @@ export function useJobsPageSurfaceState({
     openLogsForJob,
     setBucket,
     setCreateDeleteOpen,
-    setCreateDownloadOpen,
-    setCreateOpen,
     setDeleteJobPrefill,
     setDetailsJobId,
     setDetailsOpen,
     setLogClearRequest,
-    setDeviceDownloadLoading,
-    setDeviceUploadLoading,
     setLogDrawerRequest,
     setSortState,
     sortState,

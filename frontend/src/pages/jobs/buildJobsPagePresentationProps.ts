@@ -4,18 +4,12 @@ import type { JobsTableSectionProps } from './JobsTableSection'
 type Args = {
   apiToken: string
   profileId: string | null
-  activeProfileName: string | null
   isOffline: boolean
-  uploadSupported: boolean
-  uploadDisabledReason: string | null
-  bucketLookupErrorDescription?: string | null
   eventsConnected: boolean
   eventsTransport: JobsToolbarProps['eventsTransport']
   eventsRetryCount: number
   eventsRetryThreshold: number
   onRetryRealtime: () => void
-  onOpenCreateUpload: () => void
-  topActionsMenu: JobsToolbarProps['topActionsMenu']
   statusFilter: JobsToolbarProps['statusFilter']
   onStatusFilterChange: JobsToolbarProps['onStatusFilterChange']
   searchFilterNormalized: JobsToolbarProps['searchFilterNormalized']
@@ -37,7 +31,6 @@ type Args = {
   onRefreshJobs: JobsToolbarProps['onRefreshJobs']
   jobsRefreshing: JobsToolbarProps['jobsRefreshing']
   jobsCount: JobsToolbarProps['jobsCount']
-  bucketsError: JobsTableSectionProps['bucketsError']
   jobsError: JobsTableSectionProps['jobsError']
   sortedJobs: JobsTableSectionProps['sortedJobs']
   columns: JobsTableSectionProps['columns']
@@ -60,18 +53,12 @@ export function buildJobsPagePresentationProps(args: Args) {
 
   const toolbar: JobsToolbarProps = {
     scopeKey,
-    activeProfileName: args.activeProfileName,
     isOffline: args.isOffline,
-    uploadSupported: args.uploadSupported,
-    uploadDisabledReason: args.uploadDisabledReason,
-    bucketLookupErrorDescription: args.bucketLookupErrorDescription,
     eventsConnected: args.eventsConnected,
     eventsTransport: args.eventsTransport,
     eventsRetryCount: args.eventsRetryCount,
     eventsRetryThreshold: args.eventsRetryThreshold,
     onRetryRealtime: args.onRetryRealtime,
-    onOpenCreateUpload: args.onOpenCreateUpload,
-    topActionsMenu: args.topActionsMenu,
     statusFilter: args.statusFilter,
     onStatusFilterChange: args.onStatusFilterChange,
     searchFilterNormalized: args.searchFilterNormalized,
@@ -96,7 +83,6 @@ export function buildJobsPagePresentationProps(args: Args) {
   }
 
   const table: JobsTableSectionProps = {
-    bucketsError: args.bucketsError,
     jobsError: args.jobsError,
     sortedJobs: args.sortedJobs,
     columns: args.columns,
@@ -104,12 +90,10 @@ export function buildJobsPagePresentationProps(args: Args) {
     tableScrollY: args.tableScrollY,
     isLoading: args.isLoading,
     isOffline: args.isOffline,
-    uploadSupported: args.uploadSupported,
     filtersDirty: args.filtersDirty,
     onResetFilters: args.onResetFilters,
     eventsConnected: args.eventsConnected,
     onRetryRealtime: args.onRetryRealtime,
-    onOpenCreateUpload: args.onOpenCreateUpload,
     getJobSummary: args.getJobSummary,
     renderJobActions: args.renderJobActions,
     sortState: args.sortState,

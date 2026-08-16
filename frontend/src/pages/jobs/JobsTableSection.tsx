@@ -12,7 +12,7 @@ import type { JobsVirtualTableColumn, SortState } from './JobsVirtualTable'
 import styles from './JobsTableSection.module.css'
 
 export type JobsTableSectionProps = {
-	bucketsError: unknown
+	bucketsError?: unknown
 	jobsError: unknown
 	sortedJobs: Job[]
 	columns: JobsVirtualTableColumn<Job>[]
@@ -20,12 +20,12 @@ export type JobsTableSectionProps = {
 	tableScrollY: number
 	isLoading: boolean
 	isOffline: boolean
-	uploadSupported: boolean
+	uploadSupported?: boolean
 	filtersDirty: boolean
 	onResetFilters: () => void
 	eventsConnected: boolean
 	onRetryRealtime: () => void
-	onOpenCreateUpload: () => void
+	onOpenCreateUpload?: () => void
 	getJobSummary: (job: Job) => string | null
 	renderJobActions: (job: Job) => ReactNode
 	sortState: SortState
@@ -51,12 +51,10 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 		tableScrollY,
 		isLoading,
 		isOffline,
-		uploadSupported,
 		filtersDirty,
 		onResetFilters,
 		eventsConnected,
 		onRetryRealtime,
-		onOpenCreateUpload,
 		getJobSummary,
 		renderJobActions,
 		sortState,
@@ -82,12 +80,10 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 	const emptyState = (
 		<JobsEmptyState
 			isOffline={isOffline}
-			uploadSupported={uploadSupported}
 			filtersDirty={filtersDirty}
 			onResetFilters={onResetFilters}
 			eventsConnected={eventsConnected}
 			onRetryRealtime={onRetryRealtime}
-			onOpenCreateUpload={onOpenCreateUpload}
 		/>
 	)
 

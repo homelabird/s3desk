@@ -158,81 +158,6 @@ describe('useJobsPageController', () => {
 		transfersRef.current = createTransfersStub()
 	})
 
-	it('ignores stale device download responses after closing the modal', async () => {
-		const listObjectsRequest = deferred<{
-			items: Array<{ key: string; size: number }>
-			commonPrefixes: string[]
-			isTruncated: boolean
-			nextContinuationToken?: string | null
-		}>()
-		const listObjects = vi.fn().mockReturnValueOnce(listObjectsRequest.promise)
-		apiClientRef.current = createMockApiClient({
-			server: {
-				getMeta: vi.fn().mockResolvedValue({ capabilities: { providers: {} } }),
-			},
-			profiles: {
-				listProfiles: vi.fn().mockResolvedValue([]),
-			},
-			buckets: {
-				listBuckets: vi.fn().mockResolvedValue([]),
-			},
-			jobs: {
-				listJobs: vi.fn().mockResolvedValue({ items: [], nextCursor: undefined }),
-			},
-			objects: {
-				listObjects,
-			},
-		})
-
-		const queryClient = new QueryClient({
-			defaultOptions: {
-				queries: { retry: false },
-				mutations: { retry: false },
-			},
-		})
-
-		const { result } = renderHook(
-			() =>
-				useJobsPageController({
-					apiToken: 'token',
-					profileId: 'profile-1',
-				}),
-			{ wrapper: createWrapper(queryClient) },
-		)
-
-		await waitFor(() => expect(listObjects).not.toHaveBeenCalled())
-
-		act(() => {
-			result.current.onOpenCreateDownload()
-			result.current.overlaysHost.createFlow.onSubmitDownload({
-				bucket: 'bucket-a',
-				prefix: 'logs/',
-				dirHandle: { name: 'downloads' } as FileSystemDirectoryHandle,
-			})
-		})
-
-		await waitFor(() => expect(listObjects).toHaveBeenCalledTimes(1))
-		expect(result.current.overlaysHost.createFlow.downloadLoading).toBe(true)
-
-		act(() => {
-			result.current.overlaysHost.createFlow.onCloseDownload()
-		})
-
-		await act(async () => {
-			listObjectsRequest.resolve({
-				items: [{ key: 'logs/app.log', size: 128 }],
-				commonPrefixes: [],
-				isTruncated: false,
-				nextContinuationToken: undefined,
-			})
-			await Promise.resolve()
-		})
-
-		expect(transfersRef.current?.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
-		expect(result.current.overlaysHost.createFlow.createDownloadOpen).toBe(false)
-		expect(result.current.overlaysHost.createFlow.downloadLoading).toBe(false)
-	})
-
 	it('keeps the current delete modal open when an older create request resolves', async () => {
 		const createJobRequest = deferred<{ id: string }>()
 		const createJob = vi.fn().mockReturnValueOnce(createJobRequest.promise)
@@ -331,23 +256,17 @@ describe('useJobsPageController', () => {
 		)
 
 		act(() => {
-			result.current.onOpenCreateUpload()
-			result.current.onOpenCreateDownload()
 			result.current.onOpenDeleteJob()
 			result.current.onOpenDetails('job-1')
 			result.current.overlaysHost.detailsState.onOpenLogs('job-1')
 		})
 
-		expect(result.current.overlaysHost.createFlow.createOpen).toBe(true)
-		expect(result.current.overlaysHost.createFlow.createDownloadOpen).toBe(true)
 		expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(true)
 		expect(result.current.overlaysHost.detailsState.detailsOpen).toBe(true)
 		expect(result.current.overlaysHost.logsState.logRequestJobId).toBe('job-1')
 
 		rerender({ apiToken: 'token-b', profileId: 'profile-1' })
 
-		expect(result.current.overlaysHost.createFlow.createOpen).toBe(false)
-		expect(result.current.overlaysHost.createFlow.createDownloadOpen).toBe(false)
 		expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(false)
 		expect(result.current.overlaysHost.detailsState.detailsOpen).toBe(false)
 		expect(result.current.overlaysHost.detailsState.detailsJobId).toBeNull()
@@ -406,80 +325,4 @@ describe('useJobsPageController', () => {
 		})
 	})
 
-	it('blocks device uploads when the selected provider disables object uploads', async () => {
-		apiClientRef.current = createMockApiClient({
-			server: {
-				getMeta: vi.fn().mockResolvedValue({
-					capabilities: {
-						providers: {
-							s3_compatible: {
-								bucketCrud: true,
-								objectCrud: false,
-								jobTransfer: true,
-								bucketPolicy: true,
-								gcsIamPolicy: false,
-								azureContainerAccessPolicy: false,
-								presignedUpload: false,
-								presignedMultipartUpload: false,
-								directUpload: false,
-								reasons: {
-									objectCrud: 'Object API is unavailable.',
-								},
-							},
-						},
-					},
-				}),
-			},
-			profiles: {
-				listProfiles: vi.fn().mockResolvedValue([
-					{
-						id: 'profile-1',
-						name: 'Primary',
-						provider: 's3_compatible',
-						preserveLeadingSlash: false,
-						tlsInsecureSkipVerify: false,
-						createdAt: '2026-01-01T00:00:00Z',
-						updatedAt: '2026-01-01T00:00:00Z',
-					},
-				]),
-			},
-			buckets: {
-				listBuckets: vi.fn().mockResolvedValue([]),
-			},
-			jobs: {
-				listJobs: vi.fn().mockResolvedValue({ items: [], nextCursor: undefined }),
-			},
-		})
-
-		const queryClient = new QueryClient({
-			defaultOptions: {
-				queries: { retry: false },
-				mutations: { retry: false },
-			},
-		})
-
-		const { result } = renderHook(
-			() =>
-				useJobsPageController({
-					apiToken: 'token',
-					profileId: 'profile-1',
-				}),
-			{ wrapper: createWrapper(queryClient) },
-		)
-
-		await waitFor(() => expect(result.current.presentation.toolbar.uploadSupported).toBe(false))
-		expect(result.current.presentation.toolbar.uploadDisabledReason).toBe('Object API is unavailable.')
-
-		act(() => {
-			result.current.overlaysHost.createFlow.onSubmitCreate({
-				bucket: 'bucket-a',
-				prefix: 'logs/',
-				files: [new File(['hello'], 'report.txt', { type: 'text/plain' })],
-			})
-		})
-
-		expect(messageWarning).toHaveBeenCalledWith('Object API is unavailable.')
-		expect(transfersRef.current?.queueUploadFiles).not.toHaveBeenCalled()
-		expect(result.current.overlaysHost.createFlow.uploadLoading).toBe(false)
-	})
 })

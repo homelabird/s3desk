@@ -1,6 +1,4 @@
 import type { QueryClient } from '@tanstack/react-query'
-import type { MenuProps } from 'antd'
-import { DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useCallback, useMemo } from 'react'
 
 import type { APIClientShape } from '../../api/client'
@@ -71,20 +69,13 @@ export function useJobsPageControllerState(props: Props) {
 
   const {
     beginDeleteRequest,
-    beginDownloadRequest,
     bucket,
     cancelDeleteRequests,
-    cancelDownloadRequests,
     createDeleteOpen,
-    createDownloadOpen,
-    createOpen,
     deleteJobPrefill,
     detailsJobId,
     detailsOpen,
-    deviceDownloadLoading,
-    deviceUploadLoading,
     isCurrentDeleteRequest,
-    isCurrentDownloadRequest,
     logClearRequest,
     logDrawerRequest,
     openDeleteJobModal,
@@ -92,14 +83,10 @@ export function useJobsPageControllerState(props: Props) {
     openLogsForJob,
     setBucket,
     setCreateDeleteOpen,
-    setCreateDownloadOpen,
-    setCreateOpen,
     setDeleteJobPrefill,
     setDetailsJobId,
     setDetailsOpen,
     setLogClearRequest,
-    setDeviceDownloadLoading,
-    setDeviceUploadLoading,
     setLogDrawerRequest,
     setSortState,
     sortState,
@@ -138,7 +125,7 @@ export function useJobsPageControllerState(props: Props) {
     setLogDrawerRequest,
   })
 
-  const { selectedProfile, uploadSupported, uploadDisabledReason, bucketsQuery, bucketOptions, jobsQuery, jobs } =
+  const { bucketsQuery, bucketOptions, jobsQuery, jobs } =
     useJobsPageQueries({
       api: props.api,
       apiToken: props.apiToken,
@@ -151,52 +138,16 @@ export function useJobsPageControllerState(props: Props) {
       eventsConnected,
     })
   const bucketLookupErrorDescription = bucketsQuery.isError ? formatErr(bucketsQuery.error) : null
-  const topActionsMenu = useMemo<MenuProps>(
-    () => ({
-      items: [
-        {
-          key: 'new_download',
-          icon: <DownloadOutlined />,
-          label: 'Download to device...',
-          disabled: props.isOffline,
-        },
-        {
-          key: 'new_delete_job',
-          icon: <DeleteOutlined />,
-          label: 'Delete bucket or prefix...',
-          danger: true,
-          disabled: props.isOffline,
-        },
-      ],
-      onClick: ({ key }) => {
-        if (key === 'new_download') setCreateDownloadOpen(true)
-        if (key === 'new_delete_job') openDeleteJobModal()
-      },
-    }),
-    [openDeleteJobModal, props.isOffline, setCreateDownloadOpen],
-  )
 
   const {
     createDeleteMutation,
     onCreateDelete: submitCreateDelete,
-    onCreateDownload: submitCreateDownload,
-    onCreateUpload: submitCreateUpload,
   } = useJobsPageCreateFlows({
-    api: props.api,
     apiToken: props.apiToken,
     profileId: props.profileId,
     queryClient: props.queryClient,
-    transfers: props.transfers,
-    uploadSupported,
-    uploadDisabledReason,
     createJobWithRetry,
-    beginDownloadRequest,
-    isCurrentDownloadRequest,
-    setCreateOpen,
-    setCreateDownloadOpen,
     setCreateDeleteOpen,
-    setDeviceUploadLoading,
-    setDeviceDownloadLoading,
     setDeleteJobPrefill,
     beginDeleteRequest,
     isCurrentDeleteRequest,
@@ -267,20 +218,14 @@ export function useJobsPageControllerState(props: Props) {
     bucket,
     bucketOptions: bucketOptions as BucketOption[],
     createDeleteOpen,
-    createDownloadOpen,
-    createOpen,
     deleteJobMutation,
     deleteJobPrefill,
     deletingJobId,
     detailsJobId,
     detailsOpen,
-    deviceDownloadLoading,
-    deviceUploadLoading,
     createDeletePending: createDeleteMutation.isPending,
     logClearRequest,
     logDrawerRequest,
-    uploadSupported,
-    uploadDisabledReason,
     bucketLookupErrorDescription,
     isDesktop: !!props.screens.md,
     isWideSearch: !!props.screens.sm,
@@ -288,34 +233,22 @@ export function useJobsPageControllerState(props: Props) {
     backgroundColor: themeConfig.bg,
     borderRadius: props.themeToken.borderRadiusLG,
     cancelDeleteRequests,
-    cancelDownloadRequests,
     openLogsForJob,
     setBucket,
-    setCreateDeleteOpen,
-    setCreateDownloadOpen,
-    setCreateOpen,
     setDetailsOpen,
     setLogDrawerRequest,
     submitCreateDelete,
-    submitCreateDownload,
-    submitCreateUpload,
   })
 
   const presentation = buildJobsPagePresentationProps({
     apiToken: props.apiToken,
     profileId: props.profileId,
-    activeProfileName: selectedProfile?.name ?? null,
     isOffline: props.isOffline,
-    uploadSupported,
-    uploadDisabledReason,
-    bucketLookupErrorDescription,
     eventsConnected,
     eventsTransport,
     eventsRetryCount,
     eventsRetryThreshold,
     onRetryRealtime: retryRealtime,
-    onOpenCreateUpload: () => setCreateOpen(true),
-    topActionsMenu,
     statusFilter: filters.statusFilter,
     onStatusFilterChange: filters.setStatusFilter,
     searchFilterNormalized: filters.searchFilterNormalized,
@@ -337,7 +270,6 @@ export function useJobsPageControllerState(props: Props) {
     onRefreshJobs: refreshJobs,
     jobsRefreshing: jobsQuery.isFetching,
     jobsCount: jobs.length,
-    bucketsError: bucketsQuery.isError ? bucketsQuery.error : null,
     jobsError: jobsQuery.isError ? jobsQuery.error : null,
     sortedJobs,
     columns,
@@ -359,8 +291,6 @@ export function useJobsPageControllerState(props: Props) {
     api: props.api,
     hasOpenOverlay,
     isOffline: props.isOffline,
-    onOpenCreateDownload: () => setCreateDownloadOpen(true),
-    onOpenCreateUpload: presentation.toolbar.onOpenCreateUpload,
     onOpenDeleteJob: openDeleteJobModal,
     onOpenDetails: openDetailsForJob,
     overlaysHost,

@@ -4,7 +4,6 @@ import { buildJobsPagePresentationProps } from '../buildJobsPagePresentationProp
 
 describe('buildJobsPagePresentationProps', () => {
   it('maps toolbar and table props with a shared scope key', () => {
-    const onOpenCreateUpload = vi.fn()
     const onRetryRealtime = vi.fn()
     const onLoadMore = vi.fn()
     const onTableContainerRef = vi.fn()
@@ -12,17 +11,12 @@ describe('buildJobsPagePresentationProps', () => {
     const result = buildJobsPagePresentationProps({
       apiToken: 'token-a',
       profileId: 'profile-1',
-      activeProfileName: 'Primary',
       isOffline: false,
-      uploadSupported: true,
-      uploadDisabledReason: null,
       eventsConnected: true,
       eventsTransport: 'ws',
       eventsRetryCount: 1,
       eventsRetryThreshold: 3,
       onRetryRealtime,
-      onOpenCreateUpload,
-      topActionsMenu: { items: [] },
       statusFilter: 'all',
       onStatusFilterChange: vi.fn(),
       searchFilterNormalized: '',
@@ -62,7 +56,6 @@ describe('buildJobsPagePresentationProps', () => {
       onRefreshJobs: vi.fn(),
       jobsRefreshing: false,
       jobsCount: 2,
-      bucketsError: null,
       jobsError: null,
       sortedJobs: [],
       columns: [],
@@ -86,9 +79,6 @@ describe('buildJobsPagePresentationProps', () => {
 
     expect(result.scopeKey).toBe('token-a:profile-1')
     expect(result.toolbar.scopeKey).toBe('token-a:profile-1')
-    expect(result.toolbar.activeProfileName).toBe('Primary')
-    expect(result.toolbar.onOpenCreateUpload).toBe(onOpenCreateUpload)
-    expect(result.table.onOpenCreateUpload).toBe(onOpenCreateUpload)
     expect(result.table.filtersDirty).toBe(false)
     expect(result.table.eventsConnected).toBe(true)
     expect(result.table.onRetryRealtime).toBe(onRetryRealtime)

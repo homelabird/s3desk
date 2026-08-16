@@ -57,12 +57,8 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(page.getByLabel('Activity alerts')).toBeVisible()
 		await expect(page.getByLabel('Activity filters')).toBeVisible()
 		await expect(page.getByText('Realtime updates disconnected')).toBeVisible()
-		await expectMinTouchHeight(page.getByRole('button', { name: 'Upload from device' }))
-		const newJobButton = page.getByRole('button', { name: 'More job actions' })
-		await expectMinTouchHeight(newJobButton)
-		await newJobButton.click()
-		await expect(page.getByRole('menuitem', { name: 'Download to device...' })).toBeVisible()
-		await page.keyboard.press('Escape')
+		await expect(page.getByRole('button', { name: 'Upload from device' })).toHaveCount(0)
+		await expect(page.getByRole('button', { name: 'More job actions' })).toHaveCount(0)
 		await expectMinTouchHeight(page.getByTestId('jobs-mobile-filters-trigger'))
 		await expect
 			.poll(() =>
@@ -130,17 +126,6 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(reopenedSheet.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('all')
 		await closeJobsMobileFilters(reopenedSheet)
 		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toHaveText('Filters')
-	})
-
-	test('mobile upload entrypoint opens and closes the upload source sheet', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
-		await gotoJobsPage(page)
-
-		await page.getByRole('button', { name: 'Upload from device' }).click()
-		const sheet = page.getByRole('dialog', { name: 'Upload from device' })
-		await expect(sheet).toBeVisible()
-		await sheet.getByLabel('Close', { exact: true }).click()
-		await expect(sheet).toHaveCount(0)
 	})
 
 	test('mobile job details and logs drawers stay readable without horizontal overflow', async ({ page }) => {

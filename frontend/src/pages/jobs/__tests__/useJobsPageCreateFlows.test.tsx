@@ -4,302 +4,89 @@ import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
-import { createMockApiClient } from '../../../test/mockApiClient'
-import type { TransfersContextValue } from '../../../components/transfersTypes'
-import { noObjectsFoundUnderPrefixHint } from '../../../lib/secureContext'
 import { useJobsPageCreateFlows } from '../useJobsPageCreateFlows'
 
-const { messageSuccess, messageError, messageInfo, messageWarning } = vi.hoisted(() => ({
-  messageSuccess: vi.fn(),
-  messageError: vi.fn(),
-  messageInfo: vi.fn(),
-  messageWarning: vi.fn(),
-}))
+const { messageSuccess, messageError } = vi.hoisted(() => ({ messageSuccess: vi.fn(), messageError: vi.fn() }))
 
 vi.mock('antd', async () => {
-  const actual = await vi.importActual<typeof import('antd')>('antd')
-  return {
-    ...actual,
-    message: {
-      success: (...args: unknown[]) => messageSuccess(...args),
-      error: (...args: unknown[]) => messageError(...args),
-      info: (...args: unknown[]) => messageInfo(...args),
-      warning: (...args: unknown[]) => messageWarning(...args),
-    },
-  }
+	const actual = await vi.importActual<typeof import('antd')>('antd')
+	return {
+		...actual,
+		message: {
+			...actual.message,
+			success: (...args: unknown[]) => messageSuccess(...args),
+			error: (...args: unknown[]) => messageError(...args),
+		},
+	}
 })
 
 function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
-    resolve = res
-  })
-  return { promise, resolve }
-}
-
-function createTransfersStub(): TransfersContextValue {
-  return {
-    activeTab: 'uploads',
-    closeTransfers: vi.fn(),
-    clearAllTransfers: vi.fn(),
-    clearCompletedDownloads: vi.fn(),
-    clearCompletedUploads: vi.fn(),
-    downloadTasks: [],
-    openTransfers: vi.fn(),
-    queueDownloadJobArtifact: vi.fn(),
-    queueDownloadObject: vi.fn(),
-    queueDownloadObjectsToDevice: vi.fn(),
-    queueUploadFiles: vi.fn(),
-    removeDownloadTask: vi.fn(),
-    removeUploadTask: vi.fn(),
-    retryDownloadTask: vi.fn(),
-    retryUploadTask: vi.fn(),
-    cancelDownloadTask: vi.fn(),
-    cancelUploadTask: vi.fn(),
-    uploadTasks: [],
-  } as unknown as TransfersContextValue
-}
-
-function createWrapper(queryClient: QueryClient) {
-  return function Wrapper(props: PropsWithChildren) {
-    return <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
-  }
+	let resolve!: (value: T) => void
+	const promise = new Promise<T>((res) => { resolve = res })
+	return { promise, resolve }
 }
 
 function buildArgs(overrides: Partial<Parameters<typeof useJobsPageCreateFlows>[0]> = {}) {
-  const transfers = createTransfersStub()
-  return {
-    api: createMockApiClient({
-      objects: {
-        listObjects: vi.fn().mockResolvedValue({
-          items: [{ key: 'logs/app.log', size: 128 }],
-          commonPrefixes: [],
-          isTruncated: false,
-          nextContinuationToken: undefined,
-        }),
-      },
-    }),
-    apiToken: 'token-a',
-    profileId: 'profile-1' as string | null,
-    queryClient: new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    }),
-    transfers,
-    uploadSupported: true,
-    uploadDisabledReason: null,
-    createJobWithRetry: vi.fn(),
-    beginDownloadRequest: vi.fn(() => 1),
-    isCurrentDownloadRequest: vi.fn((token: number) => token === 1),
-    setCreateOpen: vi.fn(),
-    setCreateDownloadOpen: vi.fn(),
-    setCreateDeleteOpen: vi.fn(),
-    setDeviceUploadLoading: vi.fn(),
-    setDeviceDownloadLoading: vi.fn(),
-    setDeleteJobPrefill: vi.fn(),
-    beginDeleteRequest: vi.fn(() => 1),
-    isCurrentDeleteRequest: vi.fn((token: number) => token === 1),
-    ...overrides,
-  }
+	return {
+		apiToken: 'token-a',
+		profileId: 'profile-1' as string | null,
+		queryClient: new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
+		createJobWithRetry: vi.fn(),
+		setCreateDeleteOpen: vi.fn(),
+		setDeleteJobPrefill: vi.fn(),
+		beginDeleteRequest: vi.fn(() => 1),
+		isCurrentDeleteRequest: vi.fn((token: number) => token === 1),
+		...overrides,
+	}
+}
+
+function createWrapper(queryClient: QueryClient) {
+	return function Wrapper(props: PropsWithChildren) {
+		return <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
+	}
+}
+
+const payload = {
+	bucket: 'bucket-a',
+	prefix: 'logs/',
+	deleteAll: false,
+	allowUnsafePrefix: false,
+	include: [],
+	exclude: [],
+	dryRun: false,
 }
 
 describe('useJobsPageCreateFlows', () => {
-  beforeEach(() => {
-    messageSuccess.mockReset()
-    messageError.mockReset()
-    messageInfo.mockReset()
-    messageWarning.mockReset()
-  })
+	beforeEach(() => {
+		messageSuccess.mockReset()
+		messageError.mockReset()
+	})
 
-  it('blocks device uploads when the provider does not support uploads', () => {
-    const args = buildArgs({
-      uploadSupported: false,
-      uploadDisabledReason: 'Object API is unavailable.',
-    })
+	it('creates and invalidates a delete job', async () => {
+		const args = buildArgs({ createJobWithRetry: vi.fn().mockResolvedValue({ id: 'job-delete-1' }) })
+		const invalidateSpy = vi.spyOn(args.queryClient, 'invalidateQueries')
+		const { result } = renderHook(() => useJobsPageCreateFlows(args), { wrapper: createWrapper(args.queryClient) })
 
-    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
-      wrapper: createWrapper(args.queryClient),
-    })
+		act(() => result.current.onCreateDelete(payload))
 
-    act(() => {
-      void result.current.onCreateUpload({
-        bucket: 'bucket-a',
-        prefix: 'logs/',
-        files: [new File(['hello'], 'report.txt', { type: 'text/plain' })],
-      })
-    })
+		await waitFor(() => expect(args.createJobWithRetry).toHaveBeenCalledWith({ type: 'transfer_delete_prefix', payload }))
+		await waitFor(() => expect(messageSuccess).toHaveBeenCalledWith('Delete job created: job-delete-1'))
+		expect(args.setCreateDeleteOpen).toHaveBeenCalledWith(false)
+		expect(args.setDeleteJobPrefill).toHaveBeenCalledWith(null)
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-a'), exact: false })
+		expect(messageError).not.toHaveBeenCalled()
+	})
 
-    expect(messageWarning).toHaveBeenCalledWith('Object API is unavailable.')
-    expect(args.transfers.queueUploadFiles).not.toHaveBeenCalled()
-    expect(args.setDeviceUploadLoading).not.toHaveBeenCalled()
-  })
+	it('ignores duplicate delete submits while the first request is pending', async () => {
+		const pendingJob = deferred<{ id: string }>()
+		const args = buildArgs({ createJobWithRetry: vi.fn().mockReturnValue(pendingJob.promise) })
+		const { result } = renderHook(() => useJobsPageCreateFlows(args), { wrapper: createWrapper(args.queryClient) })
 
-  it('ignores stale device download responses after the request token changes', async () => {
-    const listObjectsRequest = deferred<{
-      items: Array<{ key: string; size: number }>
-      commonPrefixes: string[]
-      isTruncated: boolean
-      nextContinuationToken?: string | null
-    }>()
-    const api = createMockApiClient({
-      objects: {
-        listObjects: vi.fn().mockReturnValueOnce(listObjectsRequest.promise),
-      },
-    })
-    let activeToken = 1
-    const args = buildArgs({
-      api,
-      beginDownloadRequest: vi.fn(() => activeToken),
-      isCurrentDownloadRequest: vi.fn((token: number) => token === activeToken),
-    })
-
-    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
-      wrapper: createWrapper(args.queryClient),
-    })
-
-    act(() => {
-      void result.current.onCreateDownload({
-        bucket: 'bucket-a',
-        prefix: 'logs/',
-        dirHandle: { name: 'downloads' } as FileSystemDirectoryHandle,
-      })
-    })
-
-    await waitFor(() => expect(api.objects.listObjects).toHaveBeenCalledTimes(1))
-
-    activeToken = 2
-
-    await act(async () => {
-      listObjectsRequest.resolve({
-        items: [{ key: 'logs/app.log', size: 128 }],
-        commonPrefixes: [],
-        isTruncated: false,
-        nextContinuationToken: undefined,
-      })
-      await Promise.resolve()
-    })
-
-    expect(args.transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
-    expect(args.setCreateDownloadOpen).not.toHaveBeenCalledWith(false)
-  })
-
-  it('uses the shared empty-prefix hint when a device download source has no objects', async () => {
-    const args = buildArgs({
-      api: createMockApiClient({
-        objects: {
-          listObjects: vi.fn().mockResolvedValue({
-            items: [],
-            commonPrefixes: [],
-            isTruncated: false,
-            nextContinuationToken: undefined,
-          }),
-        },
-      }),
-    })
-
-    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
-      wrapper: createWrapper(args.queryClient),
-    })
-
-    await act(async () => {
-      await result.current.onCreateDownload({
-        bucket: 'bucket-a',
-        prefix: 'logs/',
-        dirHandle: { name: 'downloads' } as FileSystemDirectoryHandle,
-      })
-    })
-
-    expect(messageInfo).toHaveBeenCalledWith(noObjectsFoundUnderPrefixHint())
-    expect(args.transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
-    expect(args.setCreateDownloadOpen).not.toHaveBeenCalledWith(false)
-  })
-
-  it('reports delete job creation through the shared jobs feedback copy', async () => {
-    const args = buildArgs({
-      createJobWithRetry: vi.fn().mockResolvedValue({ id: 'job-delete-1' }),
-    })
-    const invalidateSpy = vi.spyOn(args.queryClient, 'invalidateQueries')
-
-    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
-      wrapper: createWrapper(args.queryClient),
-    })
-
-    act(() => {
-      result.current.onCreateDelete({
-        bucket: 'bucket-a',
-        prefix: 'logs/',
-        deleteAll: false,
-        allowUnsafePrefix: false,
-        include: [],
-        exclude: [],
-        dryRun: false,
-      })
-    })
-
-    await waitFor(() => {
-      expect(args.createJobWithRetry).toHaveBeenCalledWith({
-        type: 'transfer_delete_prefix',
-        payload: {
-          bucket: 'bucket-a',
-          prefix: 'logs/',
-          deleteAll: false,
-          allowUnsafePrefix: false,
-          include: [],
-          exclude: [],
-          dryRun: false,
-        },
-      })
-    })
-    await waitFor(() => {
-      expect(messageSuccess).toHaveBeenCalledWith('Delete job created: job-delete-1')
-    })
-    expect(args.setCreateDeleteOpen).toHaveBeenCalledWith(false)
-    expect(args.setDeleteJobPrefill).toHaveBeenCalledWith(null)
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.jobs.scope('profile-1', 'token-a'),
-      exact: false,
-    })
-    expect(messageError).not.toHaveBeenCalled()
-  })
-
-  it('ignores duplicate delete job submits while the first request is pending', async () => {
-    const pendingJob = deferred<{ id: string }>()
-    const args = buildArgs({
-      createJobWithRetry: vi.fn().mockReturnValue(pendingJob.promise),
-    })
-
-    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
-      wrapper: createWrapper(args.queryClient),
-    })
-
-    act(() => {
-      result.current.onCreateDelete({
-        bucket: 'bucket-a',
-        prefix: 'logs/',
-        deleteAll: false,
-        allowUnsafePrefix: false,
-        include: [],
-        exclude: [],
-        dryRun: false,
-      })
-      result.current.onCreateDelete({
-        bucket: 'bucket-a',
-        prefix: 'logs/',
-        deleteAll: false,
-        allowUnsafePrefix: false,
-        include: [],
-        exclude: [],
-        dryRun: false,
-      })
-    })
-
-    await waitFor(() => expect(args.createJobWithRetry).toHaveBeenCalledTimes(1))
-
-    await act(async () => {
-      pendingJob.resolve({ id: 'job-delete-1' })
-      await Promise.resolve()
-    })
-  })
+		act(() => {
+			result.current.onCreateDelete(payload)
+			result.current.onCreateDelete(payload)
+		})
+		await waitFor(() => expect(args.createJobWithRetry).toHaveBeenCalledTimes(1))
+		await act(async () => { pendingJob.resolve({ id: 'job-delete-1' }); await Promise.resolve() })
+	})
 })

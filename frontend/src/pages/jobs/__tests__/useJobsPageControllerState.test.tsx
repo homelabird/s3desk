@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { useJobsPageControllerState } from '../useJobsPageControllerState'
@@ -97,7 +97,7 @@ function buildSurfaceState() {
 }
 
 describe('useJobsPageControllerState', () => {
-  it('parses delete prefill from location state and wires offline menu actions into presentation', () => {
+  it('parses delete prefill from location state and keeps delete available through the controller', () => {
     const surfaceState = buildSurfaceState()
     surfaceStateRef.current = surfaceState
     filtersRef.current = {
@@ -228,18 +228,7 @@ describe('useJobsPageControllerState', () => {
       }),
     )
     expect(result.current.presentation.table.isCompact).toBe(true)
-    const deleteJobAction = result.current.presentation.toolbar.topActionsMenu.items?.find((item) => {
-      return typeof item === 'object' && item !== null && 'key' in item && item.key === 'new_delete_job'
-    })
-    expect(deleteJobAction).toMatchObject({
-      key: 'new_delete_job',
-      disabled: true,
-    })
-
-    act(() => {
-      result.current.presentation.toolbar.topActionsMenu.onClick?.({ key: 'new_delete_job' } as never)
-    })
-
+    result.current.onOpenDeleteJob()
     expect(surfaceState.openDeleteJobModal).toHaveBeenCalledTimes(1)
   })
 })

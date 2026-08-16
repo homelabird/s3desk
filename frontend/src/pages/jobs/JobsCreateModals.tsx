@@ -5,19 +5,8 @@ import type { BucketOption, DeleteJobModalPrefill } from './jobsPageTypes'
 type Props = {
 	apiToken: string
 	profileId: string
-	createOpen: boolean
-	createDownloadOpen: boolean
 	createDeleteOpen: boolean
-	onCloseCreate: () => void
-	onCloseDownload: () => void
 	onCloseDelete: () => void
-	onSubmitCreate: (values: {
-		bucket: string
-		prefix: string
-		files: File[]
-		label?: string
-	}) => void
-	onSubmitDownload: (values: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
 	onSubmitDelete: (values: {
 		bucket: string
 		prefix: string
@@ -27,12 +16,8 @@ type Props = {
 		exclude: string[]
 		dryRun: boolean
 	}) => void
-	uploadLoading: boolean
-	downloadLoading: boolean
 	deleteLoading: boolean
 	isOffline: boolean
-	uploadSupported: boolean
-	uploadUnsupportedReason: string | null
 	bucketLookupErrorDescription?: string | null
 	bucket: string
 	onBucketChange: (next: string) => void
@@ -41,60 +26,17 @@ type Props = {
 	deletePrefill: DeleteJobModalPrefill | null
 }
 
-const CreateJobModal = lazy(async () => {
-	const m = await import('./CreateJobModal')
-	return { default: m.CreateJobModal }
-})
-const DownloadJobModal = lazy(async () => {
-	const m = await import('./DownloadJobModal')
-	return { default: m.DownloadJobModal }
-})
 const DeletePrefixJobModal = lazy(async () => {
 	const m = await import('./DeletePrefixJobModal')
 	return { default: m.DeletePrefixJobModal }
 })
 
 export function JobsCreateModals(props: Props) {
-	if (!props.createOpen && !props.createDownloadOpen && !props.createDeleteOpen) return null
+	if (!props.createDeleteOpen) return null
 
 	return (
 		<Suspense fallback={null}>
-			{props.createOpen ? (
-				<CreateJobModal
-					key={`upload:${props.apiToken}:${props.profileId}:${props.bucket}`}
-					profileId={props.profileId}
-					open={props.createOpen}
-					onCancel={props.onCloseCreate}
-					onSubmit={props.onSubmitCreate}
-					loading={props.uploadLoading}
-					isOffline={props.isOffline}
-					uploadSupported={props.uploadSupported}
-					uploadUnsupportedReason={props.uploadUnsupportedReason}
-					bucketLookupErrorDescription={props.bucketLookupErrorDescription}
-					bucket={props.bucket}
-					setBucket={props.onBucketChange}
-					bucketOptions={props.bucketOptions}
-				/>
-			) : null}
-
-			{props.createDownloadOpen ? (
-				<DownloadJobModal
-					key={`download:${props.apiToken}:${props.profileId}:${props.bucket}`}
-					profileId={props.profileId}
-					open={props.createDownloadOpen}
-					onCancel={props.onCloseDownload}
-					onSubmit={props.onSubmitDownload}
-					loading={props.downloadLoading}
-					isOffline={props.isOffline}
-					bucketLookupErrorDescription={props.bucketLookupErrorDescription}
-					bucket={props.bucket}
-					setBucket={props.onBucketChange}
-					bucketOptions={props.bucketOptions}
-				/>
-			) : null}
-
-			{props.createDeleteOpen ? (
-				<DeletePrefixJobModal
+			<DeletePrefixJobModal
 					key={`delete:${props.apiToken}:${props.profileId}:${props.deleteBucket}:${props.deletePrefill?.prefix ?? ''}:${props.deletePrefill?.deleteAll ? 'all' : 'prefix'}`}
 					open={props.createDeleteOpen}
 					onCancel={props.onCloseDelete}
@@ -107,7 +49,6 @@ export function JobsCreateModals(props: Props) {
 					bucketOptions={props.bucketOptions}
 					prefill={props.deletePrefill}
 				/>
-			) : null}
 		</Suspense>
 	)
 }

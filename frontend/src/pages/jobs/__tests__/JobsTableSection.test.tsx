@@ -50,7 +50,7 @@ describe('JobsTableSection', () => {
 		renderJobsTableSection()
 
 		expect(screen.getByText('No activity yet.')).toBeInTheDocument()
-		expect(screen.getByText('Uploads and other background work will appear here.')).toBeInTheDocument()
+		expect(screen.getByText('Background jobs and transfer activity will appear here.')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Expand History panel' })).toBeInTheDocument()
 		expect(screen.queryByRole('link')).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'New delete job' })).not.toBeInTheDocument()
