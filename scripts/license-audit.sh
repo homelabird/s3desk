@@ -126,9 +126,11 @@ NODE
 echo "[2/4] go module license audit"
 (
   cd "$BACKEND_DIR"
-  if ! command -v go-licenses >/dev/null 2>&1; then
+  go_licenses_bin="$(command -v go-licenses || true)"
+  if [[ -z "$go_licenses_bin" ]]; then
     echo "installing go-licenses ${GO_LICENSES_VERSION}..."
     go install "github.com/google/go-licenses@${GO_LICENSES_VERSION}"
+    go_licenses_bin="$(go env GOPATH)/bin/go-licenses"
   fi
   go_license_ignore_args=()
   IFS=';' read -r -a go_license_ignore_prefixes <<< "$GO_LICENSE_IGNORE_PREFIXES"
@@ -137,7 +139,7 @@ echo "[2/4] go module license audit"
       go_license_ignore_args+=("--ignore" "$prefix")
     fi
   done
-  go-licenses report "${go_license_ignore_args[@]}" ./... > "$go_report"
+  "$go_licenses_bin" report "${go_license_ignore_args[@]}" ./... > "$go_report"
 )
 
 python3 "$ROOT_DIR/scripts/check_go_license_report.py" \

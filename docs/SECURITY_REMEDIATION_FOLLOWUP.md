@@ -34,7 +34,7 @@ All changes below are local edits; **nothing is committed or pushed** yet.
 - `.gitlab-ci.yml` parses (Python PyYAML and Ruby Psych both succeed; both previously failed on `main`).
 - `scripts/dev.sh`, `scripts/helm_k8s_smoke.sh`: `bash -n` OK.
 - `lighthouserc.js`, `scripts/lighthouse_puppeteer_auth.js`, `scripts/render_policy_live_summary.js`: `node --check` OK; summary script ran end-to-end against sample NDJSON.
-- `python3 scripts/check_go_toolchain.py`: OK (`1.25.10`). `scripts/check_go_toolchain.py` was updated because `.gitlab-ci.yml` no longer declares `GO_IMAGE` (image names are inlined, see #11).
+- `python3 scripts/check_go_toolchain.py`: OK (`1.25.13`). `scripts/check_go_toolchain.py` was updated because `.gitlab-ci.yml` no longer declares `GO_IMAGE` (image names are inlined, see #11).
 - No leftover `$ALPINE_IMAGE`/`$GO_IMAGE`/`$NODE_IMAGE`/`$PODMAN_IMAGE`/`$PLAYWRIGHT_IMAGE`/`$TRIVY_IMAGE` references in `.gitlab-ci.yml`.
 - `backend/internal/api` realtime-ticket tests cover rejection on `/api/v1/meta` and acceptance on `/api/v1/events`.
 - Frontend thumbnail-cache tests cover token redaction and persistent-cache clearing; the cache no longer embeds the raw API token.

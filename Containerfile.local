@@ -13,7 +13,7 @@ RUN npm run ci:deps:full
 COPY frontend/ /src/frontend/
 RUN npm run gen:openapi && npm run build
 
-FROM docker.io/library/golang:1.25.10-alpine AS backend
+FROM docker.io/library/golang:1.25.13-alpine AS backend
 ARG APP_VERSION=0.1.0
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum /src/backend/

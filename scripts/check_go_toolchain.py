@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPECTED_GO_DIRECTIVE = "1.25.0"
-EXPECTED_TOOLCHAIN = "1.25.10"
+EXPECTED_TOOLCHAIN = "1.25.13"
 EXPECTED_TOOLCHAIN_DIRECTIVE = f"go{EXPECTED_TOOLCHAIN}"
 
 

@@ -53,7 +53,7 @@ The repository keeps automated enforcement for release readiness inside the stan
 - third-party notice enforcement inside `./scripts/check.sh`: generates into a temporary output tree, compares it with `THIRD_PARTY_NOTICES.md` and `third_party/licenses/`, and leaves the tracked snapshot untouched
 - CI workflow: `Release Gate` (installs repo-local `actionlint`, then runs `./scripts/check.sh` on pull requests and `main`)
 - canonical release verdict: GitHub `Release Gate`; GitLab release/security jobs are parity and publish safeguards, not the source of truth for branch protection
-- backend toolchain pin: Go `1.25.10` is declared in `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub workflow `go-version` fields, and literal GitLab `image:` declarations, and `python3 scripts/check_go_toolchain.py` keeps those declarations aligned
+- backend toolchain pin: Go `1.25.13` is declared in `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub workflow `go-version` fields, and literal GitLab `image:` declarations, and `python3 scripts/check_go_toolchain.py` keeps those declarations aligned
 - backend security gate inside `./scripts/check.sh full`: `go vet`, `staticcheck`, `gosec`, and `govulncheck`
 - GitLab additive security gates: `security_fs_scan` runs Trivy filesystem/config scans and `gitleaks_scan` runs Gitleaks when tag/default-branch/schedule or relevant source changes require them
 - GitLab release-builder images are literal digest-pinned image references; they must not be overridable through `PODMAN_IMAGE` or mutable tags such as `quay.io/podman/stable:latest`.

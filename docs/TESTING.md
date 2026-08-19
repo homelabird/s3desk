@@ -519,7 +519,7 @@ Use this focused check when you only need the release-doc/changelog subset local
 
 GitHub Actions runs the `Release Gate` workflow as the full `./scripts/check.sh` pass so pull requests exercise the same repository gate used for local verification. The standalone `./scripts/check_release_gate.sh` command remains available for the release-doc/changelog subset.
 
-`./scripts/check_release_gate.sh` also runs `python3 scripts/check_go_toolchain.py`, which keeps the Go `1.25.10` declarations aligned across `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub Actions, and GitLab CI.
+`./scripts/check_release_gate.sh` also runs `python3 scripts/check_go_toolchain.py`, which keeps the Go `1.25.13` declarations aligned across `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub Actions, and GitLab CI.
 
 When the release scope is already selected and you need a concise blocker summary, use `python3 scripts/check_release_readiness.py --candidate-id <tag-or-sha>`. It is expected to fail until strict release evidence passes.
 

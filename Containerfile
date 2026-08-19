@@ -11,7 +11,7 @@ RUN npm run ci:deps:build
 COPY frontend/ /src/frontend/
 RUN npm run gen:openapi && npm run build
 
-FROM harbor.k8s.homelabird.com/library/golang:1.25.10-alpine@sha256:8d22e29d960bc50cd025d93d5b7c7d220b1ee9aa7a239b3c8f55a57e987e8d45 AS backend
+FROM harbor.k8s.homelabird.com/library/golang:1.25.13-alpine@sha256:1e0126852075c9c60731c8ba49088448b91f63e2aed97ca9d1a9791622a05946 AS backend
 ARG APP_VERSION=0.1.0
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum /src/backend/

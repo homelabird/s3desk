@@ -485,7 +485,7 @@ gitleaks_scan:
 
 openapi_validate:
   stage: test
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   rules:
     - changes:
@@ -497,7 +497,7 @@ openapi_validate:
 
 check:
   stage: test
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   rules:
     - if: '$RUN_FULL_CHECK == "1"'
@@ -645,7 +645,7 @@ shellcheck:
 
 gofmt:
   stage: test
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
   rules:
@@ -663,7 +663,7 @@ gofmt:
 
 go_test:
   stage: test
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
   rules:
@@ -701,7 +701,7 @@ go_test:
 
 go_race:
   stage: test
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
   rules:
@@ -725,7 +725,7 @@ go_race:
 
 golangci_lint:
   stage: test
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
   rules:
@@ -761,7 +761,7 @@ golangci_lint:
 
 govulncheck:
   stage: test
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
   rules:
@@ -1099,7 +1099,7 @@ frontend_bundle_analyze:
 
 third_party_notices:
   stage: audit
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   needs: []
   <<: *node_cache
@@ -1475,7 +1475,7 @@ perf_tests:
 
 dev_license_audit:
   stage: audit
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   needs: []
   <<: *node_cache
@@ -1507,7 +1507,7 @@ dev_license_audit:
 
 license_audit_runtime:
   stage: audit
-  image: "harbor.k8s.homelabird.com/library/golang:1.25.10"
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   needs:
     - job: build_release_images
