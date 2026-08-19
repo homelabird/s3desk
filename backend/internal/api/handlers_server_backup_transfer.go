@@ -308,7 +308,7 @@ func writeServerBackupFTPConfig(ctx context.Context, dataDir, host string, port 
 	}
 	path := f.Name()
 	cleanup := func() { _ = os.Remove(path) }
-	if err := f.Chmod(0o600); err == nil {
+	if err = f.Chmod(0o600); err == nil {
 		_, err = fmt.Fprintf(f, "[remote]\ntype = ftp\nhost = %s\nport = %d\nuser = %s\npass = %s\n", host, port, username, strings.TrimSpace(string(obscured)))
 	}
 	if closeErr := f.Close(); err == nil {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"s3desk/internal/jobs"
 	"s3desk/internal/metrics"
@@ -32,6 +33,25 @@ func TestBuildCreateJobSubmission_NormalizesNilPayload(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Payload, map[string]any{}) {
 		t.Fatalf("got.Payload=%#v, want empty map", got.Payload)
+	}
+}
+
+func TestJobEnqueueLogFieldsCorrelatesRequestAndJob(t *testing.T) {
+	t.Parallel()
+
+	var fields map[string]any
+	handler := middleware.RequestID(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		fields = jobEnqueueLogFields(r.Context(), "profile-1", "job-1", jobs.JobTypeS3DeleteObjects)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/jobs", nil)
+	req.Header.Set("X-Request-Id", "request-1")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if fields["request_id"] != "request-1" || fields["job_id"] != "job-1" {
+		t.Fatalf("fields=%v, want correlated request_id and job_id", fields)
+	}
+	if fields["profile_id"] != "profile-1" || fields["job_type"] != jobs.JobTypeS3DeleteObjects {
+		t.Fatalf("fields=%v, want profile and job type", fields)
 	}
 }
 

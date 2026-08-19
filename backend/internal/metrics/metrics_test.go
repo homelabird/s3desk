@@ -1,6 +1,9 @@
 package metrics
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -31,6 +34,23 @@ func TestObserveStorageOperationRegistersMetrics(t *testing.T) {
 	}
 	if !foundHistogram {
 		t.Fatal("expected storage_operation_duration_ms to be registered")
+	}
+}
+
+func TestMaintenanceCleanupMetricTracksOutcomes(t *testing.T) {
+	m := New()
+	m.AddMaintenanceCleanup("upload_sessions", "run", 1)
+	m.AddMaintenanceCleanup("upload_sessions", "deleted", 2)
+
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	for _, want := range []string{
+		`maintenance_cleanup_total{outcome="run",resource="upload_sessions"} 1`,
+		`maintenance_cleanup_total{outcome="deleted",resource="upload_sessions"} 2`,
+	} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("metrics output missing %q", want)
+		}
 	}
 }
 

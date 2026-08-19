@@ -92,7 +92,7 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if attempt > 1 {
-			m.writeJobLog(logWriter, jobID, "warn", fmt.Sprintf("retrying %s (attempt %d/%d)", errContext, attempt, maxAttempts))
+			_ = m.writeJobLog(logWriter, jobID, "warn", fmt.Sprintf("retrying %s (attempt %d/%d)", errContext, attempt, maxAttempts))
 		}
 
 		stderrCapture, waitErr := m.runRcloneAttempt(ctx, rclonePath, args, jobID, logWriter, opts)
@@ -116,7 +116,7 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 		}
 
 		delay := m.rcloneRetryDelay(attempt, cls.Code)
-		m.writeJobLog(logWriter, jobID, "warn", fmt.Sprintf("%s failed with %s; retrying in %s (attempt %d/%d)", errContext, cls.Code, delay, attempt+1, maxAttempts))
+		_ = m.writeJobLog(logWriter, jobID, "warn", fmt.Sprintf("%s failed with %s; retrying in %s (attempt %d/%d)", errContext, cls.Code, delay, attempt+1, maxAttempts))
 		if err := sleepWithContext(ctx, delay); err != nil {
 			return err
 		}

@@ -132,12 +132,10 @@ func (svc uploadCommitFinalizeService) enqueueObjectIndexRepair(ctx context.Cont
 		return
 	}
 
-	logging.WarnFields("upload object index repair queued", map[string]any{
-		"event":      "upload.object_index_repair_queued",
-		"profile_id": profileID,
-		"bucket":     bucket,
-		"job_id":     job.ID,
-	})
+	fields := jobEnqueueLogFields(ctx, profileID, job.ID, job.Type)
+	fields["bucket"] = bucket
+	fields["reason"] = "upload_object_index_repair"
+	logging.WarnFields("upload object index repair queued", fields)
 }
 
 func (svc uploadCommitFinalizeService) persistImmediateJobResult(

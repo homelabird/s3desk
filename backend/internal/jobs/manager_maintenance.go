@@ -22,6 +22,33 @@ import (
 
 const orphanAPIRcloneConfigRetention = 24 * time.Hour
 
+func (m *Manager) recordMaintenanceError(resource, operation string, err error) {
+	if err == nil || os.IsNotExist(err) {
+		return
+	}
+	m.metrics.AddMaintenanceCleanup(resource, "error", 1)
+	logging.ErrorFields("maintenance cleanup failed", map[string]any{
+		"event":     "maintenance.cleanup_failed",
+		"resource":  resource,
+		"operation": operation,
+		"error":     err.Error(),
+	})
+}
+
+func (m *Manager) removeMaintenancePath(resource, operation, target string, recursive bool) {
+	var err error
+	if recursive {
+		err = os.RemoveAll(target)
+	} else {
+		err = os.Remove(target)
+	}
+	if err != nil {
+		m.recordMaintenanceError(resource, operation, err)
+		return
+	}
+	m.metrics.AddMaintenanceCleanup(resource, "deleted", 1)
+}
+
 func (m *Manager) RunMaintenance(ctx context.Context) {
 	m.lifecycleWG.Add(1)
 	m.runMaintenance(ctx)
@@ -54,11 +81,14 @@ func (m *Manager) runMaintenance(ctx context.Context) {
 }
 
 func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
+	const resource = "upload_sessions"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	for {
 		sessions, err := m.store.ListExpiredUploadSessions(ctx, now, 200)
 		if err != nil {
+			m.recordMaintenanceError(resource, "list_expired", err)
 			return
 		}
 		if len(sessions) == 0 {
@@ -75,6 +105,7 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 				if err == nil {
 					return
 				}
+				m.metrics.AddMaintenanceCleanup(resource, "error", 1)
 				logging.ErrorFields("expired upload session cleanup failed", map[string]any{
 					"event":      "upload.expired_cleanup_failed",
 					"profile_id": us.ProfileID,
@@ -111,6 +142,7 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 				continue
 			}
 			deleted++
+			m.metrics.AddMaintenanceCleanup(resource, "deleted", 1)
 		}
 		if deleted == 0 {
 			return
@@ -220,9 +252,12 @@ func (m *Manager) cleanupStartupAPIRcloneConfigs(ctx context.Context) {
 }
 
 func (m *Manager) cleanupAPIRcloneConfigs(ctx context.Context, removeAll bool) {
+	const resource = "api_rclone_configs"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
 	dir := filepath.Join(m.dataDir, "tmp", "rclone")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
 	cutoff := time.Now().Add(-orphanAPIRcloneConfigRetention)
@@ -236,14 +271,18 @@ func (m *Manager) cleanupAPIRcloneConfigs(ctx context.Context, removeAll bool) {
 			continue
 		}
 		if removeAll {
-			_ = os.Remove(filepath.Join(dir, entry.Name()))
+			m.removeMaintenancePath(resource, "remove_startup_config", filepath.Join(dir, entry.Name()), false)
 			continue
 		}
 		info, err := entry.Info()
-		if err != nil || info.ModTime().After(cutoff) {
+		if err != nil {
+			m.recordMaintenanceError(resource, "inspect_config", err)
 			continue
 		}
-		_ = os.Remove(filepath.Join(dir, entry.Name()))
+		if info.ModTime().After(cutoff) {
+			continue
+		}
+		m.removeMaintenancePath(resource, "remove_expired_config", filepath.Join(dir, entry.Name()), false)
 	}
 }
 
@@ -251,6 +290,8 @@ func (m *Manager) cleanupOldJobs(ctx context.Context) {
 	if m.jobRetention <= 0 {
 		return
 	}
+	const resource = "jobs"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
 
 	cutoff := time.Now().Add(-m.jobRetention).UTC().Format(time.RFC3339Nano)
 
@@ -264,15 +305,20 @@ func (m *Manager) cleanupOldJobs(ctx context.Context) {
 		callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		ids, err := m.store.DeleteFinishedJobsBefore(callCtx, cutoff, 200)
 		cancel()
-		if err != nil || len(ids) == 0 {
+		if err != nil {
+			m.recordMaintenanceError(resource, "delete_finished", err)
 			return
 		}
+		if len(ids) == 0 {
+			return
+		}
+		m.metrics.AddMaintenanceCleanup(resource, "deleted", len(ids))
 
 		for _, id := range ids {
-			_ = os.Remove(filepath.Join(m.dataDir, "logs", "jobs", id+".log"))
-			_ = os.Remove(filepath.Join(m.dataDir, "logs", "jobs", id+".cmd"))
-			_ = os.Remove(filepath.Join(m.dataDir, "artifacts", "jobs", id+".zip"))
-			_ = os.Remove(filepath.Join(m.dataDir, "artifacts", "jobs", id+".zip.tmp"))
+			m.removeMaintenancePath("job_files", "remove_retained_log", filepath.Join(m.dataDir, "logs", "jobs", id+".log"), false)
+			m.removeMaintenancePath("job_files", "remove_retained_command", filepath.Join(m.dataDir, "logs", "jobs", id+".cmd"), false)
+			m.removeMaintenancePath("job_files", "remove_retained_artifact", filepath.Join(m.dataDir, "artifacts", "jobs", id+".zip"), false)
+			m.removeMaintenancePath("job_files", "remove_retained_artifact_temp", filepath.Join(m.dataDir, "artifacts", "jobs", id+".zip.tmp"), false)
 		}
 
 		m.hub.Publish(ws.Event{Type: "jobs.deleted", Payload: map[string]any{"jobIds": ids, "reason": "retention"}})
@@ -283,10 +329,13 @@ func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
 	if m.jobLogRetention <= 0 {
 		return
 	}
+	const resource = "job_logs"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
 
 	logDir := filepath.Join(m.dataDir, "logs", "jobs")
 	entries, err := os.ReadDir(logDir)
 	if err != nil {
+		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
 
@@ -314,6 +363,7 @@ func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
 	}
 	states, err := m.store.ListJobStatesByIDs(ctx, ids)
 	if err != nil {
+		m.recordMaintenanceError(resource, "list_job_states", err)
 		return
 	}
 
@@ -329,18 +379,25 @@ func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
 			continue
 		}
 		finishedAt, err := time.Parse(time.RFC3339Nano, *job.FinishedAt)
-		if err != nil || finishedAt.After(cutoff) {
+		if err != nil {
+			m.recordMaintenanceError(resource, "parse_finished_at", err)
 			continue
 		}
-		_ = os.Remove(filepath.Join(logDir, jobID+".log"))
-		_ = os.Remove(filepath.Join(logDir, jobID+".cmd"))
+		if finishedAt.After(cutoff) {
+			continue
+		}
+		m.removeMaintenancePath(resource, "remove_log", filepath.Join(logDir, jobID+".log"), false)
+		m.removeMaintenancePath(resource, "remove_command", filepath.Join(logDir, jobID+".cmd"), false)
 	}
 }
 
 func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
+	const resource = "orphan_job_logs"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
 	logDir := filepath.Join(m.dataDir, "logs", "jobs")
 	entries, err := os.ReadDir(logDir)
 	if err != nil {
+		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
 
@@ -372,6 +429,7 @@ func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
 	}
 	states, err := m.store.ListJobStatesByIDs(ctx, ids)
 	if err != nil {
+		m.recordMaintenanceError(resource, "list_job_states", err)
 		return
 	}
 	for jobID, names := range filesByJobID {
@@ -380,15 +438,18 @@ func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
 			if exists && (!strings.HasSuffix(name, ".rclone.conf") || state.Status == models.JobStatusRunning) {
 				continue
 			}
-			_ = os.Remove(filepath.Join(logDir, name))
+			m.removeMaintenancePath(resource, "remove_file", filepath.Join(logDir, name), false)
 		}
 	}
 }
 
 func (m *Manager) cleanupOrphanJobArtifacts(ctx context.Context) {
+	const resource = "orphan_job_artifacts"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
 	artifactDir := filepath.Join(m.dataDir, "artifacts", "jobs")
 	entries, err := os.ReadDir(artifactDir)
 	if err != nil {
+		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
 
@@ -417,6 +478,7 @@ func (m *Manager) cleanupOrphanJobArtifacts(ctx context.Context) {
 	}
 	states, err := m.store.ListJobStatesByIDs(ctx, ids)
 	if err != nil {
+		m.recordMaintenanceError(resource, "list_job_states", err)
 		return
 	}
 	for jobID, names := range filesByJobID {
@@ -424,15 +486,18 @@ func (m *Manager) cleanupOrphanJobArtifacts(ctx context.Context) {
 			continue
 		}
 		for _, name := range names {
-			_ = os.Remove(filepath.Join(artifactDir, name))
+			m.removeMaintenancePath(resource, "remove_file", filepath.Join(artifactDir, name), false)
 		}
 	}
 }
 
 func (m *Manager) cleanupOrphanStagingDirs(ctx context.Context) {
+	const resource = "orphan_staging_directories"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
 	stagingDir := filepath.Join(m.dataDir, "staging")
 	entries, err := os.ReadDir(stagingDir)
 	if err != nil {
+		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
 
@@ -449,11 +514,12 @@ func (m *Manager) cleanupOrphanStagingDirs(ctx context.Context) {
 	}
 	existing, err := m.store.ExistingUploadSessionIDs(ctx, ids)
 	if err != nil {
+		m.recordMaintenanceError(resource, "list_upload_sessions", err)
 		return
 	}
 	for _, uploadID := range ids {
 		if _, exists := existing[uploadID]; !exists {
-			_ = os.RemoveAll(filepath.Join(stagingDir, uploadID))
+			m.removeMaintenancePath(resource, "remove_directory", filepath.Join(stagingDir, uploadID), true)
 		}
 	}
 }

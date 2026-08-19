@@ -59,7 +59,7 @@ func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, p
 		return err
 	}
 
-	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("creating zip from s3://%s/%s", bucket, prefix))
+	_ = m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("creating zip from s3://%s/%s", bucket, prefix))
 	artifactName := defaultZipNameFromPrefix(bucket, prefix)
 	return m.writeZipArtifact(ctx, jobID, logFile, artifactName, func(zw *zip.Writer, publish publishZipProgress) error {
 		return zipS3Objects(ctx, m, profileSecrets, jobID, bucket, objs, zw, publish, preserveLeadingSlash)
@@ -155,7 +155,7 @@ func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, 
 		return err
 	}
 
-	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("creating zip from %d object(s) in s3://%s", ot, bucket))
+	_ = m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("creating zip from %d object(s) in s3://%s", ot, bucket))
 	artifactName := defaultZipNameFromKeys(bucket, stripPrefix, objs)
 	return m.writeZipArtifact(ctx, jobID, logFile, artifactName, func(zw *zip.Writer, publish publishZipProgress) error {
 		return zipS3Objects(ctx, m, profileSecrets, jobID, bucket, objs, zw, publish, preserveLeadingSlash)
@@ -273,9 +273,9 @@ func (m *Manager) writeZipArtifact(
 	}
 
 	if artifactName != "" {
-		m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("artifact ready: %s", artifactName))
+		_ = m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("artifact ready: %s", artifactName))
 	} else {
-		m.writeJobLog(logFile, jobID, "info", "artifact ready")
+		_ = m.writeJobLog(logFile, jobID, "info", "artifact ready")
 	}
 	return nil
 }

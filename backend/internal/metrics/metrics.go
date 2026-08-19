@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -32,8 +33,9 @@ type Metrics struct {
 	thumbnailCacheHitsTotal    *prometheus.CounterVec
 	downloadProxyModeTotal     *prometheus.CounterVec
 
-	eventsConnections     prometheus.Gauge
-	eventsReconnectsTotal prometheus.Counter
+	eventsConnections       prometheus.Gauge
+	eventsReconnectsTotal   prometheus.Counter
+	maintenanceCleanupTotal *prometheus.CounterVec
 }
 
 func New() *Metrics {
@@ -114,10 +116,14 @@ func New() *Metrics {
 		Name: "events_reconnects_total",
 		Help: "Total number of realtime reconnects.",
 	})
+	m.maintenanceCleanupTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "maintenance_cleanup_total",
+		Help: "Maintenance cleanup runs, deletions, and errors by resource.",
+	}, []string{"resource", "outcome"})
 
 	reg.MustRegister(
-		prometheus.NewGoCollector(),
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		m.jobsQueueDepth,
 		m.jobsQueueCapacity,
 		m.jobsStartedTotal,
@@ -135,6 +141,7 @@ func New() *Metrics {
 		m.downloadProxyModeTotal,
 		m.eventsConnections,
 		m.eventsReconnectsTotal,
+		m.maintenanceCleanupTotal,
 	)
 
 	return m
@@ -325,4 +332,11 @@ func (m *Metrics) IncEventsReconnects() {
 		return
 	}
 	m.eventsReconnectsTotal.Inc()
+}
+
+func (m *Metrics) AddMaintenanceCleanup(resource, outcome string, count int) {
+	if m == nil || count <= 0 {
+		return
+	}
+	m.maintenanceCleanupTotal.WithLabelValues(resource, outcome).Add(float64(count))
 }

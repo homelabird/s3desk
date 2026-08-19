@@ -28,6 +28,7 @@ func (s *server) enqueueStagingUploadCommit(
 		}
 		return models.Job{}, err
 	}
+	logJobEnqueued(ctx, profileID, job.ID, job.Type)
 
 	s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
 	return job, nil

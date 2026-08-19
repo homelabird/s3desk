@@ -26,7 +26,7 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 				ExtraFileCount: len(opts.ExtraFiles),
 			},
 			func(level string, message string) {
-				m.writeJobLog(logWriter, jobID, level, message)
+				_ = m.writeJobLog(logWriter, jobID, level, message)
 			},
 		)
 	}

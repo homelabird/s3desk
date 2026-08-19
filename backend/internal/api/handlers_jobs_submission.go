@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"s3desk/internal/jobs"
 	"s3desk/internal/logging"
@@ -313,8 +314,26 @@ func (s *server) createAndEnqueueJob(ctx context.Context, profileID, jobType str
 		}
 		return job, nil, err
 	}
+	logJobEnqueued(ctx, profileID, job.ID, jobType)
 
 	return job, nil, nil
+}
+
+func jobEnqueueLogFields(ctx context.Context, profileID, jobID, jobType string) map[string]any {
+	fields := map[string]any{
+		"event":      "job.enqueued",
+		"profile_id": profileID,
+		"job_id":     jobID,
+		"job_type":   jobType,
+	}
+	if requestID := chimiddleware.GetReqID(ctx); requestID != "" {
+		fields["request_id"] = requestID
+	}
+	return fields
+}
+
+func logJobEnqueued(ctx context.Context, profileID, jobID, jobType string) {
+	logging.InfoFields("job enqueued", jobEnqueueLogFields(ctx, profileID, jobID, jobType))
 }
 
 func (s *server) rollbackCreatedJobAfterEnqueueFailure(

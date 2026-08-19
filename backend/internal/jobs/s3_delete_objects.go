@@ -51,10 +51,10 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 	ot := int64(len(keys))
 	startedAt := time.Now()
 	if err := m.updateAndPublishProgress(jobID, &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: int64Ptr(0)}); err != nil {
-		m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to persist initial progress: %v", err))
+		_ = m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to persist initial progress: %v", err))
 		return err
 	}
-	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("deleting %d object(s) from s3://%s", ot, bucket))
+	_ = m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("deleting %d object(s) from s3://%s", ot, bucket))
 
 	const batchSize = 1000
 	var objectsDone int64
@@ -74,7 +74,7 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 
 		tmpPath, err := writeFilesFromRawTempFile("rclone-delete-*.txt", batch)
 		if err != nil {
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to prepare delete list: %v", err))
+			_ = m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to prepare delete list: %v", err))
 			return err
 		}
 
@@ -82,7 +82,7 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 		proc, err := m.startRcloneCommand(ctx, profileSecrets, jobID, args)
 		if err != nil {
 			_ = os.Remove(tmpPath)
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("rclone delete failed: %v", err))
+			_ = m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("rclone delete failed: %v", err))
 			return err
 		}
 		_, _ = io.Copy(io.Discard, proc.stdout)
@@ -90,7 +90,7 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 		_ = os.Remove(tmpPath)
 		if waitErr != nil {
 			err := jobErrorFromRclone(waitErr, proc.stderr.String(), "rclone delete")
-			m.writeJobLog(logFile, jobID, "error", err.Error())
+			_ = m.writeJobLog(logFile, jobID, "error", err.Error())
 			return err
 		}
 
@@ -118,12 +118,12 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 			}
 		}
 		if err := m.updateAndPublishProgress(jobID, jp); err != nil {
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to persist progress: %v", err))
+			_ = m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to persist progress: %v", err))
 			return err
 		}
 	}
 
-	m.writeJobLog(logFile, jobID, "info", "completed")
+	_ = m.writeJobLog(logFile, jobID, "info", "completed")
 	return nil
 }
 

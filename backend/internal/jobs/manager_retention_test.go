@@ -8,12 +8,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"gorm.io/gorm"
 
 	"s3desk/internal/db"
+	"s3desk/internal/metrics"
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
@@ -65,6 +67,25 @@ func TestCleanupOrphanJobLogsBatchesDatabaseReads(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(logDir, "orphan-000.log")); !os.IsNotExist(err) {
 		t.Fatalf("orphan log still exists or stat failed: %v", err)
+	}
+}
+
+func TestRemoveMaintenancePathRecordsFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "kept"), []byte("x"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	cleanupMetrics := metrics.New()
+	manager := NewManager(Config{Metrics: cleanupMetrics})
+	manager.removeMaintenancePath("test_files", "remove_directory", dir, false)
+
+	rec := httptest.NewRecorder()
+	cleanupMetrics.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	want := `maintenance_cleanup_total{outcome="error",resource="test_files"} 1`
+	if !strings.Contains(rec.Body.String(), want) {
+		t.Fatalf("metrics output missing %q", want)
 	}
 }
 
@@ -394,10 +415,12 @@ func TestCleanupExpiredUploadSessionsRemovesTrackedRows(t *testing.T) {
 		t.Fatalf("create profile: %v", err)
 	}
 
+	cleanupMetrics := metrics.New()
 	manager := NewManager(Config{
 		Store:            st,
 		DataDir:          dataDir,
 		Hub:              ws.NewHub(),
+		Metrics:          cleanupMetrics,
 		Concurrency:      1,
 		UploadSessionTTL: time.Minute,
 	})
@@ -474,6 +497,16 @@ func TestCleanupExpiredUploadSessionsRemovesTrackedRows(t *testing.T) {
 	}
 	if _, err := os.Stat(stagingDir); !os.IsNotExist(err) {
 		t.Fatalf("expected staging dir to be removed, err=%v", err)
+	}
+	rec := httptest.NewRecorder()
+	cleanupMetrics.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	for _, want := range []string{
+		`maintenance_cleanup_total{outcome="run",resource="upload_sessions"} 1`,
+		`maintenance_cleanup_total{outcome="deleted",resource="upload_sessions"} 1`,
+	} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("metrics output missing %q", want)
+		}
 	}
 }
 
