@@ -60,7 +60,12 @@ helm lint "${CHART_PATH}" --values "${CHART_PATH}/ci-values.yaml"
 helm lint "${CHART_PATH}" --values "${CHART_PATH}/values-production.yaml"
 helm lint "${CHART_PATH}" --values "${CHART_PATH}/values-istio.yaml"
 
-helm template "${RELEASE_NAME}" "${CHART_PATH}" >/dev/null
+DEFAULT_RENDERED="${TMP_DIR}/default-rendered.yaml"
+helm template "${RELEASE_NAME}" "${CHART_PATH}" >"${DEFAULT_RENDERED}"
+if grep -q '^kind: PrometheusRule$' "${DEFAULT_RENDERED}"; then
+  echo "[helm-check] expected PrometheusRule to remain opt-in" >&2
+  exit 1
+fi
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --values "${CHART_PATH}/ci-values.yaml" >/dev/null
 if helm template "${RELEASE_NAME}" "${CHART_PATH}" \
@@ -288,6 +293,14 @@ grep -Eq "networkPolicy|Additional property|from|to" "${TMP_DIR}/network-policy-
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set monitoring.serviceMonitor.enabled=true \
   --set monitoring.podMonitor.enabled=true >/dev/null
+PROMETHEUS_RULE_RENDERED="${TMP_DIR}/prometheus-rule-rendered.yaml"
+helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+  --set server.allowRemote=false \
+  --set monitoring.prometheusRule.enabled=true >"${PROMETHEUS_RULE_RENDERED}"
+grep -q '^kind: PrometheusRule$' "${PROMETHEUS_RULE_RENDERED}"
+grep -q 'alert: S3DeskTargetDown' "${PROMETHEUS_RULE_RENDERED}"
+grep -q 'alert: S3DeskJobQueueFull' "${PROMETHEUS_RULE_RENDERED}"
+grep -q 'alert: S3DeskMaintenanceCleanupError' "${PROMETHEUS_RULE_RENDERED}"
 MONITORING_EXISTING_SECRET_RENDERED="${TMP_DIR}/monitoring-existing-secret-rendered.yaml"
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set server.allowRemote=false \

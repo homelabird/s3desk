@@ -213,6 +213,7 @@ Watch these metrics together:
 - `thumbnail_cache_hits_total{source}`
 - `download_proxy_mode_total{mode}`
 - `transfer_errors_total{code}`
+- `maintenance_cleanup_total{resource,outcome}`
 
 Use these operational thresholds:
 
@@ -244,17 +245,32 @@ Use these operational thresholds:
 - Treat more than `2` staged restore directories or more than `5 GiB` of staged restore payloads as cleanup-required.
 - Any staged restore older than `7 days` should be considered stale unless a cutover is actively in progress.
 
+### Maintenance cleanup
+
+- Graph `rate(maintenance_cleanup_total{outcome="deleted"}[30m])` by `resource` to confirm retention is making progress.
+- Alert when `increase(maintenance_cleanup_total{outcome="error"}[30m]) > 0`; cleanup failures are normally actionable and repeated failures can precede PVC exhaustion.
+- A `run` increase without corresponding `deleted` activity is normal when nothing has expired.
+
+### DATA_DIR capacity
+
+- On Kubernetes, use kubelet volume metrics for the S3Desk PVC; do not duplicate filesystem capacity in the application metrics endpoint.
+- Monitor `kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes` and `kubelet_volume_stats_inodes_free / kubelet_volume_stats_inodes` for the chart PVC.
+- On Compose, monitor the host filesystem that backs `/data` with the existing host agent or node exporter.
+- Set warning and critical thresholds only after measuring normal backup, staging, thumbnail, and job-log growth.
+
 ### Dashboard and alert expectations
 
 - Dashboard panels should break down `storage_operations_total` by provider and operation so thumbnail, list, and download spikes are obvious.
 - Track `thumbnail_cache_hits_total` by source to see whether hits come from request fingerprint, manifest, or post-stat paths.
 - Track `download_proxy_mode_total` split between `stat_skipped` and `stat_required`.
+- Track maintenance cleanup errors and deletions by resource.
 - Create an alert or scheduled review for any of these conditions:
   - staged restore count > `2`
   - staged restore age > `7 days`
   - thumbnail cache reuse staying below the `80%` warm-cache threshold for a commonly revisited bucket
   - storage operation error ratio > `5%` for `10 minutes`
   - list or metadata operation p95 > `3000ms` for `10 minutes`
+  - any maintenance cleanup error in `30 minutes`
 
 ## Backup Guidance
 

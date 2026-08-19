@@ -1,0 +1,47 @@
+{{- if .Values.monitoring.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "s3desk.fullname" . }}
+  labels:
+    {{- include "s3desk.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.monitoring.prometheusRule.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  groups:
+    - name: {{ include "s3desk.fullname" . }}
+      rules:
+        - alert: S3DeskTargetDown
+          expr: |
+            (up{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }}} == 0)
+            or absent(up{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }}})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: S3Desk metrics target is down
+            description: The S3Desk metrics target has been missing or unreachable for five minutes.
+        - alert: S3DeskJobQueueFull
+          expr: |
+            jobs_queue_capacity{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }}} > 0
+            and jobs_queue_depth{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }}} >= jobs_queue_capacity{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }}}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: S3Desk job queue is full
+            description: The in-process job queue has remained at capacity for five minutes.
+        - alert: S3DeskMaintenanceCleanupError
+          expr: |
+            increase(maintenance_cleanup_total{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }},outcome="error"}[30m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: S3Desk maintenance cleanup failed
+            description: A retention or orphan cleanup operation failed during the last thirty minutes.
+{{- end }}

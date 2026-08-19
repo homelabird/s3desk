@@ -7,7 +7,7 @@
 
 S3Desk에는 구조화 로그·민감정보 redaction, job별 로그와 tail polling, health/readiness/worker 진단, 인증된 Prometheus endpoint, ServiceMonitor/PodMonitor까지 기본 운영 바닥이 있다. 단일 프로세스·단일 운영자 제품으로서는 기능 기반이 양호하다.
 
-이번 감사에서 probe 실패 로그, 런타임 자원 지표, production job log 상한, Settings 진단 가시성을 보강했다. 다만 alert rule·dashboard·SLO, 디스크 여유 지표, maintenance 실패 계측, 실제 Prometheus Operator 배포 증거가 없어 **운영 모니터링 완성 상태로 판정할 수는 없다.**
+이번 감사에서 probe 실패 로그, 런타임 자원 지표, production job log 상한, Settings 진단 가시성, HTTP→job 상관관계, maintenance cleanup 계측과 최소 alert rule을 보강했다. 다만 workload별 dashboard·SLO, 실제 디스크/Prometheus Operator 배포 증거가 없어 **운영 모니터링 완성 상태로 판정할 수는 없다.**
 
 ## 소유 경계
 
@@ -63,6 +63,30 @@ S3Desk에는 구조화 로그·민감정보 redaction, job별 로그와 tail pol
 - browser-local Objects·Transfers·Network 값은 “Saved immediately in this browser.”로 저장 범위를 명시
 - 모바일 `320px` reflow와 dark-mode axe 검사를 실제 진단 표가 열린 상태로 실행
 
+### OPS-05 — HTTP 요청과 background job 로그 상관관계가 끊김
+
+수정:
+
+- 세 job enqueue 경로가 공통 `job.enqueued` 구조화 이벤트를 사용
+- HTTP middleware의 request ID를 job ID, job type, profile ID와 같은 이벤트에 기록
+- 자동 object-index repair도 같은 상관관계 필드를 사용하면서 repair reason을 유지
+
+### OPS-06 — maintenance cleanup 실패와 삭제량을 관측할 수 없음
+
+수정:
+
+- `maintenance_cleanup_total{resource,outcome}` counter로 run, deleted, error를 기록
+- upload session, job retention, job log, orphan artifact/staging, 임시 rclone config cleanup을 낮은 cardinality resource로 구분
+- 기존에 버리던 파일 삭제 오류를 구조화 로그와 error counter에 기록
+
+### OPS-07 — scrape 이후의 최소 장애 감지 계약이 없음
+
+수정:
+
+- opt-in `PrometheusRule`에 metrics target down, 5분 queue 포화, 30분 내 maintenance cleanup 오류 alert를 추가
+- workload baseline이 필요한 provider/HTTP error ratio와 latency threshold는 배포 환경 소유로 유지
+- Helm lint/render gate에서 세 alert와 PrometheusRule 생성을 확인
+
 ## 현재 강점
 
 ### 설정 안전성
@@ -90,33 +114,23 @@ S3Desk에는 구조화 로그·민감정보 redaction, job별 로그와 tail pol
 
 ## 남은 우선순위
 
-### P1 — alert rule·dashboard·SLO가 저장소 계약에 없음
+### P1 — workload별 dashboard·SLO가 저장소 계약에 없음
 
-ServiceMonitor/PodMonitor는 scrape만 만든다. `PrometheusRule`, Grafana dashboard, burn-rate/SLO 또는 최소 alert 예시가 없다. 따라서 수집 성공이 장애 감지 성공을 뜻하지 않는다.
-
-최소 후속안:
-
-- scrape target down, readiness failure, queue saturation, job failure ratio, provider remote error ratio, HTTP 5xx, process memory를 우선 alert로 정의
-- alert threshold는 실제 workload baseline 없이 코드에 임의 고정하지 말고 배포 환경에서 승인
-
-### P1 — disk capacity와 maintenance 실패가 계측되지 않음
-
-`/readyz`는 쓰기 가능 여부만 확인하고 남은 byte/inode를 보지 않는다. expired upload/job/log cleanup의 일부 오류는 반환하거나 삭제 결과를 버리므로 반복 실패와 PVC 포화를 metric으로 조기에 발견하기 어렵다.
+ServiceMonitor/PodMonitor와 불변 실패용 `PrometheusRule`은 있다. 그러나 provider latency/error budget, HTTP SLO, Grafana dashboard는 실제 workload baseline 없이 저장소가 임의로 소유하지 않는다.
 
 최소 후속안:
 
-- 플랫폼별 안전한 filesystem collector 또는 node/kubelet volume metric을 SOT로 선택
-- cleanup run/error/deleted counter를 낮은 cardinality의 `resource`, `outcome` label로 추가
-- 애플리케이션과 node exporter가 같은 disk 지표를 중복 소유하지 않도록 배포 기준을 먼저 정함
+- provider remote error ratio, HTTP 5xx, job failure ratio, latency SLO는 실제 workload baseline을 측정한 뒤 배포 환경에서 승인
+- Grafana dashboard는 운영 datasource와 label 계약이 확정될 때 추가
 
-### P1 — 운영 로그 상관관계가 HTTP와 background job 사이에서 끊김
+### P1 — disk capacity의 실제 배포 증거가 없음
 
-HTTP log에는 request ID, job lifecycle log에는 job/profile ID가 있지만 enqueue 시 request ID를 durable job metadata로 이어 주는 trace 계약은 없다. 문제 재현 시 API 요청에서 background failure로 수동 탐색해야 한다.
+`/readyz`는 쓰기 가능 여부만 확인한다. Kubernetes는 kubelet의 `kubelet_volume_stats_available_bytes`/inode 지표를 PVC SOT로 사용하고, Compose는 `/data`를 제공하는 host filesystem collector를 사용한다. 애플리케이션은 같은 디스크 지표를 중복 노출하지 않는다.
 
 최소 후속안:
 
-- 먼저 enqueue structured log에 request ID와 job ID가 함께 존재하는지 모든 submission 경로를 통일
-- 분산 trace/OpenTelemetry는 multi-service 또는 외부 collector 운영 요구가 생길 때 도입
+- 실제 cluster/host에서 collector가 해당 volume을 노출하는지 확인
+- 배포별 용량·증가율 baseline을 측정한 뒤 warning/critical threshold 승인
 
 ### P2 — 실제 운영 환경 증거 필요
 

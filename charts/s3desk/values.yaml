@@ -67,6 +67,10 @@ networkPolicy:
     extra: []
 
 monitoring:
+  prometheusRule:
+    enabled: false
+    labels: {}
+    annotations: {}
   serviceMonitor:
     enabled: false
     labels: {}

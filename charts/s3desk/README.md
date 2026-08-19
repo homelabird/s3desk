@@ -190,8 +190,14 @@ Prometheus Operator objects:
 helm upgrade --install s3desk ./charts/s3desk \
   --namespace s3desk \
   --create-namespace \
-  --set monitoring.serviceMonitor.enabled=true
+  --set monitoring.serviceMonitor.enabled=true \
+  --set monitoring.prometheusRule.enabled=true
 ```
+
+The optional `PrometheusRule` alerts only on invariant failures: a missing
+metrics target, a queue held at full capacity, or a maintenance cleanup error.
+Tune workload-specific latency and error-ratio alerts in your monitoring stack
+after measuring the deployment baseline.
 
 ## Operational Notes
 
@@ -205,7 +211,7 @@ helm upgrade --install s3desk ./charts/s3desk \
 - The chart creates a dedicated ServiceAccount by default and disables service-account token automount unless you override it.
 - `networkPolicy` is opt-in. The default policy type is ingress-only so existing outbound DB/provider traffic is not broken by accident; `values-production.yaml` shows an NGINX controller ingress allow-list and leaves egress policy disabled until destinations are known.
 - Every rclone subprocess still uses S3Desk's short-lived guarded loopback proxy, independent of the Kubernetes `networkPolicy` setting. If `Egress` is enabled, allow DNS and the actual provider/database/proxy destinations in `networkPolicy.egress.extra`.
-- `ServiceMonitor` and `PodMonitor` are opt-in and default to the same API token Secret/key used by the app.
+- `ServiceMonitor`, `PodMonitor`, and `PrometheusRule` are opt-in. Monitors default to the same API token Secret/key used by the app.
 - `DATA_DIR` persistence is still useful on Postgres for thumbnails, staged restores, and job artifacts.
 - In-product `Full backup` / `Cache + metadata` flows remain sqlite-only. Use portable backup/import for cross-backend migration.
 
