@@ -323,7 +323,7 @@ describe("BucketsPage", () => {
       await screen.findByText(failedToLoadBucketsTitle()),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("No buckets found in this storage."),
+      screen.queryByText("Your S3Desk workspace has no buckets yet."),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Check profiles" }),

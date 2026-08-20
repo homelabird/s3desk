@@ -36,9 +36,6 @@ export function BucketPolicyWorkspaceHeader(props: {
       <div className={styles.decisionHeaderTop}>
         <div className={styles.decisionHeaderCopy}>
           <Typography.Text strong>{guide.workspaceTitle}</Typography.Text>
-          <Typography.Text type="secondary">
-            {guide.workspaceDescription}
-          </Typography.Text>
         </div>
         <div className={styles.decisionBadgeRow} aria-label="Policy risk signals">
           {guide.riskBadges.map((badge) => (

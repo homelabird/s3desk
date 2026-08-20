@@ -58,9 +58,9 @@ export function BucketsPageShell(props: BucketsPageShellProps) {
 				<Empty
 					description={
 						<Space orientation="vertical" size={4}>
-							<Typography.Text>No buckets found in this storage.</Typography.Text>
+							<Typography.Text>Your S3Desk workspace has no buckets yet.</Typography.Text>
 							<Typography.Text type="secondary">
-								Create a new bucket, or check that your profile has the right permissions to list buckets.
+								Create the first bucket. If you expected existing data, check the active profile’s list permissions.
 							</Typography.Text>
 						</Space>
 					}
