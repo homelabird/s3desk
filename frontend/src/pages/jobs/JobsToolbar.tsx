@@ -357,11 +357,6 @@ export function JobsToolbar(props: JobsToolbarProps) {
 					</PopoverSurface>
 				</div>
 				{useCompactFilters ? (
-					<Typography.Text type="secondary" className={styles.mobileFiltersHint} data-testid="jobs-mobile-filters-hint">
-						Search current jobs here, or open Filters for status, type, and error code.
-					</Typography.Text>
-				) : null}
-				{useCompactFilters ? (
 					<OverlaySheet
 						open={mobileFiltersOpenVisible}
 						onClose={() => setScopedMobileFiltersOpen(false)}

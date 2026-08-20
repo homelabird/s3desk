@@ -5,6 +5,44 @@ import { describe, expect, it, vi } from 'vitest'
 import { AppTabs } from '../AppTabs'
 
 describe('AppTabs', () => {
+	it('keeps the controlled active tab in view', async () => {
+		const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+		const scrollIntoView = vi.fn()
+		Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+
+		try {
+			const { rerender } = render(
+				<AppTabs
+					activeKey="tab-a"
+					items={[
+						{ key: 'tab-a', label: 'First tab', children: <div>First panel</div> },
+						{ key: 'tab-b', label: 'Second tab', children: <div>Second panel</div> },
+					]}
+				/>,
+			)
+
+			await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1))
+			rerender(
+				<AppTabs
+					activeKey="tab-b"
+					items={[
+						{ key: 'tab-a', label: 'First tab', children: <div>First panel</div> },
+						{ key: 'tab-b', label: 'Second tab', children: <div>Second panel</div> },
+					]}
+				/>,
+			)
+
+			await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2))
+			expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest', inline: 'nearest' })
+		} finally {
+			if (originalScrollIntoView) {
+				Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: originalScrollIntoView })
+			} else {
+				Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+			}
+		}
+	})
+
 	it('tracks horizontal overflow state for small editable tabs', async () => {
 		render(
 			<AppTabs

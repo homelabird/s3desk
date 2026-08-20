@@ -116,8 +116,7 @@
 	width: min(420px, calc(100vw - 32px));
 }
 
-.diagnosticsHint,
-.mobileFiltersHint {
+.diagnosticsHint {
 	display: block;
 	line-height: 1.5;
 }
@@ -131,13 +130,21 @@
 	padding-top: 12px;
 }
 
-.mobileFiltersHint {
-	margin-top: 10px;
-}
-
 @media (max-width: 768px) {
 	.headerActions :global(.ant-btn) {
 		min-height: 44px;
+	}
+
+	.alertStack {
+		gap: 8px;
+	}
+
+	.alertStack :global(.ant-alert-with-description) {
+		padding: 10px 12px;
+	}
+
+	.alertStack :global(.ant-alert-description) {
+		display: none;
 	}
 }
 

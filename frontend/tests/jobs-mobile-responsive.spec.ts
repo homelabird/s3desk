@@ -57,6 +57,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(page.getByLabel('Activity alerts')).toBeVisible()
 		await expect(page.getByLabel('Activity filters')).toBeVisible()
 		await expect(page.getByText('Realtime updates disconnected')).toBeVisible()
+		await expect(page.getByText('Auto-retry paused. Use Retry realtime to reconnect.')).toBeHidden()
 		await expect(page.getByRole('button', { name: 'Upload from device' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'More job actions' })).toHaveCount(0)
 		await expectMinTouchHeight(page.getByTestId('jobs-mobile-filters-trigger'))

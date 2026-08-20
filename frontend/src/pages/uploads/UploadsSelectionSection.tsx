@@ -38,7 +38,7 @@ export function UploadsSelectionSection(props: Props) {
 	return (
 		<PageSection
 			title="Selection"
-			description="Start here. Add files or folders from this device, then review the destination below."
+			description="Add files or folders from this device."
 		>
 			<div className={styles.selectionStack}>
 				<div className={styles.selectionActions}>

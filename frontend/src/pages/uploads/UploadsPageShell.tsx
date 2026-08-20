@@ -75,7 +75,7 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 
 					<PageSection
 						title="Target & source"
-						description="Choose where this selection will be uploaded. Bucket is required before queueing."
+						description="Choose a bucket and optional prefix."
 						actions={
 							<Typography.Text type="secondary" className={styles.destinationLabel}>
 								{presentation.targetSource.destinationLabel}

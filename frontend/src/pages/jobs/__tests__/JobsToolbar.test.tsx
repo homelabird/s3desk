@@ -186,9 +186,7 @@ describe('JobsToolbar', () => {
 		expect(trigger).toHaveAttribute('aria-expanded', 'false')
 		expect(trigger).toHaveAttribute('aria-controls', 'jobs-mobile-filters-sheet-panel')
 		expect(screen.getByRole('button', { name: /Filters active/i })).toBeInTheDocument()
-		expect(screen.getByTestId('jobs-mobile-filters-hint')).toHaveTextContent(
-			'Search current jobs here, or open Filters for status, type, and error code.',
-		)
+		expect(screen.queryByTestId('jobs-mobile-filters-hint')).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job status filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job type filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job error code filter' })).not.toBeInTheDocument()

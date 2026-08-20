@@ -150,6 +150,10 @@ export function AppTabs(props: AppTabsProps) {
 		}
 	}, [props.items, props.type, props.size])
 
+	useEffect(() => {
+		tabButtonByKeyRef.current.get(safeActiveKey)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+	}, [safeActiveKey])
+
 	return (
 		<div
 			className={rootClasses}

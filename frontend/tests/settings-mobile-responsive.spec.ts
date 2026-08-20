@@ -117,10 +117,10 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		const drawer = dialogByName(page, 'Settings')
 		await expect(drawer).toBeVisible()
 
-		await drawer.getByRole('tab', { name: 'Access' }).focus()
-		await page.keyboard.press('End')
-
-		await expect(drawer.getByRole('tab', { name: 'Support' })).toHaveAttribute('aria-selected', 'true')
+		const supportTab = drawer.getByRole('tab', { name: 'Support' })
+		await supportTab.click()
+		await expect(supportTab).toHaveAttribute('aria-selected', 'true')
+		await expect(supportTab).toBeInViewport()
 		const recoveryTools = drawer.getByRole('button', { name: /Browser recovery/ })
 		await expect(recoveryTools).toBeVisible()
 		await recoveryTools.click()

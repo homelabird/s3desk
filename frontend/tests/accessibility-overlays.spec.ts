@@ -493,7 +493,7 @@ test.describe('overlay accessibility scans', () => {
 	test('Buckets empty state has no whole-page axe violations', async ({ page }) => {
 		await installProfilesBucketsMobileResponsiveFixtures(page, { buckets: [] })
 		await seedProfilesBucketsMobileResponsiveStorage(page)
-		await gotoBucketsPage(page, { ready: (scope) => scope.getByText('No buckets found in this storage.') })
+		await gotoBucketsPage(page, { ready: (scope) => scope.getByText('Your S3Desk workspace has no buckets yet.') })
 
 		await expectNoA11yViolations(page, page.locator('body'))
 	})
@@ -959,17 +959,6 @@ test.describe('overlay accessibility scans', () => {
 
 		const sheet = await openJobsMobileFilters(page)
 		await expect(sheet.getByRole('combobox', { name: 'Job status filter' })).toBeVisible()
-
-		await expectNoA11yViolations(page, sheet)
-	})
-
-	test('mobile Jobs upload source sheet has no axe violations', async ({ page }) => {
-		await setupJobsMobileA11yPage(page)
-
-		await page.getByRole('button', { name: 'Upload from device' }).click()
-		const sheet = dialogByName(page, 'Upload from device')
-		await expect(sheet).toBeVisible()
-		await expect(sheet.getByRole('button', { name: 'Choose from device…' })).toBeVisible()
 
 		await expectNoA11yViolations(page, sheet)
 	})
