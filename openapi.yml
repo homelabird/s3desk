@@ -2522,7 +2522,8 @@ components:
         ok: { type: boolean }
         message: { type: string }
         details:
-          $ref: "#/components/schemas/ProfileConnectivityDetails"
+          allOf:
+            - $ref: "#/components/schemas/ProfileConnectivityDetails"
           description: |
             Additional test metadata.
             Known keys:
