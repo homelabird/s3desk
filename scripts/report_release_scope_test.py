@@ -23,6 +23,7 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertEqual(MODULE.release_unit_for("scripts/report_release_scope.py"), "release-scope-tooling")
         self.assertEqual(MODULE.release_unit_for("scripts/check_release_evidence_test.py"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for(".golangci.yml"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for(".containerignore"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("Containerfile.local"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("Containerfile.deploy"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("ansible/portable-migration-smoke.yml"), "release-gate-ci-deploy")

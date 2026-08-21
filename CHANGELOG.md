@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+## `0.21v-rc4` - 2026-08-21
+
+### New Features
+- Added remote backup storage transfers for portable backup and restore workflows.
+- Added remote syslog configuration, runtime diagnostics, and low-cardinality operational metrics and alerts.
+- Added a bootstrap API path that loads server metadata and profiles together for faster authenticated startup.
+
+### Improvements
+- Improved Objects with responsive list and grid interactions, paginated favorites, bounded index probing, and clearer image-viewer behavior.
+- Improved Jobs with canonical log rendering, bounded queue storage, batched maintenance reads, and a simpler overlay stack.
+- Reduced the initial frontend bundle and streamlined application startup, transfer queues, and backend job lifecycle storage.
+- Improved mobile safe-area handling, reflow, information hierarchy, history controls, and profile and grid density.
+- Improved portable migration consistency and demo deployment validation across Compose, Podman, and Ansible smoke paths.
+
+### Security
+- Updated Go toolchain and dependency security baselines and kept release images pinned to the approved toolchain.
+- Hardened backend runtime operations, API assets, portable migration handling, and release artifact gates.
+- Added runtime alerts for failed maintenance operations and retry exhaustion without introducing high-cardinality labels.
+
+### Bug Fixes
+- Fixed profile startup so token login is shown before bootstrap requests and invalid bootstrap responses fall back safely.
+- Fixed Jobs log polling, persistence, and rendering regressions across reconnect, retry, and overlay flows.
+- Fixed bucket policy loading, empty, unsupported, and error states so each state exposes the correct recovery action.
+- Fixed mobile viewport, overlay focus, transient heading, and accessibility regressions across core workflows.
+- Fixed object keyboard, row, preview, and responsive interaction regressions covered by the browser suites.
+
+### Chores
+- Expanded Core Mock, mobile-responsive, reflow, portable migration, database migration, and release-gate coverage.
+- Added release-scope, live-evidence, third-party notice, and deployment checks for repeatable candidate review.
+- Refreshed the README provider labels and demo GIF and documented the slower walkthrough playback.
+
+### Release Candidate Notes
+- `0.21v-rc4` is a continuation release candidate; this is not a final `0.21v` release.
+- Keep this release candidate blocked from final promotion until real-provider validation evidence is complete for AWS S3, GCS, Azure Blob, OCI Object Storage, MinIO, and Ceph.
+- Keep reverse-proxy and portable-backup smoke evidence current before promoting to final `0.21v`.
+
+### Known Limitations
+- Azure legal hold remains read-only in S3Desk.
+- Azure immutability editing requires ARM credentials in addition to storage credentials.
+- OCI PAR edits are delete-and-recreate rather than in-place mutation, and the full access URI is only guaranteed at creation time.
+- AWS typed bucket governance still does not cover Object Lock.
+- In-product backup and staged restore target sqlite `DATA_DIR` workflows and do not replace Postgres disaster recovery.
+
+### Full Changelog
+**Full Changelog**: https://github.com/homelabird/s3desk/compare/0.21v-rc3...0.21v-rc4
+
 ## `0.21v-rc3` - 2026-03-24
 
 ### New Features

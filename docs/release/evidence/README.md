@@ -17,7 +17,7 @@ The audit reports provider-live, reverse-proxy, and backup-portable evidence req
 
 Use `--format json` when release automation needs the same remediation data without parsing Markdown. Each requirement includes structured command and metadata fields such as `preflight_command`, `env_template_command`, `evidence_targets` or `evidence_target`, `required_metadata`, `required_metadata_fields`, and the relevant provider test, reverse-proxy smoke command, or backup-portable smoke command. Reverse-proxy requirements also include `required_check_fields`, `check_status_expectations`, and `check_result_expectations` so automation can verify HTTP status coverage and URL-root result coverage without parsing prose. Backup-portable requirements include `required_check_fields` so automation can verify the per-script smoke result lines. When `--candidate-id <tag-or-sha>` is provided, remediation evidence targets and the reverse-proxy smoke command use that concrete candidate identifier instead of the `<tag-or-sha>` placeholder. The top-level `final_gate_commands` object includes the strict release-scope and release-evidence commands for the final candidate gate.
 
-For the current release-candidate workspace, use [LIVE_EVIDENCE_CHECKLIST_2026-05-02.md](LIVE_EVIDENCE_CHECKLIST_2026-05-02.md) as the operator checklist before rerunning the strict evidence gate.
+For the current release-candidate workspace, use [LIVE_EVIDENCE_CHECKLIST_2026-08-21.md](LIVE_EVIDENCE_CHECKLIST_2026-08-21.md) as the operator checklist before rerunning the strict evidence gate.
 
 Checklist drift is guarded by:
 
