@@ -552,7 +552,7 @@ export async function openJobsDownloadDrawer(
 		timeout?: number
 	} = {},
 ): Promise<Locator> {
-	const trigger = page.getByRole('button', { name: options.triggerButtonName ?? 'More job actions' }).first()
+	const trigger = page.getByRole('button', { name: options.triggerButtonName ?? /^(?:Open actions menu|Actions(?: for job .+)?)$/ }).first()
 	await trigger.scrollIntoViewIfNeeded()
 	await trigger.click()
 	const menuItem = page.getByRole('menuitem', { name: options.menuItemName ?? /Download to device/ })

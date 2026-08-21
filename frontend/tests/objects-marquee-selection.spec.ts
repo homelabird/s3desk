@@ -45,10 +45,12 @@ test('selects objects with a Windows-style marquee and auto-scrolls at the viewp
 	const cards = grid.locator('[data-object-key]')
 	await expect(cards.first()).toBeVisible()
 	const gridBox = await grid.boundingBox() // e2e-geometry-allow supplies the marquee drag start within the rendered grid
+	const firstBox = await cards.first().boundingBox() // e2e-geometry-allow supplies a blank start point beside the first rendered card
 	const secondBox = await cards.nth(1).boundingBox() // e2e-geometry-allow supplies the marquee drag end across the second rendered card
-	if (!gridBox || !secondBox) throw new Error('missing grid geometry')
+	if (!gridBox || !firstBox || !secondBox) throw new Error('missing grid geometry')
+	const dragStart = { x: firstBox.x - 4, y: firstBox.y + 2 }
 
-	await page.mouse.move(gridBox.x + 2, gridBox.y + 2)
+	await page.mouse.move(dragStart.x, dragStart.y)
 	await page.mouse.down()
 	await page.mouse.move(secondBox.x + secondBox.width - 2, secondBox.y + secondBox.height - 2, { steps: 8 })
 	await expect(page.getByTestId('objects-marquee-selection')).toBeVisible()
@@ -58,7 +60,7 @@ test('selects objects with a Windows-style marquee and auto-scrolls at the viewp
 
 	const appScroller = page.locator('[data-scroll-container="app-content"]')
 	const before = await appScroller.evaluate((element) => element.scrollTop)
-	await page.mouse.move(gridBox.x + 2, gridBox.y + 2)
+	await page.mouse.move(dragStart.x, dragStart.y)
 	await page.mouse.down()
 	await page.mouse.move(gridBox.x + gridBox.width - 4, 846, { steps: 10 })
 	await page.waitForTimeout(600)

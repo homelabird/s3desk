@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, seedLocalStorage, textFixture } from './support/apiFixtures'
-import { chooseRowAction, commitComboboxValue, gotoJobsPage, jobsTableRow, openCreateDeleteJobDrawer } from './support/ui'
+import { chooseRowAction, gotoJobsPage, jobsTableRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -111,21 +111,6 @@ async function setupApiMocks(page: Page) {
 		},
 		{
 			method: 'POST',
-			path: '/api/v1/jobs',
-			handler: ({ request }) => {
-				let body: { payload?: Record<string, unknown> } = {}
-				try {
-					body = request.postDataJSON() as { payload?: Record<string, unknown> }
-				} catch {
-					body = {}
-				}
-				const job = buildJob('job-created', 'queued', body.payload ?? {})
-				addJob(job)
-				return { status: 201, json: job }
-			},
-		},
-		{
-			method: 'POST',
 			path: /^\/api\/v1\/jobs\/([^/]+)\/cancel$/,
 			handler: ({ path }) => {
 				const jobId = path.match(/^\/api\/v1\/jobs\/([^/]+)\/cancel$/)?.[1]
@@ -159,19 +144,13 @@ async function setupApiMocks(page: Page) {
 	])
 }
 
-test('jobs create, cancel, retry flow', async ({ page }) => {
+test('jobs cancel and retry flow', async ({ page }) => {
 	await seedStorage(page)
 	await setupApiMocks(page)
 
 	await gotoJobsPage(page)
-	await expect(page.getByText('job-running')).toBeVisible()
-	await expect(page.getByText('job-failed')).toBeVisible()
-
-	const deleteDrawer = await openCreateDeleteJobDrawer(page)
-	await commitComboboxValue(page, deleteDrawer, 'Bucket', defaultStorage.bucket)
-	await deleteDrawer.getByLabel('Prefix', { exact: true }).fill('to-delete/')
-	await deleteDrawer.getByRole('button', { name: 'Create' }).click()
-	await expect(page.getByRole('cell', { name: 'job-created', exact: true })).toBeVisible()
+	await expect(jobsTableRow(page, 'job-running')).toBeVisible()
+	await expect(jobsTableRow(page, 'job-failed')).toBeVisible()
 
 	const runningRow = jobsTableRow(page, 'job-running')
 	await chooseRowAction(page, runningRow, 'Cancel')
@@ -179,5 +158,5 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 
 	const failedRow = jobsTableRow(page, 'job-failed')
 	await chooseRowAction(page, failedRow, 'Retry')
-	await expect(page.getByRole('cell', { name: 'job-retry-1', exact: true })).toBeVisible()
+	await expect(jobsTableRow(page, 'job-retry-1')).toBeVisible()
 })

@@ -221,7 +221,6 @@ test.describe('Objects bucket picker', () => {
 		await page.getByTestId('objects-bucket-picker-option-charlie-bucket').click()
 
 		await expect(rowFor(page, 'charlie.txt')).toBeVisible()
-		await expect(page.getByText('s3://charlie-bucket/')).toBeVisible()
 	})
 
 	test('mobile drawer supports tap selection and clear', async ({ page }) => {

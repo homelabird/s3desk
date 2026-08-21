@@ -93,6 +93,7 @@ async function installSearchRecoveryFixtures(page: Page) {
 								prefix: '',
 								count: 1,
 								hydrated: true,
+								keys: [favoriteItem.key],
 								items: [favoriteItem],
 						  }
 						: {
@@ -101,6 +102,7 @@ async function installSearchRecoveryFixtures(page: Page) {
 								count: 1,
 								hydrated: false,
 								keys: [favoriteItem.key],
+								items: [],
 						  },
 				}
 			},

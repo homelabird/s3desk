@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { installMockApi, type MockApiContext, type MockApiRoute } from './support/apiFixtures'
+import { installMockApi } from './support/apiFixtures'
 import { gotoJobsPage, jobsTableRow, openJobLogsDrawer } from './support/ui'
 
 type StorageSeed = {
@@ -59,6 +59,7 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const storage = { ...defaultStorage, ...overrides }
 	await page.addInitScript((seed) => {
 		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
+		window.localStorage.setItem('apiRetryCount', JSON.stringify(0))
 		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
 		if (seed.jobsFollowLogs !== undefined) {
 			window.localStorage.setItem('jobsFollowLogs', JSON.stringify(seed.jobsFollowLogs))
@@ -67,41 +68,33 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 }
 
 async function setupApiMocks(page: Page, isOffline: () => boolean) {
-	const withOffline =
-		(handle: MockApiRoute['handle']) =>
-		async (ctx: MockApiContext) => {
-			if (isOffline()) {
-				await ctx.route.abort()
-				return
-			}
-			return handle(ctx)
-		}
-
 	await installMockApi(page, [
-		{ method: 'GET', path: '/meta', handle: withOffline((ctx) => ctx.json(metaResponse)) },
-		{ method: 'GET', path: '/profiles', handle: withOffline((ctx) => ctx.json(profilesResponse)) },
-		{ method: 'GET', path: '/buckets', handle: withOffline((ctx) => ctx.json(bucketResponse)) },
+		{ method: 'GET', path: '/meta', handle: (ctx) => ctx.json(metaResponse) },
+		{ method: 'GET', path: '/profiles', handle: (ctx) => ctx.json(profilesResponse) },
+		{ method: 'GET', path: '/buckets', handle: (ctx) => ctx.json(bucketResponse) },
 		{
 			method: 'GET',
 			path: '/jobs',
-			handle: withOffline((ctx) => ctx.json({ items: [jobResponse], nextCursor: null })),
+			handle: (ctx) => ctx.json({ items: [jobResponse], nextCursor: null }),
 		},
-		{ method: 'GET', path: '/jobs/job-test', handle: withOffline((ctx) => ctx.json(jobResponse)) },
+		{ method: 'GET', path: '/jobs/job-test', handle: (ctx) => ctx.json(jobResponse) },
 		{
 			method: 'GET',
 			path: '/jobs/job-test/logs',
-			handle: withOffline((ctx) =>
-				ctx.url.searchParams.has('tailBytes')
+			handle: (ctx) => {
+				if (isOffline() && ctx.url.searchParams.has('afterOffset')) return ctx.route.abort()
+				return ctx.url.searchParams.has('tailBytes')
 					? ctx.text('hello\n', 200, 'text/plain')
-					: ctx.route.fulfill({ status: 204, headers: { 'X-Log-Next-Offset': '12' } })),
+					: ctx.route.fulfill({ status: 204, headers: { 'X-Log-Next-Offset': '12' } })
+			},
 		},
-		{ method: 'GET', path: '/events', handle: withOffline((ctx) => ctx.text('forbidden', 403)) },
-		{ path: /.*/, handle: withOffline((ctx) => ctx.notFound()) },
+		{ method: 'GET', path: '/events', handle: (ctx) => ctx.text('forbidden', 403) },
+		{ path: /.*/, handle: (ctx) => ctx.notFound() },
 	])
 }
 
 test.describe('Jobs network resilience', () => {
-	test('log polling pauses and offers manual retry', async ({ page, context }) => {
+	test('log polling pauses and offers manual retry', async ({ page }) => {
 		test.setTimeout(60_000)
 		await seedStorage(page)
 		let mockOffline = false
@@ -112,14 +105,15 @@ test.describe('Jobs network resilience', () => {
 	const jobRow = jobsTableRow(page, 'job-test')
 	const logsDrawer = await openJobLogsDrawer(page, jobRow)
 	await expect(logsDrawer.getByText('hello')).toBeVisible()
+	await expect(logsDrawer.getByRole('button', { name: 'Refresh job logs' }).locator('.anticon-loading')).toHaveCount(0)
 
 	mockOffline = true
-	await context.setOffline(true)
+	await logsDrawer.getByRole('switch', { name: 'Follow job logs' }).click()
+	await logsDrawer.getByRole('switch', { name: 'Follow job logs' }).click()
 	await expect(logsDrawer.getByText('Log polling paused')).toBeVisible({ timeout: 25_000 })
 	await expect(logsDrawer.getByRole('button', { name: 'Retry' })).toBeVisible({ timeout: 25_000 })
 
 	mockOffline = false
-	await context.setOffline(false)
 	await logsDrawer.getByRole('button', { name: 'Retry' }).click()
 	await expect(logsDrawer.getByText('Log polling paused')).toHaveCount(0, { timeout: 10_000 })
 	})

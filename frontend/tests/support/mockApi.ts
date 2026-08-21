@@ -105,6 +105,13 @@ export function sequenceMockApiRoutes(
 export async function installMockApi(page: Page, routes: MockApiRoute[]) {
 	await page.route('**/api/v1/**', async (route) => {
 		const ctx = buildContext(route)
+		if (
+			ctx.method === 'GET' &&
+			ctx.path === '/api/v1/bootstrap' &&
+			!routes.some((entry) => typeof entry.path === 'string' && matchesRoute(entry, ctx.method, ctx.path))
+		) {
+			return ctx.notFound()
+		}
 		const matched = routes.find((entry) => matchesRoute(entry, ctx.method, ctx.path))
 		if (!matched) {
 			// Unmatched requests fail closed with 404 instead of reaching a live backend.

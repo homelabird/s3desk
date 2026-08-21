@@ -16,7 +16,7 @@ import {
 	seedLocalStorage,
 	textFixture,
 } from './support/apiFixtures'
-import { gotoJobsPageRaw, gotoWithDynamicImportRecovery, openJobsDownloadDrawer } from './support/ui'
+import { gotoWithDynamicImportRecovery } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -27,9 +27,8 @@ type StorageSeed = {
 }
 
 const now = '2024-01-01T00:00:00Z'
-const webviewJobsReadyTimeoutMs = 90_000
-const webviewJobsDrawerTimeoutMs = 60_000
-const webviewJobsDrawerTestTimeoutMs = 180_000
+const webviewJobsDrawerTimeoutMs = 30_000
+const webviewJobsDrawerTestTimeoutMs = 60_000
 const webviewObjectsReadyTimeoutMs = 90_000
 const webviewObjectsTestTimeoutMs = 180_000
 
@@ -187,6 +186,20 @@ async function emulateInsecureBrowser(page: Page) {
 	})
 }
 
+async function openObjectsDownloadDrawer(page: Page) {
+	await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
+		timeout: webviewObjectsReadyTimeoutMs,
+		maxAttempts: 3,
+	})
+	await page.keyboard.press('ControlOrMeta+K')
+	const commands = page.getByRole('dialog', { name: 'Commands' })
+	await commands.getByRole('combobox', { name: 'Command search' }).fill('Download to folder')
+	await commands.getByRole('option', { name: 'Download to folder…' }).click()
+	const dialog = page.getByRole('dialog', { name: 'Download to this device' })
+	await expect(dialog).toBeVisible({ timeout: webviewJobsDrawerTimeoutMs })
+	return dialog
+}
+
 test.describe('Webview environment and posture coverage', () => {
 	test('jobs download drawer can queue a device download in a short landscape split-view posture', async ({ page }) => {
 		test.setTimeout(webviewJobsDrawerTestTimeoutMs)
@@ -195,16 +208,14 @@ test.describe('Webview environment and posture coverage', () => {
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
-		await gotoJobsPageRaw(page, { timeout: webviewJobsReadyTimeoutMs })
-		const dialog = await openJobsDownloadDrawer(page, { timeout: webviewJobsDrawerTimeoutMs })
+		const dialog = await openObjectsDownloadDrawer(page)
 		const localFolderInput = dialog.getByPlaceholder('Select a folder…')
-		await expect(dialog.getByLabel('Bucket')).toHaveValue(defaultStorage.bucket)
-		await expect(dialog.getByText('Downloads to this device')).toBeVisible()
-		await dialog.getByPlaceholder('path/…').fill(defaultStorage.prefix)
+		await expect(dialog.getByText(`s3://${defaultStorage.bucket}/${defaultStorage.prefix}*`)).toBeVisible()
+		await expect(dialog.getByText('Downloads objects to your device')).toBeVisible()
 		await dialog.getByRole('button', { name: /^Browse/ }).click()
 		await expect(localFolderInput).toHaveValue('webview-downloads')
-		await expect(dialog.getByRole('button', { name: 'Download' })).toBeEnabled()
-		await dialog.getByRole('button', { name: 'Download' }).click()
+		await expect(dialog.getByRole('button', { name: 'Start download' })).toBeEnabled()
+		await dialog.getByRole('button', { name: 'Start download' }).click()
 		await expect(dialog).toHaveCount(0)
 		await expect(page.locator('.ant-message-notice').filter({ hasText: 'Downloaded summary.csv' })).toBeVisible({ timeout: 10_000 })
 	})
@@ -215,13 +226,12 @@ test.describe('Webview environment and posture coverage', () => {
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
-		await gotoJobsPageRaw(page, { timeout: webviewJobsReadyTimeoutMs })
-		const dialog = await openJobsDownloadDrawer(page, { timeout: webviewJobsDrawerTimeoutMs })
+		const dialog = await openObjectsDownloadDrawer(page)
 
 		await expect(dialog.getByText(localFolderAccessUnavailableTitle())).toBeVisible()
 		await expect(dialog.getByText(directoryPickerInsecureOriginReason())).toBeVisible()
 		await expect(dialog.getByRole('button', { name: /^Browse/ })).toBeDisabled()
-		await expect(dialog.getByRole('button', { name: 'Download' })).toBeDisabled()
+		await expect(dialog.getByRole('button', { name: 'Start download' })).toBeDisabled()
 	})
 
 	test('objects copy-location feedback surfaces the insecure-origin clipboard hint', async ({ page }) => {

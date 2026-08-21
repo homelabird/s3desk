@@ -126,10 +126,14 @@ export function buildFavoritesFixture(args: {
 	prefix?: string
 	items?: unknown[]
 }) {
+	const items = args.items ?? []
 	return {
 		bucket: args.bucket,
 		prefix: args.prefix ?? '',
-		items: args.items ?? [],
+		count: items.length,
+		keys: items.flatMap((item) => typeof item === 'object' && item && 'key' in item && typeof item.key === 'string' ? [item.key] : []),
+		hydrated: true,
+		items,
 	}
 }
 

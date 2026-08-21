@@ -134,8 +134,8 @@ async function installObjectsFixtures(page: Page) {
 				const hydrate = url.searchParams.get('hydrate') === 'true'
 				return {
 					json: hydrate
-						? { bucket, prefix: '', count: favoriteItems.length, hydrated: true, items: favoriteItems }
-						: { bucket, prefix: '', count: favoriteItems.length, hydrated: false, keys: favoriteItems.map((item) => item.key) },
+						? { bucket, prefix: '', count: favoriteItems.length, hydrated: true, keys: favoriteItems.map((item) => item.key), items: favoriteItems }
+						: { bucket, prefix: '', count: favoriteItems.length, hydrated: false, keys: favoriteItems.map((item) => item.key), items: [] },
 				}
 			},
 		},
