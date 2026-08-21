@@ -102,8 +102,10 @@ describe('useJobsLogsState', () => {
 
 		act(() => result.current.openLogsForJob('job-1'))
 		await waitFor(() => expect(getJobLogsTail).toHaveBeenCalledOnce())
+		expect(result.current.isLogsLoading).toBe(true)
 		expect(getJobLogsAfterOffset).not.toHaveBeenCalled()
 		await act(async () => initial.resolve({ text: 'one line\n', nextOffset: 9 }))
+		await waitFor(() => expect(result.current.isLogsLoading).toBe(false))
 		await waitFor(() => expect(getJobLogsAfterOffset).toHaveBeenCalledWith('profile-1', 'job-1', 9, 128 * 1024))
 		expect(result.current.visibleLogEntries).toEqual(['one line'])
 	})
