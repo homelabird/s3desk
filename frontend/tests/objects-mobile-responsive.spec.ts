@@ -38,6 +38,16 @@ async function openFoldersFromMoreActions(page: Page) {
 	await expect(moreActionsButton).toHaveAttribute('aria-expanded', 'false')
 }
 
+async function openLargePreview(page: Page, object: Locator) {
+	await object.getByRole('button', { name: 'Object actions for preview.png' }).click()
+	const menu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Open large preview' }) }).last()
+	await expect(menu).toBeVisible()
+	await menu.getByRole('menuitem', { name: 'Open large preview' }).click()
+	const modal = page.getByTestId('objects-image-viewer-modal')
+	await expect(modal).toBeVisible()
+	return modal
+}
+
 test.describe('@mobile-responsive Objects mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
 		await installObjectsMobileResponsiveFixtures(page)
@@ -362,11 +372,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const row = objectsListRow(page, 'preview.png')
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: 'Object actions for preview.png' }).click()
-		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
-
-		const modal = page.getByTestId('objects-image-viewer-modal')
-		await expect(modal).toBeVisible()
+		const modal = await openLargePreview(page, row)
 		await expect(modal.getByTestId('objects-image-viewer-image')).toBeVisible()
 		await expect(modal.getByTestId('objects-image-viewer-meta')).toContainText('image/png')
 		const downloadButton = modal.getByRole('button', { name: 'Download' })
@@ -386,13 +392,9 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const row = objectsListRow(page, 'preview.png')
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: 'Object actions for preview.png' }).click()
-		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
-
-		const modal = page.getByTestId('objects-image-viewer-modal')
+		const modal = await openLargePreview(page, row)
 		const stage = modal.getByTestId('objects-image-viewer-stage')
 		const footer = modal.getByTestId('objects-image-viewer-footer')
-		await expect(modal).toBeVisible()
 		await expect(stage).toBeVisible()
 		await expect(footer).toBeVisible()
 		await expect(modal.getByTestId('objects-image-viewer-image')).toBeVisible()
