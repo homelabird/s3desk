@@ -232,11 +232,11 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 	}()
 
 	wait := func() error {
+		<-stderrDone
 		err := cmd.Wait()
 		if cancelErr := cancelWatcher(); cancelErr != nil && err == nil && ctx.Err() != nil {
 			err = cancelErr
 		}
-		<-stderrDone
 		cleanup()
 		return err
 	}

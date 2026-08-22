@@ -115,6 +115,8 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 			_, _ = io.Copy(io.Discard, stdout)
 			close(stdoutDone)
 		}()
+		<-stdoutDone
+		<-stderrDone
 		err := cmd.Wait()
 		if cancelErr := cancelWatcher(); cancelErr != nil {
 			if pid > 0 {
@@ -129,8 +131,6 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 				err = cancelErr
 			}
 		}
-		<-stdoutDone
-		<-stderrDone
 		_ = egressProxy.Close()
 		_ = os.Remove(configPath)
 		tlsCleanup()
