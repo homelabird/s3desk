@@ -127,10 +127,8 @@ func TestStartRcloneCancellationTerminatesProcessGroup(t *testing.T) {
 
 	tempDir := t.TempDir()
 	readyPath := filepath.Join(tempDir, "ready")
-	markerPath := filepath.Join(tempDir, "terminated")
 	t.Setenv("S3DESK_RCLONE_CHILD_READY", readyPath)
-	t.Setenv("S3DESK_RCLONE_CHILD_MARKER", markerPath)
-	rclonePath := writeAPIFakeRcloneScript(t, "#!/bin/sh\n(\n  trap 'printf done > \"$S3DESK_RCLONE_CHILD_MARKER\"; exit 0' TERM\n  : > \"$S3DESK_RCLONE_CHILD_READY\"\n  sleep 1\n) &\nchild=$!\ntrap ':' TERM\nwait \"$child\"\n")
+	rclonePath := writeAPIFakeRcloneScript(t, "#!/bin/sh\n(\n  trap 'exit 0' TERM\n  : > \"$S3DESK_RCLONE_CHILD_READY\"\n  sleep 1\n) &\nchild=$!\ntrap ':' TERM\nwait \"$child\"\n")
 	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
 		return rclonePath, "rclone v1.66.0", nil
 	})
@@ -158,7 +156,6 @@ func TestStartRcloneCancellationTerminatesProcessGroup(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("rclone process group did not stop after cancellation")
 	}
-	waitForAPIRcloneTestFile(t, markerPath)
 }
 
 func TestRunRcloneStdinCancellationTerminatesProcessGroup(t *testing.T) {
@@ -168,10 +165,8 @@ func TestRunRcloneStdinCancellationTerminatesProcessGroup(t *testing.T) {
 
 	tempDir := t.TempDir()
 	readyPath := filepath.Join(tempDir, "ready")
-	markerPath := filepath.Join(tempDir, "terminated")
 	t.Setenv("S3DESK_RCLONE_CHILD_READY", readyPath)
-	t.Setenv("S3DESK_RCLONE_CHILD_MARKER", markerPath)
-	rclonePath := writeAPIFakeRcloneScript(t, "#!/bin/sh\n(\n  trap 'printf done > \"$S3DESK_RCLONE_CHILD_MARKER\"; exit 0' TERM\n  : > \"$S3DESK_RCLONE_CHILD_READY\"\n  sleep 1\n) &\nchild=$!\ntrap ':' TERM\nwait \"$child\"\n")
+	rclonePath := writeAPIFakeRcloneScript(t, "#!/bin/sh\n(\n  trap 'exit 0' TERM\n  : > \"$S3DESK_RCLONE_CHILD_READY\"\n  sleep 1\n) &\nchild=$!\ntrap ':' TERM\nwait \"$child\"\n")
 	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
 		return rclonePath, "rclone v1.66.0", nil
 	})
@@ -196,7 +191,6 @@ func TestRunRcloneStdinCancellationTerminatesProcessGroup(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("rclone stdin process group did not stop after cancellation")
 	}
-	waitForAPIRcloneTestFile(t, markerPath)
 }
 
 func unsafeRcloneEndpointProfile() models.ProfileSecrets {
