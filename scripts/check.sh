@@ -240,7 +240,7 @@ echo "[check] frontend"
   npm run check:openapi
   npm run check:e2e:geometry
   npm run lint
-  npm run test:unit
+  npm run test:unit -- --maxWorkers="${CHECK_FRONTEND_MAX_WORKERS:-50%}"
   npm run build
   if [[ "${MODE}" == "full" ]]; then
     echo "[check] frontend browser smoke"
