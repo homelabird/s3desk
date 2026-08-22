@@ -14,6 +14,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   license-audit:
@@ -22,8 +23,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect runtime license change scope
+        id: scope
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        with:
+          filters: |
+            runtime_license:
+              - ".github/workflows/license-audit.yml"
+              - "Containerfile*"
+              - "THIRD_PARTY_NOTICES.md"
+              - "backend/**/*.go"
+              - "backend/go.mod"
+              - "backend/go.sum"
+              - "frontend/package.json"
+              - "frontend/package-lock.json"
+              - "frontend/patches/**"
+              - "scripts/check_go_license_report.py"
+              - "scripts/check_runtime_image_licenses.py"
+              - "scripts/generate_third_party_notices.py"
+              - "scripts/license-audit.sh"
+              - "third_party/**"
+
+      - name: Skip runtime license audit when inputs are unchanged
+        if: github.event_name != 'workflow_dispatch' && steps.scope.outputs.runtime_license != 'true'
+        run: echo "Runtime license inputs are unchanged; required check passes without rebuilding reports."
 
       - name: Setup Node.js
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.runtime_license == 'true'
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
@@ -31,20 +60,38 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Setup Go
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.runtime_license == 'true'
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.13"
           cache-dependency-path: backend/go.sum
 
       - name: Run license audit (runtime-only)
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.runtime_license == 'true'
         run: |
           bash scripts/license-audit.sh runtime-only
 
       - name: Upload license audit reports
-        if: always()
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.runtime_license == 'true')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: license-audit
           path: .license-audit
           include-hidden-files: true
           if-no-files-found: error
+
+      - name: Write license audit summary
+        if: always()
+        run: |
+          {
+            echo "## License Audit"
+            echo ""
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ steps.scope.outputs.runtime_license }}" == "true" ]]; then
+              echo "- License Audit: executed."
+              echo "- Command: \`bash scripts/license-audit.sh runtime-only\`"
+              echo "- Artifact: \`license-audit\`"
+            else
+              echo "- License Audit: not applicable (runtime license inputs are unchanged)."
+              echo "- Required check remains successful without rebuilding unchanged reports."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

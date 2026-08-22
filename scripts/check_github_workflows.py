@@ -33,11 +33,7 @@ REQUIRED_CANCEL_IN_PROGRESS_WORKFLOWS = {
     "release-gate.yml": "release-gate-",
     "license-audit.yml": "license-audit-",
 }
-REQUIRED_FRONTEND_E2E_BROWSER_FACING_PATHS = {
-    "backend/go.mod",
-    "backend/go.sum",
-    "backend/internal/**",
-}
+FORBIDDEN_FRONTEND_E2E_BROWSER_FACING_PREFIXES = ("backend/",)
 DEPRECATED_ACTION_REFS = {
     "actions/checkout@v4": "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
     "actions/setup-go@v5": "actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
@@ -156,11 +152,21 @@ def validate_frontend_e2e_browser_facing_scope(path: Path, workflow):
             break
     if not isinstance(filters, str) or "browser_facing:" not in filters:
         fail(f"{path}: changes filter must define a browser_facing scope")
-    missing = sorted(
-        required for required in REQUIRED_FRONTEND_E2E_BROWSER_FACING_PATHS if required not in filters
+    try:
+        parsed_filters = yaml.load(filters, Loader=WorkflowLoader)
+    except (yaml.YAMLError, ValueError) as exc:
+        fail(f"{path}: changes filter is invalid YAML: {exc}")
+    require_mapping(parsed_filters, f"{path}: changes filter")
+    browser_paths = parsed_filters.get("browser_facing")
+    require_sequence(browser_paths, f"{path}: changes filter browser_facing")
+    forbidden = sorted(
+        browser_path
+        for browser_path in browser_paths
+        if isinstance(browser_path, str)
+        and browser_path.startswith(FORBIDDEN_FRONTEND_E2E_BROWSER_FACING_PREFIXES)
     )
-    if missing:
-        fail(f"{path}: browser_facing filter missing required backend scope(s): {', '.join(missing)}")
+    if forbidden:
+        fail(f"{path}: mocked browser_facing filter must not include backend paths: {', '.join(forbidden)}")
 
 
 def validate_workflow(path: Path):

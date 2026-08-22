@@ -12,10 +12,14 @@ This document keeps only the commands most contributors need.
 
 - `./scripts/check.sh full`
   - full local gate
+  - includes backend security analysis
   - includes frontend browser smoke through `npm run test:e2e:smoke`
   - verifies third-party notices in a temporary output tree without rewriting the tracked notice/license snapshot
+- `./scripts/check.sh ci`
+  - mirrors the non-browser GitHub `release-gate` job
+  - keeps backend security analysis while delegating browser smoke to the required `Core Mock E2E` check
 - `./scripts/check.sh fast`
-  - skips the browser smoke layer
+  - skips browser smoke and backend security analysis
   - keeps the existing non-browser local verification path
 
 If Playwright Chromium is not installed locally yet, run:
@@ -45,6 +49,10 @@ GitLab adds required quality gates around that minimal backend command:
 - `go_test` runs `go vet`, writes `backend/coverage.out`, enforces `GO_COVERAGE_MIN_TOTAL`, and stores backend logs in `artifacts/ci/backend/`.
 - `go_race` runs the targeted race smoke `go test -race ./internal/api ./internal/jobs` and stores `artifacts/ci/backend/go-race.log`.
 - `golangci_lint` uses `GOLANGCI_LINT_CONFIG` and fails if the checked-in `.golangci.yml` is missing.
+- Independent Helm, OpenAPI, shell, Go, frontend source validation, and frontend smoke jobs start immediately instead of waiting for unrelated stages. The focused Vitest smoke is tag-only, while merge-request E2E runs only for frontend or OpenAPI changes.
+- GitLab Playwright jobs use the Chromium bundled in the pinned Playwright image directly instead of copying or reinstalling it per job.
+- GitHub headless Playwright lanes install only Chromium's headless shell instead of downloading the unused headed browser binary per job.
+- The scheduled/manual `live-e2e-critical` image build reuses one branch-scoped GitHub Actions BuildKit cache and still loads the resulting image into the local Docker daemon for the compose smoke.
 
 ### Sandbox Notes
 
@@ -108,21 +116,26 @@ Because the snapshot intentionally excludes `.git`, `check_release_gate.sh` skip
 
 Use the exact GitHub check names when you describe release evidence or branch-protection state:
 
-- `./scripts/check.sh full`
+- `./scripts/check.sh ci`
   - local mirror of the `Release Gate` workflow job named `release-gate`
-  - includes the local `npm run test:e2e:smoke` browser smoke layer
+  - delegates browser smoke to the separately required `Core Mock E2E` check
+  - in GitHub pull-request/push runs, also delegates workflow lint to the `Workflow Lint` prerequisite enforced by `Core Mock E2E`; standalone manual dispatch remains self-contained
+  - overlaps the independent backend and frontend lanes after shared preflight checks
   - does not replace the separate `Core Mock E2E` or `Mobile Responsive E2E (Required)` checks
+- `./scripts/check.sh full`
+  - local superset of `ci` that also runs `npm run test:e2e:smoke`
 - `bash ./scripts/check_github_workflows.sh`
   - local equivalent of the `Workflow Lint` job in `Frontend E2E`
 - `cd frontend && npm run bundle:budget`
   - local equivalent of the advisory `Bundle Budget` job in `Frontend E2E`
 - `cd frontend && npm run test:e2e:core`
   - local equivalent of the required `Core Mock E2E` check
-  - CI runs the same core suite in two Playwright shards and aggregates the result under `Core Mock E2E`
+  - CI runs the same core suite in three Playwright shards and aggregates the result under `Core Mock E2E`
 - `cd frontend && npm run test:e2e:visual`
   - local equivalent of the `Visual Regression E2E` check
 - `cd frontend && npm run test:e2e:mobile-responsive`
   - local equivalent of the required `Mobile Responsive E2E (Required)` check
+  - CI runs the iPhone 13 and Pixel 7 projects in parallel, then aggregates them under the unchanged required check name
 - `./scripts/check_ci_pair.sh`
   - convenience wrapper for workflow lint + frontend OpenAPI drift + frontend build + backend test only
   - not the GitHub required-check set and not a branch-protection verdict
@@ -268,7 +281,7 @@ GitLab tag publishing also runs:
 bash scripts/check_gitlab_publish_readiness.sh <tag>
 ```
 
-That helper validates the tag format, derives the previous tag or uses `DEPLOY_RELEASE_BASE`, then delegates to `scripts/verify_release_readiness.sh` before Docker Hub or Helm publication. The preflight covers the committed candidate diff plus GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state, so `curl` and `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs. By default it requires the exact GitHub check names `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`; if branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the script default in the same change. GitLab publish/deploy jobs additionally require `CI_COMMIT_REF_PROTECTED == "true"`; release image tar files are checked with `release-images.sha256`, Docker Hub publish records immutable registry digests for post-publish smoke, and `trivy_scan` emits CycloneDX SBOM artifacts. GitLab release-builder images must remain digest-pinned literal `image:` references and must not be overridden through mutable image variables.
+That helper validates the tag format, derives the previous tag or uses `DEPLOY_RELEASE_BASE`, then delegates to `scripts/verify_release_readiness.sh` before Docker Hub or Helm publication. The preflight covers the committed candidate diff plus GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state, so `curl` and `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs. By default it requires the exact GitHub check names `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`; the GitHub license workflow always materializes that check but rebuilds reports only when runtime-license inputs change or on manual dispatch. If branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the script default in the same change. GitLab publish/deploy jobs additionally require `CI_COMMIT_REF_PROTECTED == "true"`; release image tar files are checked with `release-images.sha256`, Docker Hub publish records immutable registry digests for post-publish smoke, and `trivy_scan` emits CycloneDX SBOM artifacts. GitLab release-builder images must remain digest-pinned literal `image:` references and must not be overridden through mutable image variables.
 
 ### Lighthouse authentication
 
@@ -357,7 +370,7 @@ npm run check:bundle-report
 
 Use the Playwright lane that matches the risk you are trying to cover.
 
-GitHub Actions job summaries in `Frontend E2E` mirror these same lane definitions so reviewers can read the lane purpose directly from the CI UI. That workflow now runs a dedicated `Workflow Lint` job before any browser lane so workflow wiring failures stop early.
+GitHub Actions job summaries in `Frontend E2E` mirror these same lane definitions so reviewers can read the lane purpose directly from the CI UI. A dedicated `Workflow Lint` prerequisite installs pinned `actionlint` with setup-go's module/build cache keyed to the installer and otherwise completes without loading its toolchain.
 Those summaries now use the same evidence labels as the PR/release templates: `Workflow Lint:`, `Bundle Budget:`, `Bundle Budget Contract:`, and `Browser Lanes:`.
 
 Mocked frontend Playwright lanes start a managed Vite server on `http://127.0.0.1:18080` when neither `PLAYWRIGHT_BASE_URL` nor `BASE_URL` is set. The managed server refuses to reuse an already-running process by default so stale local bundles do not silently satisfy a fresh-source run. Set `PLAYWRIGHT_REUSE_EXISTING_SERVER=1` only when intentionally pointing the lane at a matching local Vite server; use `PLAYWRIGHT_WEB_SERVER_PORT=<port>` to move the managed server when `18080` is unavailable.
@@ -367,7 +380,7 @@ Mocked frontend Playwright lanes start a managed Vite server on `http://127.0.0.
   - run this for `.github/workflows/**`, `scripts/check_github_workflows.sh`, `scripts/check_github_workflows.py`, `scripts/install_actionlint.sh`, or browser-CI summary wiring changes
 - workflow-lint-only changes should normally show `Workflow Lint: executed` while `Browser Lanes:` stays `not applicable (...)`
   - preferred CI wording: `Browser Lanes: smoke + core not applicable (workflow or browser-CI wiring changed, but the browser surface did not)`
-- required browser lanes now key off the narrower browser surface (`frontend/src/**`, `frontend/tests/**`, `frontend/public/**`, `frontend/playwright.config.ts`, runtime/build config, API/runtime backend wiring including jobs/store/localpath/redaction paths, and live-E2E harness files), so frontend docs or bundle-only tooling changes no longer retrigger Playwright by default
+- required mocked browser lanes key off frontend runtime/tests, `openapi.yml`, and browser harness wiring, so backend-only, frontend-docs, or bundle-only changes do not retrigger Playwright; backend verification remains in `Release Gate`, while integrated browser/backend coverage remains scheduled/manual `live-e2e-critical`
 - `.github/workflows/frontend-e2e.yml` changes are treated as browser-facing wiring changes so required browser lanes cannot self-skip when the workflow itself changes.
 
 - `npm run test:e2e:smoke`
@@ -377,7 +390,7 @@ Mocked frontend Playwright lanes start a managed Vite server on `http://127.0.0.
 - `npm run test:e2e:core`
   - main desktop/mock regression lane
   - excludes `@check-smoke`, `@mobile-responsive`, `@demo`, `@perf`, and `@visual`
-  - CI runs this lane as `--shard=1/2` and `--shard=2/2`, then keeps the required check name as `Core Mock E2E`
+  - CI runs this lane as `--shard=1/3`, `--shard=2/3`, and `--shard=3/3`, then keeps the required check name as `Core Mock E2E`
 - `npm run test:e2e:visual`
   - dedicated Chromium screenshot-baseline lane for tests tagged `@visual`
   - owns visual-regression specs separately from the core desktop/mock regression lane

@@ -59,10 +59,6 @@ jobs:
               - "frontend/tests/**"
               - "frontend/tsconfig*.json"
               - "frontend/vite.config.ts"
-              - "backend/go.mod"
-              - "backend/go.sum"
-              - "backend/cmd/server/**"
-              - "backend/internal/**"
             workflow_lint_scope:
               - ".github/workflows/**"
               - "scripts/check_github_workflows.sh"
@@ -276,31 +272,35 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
+        if: needs.changes.outputs.workflow_lint_scope == 'true'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Go
+        if: needs.changes.outputs.workflow_lint_scope == 'true'
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.13"
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: |
+            backend/go.sum
+            scripts/install_actionlint.sh
 
-      - name: Skip workflow lint when workflow wiring and browser surface are both out of scope
-        if: needs.changes.outputs.workflow_lint_scope != 'true' && needs.changes.outputs.browser_facing != 'true'
+      - name: Skip workflow lint when workflow wiring is out of scope
+        if: needs.changes.outputs.workflow_lint_scope != 'true'
         run: |
-          echo "No workflow or browser-surface changes detected."
-          echo "Workflow lint passes without running because neither workflow wiring nor browser lanes are in scope."
+          echo "No workflow changes detected."
+          echo "Workflow lint passes without running because workflow wiring is unchanged."
 
       - name: Install repo-local actionlint
-        if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'
+        if: needs.changes.outputs.workflow_lint_scope == 'true'
         shell: bash
         run: bash ./scripts/install_actionlint.sh
 
       - name: Install workflow validator Python dependency
-        if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'
+        if: needs.changes.outputs.workflow_lint_scope == 'true'
         run: python3 -m pip install --disable-pip-version-check PyYAML
 
       - name: Run workflow lint
-        if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'
+        if: needs.changes.outputs.workflow_lint_scope == 'true'
         shell: bash
         run: bash ./scripts/check_github_workflows.sh
 
@@ -310,12 +310,14 @@ jobs:
           {
             echo "## Workflow Lint"
             echo ""
-            if [[ "${{ needs.changes.outputs.workflow_lint_scope }}" != "true" && "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
-              echo "- Workflow Lint: not applicable (no workflow or browser-surface changes were detected)."
-              echo "- Browser lanes do not run for this change scope, and workflow wiring did not change either."
+            if [[ "${{ needs.changes.outputs.workflow_lint_scope }}" != "true" ]]; then
+              echo "- Workflow Lint: not applicable (workflow wiring is unchanged)."
+              if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+                echo "- Browser Lanes: not applicable (the browser surface is out of scope)."
+              fi
             else
               echo "- Workflow Lint: executed."
-              echo "- Tool install: \`bash ./scripts/install_actionlint.sh\`"
+              echo "- Tool install: \`bash ./scripts/install_actionlint.sh\` (module/build cache keyed to the installer)."
               echo "- Lint command: \`bash ./scripts/check_github_workflows.sh\`"
               echo "- Purpose: validate GitHub workflow wiring before browser lanes execute."
               if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
@@ -340,6 +342,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
+        if: needs.changes.outputs.browser_facing == 'true'
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
@@ -358,7 +361,7 @@ jobs:
 
       - name: Install Playwright Chromium for desktop and mobile projects
         if: needs.changes.outputs.browser_facing == 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Enforce E2E geometry guard
         if: needs.changes.outputs.browser_facing == 'true'
@@ -406,17 +409,18 @@ jobs:
     needs:
       - changes
       - workflow-lint
-      - mock-e2e-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-          - shard: "1/2"
+          - shard: "1/3"
             artifact_suffix: shard-1
-          - shard: "2/2"
+          - shard: "2/3"
             artifact_suffix: shard-2
+          - shard: "3/3"
+            artifact_suffix: shard-3
     defaults:
       run:
         working-directory: frontend
@@ -435,7 +439,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Install Playwright Chromium for desktop and mobile projects
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Run core mock Playwright suite excluding check-smoke and dedicated mobile responsive specs
         env:
@@ -482,13 +486,13 @@ jobs:
               echo "- Browser Lanes: smoke + core shards executed."
               echo "- Lane role: browser-facing boot gates plus desktop/mock regression coverage."
               echo "- Workflow lint prerequisite: see the separate \`Workflow Lint\` job."
-              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs once before the sharded core suite."
+              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs in the smoke lane while core shards run independently."
               echo "- Boot-gate command: \`npm run test:e2e:smoke\`"
               echo "- Boot-gate scope: login/settings bootstrap and objects route boot."
-              echo "- Core regression command: \`npm run test:e2e:core -- --workers=2 --shard=<index>/2\`"
+              echo "- Core regression command: \`npm run test:e2e:core -- --workers=2 --shard=<index>/3\`"
               echo "- Core regression scope: excludes \`@check-smoke\`, \`@mobile-responsive\`, \`@demo\`, \`@perf\`, and \`@visual\`."
               echo "- Check-smoke artifact: \`playwright-check-smoke-results\`"
-              echo "- Core artifacts: \`playwright-core-mock-results-shard-1\`, \`playwright-core-mock-results-shard-2\`"
+              echo "- Core artifacts: \`playwright-core-mock-results-shard-1\`, \`playwright-core-mock-results-shard-2\`, \`playwright-core-mock-results-shard-3\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -537,6 +541,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
+        if: needs.changes.outputs.browser_facing == 'true'
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
@@ -555,7 +560,7 @@ jobs:
 
       - name: Install Playwright Chromium for visual regression
         if: needs.changes.outputs.browser_facing == 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Enforce E2E geometry guard
         if: needs.changes.outputs.browser_facing == 'true'
@@ -605,18 +610,26 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  mobile-responsive-e2e:
-    name: Mobile Responsive E2E (Required)
-    if: github.event_name != 'schedule'
+  mobile-responsive-e2e-project:
+    name: Mobile Responsive E2E ${{ matrix.project }}
+    if: github.event_name != 'schedule' && needs.changes.outputs.browser_facing == 'true'
     needs:
       - changes
       - workflow-lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: mobile-iphone-13
+            artifact_suffix: iphone-13
+          - project: mobile-pixel-7
+            artifact_suffix: pixel-7
     env:
       PLAYWRIGHT_HTML_REPORT: "1"
-      PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-mobile-responsive
-      PLAYWRIGHT_OUTPUT_DIR: test-results-mobile-responsive
+      PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-mobile-responsive-${{ matrix.artifact_suffix }}
+      PLAYWRIGHT_OUTPUT_DIR: test-results-mobile-responsive-${{ matrix.artifact_suffix }}
       PLAYWRIGHT_TEST_TIMEOUT_MS: "60000"
       PLAYWRIGHT_EXPECT_TIMEOUT_MS: "10000"
     defaults:
@@ -633,46 +646,47 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Skip mobile responsive suite when the browser surface is out of scope
-        if: needs.changes.outputs.browser_facing != 'true'
-        run: |
-          echo "Browser surface is out of scope."
-          echo "Required check passes without running the dedicated mobile responsive suite."
-
       - name: Install frontend dependencies
-        if: needs.changes.outputs.browser_facing == 'true'
         run: npm ci --no-audit --no-fund
 
       - name: Install Playwright Chromium for mobile responsive projects
-        if: needs.changes.outputs.browser_facing == 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Enforce E2E geometry guard
-        if: needs.changes.outputs.browser_facing == 'true'
         run: npm run check:e2e:geometry
 
-      - name: Run dedicated mobile responsive Playwright suite
-        if: needs.changes.outputs.browser_facing == 'true'
-        run: npm run test:e2e:mobile-responsive -- --workers=2
+      - name: Run mobile responsive Playwright project
+        run: npx playwright test --grep @mobile-responsive --project=${{ matrix.project }} --workers=2
 
       - name: Upload mobile responsive HTML report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: mobile-responsive-e2e-html-report
-          path: frontend/playwright-report-mobile-responsive
+          name: mobile-responsive-e2e-html-report-${{ matrix.artifact_suffix }}
+          path: frontend/playwright-report-mobile-responsive-${{ matrix.artifact_suffix }}
           if-no-files-found: ignore
 
       - name: Upload mobile responsive Playwright results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: mobile-responsive-e2e-test-results
-          path: frontend/test-results-mobile-responsive
+          name: mobile-responsive-e2e-test-results-${{ matrix.artifact_suffix }}
+          path: frontend/test-results-mobile-responsive-${{ matrix.artifact_suffix }}
           if-no-files-found: ignore
 
+  mobile-responsive-e2e:
+    name: Mobile Responsive E2E (Required)
+    if: always() && github.event_name != 'schedule'
+    needs:
+      - changes
+      - workflow-lint
+      - mobile-responsive-e2e-project
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
       - name: Write mobile responsive summary
         if: always()
+        shell: bash
         run: |
           {
             echo "## Mobile Responsive E2E"
@@ -685,20 +699,38 @@ jobs:
               fi
               echo "- Required checks still report success when the change scope is outside the frontend browser surface."
             else
-              echo "- Browser Lanes: mobile-responsive executed."
+              echo "- Browser Lanes: mobile-responsive device projects executed."
               echo "- Required check: \`Mobile Responsive E2E (Required)\`"
               echo "- Lane role: required mobile task-completion coverage for drawers, sheets, cards, tabs, filters, and touch flows."
               echo "- Workflow lint prerequisite: see the separate \`Workflow Lint\` job."
-              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs before the mobile suite."
+              echo "- Device projects: \`mobile-iphone-13\` and \`mobile-pixel-7\` run in parallel."
+              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs before each mobile project."
               echo "- Local/CI command: \`npm run test:e2e:mobile-responsive\`"
-              echo "- HTML report artifact: \`mobile-responsive-e2e-html-report\`"
-              echo "- HTML report directory: \`frontend/playwright-report-mobile-responsive/\`"
-              echo "- Report entry file: \`frontend/playwright-report-mobile-responsive/index.html\`"
-              echo "- Raw test results artifact: \`mobile-responsive-e2e-test-results\`"
-              echo "- Raw test results directory: \`frontend/test-results-mobile-responsive/\`"
+              echo "- HTML report artifacts: \`mobile-responsive-e2e-html-report-iphone-13\`, \`mobile-responsive-e2e-html-report-pixel-7\`"
+              echo "- Raw result artifacts: \`mobile-responsive-e2e-test-results-iphone-13\`, \`mobile-responsive-e2e-test-results-pixel-7\`"
               echo "- Targeted Settings/Login command: \`npm run test:e2e:mobile-responsive:settings-login\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+          changes_result="${{ needs.changes.result }}"
+          workflow_lint_result="${{ needs['workflow-lint'].result }}"
+          project_result="${{ needs['mobile-responsive-e2e-project'].result }}"
+
+          if [[ "${changes_result}" != "success" ]]; then
+            echo "changes job did not complete successfully: ${changes_result}" >&2
+            exit 1
+          fi
+          if [[ "${workflow_lint_result}" != "success" ]]; then
+            echo "workflow lint did not complete successfully: ${workflow_lint_result}" >&2
+            exit 1
+          fi
+          if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+            exit 0
+          fi
+          if [[ "${project_result}" != "success" ]]; then
+            echo "mobile responsive device projects did not complete successfully: ${project_result}" >&2
+            exit 1
+          fi
 
   live-e2e-critical:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -709,6 +741,7 @@ jobs:
       E2E_API_TOKEN: s3desk-e2e-token-0123456789abcdef012345
       E2E_ENCRYPTION_KEY: QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=
       E2E_S3_ENDPOINT: http://minio:9000
+      E2E_S3_PUBLIC_ENDPOINT: http://127.0.0.1:9000
       E2E_S3_REGION: us-east-1
       E2E_S3_ACCESS_KEY: minioadmin
       E2E_S3_SECRET_KEY: minioadmin
@@ -739,10 +772,20 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
       - name: Build local S3Desk image
-        run: docker build -t "${S3DESK_IMAGE}" -f Containerfile.local .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: Containerfile.local
+          load: true
+          tags: ${{ env.S3DESK_IMAGE }}
+          cache-from: type=gha,scope=live-e2e
+          cache-to: type=gha,mode=max,scope=live-e2e
 
       - name: Start live E2E stack
         run: ./scripts/compose.sh e2e up -d minio azurite fake-gcs-server s3desk

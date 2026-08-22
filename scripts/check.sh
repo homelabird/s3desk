@@ -7,19 +7,21 @@ REPRO_FOCUS_SCRIPT="${ROOT}/scripts/repro_backend_focus.sh"
 export GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
 
 case "${MODE}" in
-  fast|full) ;;
+  fast|ci|full) ;;
   *)
     echo "[check] unknown mode: ${MODE}" >&2
-    echo "[check] usage: ./scripts/check.sh [fast|full]" >&2
+    echo "[check] usage: ./scripts/check.sh [fast|ci|full]" >&2
     exit 1
     ;;
 esac
 
 echo "[check] mode: ${MODE}"
 if [[ "${MODE}" == "full" ]]; then
-  echo "[check] local scope: mirrors the Release Gate workflow and includes check-smoke, but not the separate Core Mock E2E or Mobile Responsive E2E (Required) lanes"
+  echo "[check] local scope: full local verification including backend security and check-smoke"
+elif [[ "${MODE}" == "ci" ]]; then
+  echo "[check] CI scope: Release Gate verification including backend security; browser smoke is owned by the required Core Mock E2E check"
 else
-  echo "[check] local scope: fast non-browser verification path; not equivalent to release-gate or the required browser checks"
+  echo "[check] local scope: fast non-browser verification without backend security analysis; not equivalent to release-gate or the required browser checks"
 fi
 
 GO_BIN="${GO_BIN:-}"
@@ -92,14 +94,18 @@ echo "[check] release gate"
 bash "${ROOT}/scripts/check_release_gate.sh"
 
 echo "[check] github workflows"
-bash "${ROOT}/scripts/check_github_workflows.sh"
+if [[ "${CHECK_WORKFLOW_LINT_DELEGATED:-0}" == "1" ]]; then
+  echo "[check] workflow lint delegated to the required Core Mock E2E dependency"
+else
+  bash "${ROOT}/scripts/check_github_workflows.sh"
+fi
 
 if command -v helm >/dev/null 2>&1; then
   echo "[check] helm chart"
   bash "${ROOT}/scripts/check_helm_chart.sh"
 else
-  if [[ "${MODE}" == "full" ]]; then
-    echo "[check] helm not found; full mode requires helm chart validation" >&2
+  if [[ "${MODE}" != "fast" ]]; then
+    echo "[check] helm not found; ${MODE} mode requires helm chart validation" >&2
     exit 1
   fi
   echo "[check] helm not found; skipping helm chart validation in fast mode" >&2
@@ -121,7 +127,16 @@ if [[ -n "${UNFORMATTED}" ]]; then
   exit 1
 fi
 
-echo "[check] backend"
+backend_pid=""
+cleanup_backend_check() {
+  if [[ -n "${backend_pid}" ]]; then
+    kill "${backend_pid}" 2>/dev/null || true
+    wait "${backend_pid}" 2>/dev/null || true
+  fi
+}
+trap cleanup_backend_check EXIT
+
+echo "[check] backend (parallel with frontend)"
 (
   cd "${ROOT}/backend"
   "${GO_BIN}" vet ./...
@@ -136,7 +151,7 @@ echo "[check] backend"
   else
     "${GO_BIN}" test ./...
   fi
-  if [[ "${MODE}" == "full" ]]; then
+  if [[ "${MODE}" != "fast" ]]; then
     echo "[check] backend security analysis"
 
     STATICCHECK_BIN="${STATICCHECK_BIN:-}"
@@ -170,7 +185,8 @@ echo "[check] backend"
     "${GOSEC_BIN}" -quiet -exclude="${GOSEC_EXCLUDES}" ./...
     "${GOVULNCHECK_BIN}" ./...
   fi
-)
+) &
+backend_pid=$!
 
 REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR:-22}"
 REQUIRED_NODE_MAJOR="$(echo "${REQUIRED_NODE_MAJOR}" | sed -E 's/^([0-9]+).*/\1/')"
@@ -218,7 +234,9 @@ echo "[check] bundle report"
 echo "[check] frontend"
 (
   cd "${ROOT}/frontend"
-  npm ci --no-audit --no-fund
+  if [[ "${CHECK_FRONTEND_DEPS_READY:-0}" != "1" ]]; then
+    npm ci --no-audit --no-fund
+  fi
   npm run check:openapi
   npm run check:e2e:geometry
   npm run lint
@@ -233,6 +251,19 @@ echo "[check] frontend"
     fi
   fi
 )
+
+# ponytail: failed backend checks are reported after the longer foreground
+# frontend lane; add process supervision only if failed runs waste material CI time.
+if wait "${backend_pid}"; then
+  backend_pid=""
+else
+  backend_status=$?
+  backend_pid=""
+  trap - EXIT
+  echo "[check] backend failed" >&2
+  exit "${backend_status}"
+fi
+trap - EXIT
 
 echo "[check] third-party notices"
 third_party_notice_before="$(mktemp)"

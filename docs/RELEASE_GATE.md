@@ -49,12 +49,13 @@ The repository keeps automated enforcement for release readiness inside the stan
 - local workflow lint: `bash ./scripts/check_github_workflows.sh`; the built-in validator rejects mutable GitHub Action tag/branch refs and requires 40-character commit SHAs
 - optional repo-local `actionlint` install: `bash ./scripts/install_actionlint.sh`
 - full local verification pass: `./scripts/check.sh` or `./scripts/check.sh full`
+- non-browser CI-equivalent pass: `./scripts/check.sh ci`; keeps backend security analysis while the required `Core Mock E2E` check owns browser smoke
 - faster non-browser local pass: `./scripts/check.sh fast`
 - third-party notice enforcement inside `./scripts/check.sh`: generates into a temporary output tree, compares it with `THIRD_PARTY_NOTICES.md` and `third_party/licenses/`, and leaves the tracked snapshot untouched
-- CI workflow: `Release Gate` (installs repo-local `actionlint`, then runs `./scripts/check.sh` on pull requests and `main`)
+- CI workflow: `Release Gate` (runs `./scripts/check.sh ci` on pull requests and `main`; required `Core Mock E2E` owns workflow-lint success there, while a standalone manual dispatch still runs repo-local `actionlint`; setup-go caches module/build outputs but not writable executables)
 - canonical release verdict: GitHub `Release Gate`; GitLab release/security jobs are parity and publish safeguards, not the source of truth for branch protection
 - backend toolchain pin: Go `1.25.13` is declared in `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub workflow `go-version` fields, and literal GitLab `image:` declarations, and `python3 scripts/check_go_toolchain.py` keeps those declarations aligned
-- backend security gate inside `./scripts/check.sh full`: `go vet`, `staticcheck`, `gosec`, and `govulncheck`
+- backend security gate inside `./scripts/check.sh ci` and `./scripts/check.sh full`: `go vet`, `staticcheck`, `gosec`, and `govulncheck`
 - GitLab additive security gates: `security_fs_scan` runs Trivy filesystem/config scans and `gitleaks_scan` runs Gitleaks when tag/default-branch/schedule or relevant source changes require them
 - GitLab release-builder images are literal digest-pinned image references; they must not be overridable through `PODMAN_IMAGE` or mutable tags such as `quay.io/podman/stable:latest`.
 - GitLab publish and deploy jobs require both a release tag and `CI_COMMIT_REF_PROTECTED == "true"`; production deploy jobs declare the `production` environment tier. The actual protected-tag/environment rules remain a GitLab project setting and must be verified there before release approval.
@@ -66,15 +67,15 @@ The repository keeps automated enforcement for release readiness inside the stan
 - Deploy scripts run `python3 scripts/check_live_evidence_env.py --scope reverse-proxy` before compose or Helm target mutation; Helm deploy also performs a `helm upgrade --install --dry-run=client` render before the live upgrade.
 - Compose deploys require protected `DEPLOY_SSH_KNOWN_HOSTS` and strict SSH host-key checking; do not bootstrap production deploy trust with live `ssh-keyscan` output.
 - Release/security tooling used by CI must be version pinned. `govulncheck`, `go-licenses`, and `podman-compose` installs must not use mutable `latest` or unversioned package installs.
-- Runtime license audit is a release-publish blocker. GitLab tag pipelines run `license_audit_runtime`, Docker Hub publish depends on it, and GitHub release-readiness requires the `license-audit` check by default. The audit enforces explicit npm and Go license allow-lists; Go results are produced with `go-licenses report --ignore s3desk ./...` and parsed by `scripts/check_go_license_report.py` so `Unknown`/blocked/disallowed licenses fail deterministically. When release image tar artifacts are present, the audit also parses Alpine `lib/apk/db/installed` package metadata from `release-postgres.tar` and `release-sqlite.tar` with `scripts/check_runtime_image_licenses.py`; local runs can pass semicolon-separated tar paths through `LICENSE_AUDIT_IMAGE_TARS`. The same audit verifies that the copied runtime `rclone` binary has a `THIRD_PARTY_NOTICES.md` entry and license text under `third_party/licenses/external/`. The GitHub `License Audit` workflow is intentionally not path-scoped so the required check materializes for every PR/main candidate.
+- Runtime license audit is a release-publish blocker. GitLab tag pipelines run `license_audit_runtime`, Docker Hub publish depends on it, and GitHub release-readiness requires the `license-audit` check by default. The audit enforces explicit npm and Go license allow-lists; Go results are produced with `go-licenses report --ignore s3desk ./...` and parsed by `scripts/check_go_license_report.py` so `Unknown`/blocked/disallowed licenses fail deterministically. When release image tar artifacts are present, the audit also parses Alpine `lib/apk/db/installed` package metadata from `release-postgres.tar` and `release-sqlite.tar` with `scripts/check_runtime_image_licenses.py`; local runs can pass semicolon-separated tar paths through `LICENSE_AUDIT_IMAGE_TARS`. The same audit verifies that the copied runtime `rclone` binary has a `THIRD_PARTY_NOTICES.md` entry and license text under `third_party/licenses/external/`. The GitHub `License Audit` workflow is intentionally not path-scoped, so `license-audit` still materializes for every PR/main candidate; its job rebuilds reports only for Go source/module, npm dependency/patch, Containerfile, notice/license, audit-script, or manual-dispatch changes.
 - GitLab additive quality gates:
   - `shellcheck` runs `shellcheck -x` for repository shell scripts and publishes logs under `artifacts/ci/shellcheck/`
   - `go_test` runs `go vet`, backend tests with `coverage.out`, enforces `GO_COVERAGE_MIN_TOTAL`, and publishes logs under `artifacts/ci/backend/`
   - `go_race` runs targeted `go test -race ./internal/api ./internal/jobs` and publishes `artifacts/ci/backend/go-race.log`
   - `golangci_lint` must use the checked-in `.golangci.yml` named by `GOLANGCI_LINT_CONFIG`; a missing config is a hard failure
-- CI workflow: `Frontend E2E` runs a dedicated `Workflow Lint` job with the same repo-local `actionlint` before the browser lanes
+- CI workflow: `Frontend E2E` runs repo-local `actionlint` in the `Workflow Lint` prerequisite when workflow wiring changes; unchanged workflows use the fast no-op path
 - CI workflow: `Frontend E2E` also runs `Bundle Budget` for bundle-affecting frontend changes
-- CI workflow: `Frontend E2E` only treats the narrower browser surface as browser-facing (`frontend/src/**`, `frontend/tests/**`, `frontend/public/**`, `frontend/playwright.config.ts`, runtime/build config, backend API/runtime wiring including jobs/store/localpath/redaction paths, and live-E2E harness files), so frontend docs or bundle-only tooling changes do not retrigger required Playwright lanes by themselves
+- CI workflow: `Frontend E2E` only treats frontend runtime/tests, `openapi.yml`, and browser harness wiring as browser-facing, so backend-only, frontend-docs, or bundle-only changes do not retrigger mocked Playwright; backend verification remains in `Release Gate`, while integrated browser/backend coverage remains scheduled/manual `live-e2e-critical`
 - `Frontend E2E` workflow wiring changes are browser-facing for gating purposes; required browser lanes must not self-skip when `.github/workflows/frontend-e2e.yml` changes.
 - CI workflow: workflow-lint-only changes still execute the dedicated `Workflow Lint` job, but leave `Browser Lanes:` as `not applicable (...)` unless the browser surface also changed
   - preferred CI wording: `Browser Lanes: smoke + core not applicable (workflow or browser-CI wiring changed, but the browser surface did not)`
@@ -99,7 +100,7 @@ The repository keeps automated enforcement for release readiness inside the stan
   - release evidence should say whether the run ended with `No budget warnings` / `No budget review candidates`, or name the chunk that still needs a re-baseline
   - the CI summary now splits `Warnings:`, `Review targets:`, and `Action hints:` into separate lines for up to the first two follow-up chunks, with the full detail still living in `frontend-bundle-report`
   - keep action hints narrow and reviewable: `shrink first` for likely regressions, `rebaseline if stable` when the route floor is already understood
-- frontend CI pre-core guardrails:
+- frontend CI browser guardrails:
   - `npm run check:e2e:geometry`
   - `npm run test:e2e:smoke`
 - local browser smoke used by the full gate:
@@ -140,10 +141,10 @@ Do not treat a green `bash ./scripts/check_ci_pair.sh` run as equivalent to the 
 
 Use the exact check names when you record release evidence:
 
-- `./scripts/check.sh full` mirrors the `Release Gate` workflow job named `release-gate`.
+- `./scripts/check.sh ci` mirrors the `Release Gate` workflow job named `release-gate`; `./scripts/check.sh full` is its local superset with browser smoke.
 - `bash ./scripts/check_github_workflows.sh` mirrors the `Workflow Lint` job in `Frontend E2E`.
 - `cd frontend && npm run test:e2e:core` mirrors `Core Mock E2E`.
-  In CI, the core suite is split into two Playwright shards and aggregated back into the required `Core Mock E2E` check name.
+  In CI, the core suite is split into three Playwright shards and aggregated back into the required `Core Mock E2E` check name.
 - `cd frontend && npm run test:e2e:visual` mirrors `Visual Regression E2E`.
 - `cd frontend && npm run test:e2e:mobile-responsive` mirrors `Mobile Responsive E2E (Required)`.
 - `bash ./scripts/license-audit.sh` mirrors `license-audit`.

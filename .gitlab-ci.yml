@@ -116,18 +116,8 @@ variables:
       - .cache/npm/
 
 .playwright_cache: &playwright_cache
-  cache:
-    key:
-      files:
-        - frontend/package-lock.json
-      prefix: "playwright-cache-v1.57.0"
-    paths:
-      - .cache/ms-playwright/
-    # Never let an untrusted branch publish executables into the shared cache.
-    # Playwright images include the browser; a cache miss may install it again.
-    policy: pull
   variables:
-    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+    PLAYWRIGHT_BROWSERS_PATH: "/ms-playwright"
 
 .go_cache: &go_cache
   cache:
@@ -222,6 +212,7 @@ helm_lint:
   <<: *helm_tools
   stage: test
   interruptible: true
+  needs: []
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -237,6 +228,7 @@ helm_template:
   <<: *helm_tools
   stage: test
   interruptible: true
+  needs: []
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -279,6 +271,7 @@ helm_template_negative:
   <<: *helm_tools
   stage: test
   interruptible: true
+  needs: []
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -487,6 +480,7 @@ openapi_validate:
   stage: test
   image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
+  needs: []
   rules:
     - changes:
         - openapi.yml
@@ -613,6 +607,7 @@ shellcheck:
   stage: test
   image: "harbor.k8s.homelabird.com/library/alpine:3.21"
   interruptible: true
+  needs: []
   rules:
     - changes:
         - .gitlab-ci.yml
@@ -648,6 +643,7 @@ gofmt:
   image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
+  needs: []
   rules:
     - changes:
         - backend/**/*
@@ -666,6 +662,7 @@ go_test:
   image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
+  needs: []
   rules:
     - changes:
         - backend/**/*
@@ -704,6 +701,7 @@ go_race:
   image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
+  needs: []
   rules:
     - changes:
         - backend/**/*
@@ -728,6 +726,7 @@ golangci_lint:
   image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
+  needs: []
   rules:
     - changes:
         - backend/**/*
@@ -764,6 +763,7 @@ govulncheck:
   image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
   interruptible: true
   <<: *go_cache
+  needs: []
   rules:
     - changes:
         - backend/**/*
@@ -798,14 +798,12 @@ frontend_smoke:
   stage: smoke
   image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
+  needs: []
   tags: *smoke_tags
   <<: *node_cache
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
-    - changes:
-        - frontend/**/*
-        - openapi.yml
     - when: never
   script:
     - cd frontend
@@ -818,12 +816,16 @@ e2e_smoke:
   stage: smoke
   image: "mcr.microsoft.com/playwright:v1.57.0-noble"
   interruptible: true
+  needs: []
   tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
       when: on_success
     - when: never
   script:
@@ -833,12 +835,9 @@ e2e_smoke:
     - npm ci --no-audit --no-fund
     - npm run gen:openapi
     - npm run build
-    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
     - npm run preview -- --host 0.0.0.0 --port 4173 &
     - for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:4173 >/dev/null; then break; fi; sleep 1; done
     - export PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173"
-    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test --project=chromium tests/objects-smoke.spec.ts tests/jobs-flow.spec.ts tests/uploads-folder.spec.ts
 
 frontend_ci:
@@ -846,6 +845,7 @@ frontend_ci:
   image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
+  needs: []
   rules:
     - if: '$FRONTEND_PARALLEL == "1"'
       when: never
@@ -875,6 +875,7 @@ frontend_deps:
   image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
   <<: *node_cache
+  needs: []
   rules:
     - if: '$FRONTEND_PARALLEL == "1"'
       changes:
@@ -927,6 +928,7 @@ frontend_inline_style_guard:
   stage: test
   image: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   interruptible: true
+  needs: []
   variables:
     GIT_STRATEGY: fetch
     GIT_DEPTH: "200"
@@ -1360,13 +1362,10 @@ e2e:
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
-    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
-    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/jobs-network.spec.ts tests/transfers-*.spec.ts
   artifacts:
     when: always
@@ -1398,13 +1397,10 @@ e2e_live:
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
     - export E2E_LIVE=1
-    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
-    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test tests/api-crud.spec.ts tests/objects-live-flow.spec.ts tests/jobs-live-flow.spec.ts tests/transfers-live-fallback.spec.ts tests/bucket-policy-live.spec.ts tests/docs-smoke.spec.ts tests/server-migration-live.spec.ts tests/uploads-folder-live.spec.ts tests/objects-image-preview-live.spec.ts
   after_script:
     - |
@@ -1452,19 +1448,12 @@ perf_tests:
       when: on_success
     - when: never
   script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends ca-certificates curl gnupg
-    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    - apt-get install -y --no-install-recommends nodejs
     - node --version
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - cd frontend
     - npm ci --no-audit --no-fund
     - export PERF_BASE_URL="${PERF_BASE_URL:-http://127.0.0.1:8080}"
-    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
-    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - PERF_TESTS=1 npx playwright test tests/jobs-perf.spec.ts
   artifacts:
     when: always

@@ -35,12 +35,16 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.13"
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: |
+            backend/go.sum
+            scripts/install_actionlint.sh
+            scripts/install_backend_security_tools.sh
 
       - name: Setup Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
 
       - name: Install repo-local actionlint
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: bash ./scripts/install_actionlint.sh
 
@@ -51,17 +55,16 @@ jobs:
         shell: bash
         run: bash ./scripts/install_backend_security_tools.sh
 
-      - name: Install frontend dependencies for Playwright browser setup
+      - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
-      - name: Install Playwright Chromium for release-gate browser smoke
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-
-      - name: Run full repository check gate
+      - name: Run repository CI gate
         shell: bash
-        run: ./scripts/check.sh
+        env:
+          CHECK_FRONTEND_DEPS_READY: "1"
+          CHECK_WORKFLOW_LINT_DELEGATED: ${{ github.event_name != 'workflow_dispatch' && '1' || '0' }}
+        run: ./scripts/check.sh ci
 
       - name: Write release gate summary
         if: always()
@@ -69,10 +72,11 @@ jobs:
           {
             echo "## Release Gate"
             echo ""
-            echo "- Main command: \`./scripts/check.sh\`"
-            echo "- Workflow Lint: executed via repo-local \`actionlint\` installed by \`bash ./scripts/install_actionlint.sh\`."
-            echo "- Browser Lanes: smoke executed inside \`./scripts/check.sh\`; \`core\` and \`mobile-responsive\` remain separate checks in \`Frontend E2E\`."
-            echo "- Browser Guardrails: \`npm run check:e2e:geometry\` then \`npm run test:e2e:smoke\` run inside the full gate."
+            echo "- Main command: \`./scripts/check.sh ci\`"
+            echo "- Workflow Lint: delegated to the \`Core Mock E2E\` prerequisite on pull requests and pushes; manual dispatch executes repo-local \`actionlint\`."
+            echo "- Backend Security Tools: setup-go reuses module/build outputs keyed to the pinned \`staticcheck\`, \`gosec\`, and \`govulncheck\` installer."
+            echo "- Browser Lanes: delegated to the required \`Core Mock E2E\` and \`Mobile Responsive E2E (Required)\` checks."
+            echo "- Browser Guardrails: the required \`Core Mock E2E\` aggregate fails when its smoke prerequisite fails."
             echo "- Bundle Budget: separate advisory signal in \`Frontend E2E\`."
             echo "- Bundle Budget Contract: separate advisory signal in \`Frontend E2E\` via \`npm run check:bundle-report\`."
             echo "- Local bundle equivalent when relevant: \`cd frontend && npm run bundle:budget\`"
