@@ -1,6 +1,6 @@
 # Design Audit Validation Log
 
-Date: 2026-05-24T05:04:54.855Z
+Date: 2026-08-23T08:44:29.184Z
 
 Use this file to record the evidence required before the UI/UX design audit can be considered complete.
 
@@ -9,89 +9,89 @@ Use this file to record the evidence required before the UI/UX design audit can 
 ### `npm run check:design`
 
 - Status: Passed
-- Started: 2026-05-24T05:04:20.047Z
-- Finished: 2026-05-24T05:04:20.925Z
+- Started: 2026-08-23T08:43:45.481Z
+- Finished: 2026-08-23T08:43:46.752Z
 - Evidence:
 
 ```text
-src/pages/objects/ObjectsGridCards.module.css:220 [transparent background] background: transparent;
+src/pages/objects/ObjectsImageViewer.module.css:104 [opacity styling] opacity: 0.86;
+  Prefer semantic text/surface tokens over opacity for readable repeated UI.
+src/pages/objects/ObjectsListView.module.css:650 [opacity styling] opacity: 0.6;
+  Prefer semantic text/surface tokens over opacity for readable repeated UI.
+src/pages/objects/ObjectsListView.module.css:294 [transparent background] background: transparent;
   Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/ObjectsGridCards.module.css:219 [small hardcoded radius] border-radius: 8px;
+src/pages/objects/ObjectsListView.module.css:480 [transparent background] background: transparent;
+  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
+src/pages/objects/ObjectsListView.module.css:587 [transparent background] background: transparent;
+  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
+src/pages/objects/ObjectsListView.module.css:291 [small hardcoded radius] border-radius: 6px;
   Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
-src/pages/objects/ObjectsImageViewer.module.css:109 [opacity styling] opacity: 0.86;
+src/pages/objects/ObjectsListView.module.css:896 [small hardcoded radius] border-radius: 8px;
+  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
+src/pages/objects/ObjectsSearch.module.css:136 [transparent background] background: transparent;
+  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
+src/pages/objects/ObjectsSearch.module.css:112 [small hardcoded radius] border-radius: 6px;
+  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
+src/pages/objects/ObjectsSearch.module.css:245 [small hardcoded radius] border-radius: 6px;
+  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
+src/pages/objects/ObjectsSearch.module.css:672 [small hardcoded radius] border-radius: 8px;
+  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
+src/pages/objects/ObjectsShell.module.css:433 [transparent background] background: transparent;
+  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
+src/pages/objects/objects.module.css:72 [opacity styling] opacity: 0.6;
   Prefer semantic text/surface tokens over opacity for readable repeated UI.
-src/pages/objects/ObjectsListView.module.css:532 [opacity styling] opacity: 0.6;
-  Prefer semantic text/surface tokens over opacity for readable repeated UI.
-src/pages/objects/ObjectsListView.module.css:612 [opacity styling] opacity: 0.6;
-  Prefer semantic text/surface tokens over opacity for readable repeated UI.
-src/pages/objects/ObjectsListView.module.css:535 [shadow removed] box-shadow: none;
+src/pages/objects/objects.module.css:74 [shadow removed] box-shadow: none;
   Confirm this is intentional; audited surfaces should keep hierarchy through border, shadow, or accent.
-src/pages/objects/ObjectsListView.module.css:238 [transparent background] background: transparent;
-  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/ObjectsListView.module.css:393 [transparent background] background: transparent;
-  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/ObjectsListView.module.css:551 [transparent background] background: transparent;
-  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/ObjectsListView.module.css:235 [small hardcoded radius] border-radius: 6px;
-  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
-src/pages/objects/ObjectsListView.module.css:864 [small hardcoded radius] border-radius: 8px;
-  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
-src/pages/objects/ObjectsSearch.module.css:145 [transparent background] background: transparent;
-  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/ObjectsSearch.module.css:121 [small hardcoded radius] border-radius: 6px;
-  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
-src/pages/objects/ObjectsSearch.module.css:243 [small hardcoded radius] border-radius: 6px;
-  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
-src/pages/objects/ObjectsSearch.module.css:667 [small hardcoded radius] border-radius: 8px;
-  Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
-src/pages/objects/ObjectsShell.module.css:432 [transparent background] background: transparent;
-  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/objects.module.css:91 [opacity styling] opacity: 0.6;
-  Prefer semantic text/surface tokens over opacity for readable repeated UI.
-src/pages/objects/objects.module.css:93 [shadow removed] box-shadow: none;
+src/pages/objects/objects.module.css:131 [shadow removed] box-shadow: none;
   Confirm this is intentional; audited surfaces should keep hierarchy through border, shadow, or accent.
-src/pages/objects/objects.module.css:151 [shadow removed] box-shadow: none;
-  Confirm this is intentional; audited surfaces should keep hierarchy through border, shadow, or accent.
-src/pages/objects/objects.module.css:68 [transparent background] background: transparent;
+src/pages/objects/objects.module.css:49 [transparent background] background: transparent;
   Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/objects.module.css:159 [transparent background] background: transparent;
+src/pages/objects/objects.module.css:139 [transparent background] background: transparent;
   Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
-src/pages/objects/objects.module.css:171 [small hardcoded radius] border-radius: 6px;
+src/pages/objects/objects.module.css:151 [small hardcoded radius] border-radius: 6px;
   Prefer shared radius tokens unless a compact primitive intentionally needs a smaller radius.
-src/pages/profiles/ProfileModal.module.css:188 [transparent background] background: transparent;
+src/pages/profiles/ProfileModal.module.css:28 [shadow removed] box-shadow: none;
+  Confirm this is intentional; audited surfaces should keep hierarchy through border, shadow, or accent.
+src/pages/profiles/ProfileModal.module.css:353 [shadow removed] box-shadow: none;
+  Confirm this is intentional; audited surfaces should keep hierarchy through border, shadow, or accent.
+src/pages/profiles/ProfileModal.module.css:526 [shadow removed] box-shadow: none;
+  Confirm this is intentional; audited surfaces should keep hierarchy through border, shadow, or accent.
+src/pages/profiles/ProfileModal.module.css:352 [transparent background] background: transparent;
+  Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
+src/pages/profiles/ProfileModal.module.css:429 [transparent background] background: transparent;
   Transparent controls are fine, but floating or selectable surfaces need visible hierarchy.
 
 > frontend@0.0.0 check:design-contrast
 > node ./scripts/check-design-contrast.mjs
 
-light 17.74 body text on card
-light  7.58 secondary text on card
-light  4.76 muted text on card
-light 15.89 body text on page
-light 17.74 body text on input
-light  4.08 disabled text on disabled bg
-light  6.39 primary link on card
-light  9.42 warning text on warning bg
-light  4.92 error text on error bg
-light  5.07 success text on success bg
+light 15.01 body text on card
+light  6.74 secondary text on card
+light  4.71 muted text on card
+light 13.86 body text on page
+light 15.27 body text on input
+light  3.93 disabled text on disabled bg
+light  5.10 primary link on card
+light  7.70 warning text on warning bg
+light  5.91 error text on error bg
+light  5.17 success text on success bg
 light 13.35 tooltip text on tooltip bg
-light 15.13 sidebar text on sidebar bg
-light  8.31 sidebar secondary on sidebar bg
-light  9.52 sidebar active text on sidebar active bg
-dark  15.04 body text on card
-dark   9.88 secondary text on card
-dark   6.91 muted text on card
-dark  16.54 body text on page
-dark  15.16 body text on input
-dark   4.90 disabled text on disabled bg
-dark   8.57 primary link on card
-dark  10.54 warning text on warning bg
-dark  12.20 error text on error bg
-dark   7.86 success text on success bg
-dark  13.31 tooltip text on tooltip bg
-dark  14.53 sidebar text on sidebar bg
-dark   6.44 sidebar secondary on sidebar bg
-dark  10.24 sidebar active text on sidebar active bg
+light  6.57 sidebar text on sidebar bg
+light  4.59 sidebar secondary on sidebar bg
+light  5.36 sidebar active text on sidebar active bg
+dark  11.62 body text on card
+dark   7.90 secondary text on card
+dark   5.60 muted text on card
+dark  12.79 body text on page
+dark  12.04 body text on input
+dark   4.53 disabled text on disabled bg
+dark   6.79 primary link on card
+dark   6.21 warning text on warning bg
+dark   8.38 error text on error bg
+dark   5.25 success text on success bg
+dark  10.54 tooltip text on tooltip bg
+dark  10.26 sidebar text on sidebar bg
+dark   5.87 sidebar secondary on sidebar bg
+dark   8.18 sidebar active text on sidebar active bg
 
 All tracked design contrast pairs meet their advisory thresholds.
 ```
@@ -123,91 +123,91 @@ All tracked design contrast pairs meet their advisory thresholds.
 ### `npm run build`
 
 - Status: Passed
-- Started: 2026-05-24T05:04:20.925Z
-- Finished: 2026-05-24T05:04:35.639Z
+- Started: 2026-08-23T08:43:46.752Z
+- Finished: 2026-08-23T08:44:05.959Z
 - Evidence:
 
 ```text
-dist/assets/ObjectsContextMenuPortal-CwzZZUyZ.js           1.69 kB │ gzip:   0.89 kB
-dist/assets/ObjectsDownloadPrefixModal-CwQnEu5-.js         1.88 kB │ gzip:   0.97 kB
-dist/assets/ObjectsPresignModal-CHiFSBUR.js                1.93 kB │ gzip:   0.99 kB
-dist/assets/objectsNewFolderFeedback-CHM_Dd5T.js           1.96 kB │ gzip:   1.00 kB
-dist/assets/ObjectsCommandPaletteModal-CVE-FUiy.js         2.00 kB │ gzip:   1.07 kB
-dist/assets/ObjectsRenameModal-yPV6Abyi.js                 2.05 kB │ gzip:   0.97 kB
-dist/assets/UploadsPage-19B4_EVL.js                        2.08 kB │ gzip:   0.95 kB
-dist/assets/deviceFs-TQ7z28rI.js                           2.13 kB │ gzip:   1.07 kB
-dist/assets/objectsNewFolderRuntime-DEb3EKeT.js            2.17 kB │ gzip:   1.07 kB
-dist/assets/TokenLoginPanel-H-CoKopu.js                    2.21 kB │ gzip:   1.14 kB
-dist/assets/providerOperationFeedback-D-GbX93y.js          2.34 kB │ gzip:   1.12 kB
-dist/assets/objectsJobFeedback-C535OT9Q.js                 2.37 kB │ gzip:   1.02 kB
-dist/assets/ObjectsListHeader-xJXm9Y5_.js                  2.56 kB │ gzip:   0.96 kB
-dist/assets/ObjectThumbnail-CnqQDe02.js                    2.65 kB │ gzip:   1.26 kB
-dist/assets/ObjectsCopyMoveModal-CkBwP6tC.js               2.68 kB │ gzip:   1.15 kB
-dist/assets/AccessSettingsSection-BYf0M-qo.js              2.70 kB │ gzip:   1.25 kB
-dist/assets/loadObjectThumbnailAsset-B7rzWeHg.js           2.79 kB │ gzip:   1.19 kB
-dist/assets/ObjectsNewFolderModal-DEaIufPl.js              2.86 kB │ gzip:   1.28 kB
-dist/assets/useThemeMode-DeVQa_u7.js                       2.88 kB │ gzip:   1.26 kB
-dist/assets/ObjectsSettingsSection-3Y-k_0Fh.js             3.02 kB │ gzip:   1.22 kB
-dist/assets/objectsClipboardRuntime-CtHsKjuw.js            3.03 kB │ gzip:   1.43 kB
-dist/assets/objectsDndRuntime-DB3c1F3m.js                  3.04 kB │ gzip:   1.33 kB
-dist/assets/ObjectsDeletePrefixConfirmModal-B-MHW-DG.js    3.15 kB │ gzip:   1.36 kB
-dist/assets/ObjectsListContent-CPNpRbU-.js                 3.19 kB │ gzip:   1.26 kB
-dist/assets/transfersUploadUtils-D_Li844K.js               3.23 kB │ gzip:   1.36 kB
-dist/assets/KeyboardShortcutGuide-Cq0KRpGS.js              3.25 kB │ gzip:   1.35 kB
-dist/assets/DownloadJobModal-Bf6E8pwg.js                   3.28 kB │ gzip:   1.64 kB
-dist/assets/ObjectsPageHeader-BOtIuRHP.js                  3.32 kB │ gzip:   1.34 kB
-dist/assets/NetworkSettingsSection-CcbXa4nE.js             3.54 kB │ gzip:   1.50 kB
-dist/assets/ObjectsMoveSelectionSheet-cbMpqeUT.js          3.57 kB │ gzip:   1.50 kB
-dist/assets/errors-CwNERbZ5.js                             3.81 kB │ gzip:   1.64 kB
-dist/assets/AppTabs-C0YUuTBZ.js                            4.13 kB │ gzip:   1.77 kB
-dist/assets/ObjectsSearch.module-CO04RSvl.js               4.43 kB │ gzip:   1.43 kB
-dist/assets/CreateJobModal-Dy0eMlDm.js                     4.52 kB │ gzip:   2.14 kB
-dist/assets/thumbnailCache-C6cNSVMj.js                     4.61 kB │ gzip:   2.01 kB
-dist/assets/TransfersRuntimeUiHost-DoIvA_9Q.js             4.64 kB │ gzip:   1.58 kB
-dist/assets/DeletePrefixJobModal-o63qLVNw.js               4.72 kB │ gzip:   2.08 kB
-dist/assets/ObjectsCopyPrefixModal-P8tgeVKy.js             4.81 kB │ gzip:   1.79 kB
-dist/assets/objectPreviewRuntime-BtwoXjly.js               5.01 kB │ gzip:   1.79 kB
-dist/assets/vendor-misc-DtyGqvvc.js                        5.03 kB │ gzip:   1.90 kB
-dist/assets/ObjectsPageOverlays-TELSSVBr.js                5.07 kB │ gzip:   1.56 kB
-dist/assets/presignedUpload-C57_mYwW.js                    5.16 kB │ gzip:   2.11 kB
-dist/assets/vendor-ui-collapse-BtFRwPwZ.js                 5.38 kB │ gzip:   2.05 kB
-dist/assets/ObjectsFiltersDrawer-B8sthSZq.js               5.52 kB │ gzip:   1.68 kB
-dist/assets/ProfilesModals-CdVDRSEF.js                     5.80 kB │ gzip:   2.19 kB
-dist/assets/ServerSettingsSection-Cr6hWPIS.js              6.16 kB │ gzip:   2.49 kB
-dist/assets/objectsRefreshEvents-ovXoETPa.js               6.37 kB │ gzip:   2.37 kB
-dist/assets/bucketPolicyDecisionGuide-FF81C9YV.js          6.60 kB │ gzip:   1.61 kB
-dist/assets/ObjectsListControls-mydnn7aB.js                7.55 kB │ gzip:   2.28 kB
-dist/assets/TransfersSettingsSection-D92luEPw.js           7.95 kB │ gzip:   2.34 kB
-dist/assets/SettingsDrawer-BFWWrpho.js                    10.44 kB │ gzip:   3.56 kB
-dist/assets/ObjectsImageViewerModal-CzkzwBpG.js           10.90 kB │ gzip:   3.56 kB
-dist/assets/TransfersDrawer-BSOmmCH5.js                   12.05 kB │ gzip:   3.52 kB
-dist/assets/vendor-react-CPd7ItzW.js                      12.18 kB │ gzip:   4.74 kB
-dist/assets/ObjectsGlobalSearchDrawer-BmT8mGX5.js         12.87 kB │ gzip:   3.60 kB
-dist/assets/LightApp-BZ5hm0cI.js                          13.19 kB │ gzip:   4.37 kB
-dist/assets/ObjectsDetailsPanelSection-50LbyNq2.js        13.63 kB │ gzip:   3.58 kB
-dist/assets/vendor-tanstack-virtual-bQP9FDyX.js           14.42 kB │ gzip:   4.77 kB
-dist/assets/UploadsPageExperience-hZF7bB2B.js             14.64 kB │ gzip:   4.30 kB
-dist/assets/ObjectsTreeSection-bDa7v6YS.js                14.69 kB │ gzip:   5.20 kB
-dist/assets/ObjectsToolbarSection-CKVRa7RB.js             18.91 kB │ gzip:   5.91 kB
-dist/assets/BucketModal-BTHNLqvH.js                       19.77 kB │ gzip:   4.84 kB
-dist/assets/SidebarBackupDrawer-BEJkNDEy.js               22.26 kB │ gzip:   6.37 kB
-dist/assets/BucketsPage-BFcvr0_U.js                       22.56 kB │ gzip:   6.40 kB
-dist/assets/vendor-react-router-BVextrwO.js               36.21 kB │ gzip:  13.13 kB
-dist/assets/vendor-tanstack-B1BVHV24.js                   37.12 kB │ gzip:  11.11 kB
-dist/assets/JobsOverlaysHost-Ch4OaX8o.js                  37.27 kB │ gzip:  11.73 kB
-dist/assets/BucketPolicyModal-DWv7zZbx.js                 39.22 kB │ gzip:  10.70 kB
-dist/assets/index-lS6497oT.js                             43.29 kB │ gzip:  11.61 kB
-dist/assets/Transfers-DdBFBVJf.js                         43.91 kB │ gzip:  12.97 kB
-dist/assets/ProfileModal-C6dyRUYZ.js                      44.13 kB │ gzip:  11.31 kB
-dist/assets/ProfilesPage-DSuAdLuQ.js                      50.97 kB │ gzip:  12.63 kB
-dist/assets/BucketGovernanceModal-BO9H_ATl.js             56.60 kB │ gzip:  13.19 kB
-dist/assets/FullApp-BmEF6hQD.js                           58.42 kB │ gzip:  18.81 kB
-dist/assets/JobsPage-BkiRS283.js                          64.99 kB │ gzip:  19.29 kB
-dist/assets/vendor-data-4eDMv0oK.js                       97.26 kB │ gzip:  30.35 kB
-dist/assets/vendor-react-dom-DwjLOBgM.js                 180.26 kB │ gzip:  56.27 kB
-dist/assets/ObjectsPage-CHPDK0xJ.js                      250.55 kB │ gzip:  63.91 kB
-dist/assets/vendor-ui-PBU0cVnf.js                        515.61 kB │ gzip: 166.18 kB
-✓ built in 5.51s
+dist/assets/FileTextOutlined-D82Ltpma.js                   0.98 kB │ gzip:  0.63 kB
+dist/assets/format-CHLMx_6j.js                             1.01 kB │ gzip:  0.38 kB
+dist/assets/ObjectsGoToPathModal-c41Ie5s5.js               1.23 kB │ gzip:  0.67 kB
+dist/assets/ReloadOutlined-CK6ZyKW0.js                     1.25 kB │ gzip:  0.78 kB
+dist/assets/transfer-BD0BE-dN.js                           1.32 kB │ gzip:  0.63 kB
+dist/assets/UploadSourceSheet-Dxofj_pF.js                  1.61 kB │ gzip:  0.78 kB
+dist/assets/ObjectsContextMenuPortal-DcuCfSYC.js           1.70 kB │ gzip:  0.88 kB
+dist/assets/UploadsPage-BaeZy9Bj.js                        1.89 kB │ gzip:  0.82 kB
+dist/assets/ObjectsPresignModal-BoVVj9pt.js                1.93 kB │ gzip:  0.98 kB
+dist/assets/objectsNewFolderFeedback-D_jpb3LS.js           1.96 kB │ gzip:  0.98 kB
+dist/assets/ObjectsCommandPaletteModal-xVJrDR6W.js         2.02 kB │ gzip:  1.07 kB
+dist/assets/ObjectsRenameModal-Dwc_0s0V.js                 2.07 kB │ gzip:  0.97 kB
+dist/assets/objectsDeferredActionRuntime-C-9wp6HF.js       2.16 kB │ gzip:  0.96 kB
+dist/assets/objectsNewFolderRuntime-DkdUiDth.js            2.19 kB │ gzip:  1.08 kB
+dist/assets/ObjectsDownloadPrefixModal-5qszijt5.js         2.34 kB │ gzip:  1.18 kB
+dist/assets/objectsJobFeedback-C85-k_br.js                 2.37 kB │ gzip:  1.01 kB
+dist/assets/AccessSettingsSection-BqUmVVG5.js              2.42 kB │ gzip:  1.10 kB
+dist/assets/ObjectThumbnail-CKW1xK4h.js                    2.65 kB │ gzip:  1.23 kB
+dist/assets/ObjectsCopyMoveModal-BlRknx-I.js               2.70 kB │ gzip:  1.15 kB
+dist/assets/loadObjectThumbnailAsset-BaM4Gd5w.js           2.81 kB │ gzip:  1.21 kB
+dist/assets/NetworkSettingsSection-B65-wiMA.js             2.85 kB │ gzip:  1.24 kB
+dist/assets/ObjectsSettingsSection-DZ-s2U_Q.js             2.86 kB │ gzip:  1.15 kB
+dist/assets/ObjectsNewFolderModal-DlDl_5n0.js              2.89 kB │ gzip:  1.28 kB
+dist/assets/objectsClipboardRuntime-PcaA6-tN.js            3.04 kB │ gzip:  1.41 kB
+dist/assets/objectsDndRuntime-BB_oPiJu.js                  3.05 kB │ gzip:  1.31 kB
+dist/assets/ObjectsPageHeader-j53i9EAf.js                  3.19 kB │ gzip:  1.27 kB
+dist/assets/ObjectsMoveSelectionSheet-DdGGaYy7.js          3.57 kB │ gzip:  1.48 kB
+dist/assets/ObjectsListHeader-BhX9fozm.js                  3.57 kB │ gzip:  1.54 kB
+dist/assets/LoginPage-C3ty5-7T.js                          3.74 kB │ gzip:  1.77 kB
+dist/assets/AppTabs-CvKjjk9O.js                            4.23 kB │ gzip:  1.81 kB
+dist/assets/DeletePrefixJobModal-BskDNYjA.js               4.70 kB │ gzip:  2.06 kB
+dist/assets/ObjectsListContent-5pQt1Mqt.js                 4.80 kB │ gzip:  2.02 kB
+dist/assets/ObjectsPageOverlays-Cfty_LCR.js                4.81 kB │ gzip:  1.48 kB
+dist/assets/ObjectsSearch.module-iW3S1b5W.js               4.86 kB │ gzip:  1.52 kB
+dist/assets/ObjectsCopyPrefixModal-BhPmNAgy.js             4.87 kB │ gzip:  1.81 kB
+dist/assets/objectPreviewRuntime-DHzYmD4F.js               4.99 kB │ gzip:  1.77 kB
+dist/assets/ProfilesModals-z_baG7a0.js                     5.12 kB │ gzip:  1.93 kB
+dist/assets/Overflow-CAqdEd9c.js                           5.28 kB │ gzip:  2.49 kB
+dist/assets/transfersUploadUtils-Cacn14re.js               5.29 kB │ gzip:  2.18 kB
+dist/assets/presignedUpload-DHXY826J.js                    5.46 kB │ gzip:  2.20 kB
+dist/assets/ObjectsFiltersDrawer-DELvjruc.js               5.53 kB │ gzip:  1.67 kB
+dist/assets/useJobsRealtimeEvents-Drw3w7H_.js              5.98 kB │ gzip:  2.46 kB
+dist/assets/TransfersSettingsSection-Cw5zOi7P.js           6.09 kB │ gzip:  1.85 kB
+dist/assets/bucketPolicyDecisionGuide-FF81C9YV.js          6.60 kB │ gzip:  1.61 kB
+dist/assets/ObjectsListControls-BMccMY63.js                6.65 kB │ gzip:  2.05 kB
+dist/assets/ObjectsDeletePrefixConfirmModal-CFw0nrk2.js    7.62 kB │ gzip:  2.88 kB
+dist/assets/index-ClCwWlg0.js                              7.65 kB │ gzip:  2.71 kB
+dist/assets/index-C7tz1Nyg.js                              7.98 kB │ gzip:  3.13 kB
+dist/assets/objectsRefreshEvents-CsOsUocT.js               8.06 kB │ gzip:  2.88 kB
+dist/assets/ServerSettingsSection-DgCnP-Tb.js              8.41 kB │ gzip:  3.52 kB
+dist/assets/SettingsDrawer-DPAHjQu3.js                     8.72 kB │ gzip:  3.10 kB
+dist/assets/ObjectsImageViewerModal-DzUwQOFZ.js           11.94 kB │ gzip:  3.87 kB
+dist/assets/vendor-ui-BV5vKm2k.js                         11.96 kB │ gzip:  4.87 kB
+dist/assets/vendor-react-CATs5nEF.js                      12.23 kB │ gzip:  4.74 kB
+dist/assets/ObjectsDetailsPanelSection-C15gXVDN.js        13.67 kB │ gzip:  3.58 kB
+dist/assets/ObjectsGlobalSearchDrawer-CFwTpBkz.js         14.22 kB │ gzip:  4.06 kB
+dist/assets/vendor-tanstack-virtual-Zl4lkMR9.js           14.42 kB │ gzip:  4.77 kB
+dist/assets/UploadsPageExperience-Bsk-K5tc.js             15.14 kB │ gzip:  4.71 kB
+dist/assets/TransfersRuntimeUiHost-CdRTiNbN.js            15.98 kB │ gzip:  4.70 kB
+dist/assets/ObjectsTreeSection-DJCD7r9e.js                16.53 kB │ gzip:  5.93 kB
+dist/assets/BucketModal-C4GyCjlS.js                       19.87 kB │ gzip:  4.88 kB
+dist/assets/ObjectsToolbarSection-I6PD6Vq0.js             21.08 kB │ gzip:  6.58 kB
+dist/assets/BucketsPage-KMgTPU2d.js                       22.17 kB │ gzip:  6.52 kB
+dist/assets/JobsOverlaysHost-CiDE5zIm.js                  35.27 kB │ gzip: 11.32 kB
+dist/assets/vendor-react-router-BEGUCwle.js               35.99 kB │ gzip: 13.08 kB
+dist/assets/vendor-tanstack-CrdBuhJL.js                   37.12 kB │ gzip: 11.11 kB
+dist/assets/ProfileModal-2PGD27UG.js                      39.85 kB │ gzip:  9.84 kB
+dist/assets/BucketPolicyModal-CrrbUd9S.js                 40.10 kB │ gzip: 11.10 kB
+dist/assets/Transfers-CfqzvYZQ.js                         41.99 kB │ gzip: 12.60 kB
+dist/assets/JobsPage-IAwg-Rc_.js                          58.51 kB │ gzip: 17.67 kB
+dist/assets/BucketGovernanceModal-RqmZY380.js             58.78 kB │ gzip: 13.81 kB
+dist/assets/index-e9cKLUxW.js                             62.89 kB │ gzip: 22.33 kB
+dist/assets/vendor-ui-upload-B8cV-TPx.js                  63.49 kB │ gzip: 20.65 kB
+dist/assets/SidebarBackupDrawer-B_KXV7uq.js               63.52 kB │ gzip: 19.86 kB
+dist/assets/vendor-data-4eDMv0oK.js                       97.26 kB │ gzip: 30.35 kB
+dist/assets/vendor-ui-collapse-CIs3KKIV.js               126.69 kB │ gzip: 45.76 kB
+dist/assets/vendor-react-dom-DYDFLMQG.js                 180.26 kB │ gzip: 56.27 kB
+dist/assets/index-DOUQ5-FG.js                            317.71 kB │ gzip: 95.38 kB
+dist/assets/ObjectsPage-CoEj_65G.js                      319.30 kB │ gzip: 84.91 kB
+✓ built in 6.81s
 ```
 
 - Notes:
@@ -216,8 +216,8 @@ dist/assets/vendor-ui-PBU0cVnf.js                        515.61 kB │ gzip: 166
 ### `npm run test:e2e:design-audit`
 
 - Status: Passed
-- Started: 2026-05-24T05:04:35.639Z
-- Finished: 2026-05-24T05:04:54.854Z
+- Started: 2026-08-23T08:44:05.959Z
+- Finished: 2026-08-23T08:44:29.184Z
 - Evidence:
 
 ```text
@@ -225,43 +225,100 @@ dist/assets/vendor-ui-PBU0cVnf.js                        515.61 kB │ gzip: 166
 > playwright test tests/design-audit-visual.spec.ts --project=chromium
 
 
-Running 6 tests using 1 worker
+Running 10 tests using 1 worker
 
-  ✓  1 [chromium] › tests/design-audit-visual.spec.ts:36:2 › Design audit visual smoke @visual › Objects shell hierarchy remains visible in light mode (3.0s)
-  ✓  2 [chromium] › tests/design-audit-visual.spec.ts:42:2 › Design audit visual smoke @visual › Objects shell hierarchy remains visible in dark mode (2.7s)
-  ✓  3 [chromium] › tests/design-audit-visual.spec.ts:48:2 › Design audit visual smoke @visual › Objects shell hierarchy remains visible at tablet width (2.5s)
-  ✓  4 [chromium] › tests/design-audit-visual.spec.ts:54:2 › Design audit visual smoke @visual › Objects bucket picker floating surface remains distinct (2.8s)
-  ✓  5 [chromium] › tests/design-audit-visual.spec.ts:63:2 › Design audit visual smoke @visual › Jobs operational surfaces remain scannable on mobile (3.0s)
-  ✓  6 [chromium] › tests/design-audit-visual.spec.ts:77:2 › Design audit visual smoke @visual › Uploads workflow cards remain distinct on mobile (1.4s)
+  ✓   1 [chromium] › tests/design-audit-visual.spec.ts:49:2 › Design audit visual smoke @visual › Objects shell hierarchy remains visible in light mode (2.7s)
+  ✓   2 [chromium] › tests/design-audit-visual.spec.ts:60:2 › Design audit visual smoke @visual › Objects shell hierarchy remains visible in dark mode (2.1s)
+  ✓   3 [chromium] › tests/design-audit-visual.spec.ts:66:2 › Design audit visual smoke @visual › Objects shell hierarchy remains visible at tablet width (1.9s)
+  ✓   4 [chromium] › tests/design-audit-visual.spec.ts:72:2 › Design audit visual smoke @visual › Objects shell remains usable at the narrow mobile floor (1.9s)
+  ✓   5 [chromium] › tests/design-audit-visual.spec.ts:96:2 › Design audit visual smoke @visual › Objects bucket picker floating surface remains distinct (2.1s)
+  ✓   6 [chromium] › tests/design-audit-visual.spec.ts:105:2 › Design audit visual smoke @visual › Jobs operational surfaces remain scannable on mobile (1.8s)
+  ✓   7 [chromium] › tests/design-audit-visual.spec.ts:119:2 › Design audit visual smoke @visual › Uploads workflow cards remain distinct on mobile (1.3s)
+  ✓   8 [chromium] › tests/design-audit-visual.spec.ts:132:2 › Design audit visual smoke @visual › Profiles switches cleanly between desktop table and mobile cards (1.3s)
+  ✓   9 [chromium] › tests/design-audit-visual.spec.ts:145:2 › Design audit visual smoke @visual › Profiles mobile cards preserve hierarchy in dark mode (987ms)
+  ✓  10 [chromium] › tests/design-audit-visual.spec.ts:157:2 › Design audit visual smoke @visual › Buckets switches cleanly between desktop table and mobile cards (1.6s)
 
-  6 passed (18.2s)
+  10 passed (22.0s)
 
-[WebServer] (node:398963) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (node:458516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 [WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
-[WebServer] (node:398950) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (node:458235) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 [WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
-(node:399158) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:459115) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node-22 --trace-warnings ...` to show where the warning was created)
-(node:399158) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:459115) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node-22 --trace-warnings ...` to show where the warning was created)
+[WebServer] 5:44:17 PM [vite] http proxy error: /api/v1/buckets/objects-mobile-bucket/objects/thumbnail?key=preview.png&size=34&objectSize=2048&etag=%22preview%22&lastModified=2024-01-01T00%3A00%3A00Z
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8080
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[WebServer] 5:44:17 PM [vite] http proxy error: /api/v1/buckets/objects-mobile-bucket/objects/thumbnail?key=preview.png&size=34&objectSize=2048&etag=%22preview%22&lastModified=2024-01-01T00%3A00%3A00Z
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8080
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
 ```
 
 - Notes:
+
+The 10 focused Chromium cases passed against the local test fixtures. Two thumbnail requests logged a refused `127.0.0.1:8080` proxy fallback, so this run is not live-backend or provider evidence.
 
 
 ## Supplemental Verification
 
 ### `npm run test:e2e:visual`
 
-- Status: Passed
-- Evidence: `25 passed (45.2s)`
-- Notes: Full visual regression suite now includes the mobile login/token panel plus the design-audit, object, dark-theme, image preview, workflow, bucket, profile, job, transfer, upload, and settings captures.
+- Status: Passed on 2026-08-23
+- Evidence: `35 passed (50.4s)` with five workers and global `maxDiffPixels: 100`
+- Notes: A transparent Login theme-control mutation failed both mobile and desktop screenshots (405 and 389 differing pixels), proving the strict budget catches the previously missed regression.
+
+### `npm run test:e2e:mobile-responsive`
+
+- Status: Passed on 2026-08-23
+- Evidence: `104 passed (1.2m)` across `mobile-iphone-13` and `mobile-pixel-7`
+- Notes: The required device projects now include inspected Login and Jobs screenshot sentinels; both remain mock Chromium evidence rather than physical-device or Safari proof.
+
+### `npm run test:e2e:firefox-reflow`
+
+- Status: Passed on 2026-08-24
+- Evidence: `8 passed (18.7s)` for Login, Profiles, Buckets, Objects, the bucket policy editor, Uploads, Jobs, and Settings
+- Notes: This is automated Firefox reflow, computed-text resize, and pointer-target evidence. The earlier headed probe only checked `innerWidth` and `devicePixelRatio`, so it did not distinguish failed full-page zoom from successful text-only zoom.
+
+### Firefox 200% browser text-only zoom command
+
+- Status: Passed on 2026-08-24
+- Command: `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM=1 PLAYWRIGHT_HEADLESS=0 npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1`
+- Evidence: `8 passed (27.8s)` in `mcr.microsoft.com/playwright:v1.57.0-noble` after Firefox reported text scale `200%` while retaining `innerWidth: 320` and `devicePixelRatio: 1`
+- Notes: The lane launches Firefox with `browser.zoom.full=false`, sends six real browser-window zoom increments through Xvfb/xdotool, and reuses the seven core-route scenarios plus the bucket policy editor. The bucket menu uses `ArrowDown` from its initial focused item to Policy editor; after loading, the sheet traverses 16 forward and 8 reverse Tab stops before `Escape` restores an exposed Manage trigger. The Jobs filters sheet traverses 10 forward and 6 reverse Tab stops before `Escape` restores an exposed Filters trigger; the Settings tablist uses `ArrowRight` from Access through Support. Every focused stop is sampled inside its viewport-and-overflow-clipped rect. A standalone browser probe also held a `100px` image fixed while `16px` text grew to `32px`. This is actual Firefox text-only zoom geometry and representative keyboard evidence, not exhaustive application-wide Tab, manual visual review, assistive-technology, or physical-device proof.
+
+### Firefox 400% browser full-page zoom command
+
+- Status: Passed on 2026-08-24
+- Command: `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM=1 PLAYWRIGHT_HEADLESS=0 npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1`
+- Evidence: `8 passed (29.9s)` in `mcr.microsoft.com/playwright:v1.57.0-noble` after Firefox changed from `innerWidth: 1280` and DPR `1` to `innerWidth: 320` and DPR `4`
+- Notes: The lane launches Firefox with `browser.zoom.full=true`, disables Playwright viewport emulation, sizes the native browser window to `1280×800`, and sends nine real browser-window zoom increments through Xvfb/xdotool. Post-zoom controls use their accessible keyboard activation because Playwright's Firefox pointer coordinates remain mapped to the unzoomed window. The Bucket Policy menu verifies initial focus on Controls, `ArrowDown` focus on Policy editor, and `Enter` activation; after loading, the sheet traverses 16 forward and 8 reverse Tab stops before `Escape` restores an exposed Manage trigger. The Jobs filters sheet traverses 10 forward and 6 reverse Tab stops before `Escape` restores an exposed Filters trigger; the Settings tablist verifies `ArrowRight` focus and selection from Access through Support. The traversal exposed an offscreen shared sheet footer at the 179 CSS px content height, and the shared panel overflow fallback fixed it. The same path passed in actual Chromium 400% and Firefox 200% text-only zoom. This is actual Firefox full-page zoom geometry and representative keyboard evidence, not exhaustive application-wide Tab, manual visual review, assistive-technology, or physical-device proof.
+
+### `npm run test:e2e:webkit-reflow`
+
+- Status: Passed on 2026-08-23
+- Evidence: `8 passed (22.5s)` in `mcr.microsoft.com/playwright:v1.57.0-noble`, matching the repository Playwright version
+- Notes: The native host run did not execute product tests because browser launch failed on missing WebKit host libraries. The version-matched official container supplied those dependencies. This is WebKit engine evidence, not physical Safari, WKWebView, VoiceOver, or real-device proof.
+
+### Chromium 400% browser UI zoom command
+
+- Status: Passed on 2026-08-24
+- Command: `PLAYWRIGHT_BROWSER_UI_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=chromium --workers=1`
+- Evidence: `8 passed (26.9s)` after the headful Chromium window reported `innerWidth: 320` and `devicePixelRatio: 4` at 400% browser UI zoom from a 1280px viewport
+- Notes: The seven core-route scenarios plus the bucket policy editor reused the same reflow, pointer-target, and computed-text resize checks under actual Chromium browser zoom. The policy scenario holds the initial policy request, renders a long S3 resource, traverses the ready sheet in both Tab directions, verifies `Escape` trigger restoration, holds provider validation, and renders a long provider error before checking reflow. The Jobs filters sheet also traverses forward and backward before restoring its exposed trigger. It previously exposed StrictMode cleanup leaving policy actions permanently inactive; the policy editor, policy mutations, governance mutations, Jobs actions, and Profiles scope guards now reactivate during effect setup, with 21 focused unit tests covering the affected owners. The earlier raw JSON textarea fix preserves vertical scrolling at 200% text size, and the new shared panel overflow fallback keeps short-viewport sheet footers reachable. The same run also verified native `ArrowDown` Bucket Policy menu traversal and `ArrowRight` Settings tab traversal with focus non-obscuration. Xvfb and `xdotool` supplied browser-window input in the version-matched official Playwright container. This remains automated Chromium geometry and representative keyboard evidence, not exhaustive application-wide Tab, manual browser review, or assistive-technology/physical-device proof.
 
 ### `npm run lint`
 
 - Status: Passed
 - Evidence: ESLint, CSS token check, and import-cycle check all completed successfully.
-- Notes: `check:css-tokens` reported `ok (50 CSS files, 78 tokens)` and `check:import-cycles` reported `ok (560 files, 1158 runtime edges)`.
+- Notes: On 2026-08-23, `check:css-tokens` reported `ok (49 CSS files, 93 tokens)` and `check:import-cycles` reported `ok (548 files, 1130 runtime edges)`.
+
+### `npm run bundle:budget`
+
+- Status: Passed
+- Evidence: Production build and bundle report completed successfully on 2026-08-23.
+- Notes:
 
 ### `git diff --check`
 
@@ -269,24 +326,32 @@ Running 6 tests using 1 worker
 - Evidence: No whitespace or conflict-marker issues reported.
 - Notes:
 
+### `./scripts/check.sh fast` and `./scripts/check.sh full`
+
+- Status: Passed on 2026-08-24
+- Evidence: The full gate completed backend security analysis, 252 frontend test files with 1,025 passing unit tests, a 3,416-module production build, and 2 passing Chromium smoke tests.
+- Notes: This is the current mixed worktree's full local gate. It does not prove live-provider, deployed-runtime, physical-device, or assistive-technology behavior.
+
 ## Manual Visual QA Results
+
+The broad review began on 2026-05-24. On 2026-08-23, the ten baselines exposed by the stricter visual budget and the four newly covered desktop surfaces were inspected before acceptance.
 
 ### Light theme desktop
 
-- Status: Reviewed
-- Screens reviewed: object shell light smoke, object bucket picker surface, global search action drawer, uploads workflow cards
+- Status: Reviewed on 2026-08-23
+- Screens reviewed: object shell light/tablet, object bucket picker, Profiles, Buckets, Jobs, Login, Uploads, Settings, and Transfers desktop surfaces
 - Findings: Surface separation, page hierarchy, input focus, table/card contrast, and overlay boundaries are visible without relying on faint gray-only states.
 
 ### Dark theme desktop
 
-- Status: Reviewed
-- Screens reviewed: object shell dark smoke, dark global search drawer, long-key global search row
+- Status: Object shell reviewed on 2026-08-23; global-search cases remain the 2026-05-24 review
+- Screens reviewed: object shell dark smoke; historical dark global search drawer and long-key global search row
 - Findings: Text and table headers remain readable; long object keys wrap inside the key column without colliding with size, modified, or action columns.
 
 ### Mobile
 
-- Status: Reviewed
-- Screens reviewed: login token panel, jobs filters sheet, transfers drawer states, uploads source sheet, bucket create/delete/governance flows, profile dialogs, settings drawer
+- Status: Reviewed on 2026-08-23
+- Screens reviewed: login token panel, image viewer, jobs filters, transfers, uploads source, bucket create/delete/governance flows, profile dialogs, and settings drawer
 - Findings: Modal/sheet/card hierarchy is visible at 390px width; the login theme button, brand lockup, token field, and login action remain inside the viewport.
 
 ## Regression Findings
@@ -297,5 +362,5 @@ Running 6 tests using 1 worker
 
 ## Completion Decision
 
-- Status: Complete for the current worktree.
-- Reason: Static design checks, contrast checks, build, focused design-audit visual smoke, full visual regression, lint, whitespace checks, and manual visual QA have all passed; regressions found during validation were fixed and covered by tests.
+- Status: Current local automated design verification complete.
+- Reason: Static design checks, contrast checks, build, focused and full visual Chromium suites, actual Chromium UI zoom, actual Firefox full-page and text-only zoom, Firefox/WebKit reflow, strict mutation detection, lint, bundle budget, whitespace checks, and current baseline review passed on 2026-08-24. Manual browser visual review, physical Safari/WKWebView, assistive technology, real-device, live-provider, and deployed-runtime evidence remain separate.

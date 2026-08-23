@@ -11,7 +11,7 @@
 
 - 기능·구조·접근성·반응형: **GO** — 로컬 fixture/Chromium 범위
 - production build·bundle budget: **GO**
-- 실제 Safari, Firefox 400% zoom, VoiceOver/TalkBack, 물리 기기, provider·배포·production: **미검증**
+- 실제 Safari, VoiceOver/TalkBack, 물리 기기, provider·배포·production: **미검증**
 
 ## 평가 범위
 
@@ -33,9 +33,9 @@
 | 컴포넌트 구조·유지보수성 | 20% | 9.0 | 공용 shell/domain 경계를 유지하면서 Buckets·Transfers의 전달-only 계층 2개 제거 |
 | 가시성·정보 위계 | 15% | 9.0 | light/dark/tablet/320px 시각 회귀 `10/10`, heading outline 정합성 확인 |
 | 웹 표준·접근성 | 20% | 9.0 | onboarding `h2`, Objects fallback `h1`, axe·focus·forced colors·reflow 통과 |
-| 반응형·모바일 작업 흐름 | 15% | 9.0 | iPhone 13/Pixel 7 기능 `98/100`과 부하 영향 2건 단독 재검증 `2/2` 통과 |
+| 반응형·모바일 작업 흐름 | 15% | 9.0 | iPhone 13/Pixel 7 기능 `104/104` 통과 |
 | 성능·번들 효율 | 15% | 8.5 | 초기 gzip `293.8 → 180.5kB`, 광범위 UI 강제 grouping 제거, 재설정 예산 통과 |
-| 검증 체계·회귀 방지 | 15% | 9.5 | unit `1030/1030`, 접근성 묶음 `73/73`, 정적·시각·bundle gate 통과 |
+| 검증 체계·회귀 방지 | 15% | 9.5 | unit `1025/1025`, 접근성 묶음 `73/73`, 정적·시각·bundle gate 통과 |
 | **가중 합계** | **100%** | **9.1** | 로컬 actionable finding을 닫고 외부 증거 범위는 합격으로 승격하지 않음 |
 
 ## 개선 결과
@@ -88,13 +88,15 @@ source/test import가 없던 `@tanstack/react-table`과 lockfile 항목을 제�
 
 | 검증 | 결과 |
 | --- | --- |
-| Vitest 전체 | `252/252` files, `1030/1030` tests 통과 |
-| iPhone 13·Pixel 7 모바일 작업 흐름 | `98/100` 기능 통과, 병렬 부하 초과 2건 단독 재검증 `2/2` 통과 |
+| Vitest 전체 | `252/252` files, `1025/1025` tests 통과 |
+| iPhone 13·Pixel 7 모바일 작업 흐름 | `104/104` 통과 |
 | axe·dark·320px reflow·Objects density·preview | `73/73` 통과, live-provider `1`건 의도적 skip |
+| Firefox 실제 200% text-only zoom | 핵심 7개 화면과 Bucket policy editor `8/8` 통과; viewport/DPR 불변과 계산 글꼴 2배 확대 확인 |
+| Firefox 실제 400% full-page zoom | 핵심 7개 화면과 Bucket policy editor `8/8` 통과; native `1280px` window가 `320 CSS px`/DPR `4`로 전환되고 대표 activation focus가 완전히 가려지지 않음을 확인 |
 | 디자인 시각 회귀 | `10/10` 통과 |
 | production build·bundle budget | 통과 |
 | ESLint | 통과 |
-| CSS token | `50` CSS files / `99` tokens, 통과 |
+| CSS token | `49` CSS files / `93` tokens, 통과 |
 | light/dark contrast matrix | 추적 조합 전체 통과 |
 | import cycle | 통과 |
 | geometry probe policy | 통과 |
@@ -131,7 +133,7 @@ Playwright fixture가 소유하지 않은 thumbnail/realtime 요청에서 localh
 
 이 분석이 증명하지 않는 범위:
 
-- Safari/WebKit과 Firefox 실제 400% text-only zoom
+- Safari 실제 브라우저
 - VoiceOver, TalkBack, NVDA end-to-end 작업 완료
 - 물리 iPhone/Android safe area, OS 글자 확대, 실제 터치 오차
 - authenticated provider 데이터와 대규모 production 목록 분포

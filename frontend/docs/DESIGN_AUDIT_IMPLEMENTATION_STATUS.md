@@ -1,6 +1,7 @@
 # Design Audit Implementation Status
 
-Date: 2026-05-24
+Originally audited: 2026-05-24
+Last updated: 2026-08-23
 
 ## Objective
 
@@ -25,6 +26,7 @@ Track the implementation state for the project-wide UI/UX design audit focused o
 - Design token usage guide
 - Visual QA checklist
 - Design audit visual smoke spec for key light/dark/tablet/mobile hierarchy surfaces
+- CSS ownership cleanup for orphan modules, retired selectors, and unused design tokens
 
 ## Files Added
 
@@ -54,25 +56,34 @@ Track the implementation state for the project-wide UI/UX design audit focused o
 - `npm run test:e2e:design-audit`
 - `npm run validate:design-audit`
 
-## Verification Gates Passed
+## Current Verification (2026-08-23)
 
 - `npm run check:design`
 - `npm run check:css-tokens` through `npm run check:design`
 - `npm run check:design-audit` through `npm run check:design`
 - `npm run check:design-contrast` through `npm run check:design`
 - `npm run build`
-- `npm run test:e2e:design-audit`
-- `npm run test:e2e:visual`
+- `npm run test:e2e:design-audit`: 10 passed
+- `npm run test:e2e:visual`: 35 passed with a viewport-independent 100-pixel diff budget
+- `npm run test:e2e:mobile-responsive`: 104 passed, including Login and Jobs iPhone/Pixel visual sentinels
+- `npm run test:e2e:firefox-reflow`: 8 passed
+- `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM=1 PLAYWRIGHT_HEADLESS=0 npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1`: 8 passed with actual Firefox 200% text-only zoom (`innerWidth: 320`, `devicePixelRatio: 1`, computed text scale `200%`)
+- `npm run test:e2e:webkit-reflow`: 8 passed in the version-matched official Playwright container
+- `PLAYWRIGHT_BROWSER_UI_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=chromium --workers=1`: 8 passed with actual 400% headful Chromium zoom (`1280px` to `320 CSS px`)
+- The bucket policy scenario covers initial loading, a long S3 resource, pending provider validation, and a long provider error without page or overlay overflow
+- StrictMode action guards remain active after replayed mount effects; 21 focused policy, governance, Jobs, and Profiles unit tests passed
+- `./scripts/check.sh fast`
+- `./scripts/check.sh full`: backend security analysis, 1,025 frontend unit tests, production build, and 2 Chromium smoke tests passed
 - `npm run lint`
+- `npm run bundle:budget`
 - `git diff --check`
-- Light theme visual QA
-- Dark theme visual QA
-- Tablet visual QA
-- Mobile visual QA
+- CSS ownership audit: 48 modules, with no orphan modules/classes, unused tokens/keyframes, or exact duplicate rules
+
+The full visual suite was rerun on 2026-08-23 after replacing the viewport-relative 1% tolerance with a 100-pixel absolute budget. Ten stale baselines exposed by the stricter contract were inspected and refreshed against the current worktree; the complete 35-case suite then passed with five workers.
 
 ## Remaining Advisory Notes
 
-- `npm run check:design-audit` still reports advisory review prompts for intentional transparent controls, compact radii, and selected opacity/shadow cases. The command is advisory by design and passed without `--fail-on-findings`.
+- `npm run check:design-audit` reports 58 advisory review prompts for intentional transparent controls, compact radii, and selected opacity/shadow cases. The command is advisory by design and passed without `--fail-on-findings`.
 - Full real-data visual review is still recommended after new data-heavy workflows are added, but the audited fixtures cover the current high-risk hierarchy and contrast surfaces.
 
 ## Completion Criteria
@@ -92,4 +103,4 @@ The design audit work should not be marked complete until all of the following a
 
 ## Current Status
 
-Implementation, focused validation, full visual regression coverage, lint, whitespace checks, and manual visual QA are complete for the current worktree.
+The current worktree has 49 CSS files and 93 `--s3d-*` tokens after removing 57 lines of orphan or unused CSS. Static design checks, build, focused and full Chromium visual coverage, actual Chromium UI zoom, actual Firefox full-page and text-only zoom, representative zoom focus non-obscuration, native menu/tab navigation, and bidirectional Bucket Policy and Jobs filters sheet traversal with `Escape` trigger restoration, automated Firefox/WebKit reflow, lint, bundle budget, and whitespace checks pass. Manual browser visual review, exhaustive application-wide keyboard order, physical Safari/WKWebView, assistive technology, real-device, live-provider, and deployed-runtime QA remain separate evidence boundaries.

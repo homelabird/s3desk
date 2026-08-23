@@ -8,18 +8,18 @@
 
 현재 프론트엔드는 시맨틱 구조, 접근 가능한 이름, 기본 키보드 조작, 포커스 트랩, 색상 토큰에서 비교적 강한 기반을 갖고 있다. 아래 개선 작업 후 핵심 화면 리플로우, 실제 렌더링 axe, Objects 밀도·타깃 검사를 합친 Chromium 회귀 검사를 통과했다. light/dark 전환 중 아이콘 대비가 잠시 무너지는 현상은 테마 교체 프레임의 transition을 차단해 해소했고, 투명 사용자 이미지는 두 테마에서 같은 중립 checkerboard 위에 원본 그대로 표시한다.
 
-확인됐던 WCAG 2.1.4 위반은 전역 문자 단축키와 안내 UI를 제거해 해소했다. 핵심 7개 모바일 화면의 유효 pointer target도 Apple의 `44×44pt`와 Google Material의 `48×48dp`를 함께 만족하는 `48×48px` 하한으로 보정했다. 계산된 글꼴 크기를 2배로 확대한 자동 검사에서 발견한 모바일 page subtitle 잘림도 공용 소유 CSS에서 해소했다. 다만 실제 Chrome/Firefox zoom과 보조기술 수동 증거가 남아 있어 세 기준의 완전 준수를 선언하지 않는다.
+확인됐던 WCAG 2.1.4 위반은 전역 문자 단축키와 안내 UI를 제거해 해소했다. 핵심 7개 모바일 화면의 유효 pointer target도 Apple의 `44×44pt`와 Google Material의 `48×48dp`를 함께 만족하는 `48×48px` 하한으로 보정했다. 계산된 글꼴 크기를 2배로 확대한 자동 검사에서 발견한 모바일 page subtitle 잘림도 공용 소유 CSS에서 해소했다. Chromium 400% UI zoom과 Firefox 400% full-page·200% text-only zoom 자동 검증은 통과했지만 수동 시각 검토와 보조기술 증거가 남아 있어 세 기준의 완전 준수를 선언하지 않는다.
 
 | 기준 | 판정 | 핵심 근거 |
 | --- | --- | --- |
-| WCAG 2.2 A/AA | 검사 범위 내 통과·전체 미확정 | 확인된 2.1.4 위반 제거. Chromium/Firefox 핵심 화면 2.5.8 실패 gate와 `320px` 리플로우 통과. 실제 zoom·보조기술 증거는 남음 |
+| WCAG 2.2 A/AA | 검사 범위 내 통과·전체 미확정 | 확인된 2.1.4 위반 제거. Chromium/Firefox 핵심 화면 2.5.8 실패 gate, `320px` 리플로우, Chromium 400% UI zoom·Firefox 400% full-page·200% text-only zoom 자동 검증 통과. 수동 시각·보조기술 증거는 남음 |
 | Apple HIG 접근성 | 검사 범위 내 통과·전체 미확정 | 핵심 모바일 화면 target `48px`, forced-colors, 의미·역할·대비 검사 통과. VoiceOver/Larger Text 수동 증거는 남음 |
 | Google Material 접근성 | 검사 범위 내 통과·전체 미확정 | 핵심 모바일 화면 target `48px`, label/role, 상태, reduced motion 검사 통과. TalkBack 실제 작업 증거는 남음 |
 
 | 최초 감사 판정 | 수량 | 의미 |
 | --- | ---: | --- |
 | 확인된 미충족 | 0 | 기존 1건을 코드와 회귀 검사로 해소함 |
-| 높은 위험 / 검증 필요 | 2 | 실제 브라우저 zoom과 보조기술 증거가 남음 |
+| 높은 위험 / 검증 필요 | 2 | 실제 브라우저 수동 시각 검토와 보조기술 증거가 남음 |
 | 통과 근거 있음 | 6개 영역 | 검사한 화면과 상태 범위에서만 통과 |
 
 ## 개선 작업 결과
@@ -29,13 +29,13 @@
 | P0 리플로우 | 완료 | Login, Profiles, Buckets, Objects와 view-options sheet, Uploads, Jobs, Settings를 `320x800`에서 검사하고 페이지·dialog 수평 overflow와 핵심 기능 접근성을 확인함 |
 | P0 문자 단축키 | 완료 | `?`, `G → P/B/O/U/J`, dead guide, shell plumbing을 제거하고 문자 입력 후 route/dialog 불변을 E2E로 확인함 |
 | P0 타깃 크기 | 완료(핵심 화면) | label/Ant wrapper를 포함한 실제 hit area를 측정하고 WCAG `24px` 및 Apple/Google 공통 `48px` 실패 assertion을 추가함. 7개 화면 미달 0건 |
-| P0 포커스 비가림 | 완료(대표 흐름) | Objects 검색 drawer에서 초기 포커스, 8회 Tab 순회 중 viewport 노출, `Escape` 후 trigger 복귀를 브라우저에서 확인함 |
-| P1 작은 정보 텍스트 | Chromium/Firefox 자동 검사 완료·실제 zoom 대기 | 의미 있는 `9–11px` label/meta를 `12px` 이상으로 보정하고, 200% 계산 글꼴 확대에서 발견한 모바일 subtitle 말줄임을 제거함. 실제 Firefox text-only zoom은 남음 |
+| P0 포커스 비가림 | 완료(대표 흐름) | Objects 검색 drawer, 모바일 Bucket Policy·Jobs filters sheet에서 초기 포커스, Tab/Shift+Tab 순회 중 viewport 노출, `Escape` 후 trigger 복귀를 브라우저에서 확인함 |
+| P1 작은 정보 텍스트 | Chromium/Firefox 자동 검사·실제 zoom 완료, 수동 시각 대기 | 의미 있는 `9–11px` label/meta를 `12px` 이상으로 보정하고, 200% 계산 글꼴 확대에서 발견한 모바일 subtitle 말줄임을 제거함. Firefox 실제 200% text-only zoom 8개 시나리오도 통과함 |
 | P1 실제 대비 | 완료(선정 상태) | Profile 편집 light/dark, Objects 검색 light/dark, 기존 warning/error/selected fixture의 axe 검사를 수행함. 다크 Profile disclosure 배경을 교정하고 테마 교체 중 transition을 차단해 중간 프레임의 아이콘 대비 저하를 제거함 |
 | P1 사용자 미디어 가시성 | 완료(공용 preview) | image viewer, object thumbnail/details, transfer preview에 테마 독립 중립 checkerboard를 적용하고 black/white 투명 SVG와 `filter: none`을 light/dark에서 검증함 |
 | P1 forced-colors | 완료(대표 흐름) | Objects 전역 nav, focus, selection semantics와 axe를 `forcedColors: active`에서 검사하고 system outline fallback을 추가함 |
 | P1 axe matrix | 완료(대표 상태) | Login 오류, Buckets empty/loading, Objects disabled와 핵심 7개 정상 상태 및 주요 overlay를 검사함. 모든 상태 곱집합은 만들지 않음 |
-| P2 수동 보조기술 | 미실행 | NVDA/VoiceOver, Windows High Contrast, Firefox text-only zoom은 해당 OS·보조기술 환경에서 별도 수행 필요 |
+| P2 수동 보조기술 | 미실행 | NVDA/VoiceOver와 Windows High Contrast는 해당 OS·보조기술 환경에서 별도 수행 필요 |
 
 ## 감사 범위와 방법
 
@@ -66,11 +66,15 @@ npm --prefix frontend run test:e2e:design-audit
   10 passed
 
 npm --prefix frontend run test:e2e -- tests/wcag-reflow.spec.ts --project=chromium
-  7 passed; 핵심 7개 화면의 유효 24/44/48px 미달 0건
+  8 passed; 핵심 7개 화면과 Bucket policy editor의 유효 24/44/48px 미달 0건
   계산된 글꼴 크기 200% 확대 후 수평 overflow와 unlabeled clipped text 0건
 
 npm --prefix frontend run test:e2e:firefox-reflow
-  7 passed; 동일 reflow, target, 200% 계산 글꼴 확대 gate를 Firefox 144에서 통과
+  8 passed; 동일 reflow, target, 200% 계산 글꼴 확대 gate를 Firefox 144에서 통과
+
+PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM=1 PLAYWRIGHT_HEADLESS=0 \
+  npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1
+  8 passed; Firefox 실제 200% text-only zoom에서 viewport/DPR 유지와 글꼴 2배 확대를 확인
 
 npm --prefix frontend run test:e2e -- \
   tests/wcag-reflow.spec.ts \
@@ -81,19 +85,18 @@ npm --prefix frontend run test:e2e -- \
   --project=chromium
   72 passed
 
-npm --prefix frontend run test:unit -- \
-  src/components/__tests__/useOverlayLayer.test.tsx \
-  src/__tests__/FullAppOverlaysHost.test.tsx \
-  src/__tests__/themeMode.test.tsx \
-  src/__tests__/useFullAppController.test.tsx \
-  src/lib/__tests__/keyboardShortcuts.test.ts
-  10 passed
+npx playwright test tests/accessibility-overlays.spec.ts --project=chromium --workers=1
+  36 passed; Objects 검색 drawer와 모바일 Bucket Policy·Jobs filters sheet 포커스 노출·복귀 포함
+
+npx vitest run \
+  src/components/__tests__/useOverlayLayer.test.tsx
+  5 passed
 
 npm --prefix frontend run test:unit
-  252 test files, 1014 tests passed
+  252 test files, 1025 tests passed
 
 npm --prefix frontend run build
-  TypeScript build and Vite production bundle passed (3423 modules transformed)
+  TypeScript build and Vite production bundle passed (3416 modules transformed)
 
 npm --prefix frontend run check:e2e:geometry
   pass; 의도적인 reflow, target, clipped-text 측정만 허용 표식과 함께 사용
@@ -129,14 +132,14 @@ modifier 없는 `?`와 `G → P/B/O/U/J`, 도달 불가능해진 shortcut guide,
 
 아래 항목은 현재 미충족이라고 단정하지 않는다. 다만 WCAG AA 준수를 주장하려면 추가 증거가 필요하다.
 
-### A11Y-02 — 실제 400% zoom과 전체 상태 리플로우 증거 없음
+### A11Y-02 — 실제 Chromium·Firefox 400%와 Firefox 200% text-only zoom 자동 증거 확보, 수동·전체 상태 증거 남음
 
 - 우선순위: 높음
 - WCAG: 1.4.10 Reflow (AA)
 
-Objects 화면은 `320px` viewport에서 페이지 전체 수평 overflow가 없음을 검사한다. 로그인·Settings 일부도 `320px` 반응형 테스트가 있다. 하지만 이는 `1280px` 화면의 400% 확대와 동일한 전체 제품 검사가 아니며, 오버레이·긴 S3 key·정책 편집기·테이블 셀의 정보/기능 손실까지 확인하지 않는다.
+기본 자동 검사는 Objects와 핵심 화면을 직접 `320px` viewport에서 실행한다. 별도 scheduled/manual lane은 headful Chromium 창을 `1280px`에서 실제 `400%` UI zoom으로 전환해 `innerWidth: 320`, `devicePixelRatio: 4`를 확인한다. Firefox full-page lane도 native `1280px` 창과 `browser.zoom.full=true`에서 실제 `400%` 확대 후 같은 `320`/DPR `4`를 확인한다. Firefox text-only lane은 `browser.zoom.full=false`에서 실제 `200%` 확대 후 viewport `320`과 DPR `1`은 유지하고 대표 텍스트의 계산 글꼴이 정확히 2배가 되는지 확인한다. 세 lane 모두 핵심 7개 화면과 Bucket policy editor를 검사하지만, 모든 긴 S3 key·정책·테이블 셀 조합이나 수동 시각 품질을 확인하지는 않는다.
 
-개선 후 `tests/wcag-reflow.spec.ts`가 핵심 7개 화면과 Objects view-options sheet, Settings drawer를 Chromium과 Firefox의 `320 CSS px`에서 검사한다. 각 화면의 계산된 글꼴 크기를 200%로 확대한 뒤 페이지·활성 overlay의 수평 overflow와 접근 가능한 대체 이름이 없는 clipped text도 실패시킨다. 이 검사에서 모바일 `PageHeader` subtitle의 2줄 강제 말줄임을 발견해 제거했다. 이 자동 증거로 대표 리플로우 위험은 닫았지만, 모든 긴 key·정책 편집 상태와 실제 브라우저 UI zoom 조합은 준수 경계로 남긴다.
+개선 후 `tests/wcag-reflow.spec.ts`가 핵심 7개 화면, Objects의 긴 key와 view-options sheet, Bucket policy editor, Settings drawer를 Chromium·Firefox·WebKit의 `320 CSS px`에서 검사한다. 정책 시나리오는 초기 loading, 긴 S3 resource가 든 raw JSON, provider validation pending, 긴 validation error를 한 overlay에서 순서대로 확인한다. 각 화면의 계산된 글꼴 크기를 200%로 확대한 뒤 페이지·활성 overlay의 수평 overflow와 접근 가능한 대체 이름이 없는 clipped text도 실패시킨다. 같은 8개 시나리오는 Chromium 400% 실제 UI zoom, Firefox 400% 실제 full-page zoom, Firefox 200% 실제 text-only zoom에서도 자동 통과했다. 이 검사에서 모바일 `PageHeader` subtitle의 2줄 강제 말줄임, raw policy textarea의 숨겨진 세로 overflow, StrictMode effect replay 뒤 policy action이 영구 비활성화되는 결함을 발견해 제거했다. 같은 active-request guard 패턴을 쓰는 policy mutation, governance, Jobs, Profiles 소유자도 effect setup에서 다시 활성화하고 focused unit 21개로 확인했다. 대표 fixture의 긴 key·정책·오류·로딩 위험은 닫았지만, 다른 상태 조합과 수동 시각 검토는 준수 경계로 남긴다.
 
 클라이언트 위험:
 
@@ -145,8 +148,8 @@ Objects 화면은 `320px` viewport에서 페이지 전체 수평 overflow가 없
 
 필요 증거:
 
-- Chrome/Firefox의 실제 400% zoom과 200% text-only zoom에서 핵심 7개 화면을 수동 확인
-- 긴 key, 정책 편집, 오류·로딩 상태에서 페이지 단위 양방향 스크롤, 잘린 버튼, 가려진 포커스가 없음을 확인
+- Chrome/Firefox의 실제 400% zoom과 200% text-only zoom에서 핵심 7개 화면을 수동 시각 확인
+- 자동 fixture 밖의 긴 key, 정책, 테이블 셀, 오류·로딩 조합에서도 페이지 단위 양방향 스크롤, 잘린 버튼, 가려진 포커스가 없음을 수동 확인
 
 ### A11Y-03 — 핵심 화면 타깃 크기 자동 gate 완료
 
@@ -169,25 +172,25 @@ native input의 visible wrapper, 연결 label, Ant control wrapper를 실제 hit
 | Login | 3 | 0 | 0 | 0 |
 | Profiles | 11 | 0 | 0 | 0 |
 | Buckets | 10 | 0 | 0 | 0 |
-| Objects + view options | 43 | 0 | 0 | 0 |
+| Objects + view options | 39 | 0 | 0 | 0 |
 | Uploads | 9 | 0 | 0 | 0 |
-| Jobs | 20 | 0 | 0 | 0 |
+| Jobs | 18 | 0 | 0 | 0 |
 | Settings | 18 | 0 | 0 | 0 |
 
 비가시 skip link는 focus 노출을 별도 키보드 흐름으로 검증하고 이 inventory에서는 제외한다. inline link는 WCAG 예외를 유지한다.
 
-### A11Y-04 — 포커스 비가림과 실제 보조기술 흐름 미검증
+### A11Y-04 — 대표 실제 zoom 포커스·복합 위젯 키보드 증거 확보, 전체·보조기술 흐름 미검증
 
 - 우선순위: 중간
 - WCAG: 2.4.11 Focus Not Obscured (Minimum) (AA), 1.3.2 Meaningful Sequence, 4.1.3 Status Messages
 
-skip link, `:focus-visible`, dialog focus trap, live region 구현과 단위 테스트는 존재한다. 그러나 sticky header/drawer가 키보드 포커스를 가리지 않는지, NVDA/VoiceOver에서 가상 목록과 비동기 전송 상태가 자연스러운 순서와 빈도로 읽히는지는 현재 자동 검사로 증명되지 않았다.
+skip link, `:focus-visible`, dialog focus trap, live region 구현과 단위 테스트는 존재한다. 대표 오버레이 밖의 모든 sticky header/drawer 조합과 NVDA/VoiceOver에서 가상 목록·비동기 전송 상태가 자연스러운 순서와 빈도로 읽히는지는 현재 자동 검사로 증명되지 않았다.
 
-개선 후 Objects 검색 drawer의 초기 포커스·Tab 순회 노출·trigger 복귀는 E2E로 확인한다. NVDA/VoiceOver 읽기 순서와 상태 알림 품질은 여전히 수동 검증 대상이다.
+개선 후 Objects 검색 drawer의 초기 포커스·Tab 순회 노출·trigger 복귀에 더해, 모바일 Bucket Policy와 Jobs filters sheet의 Tab/Shift+Tab 양방향 순회·부분 viewport 노출·`Escape` trigger 복귀를 E2E로 확인한다. 이 과정에서 메뉴에서 연 overlay와 loading→ready 셸 교체가 복귀 대상을 잃는 공통 결함을 수정했다. Chromium 400%, Firefox 400% full-page, Firefox 200% text-only lane에서는 Objects view options, Bucket Policy 메뉴·검증, Jobs filters, Settings 탭·섹션의 activation target에 먼저 포커스를 두고, 포커스 rect를 viewport와 모든 overflow 조상의 clip rect에 교차한 뒤 모든 표본점이 다른 author surface에 덮이면 실패시킨다. Bucket Policy 메뉴의 첫 항목에서 `ArrowDown`으로 Policy editor에 이동하고, loading→ready 전환 뒤 sheet를 Tab 16회·Shift+Tab 8회 순회한 다음 `Escape`가 노출된 Manage trigger로 복귀하는지 확인한다. Jobs filters sheet도 Close 초기 포커스부터 Tab 10회·Shift+Tab 6회를 순회하고 `Escape`가 노출된 Filters trigger로 복귀하는지 확인한다. 이 결합 검사가 400%의 짧은 viewport에서 공용 `OverlaySheet` footer가 panel 밖으로 흘러 focused Cancel을 가리는 결함을 검출했고, panel overflow fallback으로 수정했다. Settings에서는 Access부터 Support까지 `ArrowRight` 이동 중 각 탭의 선택·초점 계약을 확인한다. 이는 대표 조작의 WCAG 2.4.11 최소 자동 증거와 양방향 overlay·복합 위젯 키보드 이동 증거이며, 전체 애플리케이션 순차 Tab 순서나 NVDA/VoiceOver 상태 발표 품질은 여전히 수동 검증 대상이다.
 
-필요 증거:
+남은 증거:
 
-- 핵심 작업의 Tab/Shift+Tab 순회와 포커스 viewport 교차 검사
+- 자동 fixture 밖의 sticky surface와 긴 동적 콘텐츠 조합에서 Tab/Shift+Tab 순회와 포커스 viewport 교차 수동 확인
 - NVDA + Chrome 또는 VoiceOver + Safari로 로그인, 객체 선택/작업 메뉴, 업로드 큐, 오류 복구 수동 시나리오
 
 ## 통과 근거가 있는 영역
@@ -199,7 +202,7 @@ skip link, `:focus-visible`, dialog focus trap, live region 구현과 단위 테
 | 충분한 텍스트 대비 | 추적된 light/dark 조합이 WCAG AA 기준 통과, 대표 실제 상태 axe 위반 0 | 통과 근거 있음 |
 | 색상만으로 상태 전달하지 않기 | 선택·오류·위험 상태에 텍스트, 아이콘, border를 함께 사용 | 통과 근거 있음 |
 | 명확하고 짧은 접근성 이름 | 주요 icon button, tabs, tree, dialog에 action 중심 이름·역할 제공 | 통과 근거 있음 |
-| 큰 글자/리플로우 | 핵심 7개 화면 `320 CSS px` 리플로우 통과 | 부분 통과; 실제 Dynamic Type/200% text-only zoom 미검증 |
+| 큰 글자/리플로우 | 핵심 7개 화면 `320 CSS px`, Chromium 400% UI zoom, Firefox 400% full-page·200% text-only zoom 통과 | 부분 통과; 실제 Dynamic Type과 수동 시각 검토 미검증 |
 | 모션 감소 | `prefers-reduced-motion`에서 animation/transition과 smooth scroll 제거 | 통과 근거 있음 |
 | 플랫폼 권장 터치 타깃 | 핵심 모바일 화면의 유효 pointer target이 Apple `44`, Google `48` 기준을 충족 | 검사 범위 내 통과 |
 | 실제 스크린리더 작업 완료 | 코드·axe 증거는 있으나 TalkBack/VoiceOver 실제 작업 흐름 미실행 | 미검증 |
@@ -255,7 +258,7 @@ skip link, `:focus-visible`, dialog focus trap, live region 구현과 단위 테
 
 ### 개선이 필요한 점
 
-- 감사 당시 Profile 편집과 고급 설정에 반복되던 의미 있는 `9–11px` 보조 텍스트는 `12px` 이상으로 보정했다. 계산 글꼴 200% 확대 자동 검사는 통과했으며 실제 Firefox text-only zoom 확인은 남아 있다.
+- 감사 당시 Profile 편집과 고급 설정에 반복되던 의미 있는 `9–11px` 보조 텍스트는 `12px` 이상으로 보정했다. 계산 글꼴 200% 확대와 실제 Firefox 200% text-only zoom 자동 검사는 통과했다.
 - 모바일 `PageHeader` subtitle은 2줄 line clamp를 제거해 작은 화면과 텍스트 확대에서 전체 설명을 유지한다.
 - Objects workspace 닫기 타깃을 포함해 핵심 화면의 label/wrapper 기준 실제 hit area를 검사하고, 설명 없는 `24px` 미달과 비-inline `48px` 미달을 실패시키는 gate를 추가했다.
 - 디자인 검사에서 opacity 스타일 등 advisory 패턴 59건이 남았다. 모두 접근성 결함은 아니며 이번 범위에서는 실제 사용자 정보 텍스트와 선정 상태를 axe로 검증했다.
@@ -277,7 +280,7 @@ skip link, `:focus-visible`, dialog focus trap, live region 구현과 단위 테
 | A11Y-P0-01 | 전역 문자 단축키와 dead guide 제거 | 완료 | 필수 |
 | A11Y-P0-02 | WCAG `24px` target 예외·실패 판정 gate | 완료 | 필수 |
 | A11Y-P0-03 | touch viewport 유효 target `48px` 정렬 | 완료 | 필수 |
-| A11Y-P1-01 | 실제 zoom·forced-colors 결과 | forced-colors·Chromium/Firefox 200% 계산 글꼴 확대 완료, 실제 zoom 대기 | 필수 |
+| A11Y-P1-01 | 실제 zoom·forced-colors 결과 | forced-colors·Chromium/Firefox 200% 계산 글꼴 확대·Chromium 400% UI zoom·Firefox 400% full-page·200% text-only zoom 자동 검증 완료, 수동 시각 대기 | 필수 |
 | A11Y-P1-02 | 대표 상태 axe matrix | 완료 | 필수 |
 | A11Y-P2-01 | NVDA·VoiceOver·High Contrast·TalkBack 기록 | 미실행 | RC 필수 |
 
@@ -328,14 +331,14 @@ skip link, `:focus-visible`, dialog focus trap, live region 구현과 단위 테
   - 7개 핵심 화면의 유효 pointer target이 모두 `48×48px` 이상이거나 inline/equivalent 예외가 기록된다.
   - `769px` 이상 데스크톱 target geometry는 기존 스냅샷과 동일하다.
   - `320px`에서 새 수평 overflow와 첫 viewport CTA 손실이 없다.
-  - `test:e2e:design-audit` 10개와 `wcag-reflow.spec.ts` 7개 통과 후 변경된 스냅샷을 사람이 확인한다.
+  - `test:e2e:design-audit` 10개와 `wcag-reflow.spec.ts` 8개 통과 후 변경된 스냅샷을 사람이 확인한다.
 - 크기: M. P0-02 완료 후 진행.
 
 ### A11Y-P1-01 — 실제 확대·forced-colors 브라우저 검증
 
-- 상태: forced-colors와 Chromium/Firefox 200% 계산 글꼴 확대 자동 검증 완료, 실제 Chrome/Firefox UI zoom 수동 검증 대기
+- 상태: forced-colors, Chromium/Firefox 200% 계산 글꼴 확대, Chromium 400% browser UI zoom, Firefox 400% full-page·200% text-only zoom 자동 검증 완료. Chrome/Firefox 수동 시각 검증 대기
 - 변경 파일: 자동화 가능한 forced-colors는 `tests/accessibility-overlays.spec.ts`; 실제 zoom 결과는 이 리포트의 검증 표에 기록한다.
-- 자동 검증: Playwright `forcedColors: active`에서 전역 nav, focus ring, selected row, warning/error가 색 없이 구분되는지 확인한다.
+- 자동 검증: Playwright `forcedColors: active`에서 전역 nav, focus ring, selected row, warning/error가 색 없이 구분되는지 확인한다. 별도 scheduled/manual lane은 headful Chromium의 실제 zoom 단축키로 `1280px` viewport를 `400%`/`320 CSS px`로 전환한다. Firefox는 native 창에서 full-page `400%`/`320 CSS px`/DPR `4`와 text-only `200%`/viewport·DPR 불변을 각각 확인한 뒤 핵심 7개 화면과 Bucket policy editor 시나리오를 재사용한다. 실제 zoom 뒤 고위험 activation target은 포커스 rect와 hit-test 표본으로 완전 비가림도 확인한다.
 - 수동 검증: Chrome과 Firefox에서 `400%` page zoom 및 `200%` text-only zoom으로 7개 핵심 화면, Objects 긴 key, Bucket policy, Settings drawer를 확인한다.
 - 완료 조건: 양방향 페이지 스크롤, 잘린 텍스트·버튼, 가려진 포커스, 기능 손실 0건. 발견 시 화면·viewport·재현 순서와 owner file을 기록한다.
 - 크기: M. P0와 병렬 가능.
@@ -440,7 +443,7 @@ Chrome 모바일 에뮬레이션으로 확인 가능한 Apple/Google 공통 기�
 - OS 고대비/forced-colors 전체 호환성
 - 모든 페이지 상태에 대한 WCAG 2.2 AA 인증
 
-따라서 현재 판정은 **“검사한 Chromium 화면과 상태에서는 WCAG 2.2 A/AA, Apple HIG, Google Material 접근성 기준을 통과했지만, 실제 zoom과 보조기술 수동 증거가 없어 제품 전체 준수는 미확정”**이다.
+따라서 현재 판정은 **“검사한 화면과 상태에서는 WCAG 2.2 A/AA, Apple HIG, Google Material 접근성 기준과 Chromium 400% UI zoom·Firefox 400% full-page·200% text-only zoom 자동 검증을 통과했지만, 수동 시각과 보조기술 증거가 없어 제품 전체 준수는 미확정”**이다.
 
 ## 기준 문서
 

@@ -48,6 +48,11 @@ This guide keeps S3Desk UI changes consistent after the UI/UX design audit.
 - Do light and dark themes preserve the same hierarchy?
 - Do Ant Design components and custom CSS modules use the same surface and border hierarchy?
 
+## Ownership Cleanup
+
+- Remove a CSS module, selector, or token when its last production owner is removed; do not keep it for hypothetical reuse.
+- `npm run check:css-tokens` catches undefined `--s3d-*` usages, not unused definitions or selectors. Confirm module imports and class/token references before deleting, and review computed class names manually.
+
 ## Verification
 
 - Use `docs/VISUAL_QA_CHECKLIST.md` for browser review before treating broad design-audit work as complete.
