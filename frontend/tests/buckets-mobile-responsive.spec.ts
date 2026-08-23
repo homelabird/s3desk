@@ -1,9 +1,10 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import {
 	installProfilesBucketsMobileResponsiveFixtures,
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
+import { expectMinTouchTarget, restoreProjectViewport } from './support/geometry'
 import { clickBucketCardManageAction, gotoBucketsPage } from './support/ui'
 
 const primaryBucket = 'responsive-bucket'
@@ -70,10 +71,6 @@ function getBucketCard(page: Page, bucketName: string) {
 	return page.getByTestId('buckets-list-compact').locator('article').filter({ hasText: bucketName }).first()
 }
 
-async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
-	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates compact bucket-card action touch target height
-}
-
 test.describe('@mobile-responsive Buckets mobile workflows', () => {
 	test('keeps short bucket actions on one row at the 320px mobile floor', async ({ page }) => {
 		await page.setViewportSize({ width: 320, height: 568 })
@@ -88,8 +85,8 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		])
 
 		expect(Math.abs((openBox?.y ?? 0) - (manageBox?.y ?? 0))).toBeLessThanOrEqual(2)
-		await expectMinTouchHeight(openButton, 48)
-		await expectMinTouchHeight(manageButton, 48)
+		await expectMinTouchTarget(openButton, 48)
+		await expectMinTouchTarget(manageButton, 48)
 	})
 
 	test('opens and closes the create bucket flow on mobile', async ({ page }) => {
@@ -116,7 +113,7 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		const bucketCard = getBucketCard(page, primaryBucket)
 		const manageButton = bucketCard.getByRole('button', { name: `Manage bucket ${primaryBucket}` })
 
-		await expectMinTouchHeight(manageButton)
+		await expectMinTouchTarget(manageButton)
 
 		await clickBucketCardManageAction(page, bucketCard, primaryBucket, /Policy editor/)
 		const policySheet = page.getByRole('dialog', { name: `Policy: ${primaryBucket}` })
@@ -196,7 +193,7 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		await expect(confirmDialog).toHaveCount(0)
 	})
 
-	test('switches between table and cards without creating a nested vertical scroller', async ({ page }) => {
+	test('switches between table and cards without creating a nested vertical scroller', async ({ page }, testInfo) => {
 		const buckets = Array.from({ length: 80 }, (_, index) => ({
 			name: index === 0 ? primaryBucket : `responsive-bucket-${index}`,
 			createdAt: '2024-01-01T00:00:00Z',
@@ -211,7 +208,7 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		await expect(page.getByTestId('buckets-table-desktop').getByText('responsive-bucket-79')).toBeVisible()
 		await appScroller.evaluate((element) => element.scrollTo({ top: 0 }))
 
-		await page.setViewportSize({ width: 390, height: 844 })
+		await restoreProjectViewport(page, testInfo)
 		await expect(page.getByTestId('buckets-list-compact')).toBeVisible()
 		await expect(page.getByTestId('buckets-table-desktop')).toHaveCount(0)
 		await appScroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))

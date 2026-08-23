@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { installJobsMobileResponsiveFixtures, seedJobsMobileResponsiveStorage } from './support/jobsMobileResponsive'
@@ -14,6 +16,7 @@ import {
 } from './support/settingsLoginMobileResponsive'
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
 import {
+	clickBucketCardManageAction,
 	dialogByName,
 	gotoBucketsPage,
 	gotoJobsPage,
@@ -24,6 +27,130 @@ import {
 } from './support/ui'
 
 const reflowViewport = { width: 320, height: 800 }
+const browserUiZoom = process.env.PLAYWRIGHT_BROWSER_UI_ZOOM === '1'
+const firefoxTextOnlyZoom = process.env.PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM === '1'
+const firefoxFullPageZoom = process.env.PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM === '1'
+const actualBrowserZoom = browserUiZoom || firefoxTextOnlyZoom || firefoxFullPageZoom
+
+async function applyBrowserZoom(page: Page) {
+	if (!browserUiZoom && !firefoxTextOnlyZoom && !firefoxFullPageZoom) return
+
+	const title = `s3desk-browser-zoom-${process.pid}-${Date.now()}`
+	await page.evaluate((value) => { document.title = value }, title)
+	await page.waitForTimeout(500)
+	const windowId = execFileSync('xdotool', ['search', '--all', '--name', title], { encoding: 'utf8' })
+		.trim()
+		.split(/\s+/)[0]
+	const sendKey = (key: string) => execFileSync(
+		'xdotool',
+		['key', '--window', windowId, '--clearmodifiers', key],
+	)
+
+	execFileSync('xdotool', ['windowfocus', '--sync', windowId])
+	sendKey('ctrl+0')
+	if (firefoxFullPageZoom) {
+		execFileSync('xdotool', ['windowsize', '--sync', windowId, '1280', '800'])
+		await expect.poll(() => page.evaluate(() => ({
+			width: innerWidth,
+			scale: devicePixelRatio,
+		}))).toEqual({ width: 1280, scale: 1 })
+	}
+	if (firefoxTextOnlyZoom) {
+		const baselineFontSize = await page.locator('body').evaluate((body) => {
+			const textElement = [body, ...body.querySelectorAll<HTMLElement>('*')]
+				.find((element) => [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()))
+			return Number.parseFloat(getComputedStyle(textElement ?? body).fontSize)
+		})
+		for (let index = 0; index < 6; index += 1) sendKey('ctrl+plus')
+
+		await expect.poll(() => page.locator('body').evaluate((body, baseline) => {
+			const textElement = [body, ...body.querySelectorAll<HTMLElement>('*')]
+				.find((element) => [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()))
+			const fontSize = Number.parseFloat(getComputedStyle(textElement ?? body).fontSize)
+			return {
+				width: innerWidth,
+				scale: devicePixelRatio,
+				textScale: Math.round((fontSize / baseline) * 100),
+			}
+		}, baselineFontSize)).toEqual({ width: reflowViewport.width, scale: 1, textScale: 200 })
+		return
+	}
+
+	const zoomIncrementCount = firefoxFullPageZoom ? 9 : 8
+	for (let index = 0; index < zoomIncrementCount; index += 1) sendKey('ctrl+plus')
+
+	await expect.poll(() => page.evaluate(() => ({
+		width: innerWidth,
+		scale: devicePixelRatio,
+	}))).toEqual({ width: 320, scale: 4 })
+}
+
+async function expectFocusedAndUnobscured(locator: Locator) {
+	await expect(locator).toBeFocused()
+	await expect.poll(() => locator.evaluate((element) => {
+		const rect = element.getBoundingClientRect() // e2e-geometry-allow verifies WCAG 2.4.11 focused content is not fully obscured
+		let left = Math.max(0, rect.left)
+		let right = Math.min(innerWidth, rect.right)
+		let top = Math.max(0, rect.top)
+		let bottom = Math.min(innerHeight, rect.bottom)
+		for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+			const style = getComputedStyle(parent)
+			const parentRect = parent.getBoundingClientRect() // e2e-geometry-allow intersects overflow clips with the focused control
+			if (style.overflowX !== 'visible') {
+				left = Math.max(left, parentRect.left)
+				right = Math.min(right, parentRect.right)
+			}
+			if (style.overflowY !== 'visible') {
+				top = Math.max(top, parentRect.top)
+				bottom = Math.min(bottom, parentRect.bottom)
+			}
+		}
+		const points = [
+			[(left + right) / 2, (top + bottom) / 2],
+			[left + 1, top + 1],
+			[right - 1, top + 1],
+			[left + 1, bottom - 1],
+			[right - 1, bottom - 1],
+		]
+		if (right <= left || bottom <= top) return false
+		return points.some(([x, y]) => {
+			const hit = document.elementFromPoint(x, y)
+			return hit === element || (hit !== null && (element.contains(hit) || hit.contains(element)))
+		})
+	})).toBe(true)
+}
+
+async function activate(locator: Locator) {
+	await locator.focus()
+	await expectFocusedAndUnobscured(locator)
+
+	if (firefoxFullPageZoom) {
+		// Playwright's Firefox pointer coordinates stay unscaled after native page zoom.
+		await locator.press('Enter')
+		return
+	}
+	await locator.click()
+}
+
+async function openPolicyEditorWithKeyboard(page: Page, manageTrigger: Locator) {
+	await activate(manageTrigger)
+	const menu = page.getByRole('menu').last()
+	const controlsItem = menu.getByRole('menuitem', { name: 'Controls' })
+	const policyItem = menu.getByRole('menuitem', { name: /Policy editor/ })
+	await expectFocusedAndUnobscured(controlsItem)
+	await controlsItem.press('ArrowDown')
+	await expectFocusedAndUnobscured(policyItem)
+	await policyItem.press('Enter')
+}
+
+async function traverseOverlayFocus(page: Page, scope: Locator, key: 'Tab' | 'Shift+Tab', steps: number) {
+	for (let index = 0; index < steps; index += 1) {
+		const focusedControl = scope.locator(':focus')
+		await expect(focusedControl).toHaveCount(1)
+		await expectFocusedAndUnobscured(focusedControl)
+		await page.keyboard.press(key)
+	}
+}
 
 async function reportPointerTargets(page: Page, surface: string) {
 	const targets = await page.locator([
@@ -106,14 +233,16 @@ async function expectContainedReflow(locator: Locator) {
 }
 
 async function expectTwoHundredPercentTextResize(page: Page, surface: string, activeSurface = page.locator('body')) {
-	await page.evaluate(() => {
-		const elements = [document.body, ...document.body.querySelectorAll<HTMLElement>('*')]
-			.filter((element) => [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()))
-		const fontSizes = elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize))
-		elements.forEach((element, index) => {
-			element.style.fontSize = `${fontSizes[index] * 2}px`
+	if (!firefoxTextOnlyZoom) {
+		await page.evaluate(() => {
+			const elements = [document.body, ...document.body.querySelectorAll<HTMLElement>('*')]
+				.filter((element) => [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()))
+			const fontSizes = elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize))
+			elements.forEach((element, index) => {
+				element.style.fontSize = `${fontSizes[index] * 2}px`
+			})
 		})
-	})
+	}
 
 	await expectPageReflow(page)
 	const clippedText = await activeSurface.locator('*').evaluateAll((elements) => elements.flatMap((element) => {
@@ -148,13 +277,16 @@ async function expectTwoHundredPercentTextResize(page: Page, surface: string, ac
 
 test.describe('WCAG 1.4.10 reflow at 320 CSS px', () => {
 	test.beforeEach(async ({ page }) => {
-		await page.setViewportSize(reflowViewport)
+		if (!firefoxFullPageZoom) {
+			await page.setViewportSize(browserUiZoom ? { width: 1280, height: 800 } : reflowViewport)
+		}
 	})
 
 	test('Login reflows without losing authentication controls', async ({ page }) => {
 		await seedLoginMobileResponsiveStorage(page, '')
 		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
 		await gotoProfilesPage(page, { ready: (scope) => scope.getByRole('heading', { name: 'S3Desk' }) })
+		await applyBrowserZoom(page)
 
 		await expect(page.getByPlaceholder('API_TOKEN')).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Login' })).toBeVisible()
@@ -167,6 +299,7 @@ test.describe('WCAG 1.4.10 reflow at 320 CSS px', () => {
 		await installProfilesBucketsMobileResponsiveFixtures(page)
 		await seedProfilesBucketsMobileResponsiveStorage(page)
 		await gotoProfilesPage(page)
+		await applyBrowserZoom(page)
 
 		await expect(page.getByTestId('profiles-list-compact')).toBeVisible()
 		await expectPageReflow(page)
@@ -184,6 +317,7 @@ test.describe('WCAG 1.4.10 reflow at 320 CSS px', () => {
 		await installProfilesBucketsMobileResponsiveFixtures(page)
 		await seedProfilesBucketsMobileResponsiveStorage(page)
 		await gotoBucketsPage(page)
+		await applyBrowserZoom(page)
 
 		await expect(page.getByTestId('buckets-list-compact')).toBeVisible()
 		await expectPageReflow(page)
@@ -195,11 +329,13 @@ test.describe('WCAG 1.4.10 reflow at 320 CSS px', () => {
 		await installObjectsMobileResponsiveFixtures(page)
 		await seedObjectsMobileResponsiveStorage(page)
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByTestId('objects-list-controls-root'))
+		await applyBrowserZoom(page)
 
 		await expect(objectsListRow(page, 'alpha.txt')).toBeVisible()
+		await expect(page.getByText(/a-very-long-object-key-that-should-wrap/).first()).toBeVisible()
 		await expectPageReflow(page)
 
-		await page.getByRole('button', { name: /Filters|View|Filter/ }).click()
+		await activate(page.getByRole('button', { name: /Filters|View|Filter/ }))
 		const sheet = dialogByName(page, 'View options')
 		await expect(sheet).toBeVisible()
 		await expectContainedReflow(sheet)
@@ -208,10 +344,95 @@ test.describe('WCAG 1.4.10 reflow at 320 CSS px', () => {
 		await expectContainedReflow(sheet)
 	})
 
+	test('Bucket policy loading, long content, and validation errors reflow', async ({ page }) => {
+		const bucketName = 'responsive-bucket'
+		const longResource = `arn:aws:s3:::${bucketName}/${'nested-prefix/'.repeat(12)}${'object-key-'.repeat(12)}.json`
+		const validationError = `Cross-account statement needs review: ${'external-principal-condition-'.repeat(10)}`
+		let releasePolicy = () => undefined
+		let releaseValidation = () => undefined
+		const policyReleased = new Promise<void>((resolve) => { releasePolicy = resolve })
+		const validationReleased = new Promise<void>((resolve) => { releaseValidation = resolve })
+		await installProfilesBucketsMobileResponsiveFixtures(page, {
+			profileProvider: 'aws_s3',
+			bucketPolicy: {
+				Version: '2012-10-17',
+				Statement: [{
+					Sid: 'LongCrossAccountObjectRead',
+					Effect: 'Allow',
+					Principal: { AWS: 'arn:aws:iam::123456789012:root' },
+					Action: ['s3:GetObject'],
+					Resource: longResource,
+				}],
+			},
+		})
+		await seedProfilesBucketsMobileResponsiveStorage(page, { bucket: bucketName })
+		await page.route(`**/api/v1/buckets/${bucketName}/policy`, async (route) => {
+			await policyReleased
+			await route.fallback()
+		})
+		await page.route(`**/api/v1/buckets/${bucketName}/policy/validate`, async (route) => {
+			await validationReleased
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					ok: false,
+					provider: 'aws_s3',
+					errors: [validationError],
+					warnings: ['Confirm the intended account boundary before saving.'],
+				}),
+			})
+		})
+		await gotoBucketsPage(page)
+		await applyBrowserZoom(page)
+
+		const bucketCard = page.getByTestId('buckets-list-compact').locator('article').filter({ hasText: bucketName }).first()
+		const manageTrigger = bucketCard.getByRole('button', { name: `Manage bucket ${bucketName}` })
+		if (actualBrowserZoom) {
+			await openPolicyEditorWithKeyboard(page, manageTrigger)
+		} else {
+			await clickBucketCardManageAction(page, bucketCard, bucketName, /Policy editor/)
+		}
+		const sheet = dialogByName(page, `Policy: ${bucketName}`)
+		await expect(sheet.getByText('Loading…')).toBeVisible()
+		await expectPageReflow(page)
+		await expectContainedReflow(sheet)
+
+		releasePolicy()
+		await expect(sheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()
+		if (actualBrowserZoom) {
+			await expect(sheet.getByRole('button', { name: 'Close' })).toBeFocused()
+			await traverseOverlayFocus(page, sheet, 'Tab', 16)
+			await traverseOverlayFocus(page, sheet, 'Shift+Tab', 8)
+			await page.keyboard.press('Escape')
+			await expect(sheet).toHaveCount(0)
+			await expectFocusedAndUnobscured(manageTrigger)
+			await openPolicyEditorWithKeyboard(page, manageTrigger)
+			await expect(sheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()
+		}
+		const rawPolicy = sheet.getByRole('textbox', { name: 'Raw policy JSON' })
+		await expect(rawPolicy).toBeVisible()
+		expect(await rawPolicy.inputValue()).toContain(longResource)
+
+		const validateButton = sheet.getByRole('button', { name: 'Validate with provider' })
+		await activate(validateButton)
+		await expect(validateButton).toBeDisabled()
+		await expectContainedReflow(sheet)
+		releaseValidation()
+		await expect(sheet.getByText('Server validation found issues')).toBeVisible()
+		await expect(sheet.getByText(`Error: ${validationError}`)).toBeVisible()
+		await expectPageReflow(page)
+		await expectContainedReflow(sheet)
+		await reportPointerTargets(page, 'Bucket policy editor')
+		await expectTwoHundredPercentTextResize(page, 'Bucket policy editor', sheet)
+		await expectContainedReflow(sheet)
+	})
+
 	test('Uploads reflows without losing its primary action', async ({ page }) => {
 		await installUploadsMobileResponsiveFixtures(page)
 		await seedUploadsMobileResponsiveStorage(page)
 		await gotoUploadsPage(page)
+		await applyBrowserZoom(page)
 
 		await expect(page.getByRole('button', { name: /Add from device/i })).toBeVisible()
 		await expect(page.getByLabel('Upload prefix (optional)')).toBeVisible()
@@ -224,9 +445,22 @@ test.describe('WCAG 1.4.10 reflow at 320 CSS px', () => {
 		await installJobsMobileResponsiveFixtures(page)
 		await seedJobsMobileResponsiveStorage(page)
 		await gotoJobsPage(page)
+		await applyBrowserZoom(page)
 
 		await expect(page.getByText('job-queued')).toBeVisible()
-		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toBeVisible()
+		const filtersTrigger = page.getByTestId('jobs-mobile-filters-trigger')
+		await expect(filtersTrigger).toBeVisible()
+		if (actualBrowserZoom) {
+			await activate(filtersTrigger)
+			const sheet = page.getByTestId('jobs-mobile-filters-sheet')
+			await expect(sheet).toBeVisible()
+			await expect(sheet.getByRole('button', { name: 'Close' })).toBeFocused()
+			await traverseOverlayFocus(page, sheet, 'Tab', 10)
+			await traverseOverlayFocus(page, sheet, 'Shift+Tab', 6)
+			await page.keyboard.press('Escape')
+			await expect(sheet).toHaveCount(0)
+			await expectFocusedAndUnobscured(filtersTrigger)
+		}
 		await expectPageReflow(page)
 		await reportPointerTargets(page, 'Jobs')
 		await expectTwoHundredPercentTextResize(page, 'Jobs')
@@ -236,14 +470,25 @@ test.describe('WCAG 1.4.10 reflow at 320 CSS px', () => {
 		await installSettingsMobileResponsiveFixtures(page)
 		await seedSettingsMobileResponsiveStorage(page)
 		await page.goto('/settings')
+		await applyBrowserZoom(page)
 
 		const drawer = dialogByName(page, 'Settings')
 		await expect(drawer).toBeVisible()
 		const supportTab = drawer.getByRole('tab', { name: 'Support' })
 		await expect(supportTab).toBeVisible()
-		await supportTab.click()
+		if (actualBrowserZoom) {
+			const settingsTabs = ['Access', 'Objects', 'Transfers', 'Support'].map((name) => drawer.getByRole('tab', { name }))
+			await settingsTabs[0].focus()
+			for (const [index, tab] of settingsTabs.entries()) {
+				await expectFocusedAndUnobscured(tab)
+				if (index < settingsTabs.length - 1) await tab.press('ArrowRight')
+			}
+			await expect(supportTab).toHaveAttribute('aria-selected', 'true')
+		} else {
+			await activate(supportTab)
+		}
 		await expect(drawer.getByText('Browser recovery')).toBeVisible()
-		await drawer.getByRole('button', { name: 'Server and backup' }).click()
+		await activate(drawer.getByRole('button', { name: 'Server and backup' }))
 		await expect(drawer.getByText('Runtime diagnostics')).toBeVisible()
 		await expectPageReflow(page)
 		await expectContainedReflow(drawer)

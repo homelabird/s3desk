@@ -6,6 +6,11 @@ import {
 } from './support/profilesBucketsMobileResponsive'
 import { gotoProfilesPage } from './support/ui'
 
+const mobileDeviceContracts = {
+	'mobile-iphone-13': { width: 390, height: 664, deviceScaleFactor: 3 },
+	'mobile-pixel-7': { width: 412, height: 839, deviceScaleFactor: 2.625 },
+} as const
+
 async function setupProfilesPage(page: Page) {
 	await installProfilesBucketsMobileResponsiveFixtures(page)
 	await seedProfilesBucketsMobileResponsiveStorage(page)
@@ -13,8 +18,20 @@ async function setupProfilesPage(page: Page) {
 }
 
 test.describe('@mobile-responsive Apple and Google mobile web standards', () => {
-	test('keeps standards metadata and user zoom enabled', async ({ page }) => {
+	test('keeps the Chromium device contract, standards metadata, and user zoom enabled', async ({ browser, page }, testInfo) => {
 		await setupProfilesPage(page)
+
+		const expectedDevice = mobileDeviceContracts[testInfo.project.name as keyof typeof mobileDeviceContracts]
+		expect(expectedDevice).toBeDefined()
+		expect(browser.browserType().name()).toBe('chromium')
+		expect(
+			await page.evaluate(() => ({
+				width: window.innerWidth,
+				height: window.innerHeight,
+				deviceScaleFactor: window.devicePixelRatio,
+				hasTouch: navigator.maxTouchPoints > 0,
+			})),
+		).toEqual({ ...expectedDevice, hasTouch: true })
 
 		const viewport = await page.locator('meta[name="viewport"]').getAttribute('content')
 		expect(viewport).toContain('width=device-width')
@@ -22,7 +39,6 @@ test.describe('@mobile-responsive Apple and Google mobile web standards', () => 
 		expect(viewport).toContain('viewport-fit=cover')
 		expect(viewport).not.toMatch(/user-scalable\s*=\s*no|maximum-scale\s*=\s*1/i)
 		await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', /\S+/)
-		expect(await page.evaluate(() => navigator.maxTouchPoints)).toBeGreaterThan(0)
 	})
 
 	test('keeps primary chrome inside emulated display safe areas', async ({ page }) => {

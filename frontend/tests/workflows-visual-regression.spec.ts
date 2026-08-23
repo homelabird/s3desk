@@ -23,7 +23,6 @@ import { dialogByName, gotoBucketsPage, gotoJobsPage, gotoProfilesPage, gotoUplo
 const visualScreenshotOptions = {
 	animations: 'disabled',
 	caret: 'hide',
-	maxDiffPixelRatio: 0.01,
 } as const
 const profilesBucketsVisualBucket = 'responsive-bucket'
 
@@ -137,16 +136,16 @@ async function setupJobsVisualPage(
 	await expect(page.getByRole('heading', { name: 'History' })).toBeVisible()
 }
 
-async function setupUploadsVisualPage(page: Page) {
-	await page.setViewportSize({ width: 390, height: 844 })
+async function setupUploadsVisualPage(page: Page, viewport = { width: 390, height: 844 }) {
+	await page.setViewportSize(viewport)
 	await installUploadsMobileResponsiveFixtures(page)
 	await seedUploadsMobileResponsiveStorage(page)
 	await gotoUploadsPage(page)
 	await expect(page.getByLabel('Upload prefix (optional)')).toBeVisible()
 }
 
-async function setupSettingsVisualPage(page: Page) {
-	await page.setViewportSize({ width: 390, height: 844 })
+async function setupSettingsVisualPage(page: Page, viewport = { width: 390, height: 844 }) {
+	await page.setViewportSize(viewport)
 	await installSettingsMobileResponsiveFixtures(page)
 	await seedSettingsMobileResponsiveStorage(page)
 	await page.goto('/settings')
@@ -155,8 +154,8 @@ async function setupSettingsVisualPage(page: Page) {
 	return drawer
 }
 
-async function setupLoginVisualPage(page: Page) {
-	await page.setViewportSize({ width: 390, height: 844 })
+async function setupLoginVisualPage(page: Page, viewport = { width: 390, height: 844 }) {
+	await page.setViewportSize(viewport)
 	await seedLoginMobileResponsiveStorage(page, '')
 	await installLoginMobileResponsiveFixtures(page, ['valid-token'])
 	await gotoProfilesPage(page, {
@@ -220,6 +219,14 @@ async function expectWithinViewport(page: Page, locator: Locator) {
 	const viewportWidth = page.viewportSize()?.width ?? 0
 	expect(box!.x).toBeGreaterThanOrEqual(0)
 	expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth + 1)
+}
+
+async function expectNoPageHorizontalOverflow(page: Page) {
+	const widths = await page.evaluate(() => ({
+		client: document.documentElement.clientWidth, // e2e-geometry-allow compares the rendered layout viewport
+		scroll: document.documentElement.scrollWidth, // e2e-geometry-allow detects page-level horizontal overflow
+	}))
+	expect(widths.scroll).toBeLessThanOrEqual(widths.client)
 }
 
 async function seedPersistedTransfers(page: Page) {
@@ -324,6 +331,13 @@ test.describe('Workflow visual regression @visual', () => {
 		await expectWithinViewport(page, page.getByRole('button', { name: 'Login' }))
 
 		await expect(page).toHaveScreenshot('login-mobile-token-panel.png', visualScreenshotOptions)
+	})
+
+	test('desktop Login token panel remains stable', async ({ page }) => {
+		await setupLoginVisualPage(page, { width: 1280, height: 800 })
+		await expectNoPageHorizontalOverflow(page)
+
+		await expect(page).toHaveScreenshot('login-desktop-token-panel.png', visualScreenshotOptions)
 	})
 
 	test('mobile Profiles edit dialog remains stable', async ({ page }) => {
@@ -469,6 +483,18 @@ test.describe('Workflow visual regression @visual', () => {
 		await expect(drawer).toHaveScreenshot('transfers-mobile-uploads-state.png', visualScreenshotOptions)
 	})
 
+	test('desktop Transfers drawer remains stable', async ({ page }) => {
+		await seedPersistedTransfers(page)
+		await setupJobsVisualPage(page, { width: 1440, height: 900 })
+
+		await page.getByRole('button', { name: 'Transfers' }).click()
+		const drawer = dialogByName(page, 'Transfers')
+		await expect(drawer.getByText('archive.zip', { exact: true })).toBeVisible()
+		await expectNoPageHorizontalOverflow(page)
+
+		await expect(page).toHaveScreenshot('transfers-desktop-workspace.png', visualScreenshotOptions)
+	})
+
 	test('mobile Uploads source selection dialog remains stable', async ({ page }) => {
 		await setupUploadsVisualPage(page)
 
@@ -480,11 +506,26 @@ test.describe('Workflow visual regression @visual', () => {
 		await expect(dialog).toHaveScreenshot('uploads-mobile-source-selection-dialog.png', visualScreenshotOptions)
 	})
 
+	test('desktop Uploads workspace remains stable', async ({ page }) => {
+		await setupUploadsVisualPage(page, { width: 1280, height: 800 })
+		await expectNoPageHorizontalOverflow(page)
+
+		await expect(page).toHaveScreenshot('uploads-desktop-workspace.png', visualScreenshotOptions)
+	})
+
 	test('mobile Settings drawer remains stable', async ({ page }) => {
 		const drawer = await setupSettingsVisualPage(page)
 
 		await expect(drawer.getByPlaceholder('Must match API_TOKEN')).toBeVisible()
 
 		await expect(drawer).toHaveScreenshot('settings-mobile-drawer.png', visualScreenshotOptions)
+	})
+
+	test('desktop Settings drawer remains stable', async ({ page }) => {
+		const drawer = await setupSettingsVisualPage(page, { width: 1280, height: 800 })
+		await expect(drawer.getByPlaceholder('Must match API_TOKEN')).toBeVisible()
+		await expectNoPageHorizontalOverflow(page)
+
+		await expect(page).toHaveScreenshot('settings-desktop-drawer.png', visualScreenshotOptions)
 	})
 })

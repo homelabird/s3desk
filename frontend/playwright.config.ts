@@ -20,6 +20,8 @@ const testTimeoutMs = parseInteger(process.env.PLAYWRIGHT_TEST_TIMEOUT_MS) ?? 30
 const expectTimeoutMs = parseInteger(process.env.PLAYWRIGHT_EXPECT_TIMEOUT_MS) ?? 5_000
 const includeFirefox = isTruthy(process.env.PLAYWRIGHT_FIREFOX)
 const includeWebkit = isTruthy(process.env.PLAYWRIGHT_WEBKIT)
+const firefoxTextOnlyZoom = isTruthy(process.env.PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM)
+const firefoxFullPageZoom = isTruthy(process.env.PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM)
 
 const videoMode = parseMode(process.env.PLAYWRIGHT_VIDEO_MODE, VIDEO_MODES, recordArtifacts || recordVideos ? 'on' : 'off')
 const screenshotMode = parseMode(
@@ -39,7 +41,11 @@ const video = recordArtifacts ? { mode: videoMode, size: { width: 1280, height: 
 export default defineConfig({
 	testDir: './tests',
 	timeout: testTimeoutMs,
-	expect: { timeout: expectTimeoutMs },
+	expect: {
+		timeout: expectTimeoutMs,
+		// Keep the visual budget viewport-independent so large canvases cannot hide missing controls.
+		toHaveScreenshot: { animations: 'disabled', caret: 'hide', maxDiffPixels: 100 },
+	},
 	reporter,
 	...(shouldManageWebServer
 		? {
@@ -68,7 +74,7 @@ export default defineConfig({
 				...devices['Desktop Chrome'],
 			},
 			testIgnore:
-				/(?:mobile-smoke|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
+				/(?:mobile-smoke|mobile-platform-standards|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
 		},
 		{
 			name: 'mobile-iphone-13',
@@ -92,7 +98,13 @@ export default defineConfig({
 		...(includeFirefox
 			? [{
 					name: 'firefox-reflow',
-					use: { ...devices['Desktop Firefox'] },
+					use: {
+						...devices['Desktop Firefox'],
+						...(firefoxFullPageZoom ? { viewport: null, deviceScaleFactor: undefined } : {}),
+						...(firefoxTextOnlyZoom || firefoxFullPageZoom
+							? { launchOptions: { firefoxUserPrefs: { 'browser.zoom.full': firefoxFullPageZoom } } }
+							: {}),
+					},
 					testMatch: /wcag-reflow\.spec\.ts/,
 				}]
 			: []),

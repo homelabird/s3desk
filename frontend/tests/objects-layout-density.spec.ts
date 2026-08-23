@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import {
 	clearFavoritesFilterHint,
@@ -18,6 +18,7 @@ import {
 	seedLocalStorage,
 	textFixture,
 } from './support/apiFixtures'
+import { expectMinTouchTarget } from './support/geometry'
 import {
 	objectsBucketPickerDesktop,
 	objectsFavoriteItem,
@@ -83,11 +84,6 @@ function currentPrefixCrumb(page: Page, prefix: string) {
 	const segment = prefix.split('/').filter(Boolean).at(-1)
 	if (!segment) throw new Error('prefix must contain a path segment')
 	return page.getByRole('navigation', { name: 'Location breadcrumb' }).getByRole('button', { name: `${segment}/`, exact: true })
-}
-
-async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
-	const box = await locator.boundingBox() // e2e-geometry-allow validates public touch-target height contract
-	expect(box?.height ?? 0).toBeGreaterThanOrEqual(minHeight)
 }
 
 const metaByKey = {
@@ -586,7 +582,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		const newFolderButton = drawer.getByTestId('objects-tree-new-folder')
 		await expect(newFolderButton).toBeEnabled()
 		await expect(newFolderButton).toHaveAttribute('aria-label', 'New folder')
-		await expectMinTouchHeight(newFolderButton)
+		await expectMinTouchTarget(newFolderButton)
 
 		await newFolderButton.click()
 		const dialog = page.getByRole('dialog', { name: 'New folder' })

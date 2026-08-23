@@ -32,7 +32,6 @@ const defaultStorage: StorageSeed = {
 const visualScreenshotOptions = {
 	animations: 'disabled',
 	caret: 'hide',
-	maxDiffPixelRatio: 0.01,
 } as const
 
 const svgPreview = `

@@ -24,7 +24,6 @@ import {
 const visualScreenshotOptions = {
 	animations: 'disabled',
 	caret: 'hide',
-	maxDiffPixelRatio: 0.01,
 } as const
 
 async function setupObjectsAuditPage(

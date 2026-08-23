@@ -9,7 +9,6 @@ import { dialogByName, gotoWithDynamicImportRecovery, objectsListRow } from './s
 const visualScreenshotOptions = {
 	animations: 'disabled',
 	caret: 'hide',
-	maxDiffPixelRatio: 0.01,
 } as const
 
 async function setupObjectsVisualPage(page: Page, viewport: { width: number; height: number }) {

@@ -1,12 +1,9 @@
-import { expect, test, type Locator } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
+import { expectMinTouchTarget } from './support/geometry'
 import { readProfileScopedLocalStorage } from './support/storage'
 import { addUploadSourceFromDevice, dialogByName, gotoUploadsPage, openTransfersUploadRow, queueSelectedUpload } from './support/ui'
-
-async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
-	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates upload primary action touch-target height
-}
 
 test.describe('@mobile-responsive Uploads mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
@@ -15,11 +12,10 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 	})
 
 	test('upload destination prefix persists across a mobile reload', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoUploadsPage(page)
 
 		await expect(page.getByRole('button', { name: /^Queue upload/ })).toHaveCount(0)
-		await expectMinTouchHeight(page.getByRole('button', { name: /Add from device/i }))
+		await expectMinTouchTarget(page.getByRole('button', { name: /Add from device/i }))
 		const prefixInput = page.getByLabel('Upload prefix (optional)')
 		await prefixInput.fill('photos/mobile')
 
@@ -41,7 +37,6 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 	})
 
 	test('upload source sheet opens from the mobile page', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoUploadsPage(page)
 
 		await page.getByRole('button', { name: /Add from device/i }).click()
@@ -57,7 +52,6 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 	})
 
 	test('selected files can be cleared from the mobile uploads header', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoUploadsPage(page)
 
 		await addUploadSourceFromDevice(page, {
@@ -76,7 +70,6 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 
 	test('queueing a mobile upload exposes the queued file in Transfers', async ({ page }) => {
 		test.setTimeout(45_000)
-		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoUploadsPage(page)
 
 		await addUploadSourceFromDevice(page, {

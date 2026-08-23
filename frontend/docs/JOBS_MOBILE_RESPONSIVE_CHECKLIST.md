@@ -6,7 +6,7 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 ## Scope
 
 - Page: `Jobs`
-- Goal: verify that `Jobs` still supports real mobile task completion for filtering, job creation entrypoints, queue visibility, and job detail access.
+- Goal: verify that `Jobs` still supports real mobile task completion for filtering, queue visibility, expandable history, and job detail access.
 
 ## Recommended Viewports
 
@@ -22,7 +22,8 @@ Covered by `frontend/tests/jobs-mobile-responsive.spec.ts`.
 
 - [x] Queue health reflects loaded mobile job fixtures.
 - [x] Mobile filters persist across reopen and can reset.
-- [x] The mobile upload entrypoint opens and closes the upload source sheet.
+- [x] The History panel expands to the active device viewport and restores.
+- [x] The compact Jobs surface avoids duplicate upload and job-action entrypoints.
 - [x] Mobile job details and logs drawers stay readable without horizontal overflow.
 
 ## Manual QA Checklist
@@ -35,10 +36,10 @@ Covered by `frontend/tests/jobs-mobile-responsive.spec.ts`.
 ## Playwright Coverage Checklist
 
 - [x] Filter open/apply/reset flows complete successfully.
-- [x] Upload creation sheet still opens from mobile.
+- [x] Expanded History remains usable and returns to the normal page layout.
 - [x] Mobile job details and logs remain reachable.
 - [x] Queue or health state remains understandable on mobile fixtures.
 
 ## Notes
 
-- Prioritize filter persistence, job creation entry, and detail access. Layout checks only matter when they block one of those actions.
+- Prioritize filter persistence, queue inspection, and detail access. Layout checks only matter when they block one of those actions.

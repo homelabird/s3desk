@@ -1,6 +1,7 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage } from './support/apiFixtures'
+import { expectMinTouchTarget } from './support/geometry'
 import {
 	clickBucketCardManageAction,
 	closeJobsMobileFilters,
@@ -42,15 +43,6 @@ async function openObjectsMobilePage(page: Page) {
 		timeout: 10_000,
 		maxAttempts: 3,
 	})
-}
-
-async function expectMinTouchTarget(locator: Locator, minSize = 44) {
-	const rect = await locator.evaluate((element) => {
-		const { height, width } = element.getBoundingClientRect() // e2e-geometry-allow validates shared mobile touch-target sizing
-		return { height, width }
-	})
-	expect(rect.height).toBeGreaterThanOrEqual(minSize)
-	expect(rect.width).toBeGreaterThanOrEqual(minSize)
 }
 
 async function openNewFolderFromMoreActions(page: Page) {

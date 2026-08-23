@@ -4,6 +4,7 @@ import {
 	installProfilesBucketsMobileResponsiveFixtures,
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
+import { restoreProjectViewport } from './support/geometry'
 import { readServerScopedLocalStorage } from './support/storage'
 import { gotoProfilesPage } from './support/ui'
 
@@ -139,7 +140,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await expect(warningCard.getByText('Needs update')).toHaveAttribute('title', 'Endpoint URL is required')
 	})
 
-	test('keeps the selected profile and outer-scroll ownership across responsive transitions', async ({ page }) => {
+	test('keeps the selected profile and outer-scroll ownership across responsive transitions', async ({ page }, testInfo) => {
 		const profiles = Array.from({ length: 80 }, (_, index) => ({
 			id: index === 0 ? 'profiles-buckets-mobile-profile' : `responsive-profile-${index}`,
 			name: index === 0 ? 'Responsive Profile' : `Responsive Profile ${index}`,
@@ -162,7 +163,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await expect(page.getByTestId('profiles-table-desktop').getByText('Responsive Profile 79')).toBeVisible()
 		await appScroller.evaluate((element) => element.scrollTo({ top: 0 }))
 
-		await page.setViewportSize({ width: 390, height: 844 })
+		await restoreProjectViewport(page, testInfo)
 		await expect(page.getByTestId('profiles-list-compact')).toBeVisible()
 		await expect(page.getByTestId('profiles-table-desktop')).toHaveCount(0)
 		await expect(getProfileCard(page, 'Responsive Profile').getByRole('button', { name: 'Selected' })).toBeVisible()

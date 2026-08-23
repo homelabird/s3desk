@@ -4,6 +4,7 @@ import {
 	installSettingsMobileResponsiveFixtures,
 	seedSettingsMobileResponsiveStorage,
 } from './support/settingsLoginMobileResponsive'
+import { expectMinTouchTarget } from './support/geometry'
 import { dialogByName } from './support/ui'
 
 async function setSwitch(scope: Locator, name: string, enabled: boolean) {
@@ -12,10 +13,6 @@ async function setSwitch(scope: Locator, name: string, enabled: boolean) {
 	if ((state === 'true') !== enabled) {
 		await control.click()
 	}
-}
-
-async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
-	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates shared switch touch-target height
 }
 
 async function openTransferAdvancedOptions(scope: Locator, advancedOptionsName: string, proxySwitchName: string) {
@@ -62,7 +59,6 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		const advancedOptionsName = 'Advanced transfer options'
 		const proxySwitchName = 'Force server proxy for downloads and previews'
 
-		await page.setViewportSize({ width: 390, height: 844 })
 		await page.goto('/settings')
 
 		const drawer = dialogByName(page, 'Settings')
@@ -71,7 +67,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await expect(drawer.getByText('Defaults work for most connections.')).toBeVisible()
 		await openTransferAdvancedOptions(drawer, advancedOptionsName, proxySwitchName)
 		await expect(drawer.getByText(proxySwitchName)).toBeVisible()
-		await expectMinTouchHeight(drawer.getByRole('switch', { name: proxySwitchName }))
+		await expectMinTouchTarget(drawer.getByRole('switch', { name: proxySwitchName }))
 
 		await setSwitch(drawer, proxySwitchName, true)
 		await expect
@@ -91,7 +87,6 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 	test('settings access token survives mobile reopen after apply', async ({ page }) => {
 		const updatedToken = 'updated-token'
 
-		await page.setViewportSize({ width: 390, height: 844 })
 		await page.goto('/settings')
 
 		const drawer = dialogByName(page, 'Settings')

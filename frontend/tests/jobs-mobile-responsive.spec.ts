@@ -1,6 +1,7 @@
-import { expect, test, type Locator } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 import { installJobsMobileResponsiveFixtures, seedJobsMobileResponsiveStorage } from './support/jobsMobileResponsive'
+import { expectMinTouchTarget, getProjectViewport, restoreProjectViewport } from './support/geometry'
 import { readProfileScopedLocalStorage } from './support/storage'
 import {
 	closeJobsMobileFilters,
@@ -10,15 +11,6 @@ import {
 	openJobsMobileFilters,
 } from './support/ui'
 
-async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
-	await expect
-		.poll(async () => {
-			const box = await locator.boundingBox() // e2e-geometry-allow verifies mobile touch target minimum size
-			return box?.height ?? 0
-		})
-		.toBeGreaterThanOrEqual(minHeight)
-}
-
 test.describe('@mobile-responsive Jobs mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
 		await installJobsMobileResponsiveFixtures(page)
@@ -26,7 +18,6 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 	})
 
 	test('queue health reflects the loaded mobile job fixtures', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoJobsPage(page)
 
 		await expect(page.getByTestId('jobs-health-active')).toContainText('2')
@@ -50,7 +41,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await closeJobsMobileFilters(sheet)
 	})
 
-	test('top operations groups remain usable at 320px', async ({ page }) => {
+	test('top operations stay usable at 320px and stable at the device viewport', async ({ page }, testInfo) => {
 		await page.setViewportSize({ width: 320, height: 740 })
 		await gotoJobsPage(page)
 
@@ -60,21 +51,35 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(page.getByText('Auto-retry paused. Use Retry realtime to reconnect.')).toBeHidden()
 		await expect(page.getByRole('button', { name: 'Upload from device' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'More job actions' })).toHaveCount(0)
-		await expectMinTouchHeight(page.getByTestId('jobs-mobile-filters-trigger'))
+		await expectMinTouchTarget(page.getByTestId('jobs-mobile-filters-trigger'))
+		await expect
+			.poll(async () => {
+				const cards = await Promise.all(
+					['active', 'failed', 'succeeded'].map(async (status) =>
+						Math.round(
+							(await page.getByTestId(`jobs-health-${status}`).boundingBox())?.y ?? -1, // e2e-geometry-allow verifies all three mobile status cards share one row
+						),
+					),
+				)
+				return cards[0] >= 0 && new Set(cards).size === 1
+			})
+			.toBe(true)
 		await expect
 			.poll(() =>
 				page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), // e2e-geometry-allow verifies Jobs top groups do not horizontally overflow at 320px
 			)
 			.toBe(true)
+		await restoreProjectViewport(page, testInfo)
+		await expect(page).toHaveScreenshot('jobs-mobile-device-operations.png')
 	})
 
-	test('History panel expands to the viewport and restores', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
+	test('History panel expands to the viewport and restores', async ({ page }, testInfo) => {
 		await gotoJobsPage(page)
+		const viewport = getProjectViewport(testInfo)
 
 		const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'History' }) })
 		const expandButton = page.getByRole('button', { name: 'Expand History panel' })
-		await expectMinTouchHeight(expandButton)
+		await expectMinTouchTarget(expandButton)
 		await expandButton.click()
 
 		await expect(page.getByRole('button', { name: 'Restore History panel' })).toHaveAttribute('aria-pressed', 'true')
@@ -83,7 +88,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 				const box = await section.boundingBox() // e2e-geometry-allow verifies the expanded panel fills the viewport
 				return box ? [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)] : null
 			})
-			.toEqual([0, 0, 390, 844])
+			.toEqual([0, 0, viewport.width, viewport.height])
 
 		await page.keyboard.press('Escape')
 		await expect(page.getByRole('button', { name: 'Expand History panel' })).toHaveAttribute('aria-pressed', 'false')
@@ -91,16 +96,15 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 	})
 
 	test('mobile filters persist across reopen and can reset', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoJobsPage(page)
 
 		const trigger = page.getByTestId('jobs-mobile-filters-trigger')
 		await expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
 		await expect(trigger).toHaveAttribute('aria-expanded', 'false')
 		await expect(trigger).toHaveAttribute('aria-controls', 'jobs-mobile-filters-sheet-panel')
-		await expectMinTouchHeight(trigger)
-		await expectMinTouchHeight(page.getByTestId('jobs-columns-trigger'))
-		await expectMinTouchHeight(page.getByRole('button', { name: 'Refresh' }))
+		await expectMinTouchTarget(trigger)
+		await expect(page.getByTestId('jobs-columns-trigger')).toHaveCount(0)
+		await expectMinTouchTarget(page.getByRole('button', { name: 'Refresh' }))
 
 		const sheet = await openJobsMobileFilters(page)
 		await expect(trigger).toHaveAttribute('aria-expanded', 'true')
@@ -130,7 +134,6 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 	})
 
 	test('mobile job details and logs drawers stay readable without horizontal overflow', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoJobsPage(page)
 
 		await expect(page.getByRole('list').filter({ hasText: 'job-running' })).toBeVisible()

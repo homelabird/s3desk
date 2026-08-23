@@ -1,7 +1,8 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { bucketFieldPlaceholder, selectBucketToBrowseObjectsHint } from '../src/lib/actionHints'
 import { installMockApi, seedLocalStorage } from './support/apiFixtures'
+import { expectMinTouchTarget } from './support/geometry'
 import { gotoObjectsPage, objectsBucketPickerDesktop, objectsListRow } from './support/ui'
 
 type StorageSeed = {
@@ -132,10 +133,6 @@ function rowFor(page: Page, key: string) {
 	return objectsListRow(page, key)
 }
 
-async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
-	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates bucket picker search touch-target height
-}
-
 test.describe('Objects bucket picker', () => {
 	test('desktop picker shows current and recent buckets, then switches on click', async ({ page }) => {
 		await stubBucketPickerApi(page)
@@ -186,7 +183,7 @@ test.describe('Objects bucket picker', () => {
 		await expect(popover).toBeVisible()
 		const searchInput = popover.getByLabel('Search buckets')
 		await expect(searchInput).toBeFocused()
-		await expectMinTouchHeight(searchInput)
+		await expectMinTouchTarget(searchInput)
 
 		await page.keyboard.press('Shift+Tab')
 		await expect(picker).toBeFocused()

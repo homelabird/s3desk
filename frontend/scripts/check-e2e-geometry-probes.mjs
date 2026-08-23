@@ -2,17 +2,18 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const targets = ['tests', 'tests/support']
+const targets = ['tests', 'playwright.config.ts']
 const allowedMarker = 'e2e-geometry-allow'
 
 const bannedPatterns = [
-	{ name: 'boundingBox()', regex: /\bboundingBox\s*\(/ },
-	{ name: 'getBoundingClientRect()', regex: /\bgetBoundingClientRect\s*\(/ },
-	{ name: 'scrollWidth', regex: /\bscrollWidth\b/ },
-	{ name: 'clientWidth', regex: /\bclientWidth\b/ },
-	{ name: 'clientHeight', regex: /\bclientHeight\b/ },
-	{ name: 'offsetWidth', regex: /\boffsetWidth\b/ },
-	{ name: 'offsetHeight', regex: /\boffsetHeight\b/ },
+	{ name: 'boundingBox()', regex: /\bboundingBox\s*\(/, allowMarker: true },
+	{ name: 'getBoundingClientRect()', regex: /\bgetBoundingClientRect\s*\(/, allowMarker: true },
+	{ name: 'scrollWidth', regex: /\bscrollWidth\b/, allowMarker: true },
+	{ name: 'clientWidth', regex: /\bclientWidth\b/, allowMarker: true },
+	{ name: 'clientHeight', regex: /\bclientHeight\b/, allowMarker: true },
+	{ name: 'offsetWidth', regex: /\boffsetWidth\b/, allowMarker: true },
+	{ name: 'offsetHeight', regex: /\boffsetHeight\b/, allowMarker: true },
+	{ name: 'maxDiffPixelRatio', regex: /\bmaxDiffPixelRatio\b/, allowMarker: false },
 ]
 
 function walk(dir) {
@@ -41,14 +42,13 @@ for (const target of targets) {
 	} catch {
 		continue
 	}
-	if (!stats.isDirectory()) continue
-
-	for (const file of walk(targetPath)) {
+	const files = stats.isDirectory() ? walk(targetPath) : stats.isFile() ? [targetPath] : []
+	for (const file of files) {
 		const lines = readFileSync(file, 'utf8').split(/\r?\n/)
 		lines.forEach((line, index) => {
-			if (line.includes(allowedMarker)) return
 			for (const pattern of bannedPatterns) {
 				if (!pattern.regex.test(line)) continue
+				if (pattern.allowMarker && line.includes(allowedMarker)) continue
 				violations.push({
 					file: path.relative(root, file),
 					line: index + 1,
@@ -61,12 +61,13 @@ for (const target of targets) {
 }
 
 if (violations.length > 0) {
-	console.error('[check:e2e:geometry] banned geometry probe(s) found in Playwright tests/support files:')
+	console.error('[check:e2e:geometry] banned E2E authoring pattern(s) found:')
 	for (const violation of violations) {
 		console.error(`- ${violation.file}:${violation.line} uses ${violation.pattern}`)
 		console.error(`  ${violation.source}`)
 	}
-	console.error(`[check:e2e:geometry] if a probe is truly unavoidable, annotate the line with "${allowedMarker}" and justify it in code review.`)
+	console.error(`[check:e2e:geometry] unavoidable geometry probes require "${allowedMarker}" and a code-review justification.`)
+	console.error('[check:e2e:geometry] visual snapshots must use the global absolute maxDiffPixels budget; maxDiffPixelRatio is not allowed.')
 	process.exit(1)
 }
 

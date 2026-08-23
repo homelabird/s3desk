@@ -71,12 +71,18 @@ async function expectFocusedControlExposed(scope: Locator) {
 	await expect.poll(() => scope.evaluate((container) => {
 		const active = document.activeElement
 		if (!(active instanceof HTMLElement) || !container.contains(active)) return false
-		const rect = active.getBoundingClientRect() // e2e-geometry-allow verifies focused controls remain exposed inside overlays
-		if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) return false
-		const x = Math.min(window.innerWidth - 1, Math.max(0, rect.left + rect.width / 2))
-		const y = Math.min(window.innerHeight - 1, Math.max(0, rect.top + rect.height / 2))
-		const hit = document.elementFromPoint(x, y)
-		return !!hit && (active.contains(hit) || hit.contains(active))
+		const rect = active.getBoundingClientRect() // e2e-geometry-allow verifies focused controls remain at least partly exposed inside overlays
+		const left = Math.max(0, rect.left)
+		const right = Math.min(window.innerWidth, rect.right)
+		const top = Math.max(0, rect.top)
+		const bottom = Math.min(window.innerHeight, rect.bottom)
+		if (right <= left || bottom <= top) return false
+		const xs = [left + 1, (left + right) / 2, right - 1]
+		const ys = [top + 1, (top + bottom) / 2, bottom - 1]
+		return xs.some((x) => ys.some((y) => {
+			const hit = document.elementFromPoint(x, y)
+			return !!hit && (active.contains(hit) || hit.contains(active))
+		}))
 	})).toBe(true)
 }
 
@@ -710,17 +716,41 @@ test.describe('overlay accessibility scans', () => {
 		await expectNoA11yViolations(page, sheet)
 	})
 
-	test('mobile Bucket policy sheet has no axe violations', async ({ page }) => {
+	test('mobile Bucket policy sheet keeps keyboard focus exposed and has no axe violations', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
-		await setupBucketsA11yPage(page)
+		await setupBucketsA11yPage(page, {
+			bucketPolicy: {
+				Version: '2012-10-17',
+				Statement: [{
+					Effect: 'Allow',
+					Principal: '*',
+					Action: 's3:GetObject',
+					Resource: `arn:aws:s3:::${bucketsA11yBucket}/${'nested/'.repeat(12)}*`,
+				}],
+			},
+		})
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
+		const trigger = bucket.getByRole('button', { name: `Manage bucket ${bucketsA11yBucket}` })
+		await trigger.focus()
 		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Policy editor/)
 		const sheet = dialogByName(page, `Policy: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()
+		await expect(sheet.getByRole('button', { name: 'Close' })).toBeFocused()
+		for (let index = 0; index < 16; index += 1) {
+			await expectFocusedControlExposed(sheet)
+			await page.keyboard.press('Tab')
+		}
+		for (let index = 0; index < 8; index += 1) {
+			await expectFocusedControlExposed(sheet)
+			await page.keyboard.press('Shift+Tab')
+		}
 
 		await expectNoA11yViolations(page, sheet)
+		await page.keyboard.press('Escape')
+		await expect(sheet).toHaveCount(0)
+		await expect(trigger).toBeFocused()
 	})
 
 	test('mobile Bucket delete confirmation, not-empty warning, and delete-job fallback have no axe violations', async ({ page }) => {
@@ -954,13 +984,27 @@ test.describe('overlay accessibility scans', () => {
 		await expectNoA11yViolations(page, dialog)
 	})
 
-	test('mobile Jobs filters sheet has no axe violations', async ({ page }) => {
+	test('mobile Jobs filters sheet keeps keyboard focus exposed and has no axe violations', async ({ page }) => {
 		await setupJobsMobileA11yPage(page)
 
+		const trigger = page.getByTestId('jobs-mobile-filters-trigger')
+		await trigger.focus()
 		const sheet = await openJobsMobileFilters(page)
 		await expect(sheet.getByRole('combobox', { name: 'Job status filter' })).toBeVisible()
+		await expect(sheet.getByRole('button', { name: 'Close' })).toBeFocused()
+		for (let index = 0; index < 10; index += 1) {
+			await expectFocusedControlExposed(sheet)
+			await page.keyboard.press('Tab')
+		}
+		for (let index = 0; index < 6; index += 1) {
+			await expectFocusedControlExposed(sheet)
+			await page.keyboard.press('Shift+Tab')
+		}
 
 		await expectNoA11yViolations(page, sheet)
+		await page.keyboard.press('Escape')
+		await expect(sheet).toHaveCount(0)
+		await expect(trigger).toBeFocused()
 	})
 
 	test('mobile Uploads source dialog has no axe violations', async ({ page }) => {

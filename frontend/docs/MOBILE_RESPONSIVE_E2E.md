@@ -46,6 +46,7 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
   - `npm run test:e2e:perf`
 - Geometry guard for Playwright authoring:
   - `npm run check:e2e:geometry`
+  - also rejects viewport-relative `maxDiffPixelRatio`; screenshot assertions inherit the global absolute pixel budget
 - Workflow lint for browser-CI wiring:
   - `bash ./scripts/check_github_workflows.sh`
 
@@ -64,10 +65,24 @@ The `Frontend E2E` Actions summaries should surface these lane meanings directly
   - equivalent local command: `npm run test:e2e:smoke`
 - `Core Mock E2E`
   - equivalent local command: `npm run test:e2e:core`
-  - CI shards the same core suite into `1/3`, `2/3`, and `3/3`, then aggregates the required `Core Mock E2E` check
+  - CI shards the same core suite into `1/3`, `2/3`, and `3/3`, then combines smoke, core, and visual regression into the required `Core Mock E2E` check
+- `Visual Regression E2E`
+  - equivalent local command: `npm run test:e2e:visual`
+  - runs separately, but a failure blocks the required `Core Mock E2E` aggregate
 - `Mobile Responsive E2E (Required)`
-  - equivalent local command: `npm run test:e2e:mobile-responsive`
-  - CI runs `mobile-iphone-13` and `mobile-pixel-7` as parallel project jobs, then aggregates both results under this exact required check name
+	- equivalent local command: `npm run test:e2e:mobile-responsive`
+	- CI runs `mobile-iphone-13` and `mobile-pixel-7` as parallel project jobs, then aggregates both results under this exact required check name
+	- `mobile-platform-standards.spec.ts` asserts both projects still run on Chromium with their pinned viewport, device scale factor, and touch emulation
+	- includes device-context visual sentinels for the sparse Login shell and dense Jobs operations shell
+- `Cross-Browser Reflow E2E`
+  - equivalent local commands: `PLAYWRIGHT_BROWSER_UI_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=chromium --workers=1`, `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1`, `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1`, `npm run test:e2e:firefox-reflow`, and `npm run test:e2e:webkit-reflow`
+  - the Chromium lane drives the headful browser's actual zoom control to 400% and asserts a `320 CSS px` layout viewport before reusing the seven core-route scenarios plus the bucket policy editor
+  - the Firefox full-page lane drives actual browser zoom to 400% with `browser.zoom.full=true`, while asserting the native `1280px` window becomes a `320 CSS px` viewport at DPR `4`
+  - the Firefox text-only lane drives actual browser zoom to 200% with `browser.zoom.full=false`, while asserting the `320 CSS px` viewport and DPR remain unchanged
+  - all actual zoom modes focus representative activation controls, move through the bucket menu with `ArrowDown`, traverse the loaded Bucket Policy and Jobs filters sheets forward and backward with Tab before verifying `Escape` trigger restoration, move from Access through Support with the Settings tablist's `ArrowRight` contract, and fail if every sampled point inside the viewport-and-overflow-clipped focus rect is covered by another authored surface; exhaustive application-wide Tab and assistive-technology reading order remain manual evidence
+  - the policy scenario verifies initial loading, long raw JSON content, pending provider validation, and a long validation error in the same constrained overlay
+  - runs on the scheduled/manual workflow only and is not a pull-request required check
+  - Playwright WebKit evidence does not prove physical Safari, WKWebView, or VoiceOver behavior
 
 ## Authoring Rules
 
@@ -76,8 +91,11 @@ Mobile responsive coverage should prove task completion on constrained viewports
 - Prefer drawer, sheet, tab, filter, picker, queue, and persistence flows.
 - Keep page-level checklist wording aligned with that rule; checklist items should describe reachable actions and stable outcomes, not viewport math.
 - Keep bootstrap-only checks in `@check-smoke`; use `@mobile-responsive` only when the flow proves real mobile task completion.
+- Keep device-context screenshots limited to representative high-risk shells; do not duplicate every desktop-project visual baseline.
+- Let ordinary workflows inherit their project viewport so iPhone and Pixel exercise different dimensions; use fixed sizes only for named breakpoint, rotation, short-height, or responsive-transition probes.
 - Do not add viewport-fit or element-measurement assertions just to prove a page is "responsive".
-- `frontend/tests` and `frontend/tests/support` are guarded by `npm run check:e2e:geometry`.
+- Reuse `tests/support/geometry.ts` for required touch targets; it checks both rendered dimensions instead of allowing height-only local helpers.
+- `frontend/tests` (including support helpers) and `frontend/playwright.config.ts` are guarded by `npm run check:e2e:geometry`.
 - If a mobile Playwright test truly requires a geometry probe, mark the exact line with `e2e-geometry-allow` and a short reason.
 
 ## Required Check
