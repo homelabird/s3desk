@@ -43,7 +43,7 @@ The repository keeps automated enforcement for release readiness inside the stan
 - focused local release-doc check: `./scripts/check_release_gate.sh`
 - release-readiness blocker summary: `python3 scripts/check_release_readiness.py --candidate-id <tag-or-sha>`
   - runs the strict scope/evidence checks and live-evidence env preflight for the candidate
-  - reports a candidate identity blocker when an existing tag candidate does not resolve to the checked `--head`
+  - reports a candidate identity blocker when the candidate cannot be resolved or does not resolve to the checked `--head`
   - exits non-zero until required provider/reverse-proxy/backup-portable evidence is present
   - does not replace `./scripts/check.sh full`, clean-snapshot verification, or the browser lanes
 - local workflow lint: `bash ./scripts/check_github_workflows.sh`; the built-in validator rejects mutable GitHub Action tag/branch refs and requires 40-character commit SHAs

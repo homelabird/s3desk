@@ -273,7 +273,7 @@ python3 scripts/check_release_readiness.py --candidate-id <tag-or-sha>
 python3 scripts/check_release_readiness.py --candidate-id <candidate-tag-or-sha> --base <base-tag-or-sha> --head <candidate-tag-or-sha>
 ```
 
-This command runs the strict scope/evidence checks, checks that an existing tag candidate resolves to the requested `--head`, and runs the live-evidence env preflight for missing provider/reverse-proxy scopes. It exits non-zero while live evidence is still missing or when an existing tag candidate does not match the checked head, and it does not replace `./scripts/check.sh full`, clean-snapshot verification, or browser-lane evidence.
+This command runs the strict scope/evidence checks, checks that the candidate resolves to the requested `--head`, and runs the live-evidence env preflight for missing provider/reverse-proxy scopes. It exits non-zero while the candidate is unresolved, live evidence is still missing, or the candidate does not match the checked head, and it does not replace `./scripts/check.sh full`, clean-snapshot verification, or browser-lane evidence.
 
 GitLab tag publishing also runs:
 
@@ -707,7 +707,7 @@ cd frontend
 E2E_LIVE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 E2E_API_TOKEN=s3desk-e2e-token-0123456789abcdef012345 npm run test:e2e
 ```
 
-Live Playwright runs do not start the managed mock Vite server. Set `PLAYWRIGHT_BASE_URL` or `BASE_URL` to the already-running S3Desk UI URL, or run `scripts/run_live_e2e_local.sh` from the repository root to start the local backend/MinIO harness automatically.
+Live Playwright runs do not start the managed mock Vite server. Set `PLAYWRIGHT_BASE_URL` or `BASE_URL` to the already-running S3Desk UI URL, or run `scripts/run_live_e2e_local.sh` from the repository root to rebuild the frontend and start the local backend/MinIO harness automatically.
 Use `docs/ci/e2e_live.env.example` as the starting point for live Playwright environment variables.
 Use `docs/ci/provider_live_validation.env.example` as the starting point for backend live-provider smoke variables.
 

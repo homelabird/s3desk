@@ -20,6 +20,7 @@ PLAYWRIGHT_PROJECT="${PLAYWRIGHT_PROJECT:-chromium}"
 
 E2E_BASE_URL="${E2E_BASE_URL:-http://${BACKEND_ADDR}}"
 E2E_S3_ENDPOINT="${E2E_S3_ENDPOINT:-http://127.0.0.1:${MINIO_PORT}}"
+E2E_S3_PUBLIC_ENDPOINT="${E2E_S3_PUBLIC_ENDPOINT:-${E2E_S3_ENDPOINT}}"
 E2E_S3_ACCESS_KEY="${E2E_S3_ACCESS_KEY:-${MINIO_ROOT_USER}}"
 E2E_S3_SECRET_KEY="${E2E_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}"
 E2E_S3_REGION="${E2E_S3_REGION:-us-east-1}"
@@ -182,6 +183,13 @@ trap cleanup EXIT
 
 ensure_rclone
 stop_stale_backend
+
+echo "[live-e2e] building frontend"
+(
+	cd "${ROOT_DIR}/frontend"
+	npm run build
+)
+
 build_backend
 
 for _ in $(seq 1 40); do
@@ -213,6 +221,7 @@ echo "[live-e2e] running Playwright (${PLAYWRIGHT_PROJECT})"
 	DOCS_BASE_URL="${E2E_BASE_URL}" \
 	E2E_API_TOKEN="${API_TOKEN}" \
 	E2E_S3_ENDPOINT="${E2E_S3_ENDPOINT}" \
+	E2E_S3_PUBLIC_ENDPOINT="${E2E_S3_PUBLIC_ENDPOINT}" \
 	E2E_S3_ACCESS_KEY="${E2E_S3_ACCESS_KEY}" \
 	E2E_S3_SECRET_KEY="${E2E_S3_SECRET_KEY}" \
 	E2E_S3_REGION="${E2E_S3_REGION}" \

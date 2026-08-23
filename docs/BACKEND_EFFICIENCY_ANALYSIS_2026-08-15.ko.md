@@ -30,6 +30,15 @@
 - retention 회귀 테스트는 GORM callback 수가 아니라 실제 driver trace를 세어 1 SQL을 검증한다. subquery 조립 callback까지 statement로 오인하는 거짓 양성을 피했다.
 - 추가 index, cache, background worker는 도입하지 않았다. 현재 경로는 기존 `profile_id` index와 queue 상한을 사용하며, 복합 index의 이득을 증명할 운영 cardinality나 query-plan 근거가 없다.
 
+## 2026-08-22 추가 실행 현황
+
+- 만료 upload session 정리가 같은 profile의 credential을 session마다 다시 조회하던 경로를 200-session batch 안에서 재사용하도록 변경했다. profile 삭제도 기존 lazy credential loader를 multipart abort와 direct-temp cleanup이 함께 재사용한다. 같은 profile의 multipart session 2개가 provider abort와 row 정리를 유지하면서 maintenance profile query 1회만 실행하는 회귀 테스트를 추가했다.
+- job 시작 시 읽은 secret profile을 기존 job context에 넣고 totals, rclone, S3 작업이 재사용하도록 변경했다. local-to-S3 실행 회귀는 start부터 rclone 완료까지 profile query가 job당 1회임을 검증한다.
+- bucket 목록 JSON decoder가 중간 `listEntry` 전체 slice를 만든 뒤 응답 slice로 복사하던 경로를 제거하고 최종 `Bucket` 응답을 직접 생성하도록 변경했다.
+- maintenance 주기 시간은 `maintenance_cycle_duration_ms`로, resource별 scan 수와 실제 DB batch 수는 기존 `maintenance_cleanup_total`의 `scanned`/`db_batch` outcome으로 기록한다. 502개 orphan log fixture가 scan 502개와 DB batch 2개를 함께 노출하는 회귀 테스트를 추가했다.
+- portable export의 GORM row streaming을 10,000 object-index row로 비교했지만 기존 materialization `44.7ms / 15.5MB / 210,612 allocs`보다 `57.5ms / 19.1MB / 270,671 allocs`로 악화되어 코드를 되돌렸다. 더 낮은 peak-memory가 운영 문제로 확인되기 전에는 typed scanner나 export 계약 변경을 추가하지 않는다.
+- 정지 상태의 `.deploy-data/quick/s3desk.db`를 user namespace 안에서 read-only로 재측정했다. profile 1개 외에 jobs, upload sessions/objects/multipart, object index/replacements/favorites는 모두 0행이었고 object-index probe도 `scopes=0 total_rows=0`으로 통과했다. 이는 production p95 증거는 아니지만 현재 배포 데이터에는 text index, progress coalescing, 장기 credential cache, 병렬 cleanup을 추가할 근거가 없음을 확인한다.
+
 ## 범위와 증거 수준
 
 - 범위: `backend/internal/api`, `backend/internal/jobs`, `backend/internal/store`, DB schema/index, Prometheus 계측

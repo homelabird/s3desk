@@ -194,7 +194,10 @@ def resolve_git_commit(ref: str) -> str:
 def candidate_identity_blockers(candidate_id: str, head: str = "HEAD") -> list[str]:
     candidate_commit = resolve_git_commit(candidate_id)
     if not candidate_commit:
-        return []
+        return [
+            f"Candidate `{candidate_id}` could not be resolved to a commit. "
+            "Create the release tag or validate an exact commit SHA."
+        ]
 
     head_commit = resolve_git_commit(head)
     if not head_commit:

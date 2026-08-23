@@ -214,6 +214,14 @@ class ReleaseReadinessPreflightTests(unittest.TestCase):
         self.assertIn("Candidate identity mismatch", blockers[0])
         self.assertIn("Use a new RC tag or validate an exact HEAD commit SHA.", blockers[0])
 
+    def test_candidate_identity_blockers_report_unresolved_candidate(self):
+        with mock.patch.object(MODULE, "resolve_git_commit", return_value=""):
+            blockers = MODULE.candidate_identity_blockers("0.21v-rc4", "HEAD")
+
+        self.assertEqual(len(blockers), 1)
+        self.assertIn("could not be resolved to a commit", blockers[0])
+        self.assertIn("Create the release tag or validate an exact commit SHA.", blockers[0])
+
     def test_candidate_identity_blockers_allow_head_commit_candidate(self):
         with mock.patch.object(MODULE, "resolve_git_commit", return_value="a" * 40):
             self.assertEqual(MODULE.candidate_identity_blockers("HEAD", "HEAD"), [])

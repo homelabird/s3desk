@@ -39,8 +39,7 @@
 - Keep reverse-proxy and portable-backup smoke evidence current before promoting to final `0.21v`.
 
 ### Known Limitations
-- Azure legal hold remains read-only in S3Desk.
-- Azure immutability editing requires ARM credentials in addition to storage credentials.
+- Azure immutability and legal-hold editing require ARM credentials in addition to storage credentials.
 - OCI PAR edits are delete-and-recreate rather than in-place mutation, and the full access URI is only guaranteed at creation time.
 - AWS typed bucket governance still does not cover Object Lock.
 - In-product backup and staged restore target sqlite `DATA_DIR` workflows and do not replace Postgres disaster recovery.
