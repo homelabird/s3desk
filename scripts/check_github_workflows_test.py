@@ -84,7 +84,17 @@ class GithubWorkflowValidatorTests(unittest.TestCase):
         jobs = workflow["jobs"]
 
         self.assertNotIn("mock-e2e-smoke", jobs["mock-e2e-shard"]["needs"])
+        self.assertEqual("always() && github.event_name != 'schedule'", jobs["mock-e2e"]["if"])
         self.assertIn("mock-e2e-smoke", jobs["mock-e2e"]["needs"])
+        self.assertIn("visual-regression-e2e", jobs["mock-e2e"]["needs"])
+        self.assertEqual("github.event_name != 'schedule'", jobs["visual-regression-e2e"]["if"])
+        core_aggregate = next(
+            step["run"]
+            for step in jobs["mock-e2e"]["steps"]
+            if step.get("name") == "Write core mock summary"
+        )
+        self.assertIn("needs['visual-regression-e2e'].result", core_aggregate)
+        self.assertIn("visual regression suite did not complete successfully", core_aggregate)
         self.assertEqual(
             [
                 {"shard": "1/3", "artifact_suffix": "shard-1"},
@@ -103,21 +113,53 @@ class GithubWorkflowValidatorTests(unittest.TestCase):
                 "needs.changes.outputs.browser_facing == 'true'",
                 setup_node.get("if"),
             )
+        mobile_project = jobs["mobile-responsive-e2e-project"]
         self.assertEqual(
             [
                 {"project": "mobile-iphone-13", "artifact_suffix": "iphone-13"},
                 {"project": "mobile-pixel-7", "artifact_suffix": "pixel-7"},
             ],
-            jobs["mobile-responsive-e2e-project"]["strategy"]["matrix"]["include"],
+            mobile_project["strategy"]["matrix"]["include"],
         )
-        self.assertIn(
-            "mobile-responsive-e2e-project",
-            jobs["mobile-responsive-e2e"]["needs"],
+        self.assertEqual(
+            "github.event_name != 'schedule' && needs.changes.outputs.browser_facing == 'true'",
+            mobile_project["if"],
+        )
+        self.assertIn("workflow-lint", mobile_project["needs"])
+        mobile_steps = {
+            step["name"]: step
+            for step in mobile_project["steps"]
+            if "name" in step
+        }
+        self.assertEqual(
+            "npx playwright install --with-deps --only-shell chromium",
+            mobile_steps["Install Playwright Chromium for mobile responsive projects"]["run"],
+        )
+        self.assertEqual(
+            "npm run check:e2e:geometry",
+            mobile_steps["Enforce E2E geometry guard"]["run"],
+        )
+        self.assertEqual(
+            "npx playwright test --grep @mobile-responsive --project=${{ matrix.project }} --workers=2",
+            mobile_steps["Run mobile responsive Playwright project"]["run"],
+        )
+        mobile_aggregate = jobs["mobile-responsive-e2e"]
+        self.assertEqual("always() && github.event_name != 'schedule'", mobile_aggregate["if"])
+        self.assertEqual(
+            ["changes", "workflow-lint", "mobile-responsive-e2e-project"],
+            mobile_aggregate["needs"],
         )
         self.assertEqual(
             "Mobile Responsive E2E (Required)",
-            jobs["mobile-responsive-e2e"]["name"],
+            mobile_aggregate["name"],
         )
+        mobile_summary = next(
+            step["run"]
+            for step in mobile_aggregate["steps"]
+            if step.get("name") == "Write mobile responsive summary"
+        )
+        self.assertIn("needs['mobile-responsive-e2e-project'].result", mobile_summary)
+        self.assertIn("mobile responsive device projects did not complete successfully", mobile_summary)
         lint_steps = {
             step["name"]: step
             for step in jobs["workflow-lint"]["steps"]
@@ -139,15 +181,108 @@ class GithubWorkflowValidatorTests(unittest.TestCase):
             lint_steps["Setup Go"]["with"]["cache-dependency-path"],
         )
         self.assertNotIn(".tools/go/bin", str(jobs["workflow-lint"]["steps"]))
-        browser_installs = [
+        chromium_installs = [
             step["run"]
             for job in jobs.values()
             for step in job.get("steps", [])
-            if "playwright install" in step.get("run", "")
+            if step.get("run") == "npx playwright install --with-deps --only-shell chromium"
         ]
+        self.assertEqual(5, len(chromium_installs))
+        cross_browser_job = jobs["cross-browser-reflow-e2e"]
         self.assertEqual(
-            ["npx playwright install --with-deps --only-shell chromium"] * 5,
-            browser_installs,
+            "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
+            cross_browser_job["if"],
+        )
+        self.assertEqual(
+            [
+                {
+                    "project": "chromium",
+                    "browser": "chromium",
+                    "browser_ui_zoom": "1",
+                    "firefox_text_only_zoom": "0",
+                    "firefox_full_page_zoom": "0",
+                    "artifact_suffix": "chromium-ui-zoom",
+                    "lane_role": "actual Chromium 400% browser UI zoom with 320 CSS px reflow",
+                },
+                {
+                    "project": "firefox-reflow",
+                    "browser": "firefox",
+                    "browser_ui_zoom": "0",
+                    "firefox_text_only_zoom": "0",
+                    "firefox_full_page_zoom": "0",
+                    "artifact_suffix": "firefox",
+                    "lane_role": "Firefox 320 CSS px reflow and 200% computed-text resize",
+                },
+                {
+                    "project": "firefox-reflow",
+                    "browser": "firefox",
+                    "browser_ui_zoom": "0",
+                    "firefox_text_only_zoom": "1",
+                    "firefox_full_page_zoom": "0",
+                    "artifact_suffix": "firefox-text-only-zoom",
+                    "lane_role": "actual Firefox 200% text-only zoom with 320 CSS px reflow",
+                },
+                {
+                    "project": "firefox-reflow",
+                    "browser": "firefox",
+                    "browser_ui_zoom": "0",
+                    "firefox_text_only_zoom": "0",
+                    "firefox_full_page_zoom": "1",
+                    "artifact_suffix": "firefox-full-page-zoom",
+                    "lane_role": "actual Firefox 400% full-page zoom with 320 CSS px reflow",
+                },
+                {
+                    "project": "webkit-reflow",
+                    "browser": "webkit",
+                    "browser_ui_zoom": "0",
+                    "firefox_text_only_zoom": "0",
+                    "firefox_full_page_zoom": "0",
+                    "artifact_suffix": "webkit",
+                    "lane_role": "WebKit 320 CSS px reflow and 200% computed-text resize",
+                },
+            ],
+            cross_browser_job["strategy"]["matrix"]["include"],
+        )
+        self.assertEqual(
+            "${{ matrix.firefox_full_page_zoom }}",
+            cross_browser_job["env"]["PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM"],
+        )
+        cross_browser_steps = {
+            step["name"]: step
+            for step in cross_browser_job["steps"]
+            if "name" in step
+        }
+        self.assertEqual(
+            "npx playwright install --with-deps ${{ matrix.browser }}",
+            cross_browser_steps["Install Playwright browser"]["run"],
+        )
+        self.assertIn(
+            "--project=${{ matrix.project }}",
+            cross_browser_steps["Run cross-browser reflow project"]["run"],
+        )
+        self.assertEqual(
+            "matrix.browser_ui_zoom != '1' && matrix.firefox_text_only_zoom != '1' && matrix.firefox_full_page_zoom != '1'",
+            cross_browser_steps["Run cross-browser reflow project"]["if"],
+        )
+        self.assertEqual(
+            "sudo apt-get install -y xdotool",
+            cross_browser_steps["Install browser zoom input helper"]["run"],
+        )
+        self.assertEqual(
+            "matrix.browser_ui_zoom == '1' || matrix.firefox_text_only_zoom == '1' || matrix.firefox_full_page_zoom == '1'",
+            cross_browser_steps["Install browser zoom input helper"]["if"],
+        )
+        self.assertEqual(
+            "PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=chromium --workers=1",
+            cross_browser_steps["Run Chromium browser UI zoom project"]["run"],
+        )
+        self.assertEqual(
+            "PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1",
+            cross_browser_steps["Run Firefox browser zoom project"]["run"],
+        )
+        self.assertEqual(
+            "matrix.firefox_text_only_zoom == '1' || matrix.firefox_full_page_zoom == '1'",
+            cross_browser_steps["Run Firefox browser zoom project"]["if"],
         )
         live_steps = {
             step["name"]: step

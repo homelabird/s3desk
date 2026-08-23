@@ -465,6 +465,7 @@ jobs:
       - workflow-lint
       - mock-e2e-smoke
       - mock-e2e-shard
+      - visual-regression-e2e
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -483,8 +484,8 @@ jobs:
               fi
               echo "- Required checks still report success when the change scope is outside the frontend browser surface."
             else
-              echo "- Browser Lanes: smoke + core shards executed."
-              echo "- Lane role: browser-facing boot gates plus desktop/mock regression coverage."
+              echo "- Browser Lanes: smoke + core shards + visual regression executed."
+              echo "- Lane role: browser-facing boot gates plus desktop/mock and visual regression coverage."
               echo "- Workflow lint prerequisite: see the separate \`Workflow Lint\` job."
               echo "- Geometry guard: \`npm run check:e2e:geometry\` runs in the smoke lane while core shards run independently."
               echo "- Boot-gate command: \`npm run test:e2e:smoke\`"
@@ -500,6 +501,7 @@ jobs:
           workflow_lint_result="${{ needs['workflow-lint'].result }}"
           smoke_result="${{ needs['mock-e2e-smoke'].result }}"
           shard_result="${{ needs['mock-e2e-shard'].result }}"
+          visual_result="${{ needs['visual-regression-e2e'].result }}"
 
           if [[ "${changes_result}" != "success" ]]; then
             echo "changes job did not complete successfully: ${changes_result}" >&2
@@ -518,6 +520,10 @@ jobs:
           fi
           if [[ "${shard_result}" != "success" ]]; then
             echo "core mock shard suite did not complete successfully: ${shard_result}" >&2
+            exit 1
+          fi
+          if [[ "${visual_result}" != "success" ]]; then
+            echo "visual regression suite did not complete successfully: ${visual_result}" >&2
             exit 1
           fi
 
@@ -731,6 +737,117 @@ jobs:
             echo "mobile responsive device projects did not complete successfully: ${project_result}" >&2
             exit 1
           fi
+
+  cross-browser-reflow-e2e:
+    name: Cross-Browser Reflow E2E (${{ matrix.artifact_suffix }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            browser: chromium
+            browser_ui_zoom: "1"
+            firefox_text_only_zoom: "0"
+            firefox_full_page_zoom: "0"
+            artifact_suffix: chromium-ui-zoom
+            lane_role: actual Chromium 400% browser UI zoom with 320 CSS px reflow
+          - project: firefox-reflow
+            browser: firefox
+            browser_ui_zoom: "0"
+            firefox_text_only_zoom: "0"
+            firefox_full_page_zoom: "0"
+            artifact_suffix: firefox
+            lane_role: Firefox 320 CSS px reflow and 200% computed-text resize
+          - project: firefox-reflow
+            browser: firefox
+            browser_ui_zoom: "0"
+            firefox_text_only_zoom: "1"
+            firefox_full_page_zoom: "0"
+            artifact_suffix: firefox-text-only-zoom
+            lane_role: actual Firefox 200% text-only zoom with 320 CSS px reflow
+          - project: firefox-reflow
+            browser: firefox
+            browser_ui_zoom: "0"
+            firefox_text_only_zoom: "0"
+            firefox_full_page_zoom: "1"
+            artifact_suffix: firefox-full-page-zoom
+            lane_role: actual Firefox 400% full-page zoom with 320 CSS px reflow
+          - project: webkit-reflow
+            browser: webkit
+            browser_ui_zoom: "0"
+            firefox_text_only_zoom: "0"
+            firefox_full_page_zoom: "0"
+            artifact_suffix: webkit
+            lane_role: WebKit 320 CSS px reflow and 200% computed-text resize
+    env:
+      PLAYWRIGHT_FIREFOX: "1"
+      PLAYWRIGHT_WEBKIT: "1"
+      PLAYWRIGHT_BROWSER_UI_ZOOM: ${{ matrix.browser_ui_zoom }}
+      PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM: ${{ matrix.firefox_text_only_zoom }}
+      PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM: ${{ matrix.firefox_full_page_zoom }}
+      PLAYWRIGHT_TEST_TIMEOUT_MS: "60000"
+      PLAYWRIGHT_EXPECT_TIMEOUT_MS: "10000"
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Install browser zoom input helper
+        if: matrix.browser_ui_zoom == '1' || matrix.firefox_text_only_zoom == '1' || matrix.firefox_full_page_zoom == '1'
+        run: sudo apt-get install -y xdotool
+
+      - name: Enforce E2E geometry guard
+        run: npm run check:e2e:geometry
+
+      - name: Run cross-browser reflow project
+        if: matrix.browser_ui_zoom != '1' && matrix.firefox_text_only_zoom != '1' && matrix.firefox_full_page_zoom != '1'
+        run: npx playwright test tests/wcag-reflow.spec.ts --project=${{ matrix.project }} --workers=1
+
+      - name: Run Chromium browser UI zoom project
+        if: matrix.browser_ui_zoom == '1'
+        run: PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=chromium --workers=1
+
+      - name: Run Firefox browser zoom project
+        if: matrix.firefox_text_only_zoom == '1' || matrix.firefox_full_page_zoom == '1'
+        run: PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1
+
+      - name: Upload cross-browser reflow results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cross-browser-reflow-${{ matrix.artifact_suffix }}-results
+          path: frontend/test-results
+          if-no-files-found: ignore
+
+      - name: Write cross-browser reflow summary
+        if: always()
+        run: |
+          {
+            echo "## Cross-Browser Reflow E2E"
+            echo ""
+            echo "- Browser Lanes: ${{ matrix.artifact_suffix }} executed."
+            echo "- Lane role: ${{ matrix.lane_role }}."
+            echo "- Required check: no; this lane is not part of pull-request branch protection."
+            echo "- Manual boundary: automated browser zoom/WebKit evidence is not physical Safari, WKWebView, assistive-technology, or real-device proof."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   live-e2e-critical:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

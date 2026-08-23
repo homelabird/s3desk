@@ -76,7 +76,7 @@ jobs:
             echo "- Workflow Lint: delegated to the \`Core Mock E2E\` prerequisite on pull requests and pushes; manual dispatch executes repo-local \`actionlint\`."
             echo "- Backend Security Tools: setup-go reuses module/build outputs keyed to the pinned \`staticcheck\`, \`gosec\`, and \`govulncheck\` installer."
             echo "- Browser Lanes: delegated to the required \`Core Mock E2E\` and \`Mobile Responsive E2E (Required)\` checks."
-            echo "- Browser Guardrails: the required \`Core Mock E2E\` aggregate fails when its smoke prerequisite fails."
+            echo "- Browser Guardrails: the required \`Core Mock E2E\` aggregate fails when smoke, core shards, or visual regression fail."
             echo "- Bundle Budget: separate advisory signal in \`Frontend E2E\`."
             echo "- Bundle Budget Contract: separate advisory signal in \`Frontend E2E\` via \`npm run check:bundle-report\`."
             echo "- Local bundle equivalent when relevant: \`cd frontend && npm run bundle:budget\`"

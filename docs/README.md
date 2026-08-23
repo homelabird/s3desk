@@ -27,6 +27,8 @@ Supporting assets that still live under `docs/`:
 Reports and audit indexes:
 
 - [../notes/INDEX.md](../notes/INDEX.md): engineering notes, project quality reports, and frontend design reports
+- [../frontend/docs/DESIGN_AUDIT_IMPLEMENTATION_STATUS.md](../frontend/docs/DESIGN_AUDIT_IMPLEMENTATION_STATUS.md) and [latest validation log](../frontend/docs/DESIGN_AUDIT_VALIDATION_LOG.md): maintained frontend design status, current checks, and evidence boundaries
+- [../frontend/docs/DESIGN_TOKEN_USAGE.md](../frontend/docs/DESIGN_TOKEN_USAGE.md): maintained CSS token, hierarchy, and ownership-cleanup rules
 - [../frontend/docs/UI_UX_CURRENT_FINDINGS_2026-07-31.md](../frontend/docs/UI_UX_CURRENT_FINDINGS_2026-07-31.md): current UI/UX findings snapshot for the July 31, 2026 frontend worktree
 - [../frontend/docs/UI_UX_OPTIMIZATION_REPORT_2026-07-31.md](../frontend/docs/UI_UX_OPTIMIZATION_REPORT_2026-07-31.md): code optimization and design improvement report for the July 31, 2026 frontend worktree
 - [CODEBASE_SUBAGENT_GAP_REPORT_2026-05-21.md](CODEBASE_SUBAGENT_GAP_REPORT_2026-05-21.md): current sub-agent gap audit and applied improvements

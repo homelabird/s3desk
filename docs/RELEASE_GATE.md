@@ -83,6 +83,7 @@ The repository keeps automated enforcement for release readiness inside the stan
 - frontend CI required checks for browser-surface work:
   - `Core Mock E2E`
   - `Mobile Responsive E2E (Required)`
+- `Core Mock E2E` aggregates smoke, core shards, and `Visual Regression E2E`; any visual failure blocks the required check.
 - current `Frontend E2E` wiring does not maintain a narrower mobile-only runtime scope, so browser-surface changes normally materialize both required Playwright checks together
 - frontend CI advisory bundle signal:
   - `Bundle Budget`
@@ -118,7 +119,9 @@ Browser-facing release work should follow the same lane split that CI enforces:
   - tiny boot/auth/shell gates only
 - `core`
   - desktop/mock task-completion regressions
-- Release evidence should list `smoke`, `core`, and `mobile-responsive` as separate lines. If a lane did not run, state why it was not applicable.
+- `visual`
+  - screenshot regressions; its CI result is enforced by the required `Core Mock E2E` aggregate
+- Release evidence should list `smoke`, `core`, `visual`, and `mobile-responsive` as separate lines. If a lane did not run, state why it was not applicable.
 - `mobile-responsive`
   - constrained-viewport task-completion regressions
 
@@ -143,9 +146,9 @@ Use the exact check names when you record release evidence:
 
 - `./scripts/check.sh ci` mirrors the `Release Gate` workflow job named `release-gate`; `./scripts/check.sh full` is its local superset with browser smoke.
 - `bash ./scripts/check_github_workflows.sh` mirrors the `Workflow Lint` job in `Frontend E2E`.
-- `cd frontend && npm run test:e2e:core` mirrors `Core Mock E2E`.
-  In CI, the core suite is split into three Playwright shards and aggregated back into the required `Core Mock E2E` check name.
-- `cd frontend && npm run test:e2e:visual` mirrors `Visual Regression E2E`.
+- `cd frontend && npm run test:e2e:core` covers the core-shard portion of `Core Mock E2E`.
+  In CI, the core suite is split into three Playwright shards and combined with smoke and visual regression under the required `Core Mock E2E` check name.
+- `cd frontend && npm run test:e2e:visual` mirrors `Visual Regression E2E`, whose result is enforced by `Core Mock E2E`.
 - `cd frontend && npm run test:e2e:mobile-responsive` mirrors `Mobile Responsive E2E (Required)`.
 - `bash ./scripts/license-audit.sh` mirrors `license-audit`.
 - `bash ./scripts/check_ci_pair.sh` is only a local convenience wrapper for workflow lint + frontend OpenAPI drift + frontend build + backend test.

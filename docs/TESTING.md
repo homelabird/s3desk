@@ -129,13 +129,22 @@ Use the exact GitHub check names when you describe release evidence or branch-pr
 - `cd frontend && npm run bundle:budget`
   - local equivalent of the advisory `Bundle Budget` job in `Frontend E2E`
 - `cd frontend && npm run test:e2e:core`
-  - local equivalent of the required `Core Mock E2E` check
-  - CI runs the same core suite in three Playwright shards and aggregates the result under `Core Mock E2E`
+  - local equivalent of the core-shard portion of the required `Core Mock E2E` check
+  - CI runs the same core suite in three Playwright shards; the required aggregate also waits for visual regression
 - `cd frontend && npm run test:e2e:visual`
   - local equivalent of the `Visual Regression E2E` check
+  - CI folds this result into the required `Core Mock E2E` aggregate, so a visual failure blocks browser-facing changes
 - `cd frontend && npm run test:e2e:mobile-responsive`
   - local equivalent of the required `Mobile Responsive E2E (Required)` check
   - CI runs the iPhone 13 and Pixel 7 projects in parallel, then aggregates them under the unchanged required check name
+  - includes Login and Jobs device-context screenshot sentinels under the global absolute pixel budget
+- `cd frontend && PLAYWRIGHT_BROWSER_UI_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=chromium --workers=1` / `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1` / `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1` / `npm run test:e2e:firefox-reflow` / `npm run test:e2e:webkit-reflow`
+  - local equivalents of the scheduled/manual `Cross-Browser Reflow E2E` matrix
+  - the Chromium lane uses headful browser zoom shortcuts under Xvfb and requires `xdotool`; it asserts `1280px` at `400%` becomes a `320 CSS px` layout viewport
+  - the Firefox full-page lane uses the native browser window with `browser.zoom.full=true`; it asserts `1280px` at `400%` becomes `320 CSS px` with DPR `4`
+  - the Firefox text-only lane requires the same Xvfb/xdotool input path; it asserts computed text reaches `200%` while the `320 CSS px` viewport and DPR remain unchanged
+  - actual zoom interactions focus high-risk controls, traverse the bucket menu with `ArrowDown`, traverse the loaded Bucket Policy and Jobs filters sheets in both Tab directions before `Escape` trigger restoration, traverse the Settings tablist with `ArrowRight`, and fail if the focused control has no uncovered point inside its viewport-and-overflow-clipped rect; this is representative keyboard evidence, not exhaustive application-wide Tab or screen-reader evidence
+  - these lanes are not pull-request required checks and do not replace manual browser review, Safari/WKWebView, or assistive-technology evidence
 - `./scripts/check_ci_pair.sh`
   - convenience wrapper for workflow lint + frontend OpenAPI drift + frontend build + backend test only
   - not the GitHub required-check set and not a branch-protection verdict
@@ -390,13 +399,18 @@ Mocked frontend Playwright lanes start a managed Vite server on `http://127.0.0.
 - `npm run test:e2e:core`
   - main desktop/mock regression lane
   - excludes `@check-smoke`, `@mobile-responsive`, `@demo`, `@perf`, and `@visual`
-  - CI runs this lane as `--shard=1/3`, `--shard=2/3`, and `--shard=3/3`, then keeps the required check name as `Core Mock E2E`
+  - CI runs this lane as `--shard=1/3`, `--shard=2/3`, and `--shard=3/3`, then combines it with smoke and visual regression under the required `Core Mock E2E` check
 - `npm run test:e2e:visual`
   - dedicated Chromium screenshot-baseline lane for tests tagged `@visual`
-  - owns visual-regression specs separately from the core desktop/mock regression lane
+  - owns visual-regression specs separately from the core desktop/mock regression lane, but its result is required by the `Core Mock E2E` aggregate
 - `npm run test:e2e:mobile-responsive`
   - required mobile task-completion lane
   - runs the `mobile-iphone-13` and `mobile-pixel-7` projects
+  - keeps representative sparse and dense shell screenshots in the device projects instead of treating narrow desktop Chromium as mobile visual proof
+- `PLAYWRIGHT_BROWSER_UI_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=chromium --workers=1`, `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_FULL_PAGE_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1`, `PLAYWRIGHT_FIREFOX=1 PLAYWRIGHT_FIREFOX_TEXT_ONLY_ZOOM=1 PLAYWRIGHT_HEADLESS=0 xvfb-run -a npx playwright test tests/wcag-reflow.spec.ts --project=firefox-reflow --workers=1`, `npm run test:e2e:firefox-reflow`, and `npm run test:e2e:webkit-reflow`
+  - scheduled/manual actual Chromium 400% UI zoom, actual Firefox 400% full-page and 200% text-only zoom, plus Firefox/WebKit 320 CSS px reflow, 200% computed-text resize, and pointer-target lanes
+  - the actual zoom modes also require representative focused activation controls, native bucket-menu/Settings-tab navigation, and bidirectional Bucket Policy and Jobs filters sheet Tab traversal plus `Escape` trigger restoration to remain at least partially visible and unobscured
+  - run as the `Cross-Browser Reflow E2E` matrix; Playwright WebKit remains distinct from physical Safari, WKWebView, and VoiceOver evidence
 - `npx playwright test tests/dark-theme-accessibility.spec.ts tests/dark-theme-visual-regression.spec.ts --project=chromium`
   - focused dark-theme axe and screenshot lane
   - run this for theme tokens, dark-mode surfaces, overlay contrast, or visual-regression baseline changes
@@ -417,13 +431,14 @@ npm run check:e2e:geometry
 
 ### Browser E2E Authoring Rules
 
-`npm run check:e2e:geometry` scans `frontend/tests` and `frontend/tests/support` and fails on direct geometry probes such as:
+`npm run check:e2e:geometry` scans `frontend/tests` recursively and `frontend/playwright.config.ts`. It fails on direct geometry probes such as:
 
 - `boundingBox`
 - `getBoundingClientRect`
 - `scrollWidth`
 - `clientWidth` / `clientHeight`
 - `offsetWidth` / `offsetHeight`
+- `maxDiffPixelRatio` (no escape hatch; visual snapshots use the global absolute pixel budget)
 
 Only use the inline `e2e-geometry-allow` escape hatch when a browser test truly needs coordinate math and that contract cannot be pushed into a lower-level unit/component test.
 
