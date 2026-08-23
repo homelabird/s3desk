@@ -292,6 +292,7 @@ function BucketPolicyEditor(props: {
   const editorActiveRef = useRef(true);
 
   useEffect(() => {
+    editorActiveRef.current = true;
     return () => {
       editorActiveRef.current = false;
     };

@@ -36,6 +36,7 @@ export function useJobsActionMutations({
 	}, [apiToken, profileId])
 
 	useEffect(() => {
+		isActiveRef.current = true
 		return () => {
 			isActiveRef.current = false
 		}

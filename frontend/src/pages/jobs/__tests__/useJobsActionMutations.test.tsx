@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { type PropsWithChildren } from 'react'
+import { StrictMode, type PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
@@ -30,7 +30,11 @@ function deferred<T>() {
 }
 
 function wrapperWithClient(queryClient: QueryClient) {
-	return ({ children }: PropsWithChildren) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+	return ({ children }: PropsWithChildren) => (
+		<StrictMode>
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		</StrictMode>
+	)
 }
 
 describe('useJobsActionMutations', () => {

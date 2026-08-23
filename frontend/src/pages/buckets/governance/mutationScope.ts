@@ -24,6 +24,7 @@ export function useGovernanceMutationScope(args: {
   }, [args.apiToken, args.profileId, args.provider, args.bucket]);
 
   useEffect(() => {
+    isActiveRef.current = true;
     return () => {
       isActiveRef.current = false;
     };

@@ -150,6 +150,34 @@ describe('useOverlayLayer', () => {
 		})
 	})
 
+	it('preserves the opener when one overlay shell replaces another', async () => {
+		function Example() {
+			const [phase, setPhase] = useState<'closed' | 'loading' | 'ready'>('closed')
+
+			return (
+				<>
+					<button type="button" onClick={() => setPhase('loading')}>Opener</button>
+					<TestOverlay open={phase === 'loading'} onEscape={() => setPhase('closed')} testId="loading">
+						<button type="button" onClick={() => setPhase('ready')}>Finish loading</button>
+					</TestOverlay>
+					<TestOverlay open={phase === 'ready'} onEscape={() => setPhase('closed')} testId="ready" />
+				</>
+			)
+		}
+
+		render(<Example />)
+		const opener = screen.getByRole('button', { name: 'Opener' })
+		opener.focus()
+		fireEvent.click(opener)
+		await waitFor(() => expect(screen.getByRole('button', { name: 'loading initial action' })).toHaveFocus())
+
+		fireEvent.click(screen.getByRole('button', { name: 'Finish loading' }))
+		await waitFor(() => expect(screen.getByRole('button', { name: 'ready initial action' })).toHaveFocus())
+		fireEvent.keyDown(document, { key: 'Escape', bubbles: true, cancelable: true })
+
+		await waitFor(() => expect(opener).toHaveFocus())
+	})
+
 	it('does not steal focus back to the opener when focus has moved outside the overlay before close', async () => {
 		function Example(props: { open: boolean }) {
 			return (

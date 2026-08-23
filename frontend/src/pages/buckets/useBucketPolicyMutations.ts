@@ -30,6 +30,7 @@ export function useBucketPolicyMutations(props: {
   const validateRequestTokenRef = useRef(0);
 
   useEffect(() => {
+    isActiveRef.current = true;
     return () => {
       isActiveRef.current = false;
     };

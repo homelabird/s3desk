@@ -33,6 +33,7 @@ const overlayLayerStack: OverlayLayerRegistration[] = []
 let listenersAttached = false
 let bodyScrollLockCount = 0
 let previousBodyOverflow = ''
+let pendingFocusRestoreTarget: HTMLElement | null = null
 
 function getTopOverlayLayer() {
 	return overlayLayerStack[overlayLayerStack.length - 1] ?? null
@@ -72,13 +73,15 @@ function getInitialFocusSelectorElement(container: HTMLElement | null, selector:
 }
 
 function scheduleFocusRestore(element: HTMLElement) {
+	pendingFocusRestoreTarget = element
 	if (typeof window === 'undefined') {
 		element.focus()
+		pendingFocusRestoreTarget = null
 		return
 	}
 	window.setTimeout(() => {
-		if (!element.isConnected) return
-		element.focus()
+		if (element.isConnected) element.focus()
+		if (pendingFocusRestoreTarget === element) pendingFocusRestoreTarget = null
 	}, 0)
 }
 
@@ -176,7 +179,11 @@ export function useOverlayLayer(options: UseOverlayLayerOptions) {
 		if (!options.open || typeof document === 'undefined') return
 		const overlayId = Symbol('overlay-layer')
 		const containerElement = options.containerRef.current
-		restoreFocusTargetRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+		const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+		restoreFocusTargetRef.current =
+			(activeElement === document.body || activeElement === document.documentElement) && pendingFocusRestoreTarget?.isConnected
+				? pendingFocusRestoreTarget
+				: activeElement
 
 		registerOverlayLayer({
 			id: overlayId,

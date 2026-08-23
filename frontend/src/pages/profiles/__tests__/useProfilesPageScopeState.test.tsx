@@ -1,9 +1,21 @@
 import { act, renderHook } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { describe, expect, it } from 'vitest'
 
 import { useProfilesPageScopeState } from '../useProfilesPageScopeState'
 
 describe('useProfilesPageScopeState', () => {
+	it('keeps the current mount active when StrictMode replays effects', () => {
+		const { result, unmount } = renderHook(
+			() => useProfilesPageScopeState('token-a'),
+			{ wrapper: StrictMode },
+		)
+
+		expect(result.current.isActiveRef.current).toBe(true)
+		unmount()
+		expect(result.current.isActiveRef.current).toBe(false)
+	})
+
 	it('tracks modal sessions independently and bumps scope version when the api token changes', () => {
 		const { result, rerender, unmount } = renderHook(
 			(props: { apiToken: string }) => useProfilesPageScopeState(props.apiToken),

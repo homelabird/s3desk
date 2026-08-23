@@ -21,6 +21,7 @@
 .panel {
 	display: flex;
 	flex-direction: column;
+	overflow: auto;
 	background: var(--s3d-color-bg-card);
 	box-shadow: var(--s3d-shadow-md);
 	min-width: 0;

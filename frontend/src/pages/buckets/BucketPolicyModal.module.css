@@ -5,6 +5,11 @@
   width: 100%;
 }
 
+.desktopShell :global(textarea),
+.mobileShell :global(textarea) {
+  overflow-y: auto !important;
+}
+
 .decisionHeader {
   display: flex;
   flex-direction: column;

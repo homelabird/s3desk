@@ -12,6 +12,7 @@ export function useProfilesPageScopeState(apiToken: string) {
 	}, [apiToken])
 
 	useEffect(() => {
+		isActiveRef.current = true
 		return () => {
 			isActiveRef.current = false
 		}
