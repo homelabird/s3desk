@@ -40,7 +40,7 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 	}
 	defer func() { _ = logFile.Close() }()
 
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
 		return err
 	}

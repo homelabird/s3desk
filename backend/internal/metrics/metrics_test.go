@@ -40,13 +40,19 @@ func TestObserveStorageOperationRegistersMetrics(t *testing.T) {
 func TestMaintenanceCleanupMetricTracksOutcomes(t *testing.T) {
 	m := New()
 	m.AddMaintenanceCleanup("upload_sessions", "run", 1)
+	m.AddMaintenanceCleanup("upload_sessions", "scanned", 3)
+	m.AddMaintenanceCleanup("upload_sessions", "db_batch", 1)
 	m.AddMaintenanceCleanup("upload_sessions", "deleted", 2)
+	m.ObserveMaintenanceCycle(25 * time.Millisecond)
 
 	rec := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	for _, want := range []string{
 		`maintenance_cleanup_total{outcome="run",resource="upload_sessions"} 1`,
+		`maintenance_cleanup_total{outcome="scanned",resource="upload_sessions"} 3`,
+		`maintenance_cleanup_total{outcome="db_batch",resource="upload_sessions"} 1`,
 		`maintenance_cleanup_total{outcome="deleted",resource="upload_sessions"} 2`,
+		`maintenance_cycle_duration_ms_count 1`,
 	} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Fatalf("metrics output missing %q", want)

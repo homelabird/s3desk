@@ -36,6 +36,7 @@ type Metrics struct {
 	eventsConnections       prometheus.Gauge
 	eventsReconnectsTotal   prometheus.Counter
 	maintenanceCleanupTotal *prometheus.CounterVec
+	maintenanceCycleMs      prometheus.Histogram
 }
 
 func New() *Metrics {
@@ -118,8 +119,13 @@ func New() *Metrics {
 	})
 	m.maintenanceCleanupTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "maintenance_cleanup_total",
-		Help: "Maintenance cleanup runs, deletions, and errors by resource.",
+		Help: "Maintenance cleanup runs, scanned items, database batches, deletions, and errors by resource.",
 	}, []string{"resource", "outcome"})
+	m.maintenanceCycleMs = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "maintenance_cycle_duration_ms",
+		Help:    "Maintenance cycle duration in milliseconds.",
+		Buckets: prometheus.ExponentialBuckets(10, 2, 14),
+	})
 
 	reg.MustRegister(
 		collectors.NewGoCollector(),
@@ -142,6 +148,7 @@ func New() *Metrics {
 		m.eventsConnections,
 		m.eventsReconnectsTotal,
 		m.maintenanceCleanupTotal,
+		m.maintenanceCycleMs,
 	)
 
 	return m
@@ -339,4 +346,15 @@ func (m *Metrics) AddMaintenanceCleanup(resource, outcome string, count int) {
 		return
 	}
 	m.maintenanceCleanupTotal.WithLabelValues(resource, outcome).Add(float64(count))
+}
+
+func (m *Metrics) ObserveMaintenanceCycle(duration time.Duration) {
+	if m == nil {
+		return
+	}
+	ms := float64(duration.Milliseconds())
+	if ms < 0 {
+		ms = 0
+	}
+	m.maintenanceCycleMs.Observe(ms)
 }

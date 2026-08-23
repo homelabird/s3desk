@@ -190,6 +190,16 @@ func TestRunJobReturnsErrorWhenFinalizeFailedAfterSuccess(t *testing.T) {
 
 	client := hub.Subscribe()
 	t.Cleanup(func() { hub.Unsubscribe(client) })
+	profileQueries := 0
+	const profileQueryCallback = "test_run_job_profile_query_count"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(profileQueryCallback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "profiles" {
+			profileQueries++
+		}
+	}); err != nil {
+		t.Fatalf("register profile query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = gormDB.Callback().Query().Remove(profileQueryCallback) })
 
 	err = manager.runJob(context.Background(), job.ID)
 	if err == nil {
@@ -211,6 +221,9 @@ func TestRunJobReturnsErrorWhenFinalizeFailedAfterSuccess(t *testing.T) {
 	}
 	if updated.FinishedAt != nil {
 		t.Fatalf("expected finishedAt to remain nil after finalize failure")
+	}
+	if profileQueries != 1 {
+		t.Fatalf("profile queries=%d, want 1 per job", profileQueries)
 	}
 
 	assertNoHubEventType(t, client, "job.completed")

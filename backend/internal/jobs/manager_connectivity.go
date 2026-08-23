@@ -57,7 +57,7 @@ func benchmarkFailureResponse(profile models.ProfileSecrets, message string, err
 }
 
 func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
-	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, found, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
 		return false, nil, err
 	}
@@ -110,7 +110,7 @@ func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok 
 // returning upload/download throughput so users can gauge their connection speed.
 func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (models.ProfileBenchmarkResponse, error) {
 	const benchFileSize = 1 << 20 // 1 MiB
-	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, found, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
 		return models.ProfileBenchmarkResponse{}, err
 	}

@@ -55,7 +55,7 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		}()
 	}
 
-	secrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	secrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
 		return err
 	}

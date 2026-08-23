@@ -46,7 +46,7 @@ func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, p
 	}
 	defer func() { _ = logFile.Close() }()
 
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, 
 	}
 	defer func() { _ = logFile.Close() }()
 
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
 		return err
 	}

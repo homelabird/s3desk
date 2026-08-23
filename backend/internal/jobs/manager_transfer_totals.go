@@ -59,7 +59,7 @@ func (m *Manager) incrementJobObjectsDone(jobID string, delta int64) {
 func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jobID, bucket, key string, preserveLeadingSlash bool) {
 	key = normalizeKeyInput(key, preserveLeadingSlash)
 
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil || !ok {
 		return
 	}
@@ -98,7 +98,7 @@ func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jo
 }
 
 func (m *Manager) trySetJobTotalsFromS3Prefix(ctx context.Context, profileID, jobID, bucket, prefix string, include, exclude []string, preserveLeadingSlash bool) {
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil || !ok {
 		return
 	}
@@ -112,7 +112,7 @@ func (m *Manager) trySetJobTotalsFromS3Prefix(ctx context.Context, profileID, jo
 }
 
 func (m *Manager) trySetJobObjectsTotalFromS3Prefix(ctx context.Context, profileID, jobID, bucket, prefix string, include, exclude []string, preserveLeadingSlash bool) {
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil || !ok {
 		return
 	}

@@ -237,7 +237,7 @@ func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID 
 
 	var profileSecrets models.ProfileSecrets
 	if !deleteAll && !dryRun {
-		secrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+		secrets, ok, err := m.profileSecrets(ctx, profileID)
 		if err != nil {
 			return err
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
 )
 
@@ -14,6 +15,19 @@ func (s *server) deleteMultipartUploadMetadataAfterRemote(ctx context.Context, p
 }
 
 func (s *server) abortStoredMultipartUploads(ctx context.Context, profileID, uploadID string) error {
+	return s.abortStoredMultipartUploadsWithSecrets(ctx, profileID, uploadID, func(ctx context.Context) (models.ProfileSecrets, error) {
+		secrets, ok, err := s.store.GetProfileSecrets(ctx, profileID)
+		if err != nil {
+			return models.ProfileSecrets{}, err
+		}
+		if !ok {
+			return models.ProfileSecrets{}, fmt.Errorf("profile %q not found for multipart cleanup", profileID)
+		}
+		return secrets, nil
+	})
+}
+
+func (s *server) abortStoredMultipartUploadsWithSecrets(ctx context.Context, profileID, uploadID string, loadSecrets func(context.Context) (models.ProfileSecrets, error)) error {
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), immediateUploadCleanupTimeout)
 	defer cancel()
 
@@ -25,12 +39,9 @@ func (s *server) abortStoredMultipartUploads(ctx context.Context, profileID, upl
 		return nil
 	}
 
-	secrets, ok, err := s.store.GetProfileSecrets(cleanupCtx, profileID)
+	secrets, err := loadSecrets(cleanupCtx)
 	if err != nil {
 		return err
-	}
-	if !ok {
-		return fmt.Errorf("profile %q not found for multipart cleanup", profileID)
 	}
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
 		return fmt.Errorf("multipart cleanup requires an S3-compatible profile")

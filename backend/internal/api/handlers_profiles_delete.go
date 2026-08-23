@@ -145,21 +145,21 @@ func (svc profileDeleteHTTPService) removeJobArtifacts(ctx context.Context, prof
 func (svc profileDeleteHTTPService) cleanupUploadSessions(ctx context.Context, profileID string) error {
 	var secrets models.ProfileSecrets
 	secretsLoaded := false
-	loadSecrets := func() error {
+	loadSecrets := func(ctx context.Context) (models.ProfileSecrets, error) {
 		if secretsLoaded {
-			return nil
+			return secrets, nil
 		}
 		var ok bool
 		var err error
 		secrets, ok, err = svc.server.store.GetProfileSecrets(ctx, profileID)
 		if err != nil {
-			return err
+			return models.ProfileSecrets{}, err
 		}
 		if !ok {
-			return fmt.Errorf("profile %q not found for upload cleanup", profileID)
+			return models.ProfileSecrets{}, fmt.Errorf("profile %q not found for upload cleanup", profileID)
 		}
 		secretsLoaded = true
-		return nil
+		return secrets, nil
 	}
 
 	for {
@@ -176,11 +176,13 @@ func (svc profileDeleteHTTPService) cleanupUploadSessions(ctx context.Context, p
 			if mode == "" {
 				mode = uploadModeStaging
 			}
-			if err := svc.server.abortStoredMultipartUploads(ctx, profileID, us.ID); err != nil {
+			if err := svc.server.abortStoredMultipartUploadsWithSecrets(ctx, profileID, us.ID, loadSecrets); err != nil {
 				return err
 			}
 			if mode == uploadModeDirect {
-				if err := loadSecrets(); err != nil {
+				var err error
+				secrets, err = loadSecrets(ctx)
+				if err != nil {
 					return err
 				}
 				tempPrefix := directUploadTempSessionPrefix(us.Prefix, us.ID)

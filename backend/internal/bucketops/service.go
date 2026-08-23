@@ -58,7 +58,7 @@ func (s *Service) List(ctx context.Context, profile models.ProfileSecrets) ([]mo
 	}
 	defer proc.Stdout.Close()
 
-	entries, decodeErr := decodeList(proc.Stdout)
+	buckets, decodeErr := decodeList(proc.Stdout)
 	waitErr := proc.Wait()
 	if decodeErr != nil {
 		if waitErr != nil {
@@ -70,19 +70,6 @@ func (s *Service) List(ctx context.Context, profile models.ProfileSecrets) ([]mo
 		return nil, &RemoteError{Err: waitErr, Stderr: processStderr(proc)}
 	}
 
-	buckets := make([]models.Bucket, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir && !entry.IsBucket {
-			continue
-		}
-		name := strings.TrimSpace(entry.Name)
-		if name == "" {
-			name = strings.TrimSpace(entry.Path)
-		}
-		if name != "" {
-			buckets = append(buckets, models.Bucket{Name: name})
-		}
-	}
 	return buckets, nil
 }
 
@@ -118,7 +105,7 @@ type listEntry struct {
 	IsBucket bool   `json:"IsBucket"`
 }
 
-func decodeList(r io.Reader) ([]listEntry, error) {
+func decodeList(r io.Reader) ([]models.Bucket, error) {
 	dec := json.NewDecoder(r)
 	tok, err := dec.Token()
 	if err != nil {
@@ -129,18 +116,27 @@ func decodeList(r io.Reader) ([]listEntry, error) {
 		return nil, fmt.Errorf("unexpected rclone bucket list output")
 	}
 
-	entries := make([]listEntry, 0)
+	buckets := make([]models.Bucket, 0)
 	for dec.More() {
 		var entry listEntry
 		if err := dec.Decode(&entry); err != nil {
 			return nil, err
 		}
-		entries = append(entries, entry)
+		if !entry.IsDir && !entry.IsBucket {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name)
+		if name == "" {
+			name = strings.TrimSpace(entry.Path)
+		}
+		if name != "" {
+			buckets = append(buckets, models.Bucket{Name: name})
+		}
 	}
 	if _, err := dec.Token(); err != nil {
 		return nil, err
 	}
-	return entries, nil
+	return buckets, nil
 }
 
 func processStderr(proc *Process) string {

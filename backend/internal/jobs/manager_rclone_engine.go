@@ -17,7 +17,7 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 		return TransferEngineJobError(err)
 	}
 
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	profileSecrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
 		return err
 	}

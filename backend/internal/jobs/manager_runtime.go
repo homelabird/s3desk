@@ -20,7 +20,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return nil
 	}
 
-	profile, ok, err := m.store.GetProfile(rootCtx, profileID)
+	profile, ok, err := m.profileSecrets(rootCtx, profileID)
 	if err != nil {
 		return err
 	}
@@ -31,6 +31,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 
 	ctx, cancel := context.WithCancel(rootCtx)
 	ctx = withJobType(ctx, job.Type)
+	ctx = withProfileSecrets(ctx, profile)
 	m.mu.Lock()
 	m.cancels[jobID] = cancel
 	m.mu.Unlock()

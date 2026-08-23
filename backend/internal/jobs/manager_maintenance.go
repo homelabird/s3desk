@@ -60,10 +60,7 @@ func (m *Manager) runMaintenance(ctx context.Context) {
 		return
 	}
 
-	m.cleanupExpiredUploadSessions(ctx)
-	m.cleanupOrphanArtifacts(ctx)
-	m.cleanupOldJobs(ctx)
-	m.cleanupExpiredJobLogs(ctx)
+	m.runMaintenanceCycle(ctx)
 
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
@@ -72,12 +69,19 @@ func (m *Manager) runMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			m.cleanupExpiredUploadSessions(ctx)
-			m.cleanupOrphanArtifacts(ctx)
-			m.cleanupOldJobs(ctx)
-			m.cleanupExpiredJobLogs(ctx)
+			m.runMaintenanceCycle(ctx)
 		}
 	}
+}
+
+func (m *Manager) runMaintenanceCycle(ctx context.Context) {
+	startedAt := time.Now()
+	defer func() { m.metrics.ObserveMaintenanceCycle(time.Since(startedAt)) }()
+
+	m.cleanupExpiredUploadSessions(ctx)
+	m.cleanupOrphanArtifacts(ctx)
+	m.cleanupOldJobs(ctx)
+	m.cleanupExpiredJobLogs(ctx)
 }
 
 func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
@@ -87,6 +91,7 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 
 	for {
 		sessions, err := m.store.ListExpiredUploadSessions(ctx, now, 200)
+		m.metrics.AddMaintenanceCleanup(resource, "db_batch", 1)
 		if err != nil {
 			m.recordMaintenanceError(resource, "list_expired", err)
 			return
@@ -94,6 +99,8 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 		if len(sessions) == 0 {
 			return
 		}
+		m.metrics.AddMaintenanceCleanup(resource, "scanned", len(sessions))
+		secretsByProfile := make(map[string]models.ProfileSecrets)
 		deleted := 0
 		for _, us := range sessions {
 			select {
@@ -114,7 +121,7 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 					"error":      err.Error(),
 				})
 			}
-			if err := m.cleanupExpiredUploadSessionRemoteState(ctx, us); err != nil {
+			if err := m.cleanupExpiredUploadSessionRemoteState(ctx, us, secretsByProfile); err != nil {
 				logCleanupError("remote_state", err)
 				continue
 			}
@@ -150,14 +157,14 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 	}
 }
 
-func (m *Manager) cleanupExpiredUploadSessionRemoteState(ctx context.Context, us store.UploadSession) error {
-	if err := m.cleanupExpiredUploadSessionMultipartUploads(ctx, us); err != nil {
+func (m *Manager) cleanupExpiredUploadSessionRemoteState(ctx context.Context, us store.UploadSession, secretsByProfile map[string]models.ProfileSecrets) error {
+	if err := m.cleanupExpiredUploadSessionMultipartUploads(ctx, us, secretsByProfile); err != nil {
 		return err
 	}
-	return m.cleanupExpiredUploadSessionRemoteTemps(ctx, us)
+	return m.cleanupExpiredUploadSessionRemoteTemps(ctx, us, secretsByProfile)
 }
 
-func (m *Manager) cleanupExpiredUploadSessionMultipartUploads(ctx context.Context, us store.UploadSession) error {
+func (m *Manager) cleanupExpiredUploadSessionMultipartUploads(ctx context.Context, us store.UploadSession, secretsByProfile map[string]models.ProfileSecrets) error {
 	uploads, err := m.store.ListMultipartUploads(ctx, us.ProfileID, us.ID)
 	if err != nil {
 		return err
@@ -166,7 +173,7 @@ func (m *Manager) cleanupExpiredUploadSessionMultipartUploads(ctx context.Contex
 		return nil
 	}
 
-	secrets, ok, err := m.store.GetProfileSecrets(ctx, us.ProfileID)
+	secrets, ok, err := m.cachedProfileSecrets(ctx, us.ProfileID, secretsByProfile)
 	if err != nil {
 		return err
 	}
@@ -199,7 +206,7 @@ func abortStoredMultipartUpload(ctx context.Context, client *s3.Client, meta sto
 	return s3client.AbortMultipartUpload(ctx, client, meta.Bucket, meta.ObjectKey, meta.S3UploadID)
 }
 
-func (m *Manager) cleanupExpiredUploadSessionRemoteTemps(ctx context.Context, us store.UploadSession) error {
+func (m *Manager) cleanupExpiredUploadSessionRemoteTemps(ctx context.Context, us store.UploadSession, secretsByProfile map[string]models.ProfileSecrets) error {
 	if strings.TrimSpace(strings.ToLower(us.Mode)) != "direct" {
 		return nil
 	}
@@ -207,7 +214,7 @@ func (m *Manager) cleanupExpiredUploadSessionRemoteTemps(ctx context.Context, us
 		return nil
 	}
 
-	secrets, ok, err := m.store.GetProfileSecrets(ctx, us.ProfileID)
+	secrets, ok, err := m.cachedProfileSecrets(ctx, us.ProfileID, secretsByProfile)
 	if err != nil {
 		return err
 	}
@@ -226,6 +233,17 @@ func (m *Manager) cleanupExpiredUploadSessionRemoteTemps(ctx context.Context, us
 		return jobErrorFromRclone(err, proc.stderr.String(), "rclone delete")
 	}
 	return nil
+}
+
+func (m *Manager) cachedProfileSecrets(ctx context.Context, profileID string, cache map[string]models.ProfileSecrets) (models.ProfileSecrets, bool, error) {
+	if secrets, ok := cache[profileID]; ok {
+		return secrets, true, nil
+	}
+	secrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	if err == nil && ok {
+		cache[profileID] = secrets
+	}
+	return secrets, ok, err
 }
 
 func directUploadTempSessionPrefix(prefix, uploadID string) string {
@@ -260,6 +278,7 @@ func (m *Manager) cleanupAPIRcloneConfigs(ctx context.Context, removeAll bool) {
 		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
+	m.metrics.AddMaintenanceCleanup(resource, "scanned", len(entries))
 	cutoff := time.Now().Add(-orphanAPIRcloneConfigRetention)
 	for _, entry := range entries {
 		select {
@@ -305,6 +324,7 @@ func (m *Manager) cleanupOldJobs(ctx context.Context) {
 		callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		ids, err := m.store.DeleteFinishedJobsBefore(callCtx, cutoff, 200)
 		cancel()
+		m.metrics.AddMaintenanceCleanup(resource, "db_batch", 1)
 		if err != nil {
 			m.recordMaintenanceError(resource, "delete_finished", err)
 			return
@@ -312,6 +332,7 @@ func (m *Manager) cleanupOldJobs(ctx context.Context) {
 		if len(ids) == 0 {
 			return
 		}
+		m.metrics.AddMaintenanceCleanup(resource, "scanned", len(ids))
 		m.metrics.AddMaintenanceCleanup(resource, "deleted", len(ids))
 
 		for _, id := range ids {
@@ -338,6 +359,7 @@ func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
 		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
+	m.metrics.AddMaintenanceCleanup(resource, "scanned", len(entries))
 
 	jobIDs := make(map[string]struct{}, len(entries))
 	for _, ent := range entries {
@@ -362,6 +384,7 @@ func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
 		ids = append(ids, jobID)
 	}
 	states, err := m.store.ListJobStatesByIDs(ctx, ids)
+	m.metrics.AddMaintenanceCleanup(resource, "db_batch", (len(ids)+499)/500)
 	if err != nil {
 		m.recordMaintenanceError(resource, "list_job_states", err)
 		return
@@ -400,6 +423,7 @@ func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
 		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
+	m.metrics.AddMaintenanceCleanup(resource, "scanned", len(entries))
 
 	filesByJobID := make(map[string][]string)
 	for _, ent := range entries {
@@ -428,6 +452,7 @@ func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
 		ids = append(ids, jobID)
 	}
 	states, err := m.store.ListJobStatesByIDs(ctx, ids)
+	m.metrics.AddMaintenanceCleanup(resource, "db_batch", (len(ids)+499)/500)
 	if err != nil {
 		m.recordMaintenanceError(resource, "list_job_states", err)
 		return
@@ -452,6 +477,7 @@ func (m *Manager) cleanupOrphanJobArtifacts(ctx context.Context) {
 		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
+	m.metrics.AddMaintenanceCleanup(resource, "scanned", len(entries))
 
 	filesByJobID := make(map[string][]string)
 	for _, ent := range entries {
@@ -477,6 +503,7 @@ func (m *Manager) cleanupOrphanJobArtifacts(ctx context.Context) {
 		ids = append(ids, jobID)
 	}
 	states, err := m.store.ListJobStatesByIDs(ctx, ids)
+	m.metrics.AddMaintenanceCleanup(resource, "db_batch", (len(ids)+499)/500)
 	if err != nil {
 		m.recordMaintenanceError(resource, "list_job_states", err)
 		return
@@ -500,6 +527,7 @@ func (m *Manager) cleanupOrphanStagingDirs(ctx context.Context) {
 		m.recordMaintenanceError(resource, "read_directory", err)
 		return
 	}
+	m.metrics.AddMaintenanceCleanup(resource, "scanned", len(entries))
 
 	ids := make([]string, 0, len(entries))
 	for _, ent := range entries {
@@ -513,6 +541,7 @@ func (m *Manager) cleanupOrphanStagingDirs(ctx context.Context) {
 		ids = append(ids, uploadID)
 	}
 	existing, err := m.store.ExistingUploadSessionIDs(ctx, ids)
+	m.metrics.AddMaintenanceCleanup(resource, "db_batch", (len(ids)+499)/500)
 	if err != nil {
 		m.recordMaintenanceError(resource, "list_upload_sessions", err)
 		return

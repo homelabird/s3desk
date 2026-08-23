@@ -23,6 +23,8 @@ import (
 
 func TestCleanupOrphanJobLogsBatchesDatabaseReads(t *testing.T) {
 	manager, st, _, gormDB, profile, dataDir := newManagerConsistencyFixture(t)
+	cleanupMetrics := metrics.New()
+	manager.metrics = cleanupMetrics
 	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
 		Type:    JobTypeS3DeleteObjects,
 		Payload: map[string]any{"bucket": "test", "keys": []string{"kept"}},
@@ -61,6 +63,16 @@ func TestCleanupOrphanJobLogsBatchesDatabaseReads(t *testing.T) {
 
 	if queries != 2 {
 		t.Fatalf("job queries=%d, want 2 batches for 502 job IDs", queries)
+	}
+	rec := httptest.NewRecorder()
+	cleanupMetrics.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	for _, want := range []string{
+		`maintenance_cleanup_total{outcome="scanned",resource="orphan_job_logs"} 502`,
+		`maintenance_cleanup_total{outcome="db_batch",resource="orphan_job_logs"} 2`,
+	} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("metrics output missing %q", want)
+		}
 	}
 	if _, err := os.Stat(kept); err != nil {
 		t.Fatalf("kept log removed: %v", err)
@@ -660,7 +672,7 @@ func TestCleanupExpiredUploadSessionsKeepsDirectSessionWhenTempCleanupFails(t *t
 	}
 }
 
-func TestCleanupExpiredUploadSessionsAbortsProviderMultipartBeforeDeletingRows(t *testing.T) {
+func TestCleanupExpiredUploadSessionsReusesProfileSecretsWhileAbortingMultipart(t *testing.T) {
 	var aborted = make(chan string, 2)
 	fakeS3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -672,7 +684,7 @@ func TestCleanupExpiredUploadSessionsAbortsProviderMultipartBeforeDeletingRows(t
 	}))
 	t.Cleanup(fakeS3.Close)
 
-	manager, st, _, _, profile, _ := newManagerConsistencyFixture(t)
+	manager, st, _, gormDB, profile, _ := newManagerConsistencyFixture(t)
 	endpoint := fakeS3.URL
 	if _, ok, err := st.UpdateProfile(context.Background(), profile.ID, models.ProfileUpdateRequest{Endpoint: &endpoint}); err != nil || !ok {
 		t.Fatalf("update profile endpoint: ok=%v err=%v", ok, err)
@@ -704,7 +716,22 @@ func TestCleanupExpiredUploadSessionsAbortsProviderMultipartBeforeDeletingRows(t
 		}
 	}
 
+	profileQueries := 0
+	const callback = "test_cleanup_expired_upload_sessions_profile_query_count"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "profiles" {
+			profileQueries++
+		}
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = gormDB.Callback().Query().Remove(callback) })
+
 	manager.cleanupExpiredUploadSessions(ctx)
+
+	if profileQueries != 1 {
+		t.Fatalf("profile queries=%d, want 1 for sessions sharing a profile", profileQueries)
+	}
 
 	wantAborts := map[string]bool{"multipart-presigned": false, "multipart-staging": false}
 	for range sessions {
