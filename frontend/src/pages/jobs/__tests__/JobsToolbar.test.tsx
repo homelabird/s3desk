@@ -190,9 +190,12 @@ describe('JobsToolbar', () => {
 		expect(screen.queryByRole('combobox', { name: 'Job status filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job type filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job error code filter' })).not.toBeInTheDocument()
+		expect(screen.queryByTestId('jobs-columns-trigger')).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Reset filters' })).not.toBeInTheDocument()
 
 		fireEvent.click(trigger)
 		expect(screen.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('active')
+		expect(screen.getByRole('button', { name: 'Reset filters' })).toBeInTheDocument()
 	})
 
 	it('closes the mobile filters sheet when the scope changes', () => {

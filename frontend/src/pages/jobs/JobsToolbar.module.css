@@ -149,7 +149,26 @@
 }
 
 @media (max-width: 767px) {
+	.healthCard {
+		flex: 1 0 auto;
+		min-width: 0;
+		min-height: 44px;
+		flex-direction: column;
+		justify-content: center;
+		gap: 2px;
+		padding: 5px 4px;
+		text-align: center;
+	}
+
+	.healthLabel {
+		letter-spacing: 0;
+		text-transform: none;
+		white-space: nowrap;
+	}
+
 	.filtersRow {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: stretch;
 		gap: 10px;
 	}
@@ -159,7 +178,6 @@
 	}
 
 	.mobileFiltersTrigger {
-		width: 100%;
 		justify-content: center;
 	}
 

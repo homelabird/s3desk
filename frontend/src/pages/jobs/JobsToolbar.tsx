@@ -307,8 +307,8 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							</PopoverSurface>
 						</>
 					)}
-					{props.filtersDirty ? <Button onClick={props.onResetFilters}>Reset filters</Button> : null}
-					<PopoverSurface
+					{props.filtersDirty && !useCompactFilters ? <Button onClick={props.onResetFilters}>Reset filters</Button> : null}
+					{useCompactFilters ? null : <PopoverSurface
 						key={`columns:${props.scopeKey}`}
 						align="end"
 						closeOnTab={false}
@@ -354,7 +354,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 								Table layout
 							</Button>
 						)}
-					</PopoverSurface>
+					</PopoverSurface>}
 				</div>
 				{useCompactFilters ? (
 					<OverlaySheet
