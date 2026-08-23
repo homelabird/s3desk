@@ -1,0 +1,4 @@
+interface:
+  display_name: "S3Desk Release"
+  short_description: "Changelog, tags, GitHub Release, and readiness"
+  default_prompt: "Use $s3desk-release to prepare and verify this S3Desk release candidate."

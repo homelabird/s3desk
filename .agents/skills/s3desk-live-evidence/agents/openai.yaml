@@ -1,0 +1,4 @@
+interface:
+  display_name: "S3Desk Live Evidence"
+  short_description: "Provider, proxy, backup, and deployment evidence"
+  default_prompt: "Use $s3desk-live-evidence to derive and verify the required S3Desk live evidence."

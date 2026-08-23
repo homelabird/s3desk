@@ -1,0 +1,4 @@
+interface:
+  display_name: "S3Desk Backend"
+  short_description: "Backend, API, jobs, store, and provider workflow"
+  default_prompt: "Use $s3desk-backend to implement and validate this S3Desk backend change."

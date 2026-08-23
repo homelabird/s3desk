@@ -1,0 +1,4 @@
+interface:
+  display_name: "S3Desk Frontend"
+  short_description: "React UI, accessibility, responsive, and E2E workflow"
+  default_prompt: "Use $s3desk-frontend to implement and validate this S3Desk frontend change."
