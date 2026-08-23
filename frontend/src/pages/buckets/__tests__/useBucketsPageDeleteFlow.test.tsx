@@ -100,7 +100,7 @@ describe('useBucketsPageDeleteFlow', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('shows a warning instead of reopening the bucket_not_empty dialog after dismissal', async () => {
+  it('resolves the handled bucket_not_empty error and shows a warning after dismissal', async () => {
     const deleteBucketApi = vi.fn().mockRejectedValue(
       new APIError({
         status: 409,
@@ -136,7 +136,7 @@ describe('useBucketsPageDeleteFlow', () => {
     )
 
     await act(async () => {
-      await result.current.deleteBucket('primary-bucket').catch(() => undefined)
+      await expect(result.current.deleteBucket('primary-bucket')).resolves.toBeUndefined()
     })
 
     await waitFor(() =>

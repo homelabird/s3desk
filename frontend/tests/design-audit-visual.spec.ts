@@ -76,6 +76,14 @@ test.describe('Design audit visual smoke @visual', () => {
 		await expect(firstObjectRow).toBeVisible()
 		const firstObjectBox = await firstObjectRow.boundingBox() // e2e-geometry-allow keeps actual data in the first narrow-mobile viewport
 		expect(firstObjectBox?.y).toBeLessThan(568) // e2e-geometry-allow asserts first-content visibility without scrolling
+		const compactButtons = page.getByTestId('objects-list-controls-compact-footer').getByRole('button')
+		await expect(compactButtons).toHaveCount(4)
+		const compactButtonBoxes = await Promise.all(
+			Array.from({ length: 4 }, (_, index) => compactButtons.nth(index).boundingBox()), // e2e-geometry-allow verifies the 48px compact actions stay on one row
+		)
+		expect(compactButtonBoxes.every((box) => (box?.height ?? 0) >= 48)).toBe(true) // e2e-geometry-allow enforces the shared mobile touch floor
+		const compactButtonTops = compactButtonBoxes.map((box) => box?.y ?? 0)
+		expect(Math.max(...compactButtonTops) - Math.min(...compactButtonTops)).toBeLessThanOrEqual(2) // e2e-geometry-allow prevents a taller two-row control stack
 		const viewport = await page.evaluate(() => ({
 			clientWidth: document.documentElement.clientWidth, // e2e-geometry-allow compares the narrow layout viewport
 			scrollWidth: document.documentElement.scrollWidth, // e2e-geometry-allow detects page-level horizontal overflow

@@ -1,5 +1,6 @@
 import {
 	AppstoreOutlined,
+	CloudUploadOutlined,
 	EllipsisOutlined,
 	FolderOpenOutlined,
 	MenuOutlined,
@@ -31,10 +32,11 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-	{ key: '/profiles', label: 'Profiles', icon: <ProfileOutlined />, to: '/profiles' },
-	{ key: '/buckets', label: 'Buckets', icon: <AppstoreOutlined />, to: '/buckets' },
-	{ key: '/objects', label: 'Objects', icon: <FolderOpenOutlined />, to: '/objects' },
-	{ key: '/jobs', label: 'Activity', icon: <ToolOutlined />, to: '/jobs' },
+	{ key: '/profiles', label: 'Profiles', icon: <ProfileOutlined aria-hidden="true" />, to: '/profiles' },
+	{ key: '/buckets', label: 'Buckets', icon: <AppstoreOutlined aria-hidden="true" />, to: '/buckets' },
+	{ key: '/objects', label: 'Objects', icon: <FolderOpenOutlined aria-hidden="true" />, to: '/objects' },
+	{ key: '/uploads', label: 'Uploads', icon: <CloudUploadOutlined aria-hidden="true" />, to: '/uploads' },
+	{ key: '/jobs', label: 'Activity', icon: <ToolOutlined aria-hidden="true" />, to: '/jobs' },
 ]
 export type FullAppShellChromeSession = {
 	apiToken: string

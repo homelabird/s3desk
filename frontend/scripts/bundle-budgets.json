@@ -2,9 +2,9 @@
   "vendorUiGzip": {
     "label": "vendor-ui gzip budget",
     "env": "BUNDLE_BUDGET_VENDOR_UI_GZIP_KB",
-    "defaultKB": 170,
+    "defaultKB": 6.5,
     "reviewAction": "shrink first",
-    "rationale": "Shared UI/vendor surface is allowed to stay large because it amortizes across every browser lane entrypoint, but regressions here should still be noticeable."
+    "rationale": "The residual shared UI chunk is about 4.9 kB gzip after broad UI vendor grouping was removed; this cap keeps useful headroom while making regressions visible."
   },
   "initialJsGzip": {
     "label": "initial JS gzip budget",

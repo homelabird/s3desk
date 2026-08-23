@@ -60,7 +60,6 @@ async function reportPointerTargets(page: Page, surface: string) {
 			x: rect.left + rect.width / 2,
 			y: rect.top + rect.height / 2,
 			inline: element.matches('a[href]') && ['inline', 'inline-block'].includes(style.display),
-			denseToolbar: Boolean(element.closest('[data-testid="objects-list-controls-compact-footer"]')),
 		}]
 	}))
 
@@ -82,7 +81,7 @@ async function reportPointerTargets(page: Page, surface: string) {
 	})
 	expect(unexplainedBelow24, `${surface} has WCAG 2.5.8 targets without an inline or spacing exception`).toEqual([])
 	expect(
-		below(48).filter((target) => !target.inline && !target.denseToolbar),
+		below(48).filter((target) => !target.inline),
 		`${surface} has touch targets below the shared Apple and Google 48px floor`,
 	).toEqual([])
 }

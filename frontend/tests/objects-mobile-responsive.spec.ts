@@ -108,8 +108,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 				expect(control.right).toBeLessThanOrEqual(geometry.viewportWidth + 1)
 			}
 			expect(Math.round(geometry.searchHeight)).toBe(48)
-			expect(Math.round(geometry.listControls.height)).toBeLessThanOrEqual(100)
-			expect(Math.round(geometry.footer.height)).toBe(24)
+			expect(Math.round(geometry.listControls.height)).toBeLessThanOrEqual(120)
+			expect(Math.round(geometry.footer.height)).toBe(48)
 			expect(Math.round(geometry.filter.top)).toBe(Math.round(geometry.viewToggle.top))
 		}
 	})

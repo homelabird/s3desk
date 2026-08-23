@@ -181,6 +181,7 @@ describe('FullAppInner header', () => {
 
 		expect(navButton).toHaveAttribute('aria-expanded', 'true')
 		expect(await screen.findByRole('dialog', { name: 'Navigation' })).toHaveAttribute('id', 'app-navigation-drawer')
+		expect(screen.getByRole('link', { name: 'Uploads' })).toHaveAttribute('href', '/uploads')
 		expect(screen.queryByRole('button', { name: 'Backup' })).not.toBeInTheDocument()
 	}, 15_000)
 
@@ -213,6 +214,7 @@ describe('FullAppInner header', () => {
 		expect(screen.queryByRole('button', { name: /Settings/i })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: /Logout/i })).not.toBeInTheDocument()
 		expect(screen.getByRole('link', { name: 'Open objects workspace' })).toHaveAttribute('href', '/objects')
+		expect(screen.getByRole('link', { name: 'Uploads' })).toHaveAttribute('href', '/uploads')
 		const sider = document.querySelector('.ant-layout-sider')
 		expect(sider).toHaveClass('ant-layout-sider-light')
 		const appMenuButton = screen.getByRole('button', { name: 'App menu' })

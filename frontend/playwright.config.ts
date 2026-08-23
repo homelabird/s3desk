@@ -19,6 +19,7 @@ const slowMoMs = parseInteger(process.env.PLAYWRIGHT_SLOW_MO_MS)
 const testTimeoutMs = parseInteger(process.env.PLAYWRIGHT_TEST_TIMEOUT_MS) ?? 30_000
 const expectTimeoutMs = parseInteger(process.env.PLAYWRIGHT_EXPECT_TIMEOUT_MS) ?? 5_000
 const includeFirefox = isTruthy(process.env.PLAYWRIGHT_FIREFOX)
+const includeWebkit = isTruthy(process.env.PLAYWRIGHT_WEBKIT)
 
 const videoMode = parseMode(process.env.PLAYWRIGHT_VIDEO_MODE, VIDEO_MODES, recordArtifacts || recordVideos ? 'on' : 'off')
 const screenshotMode = parseMode(
@@ -92,6 +93,13 @@ export default defineConfig({
 			? [{
 					name: 'firefox-reflow',
 					use: { ...devices['Desktop Firefox'] },
+					testMatch: /wcag-reflow\.spec\.ts/,
+				}]
+			: []),
+		...(includeWebkit
+			? [{
+					name: 'webkit-reflow',
+					use: { ...devices['Desktop Safari'] },
 					testMatch: /wcag-reflow\.spec\.ts/,
 				}]
 			: []),

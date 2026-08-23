@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
+import { seedLocalStorage } from './support/apiFixtures'
 import { installJobsMobileResponsiveFixtures, seedJobsMobileResponsiveStorage } from './support/jobsMobileResponsive'
 import {
 	buildAzureGovernanceFixture,
@@ -123,12 +124,17 @@ const providerGovernanceWarningVisualCases = [
 	},
 ] satisfies readonly ProviderGovernanceVisualCase[]
 
-async function setupJobsVisualPage(page: Page) {
-	await page.setViewportSize({ width: 390, height: 844 })
+async function setupJobsVisualPage(
+	page: Page,
+	viewport = { width: 390, height: 844 },
+	themeMode: 'light' | 'dark' = 'light',
+) {
+	await page.setViewportSize(viewport)
 	await installJobsMobileResponsiveFixtures(page)
 	await seedJobsMobileResponsiveStorage(page)
+	await seedLocalStorage(page, { themeMode })
 	await gotoJobsPage(page)
-	await expect(page.getByText('job-queued')).toBeVisible()
+	await expect(page.getByRole('heading', { name: 'History' })).toBeVisible()
 }
 
 async function setupUploadsVisualPage(page: Page) {
@@ -419,6 +425,22 @@ test.describe('Workflow visual regression @visual', () => {
 			await expect(sheet).toHaveScreenshot(governanceVisualCase.screenshotName, visualScreenshotOptions)
 		})
 	}
+
+	test('desktop Jobs workspace remains stable', async ({ page }) => {
+		await setupJobsVisualPage(page, { width: 1280, height: 800 })
+		await expect(page.getByRole('button', { name: 'Retry realtime' })).toBeVisible({ timeout: 15_000 })
+
+		await expect(page).toHaveScreenshot('jobs-desktop-workspace.png', visualScreenshotOptions)
+	})
+
+	test('dark mobile Jobs workspace remains stable', async ({ page }) => {
+		await setupJobsVisualPage(page, { width: 390, height: 844 }, 'dark')
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+		await expect(page.getByRole('list').filter({ hasText: 'job-queued' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Retry realtime' })).toBeVisible({ timeout: 15_000 })
+
+		await expect(page).toHaveScreenshot('jobs-mobile-workspace-dark.png', visualScreenshotOptions)
+	})
 
 	test('mobile Jobs filters sheet remains stable', async ({ page }) => {
 		await setupJobsVisualPage(page)

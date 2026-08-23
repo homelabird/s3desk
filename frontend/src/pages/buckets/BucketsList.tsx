@@ -92,7 +92,7 @@ export function BucketsList(props: BucketsListProps) {
 									Name
 								</th>
 								<th scope="col" className={`${styles.th} ${styles.thCreated}`}>
-									CreatedAt
+									Created at
 								</th>
 								<th scope="col" className={`${styles.th} ${styles.thActions}`}>
 									Actions

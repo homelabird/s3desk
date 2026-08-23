@@ -225,6 +225,8 @@ export function SettingsPage(props: Props) {
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
 			<AppTabs
 				ariaLabel="Settings sections"
+				type="card"
+				size="small"
 				activeKey={activeTab}
 				onChange={setActiveTab}
 				items={[

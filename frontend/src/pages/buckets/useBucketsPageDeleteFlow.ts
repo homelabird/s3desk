@@ -104,13 +104,18 @@ export function useBucketsPageDeleteFlow({
     if (!profileId) return
     const scopeKey = currentScopeKey
     if (scopeKey !== latestScopeKeyRef.current) return
-    return deleteMutation.mutateAsync({
-      bucketName,
-      contextVersion: bucketsPageContextVersionRef.current,
-      scopeKey,
-      scopeProfileId: profileId,
-      scopeApiToken: apiToken,
-    })
+    try {
+      return await deleteMutation.mutateAsync({
+        bucketName,
+        contextVersion: bucketsPageContextVersionRef.current,
+        scopeKey,
+        scopeProfileId: profileId,
+        scopeApiToken: apiToken,
+      })
+    } catch (err) {
+      if (err instanceof APIError && err.code === 'bucket_not_empty') return
+      throw err
+    }
   }, [apiToken, bucketsPageContextVersionRef, currentScopeKey, deleteMutation, latestScopeKeyRef, profileId])
 
   const openBucketNotEmptyObjects = useCallback(() => {

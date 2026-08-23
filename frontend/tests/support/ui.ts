@@ -474,21 +474,6 @@ export async function addUploadSourceFromDevice(
 	return dialog
 }
 
-export async function openCreateDeleteJobDrawer(
-	page: Page,
-	options: {
-		moreButtonName?: string | RegExp
-		timeout?: number
-	} = {},
-): Promise<Locator> {
-	const drawer = await ensureDialogOpen(page, 'Create delete job (S3)', async () => {
-		await page.getByRole('button', { name: options.moreButtonName ?? 'More job actions' }).click()
-		await page.getByRole('menuitem', { name: 'Delete bucket or prefix...' }).click()
-	})
-	await expect(drawer).toBeVisible({ timeout: options.timeout })
-	return drawer
-}
-
 function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

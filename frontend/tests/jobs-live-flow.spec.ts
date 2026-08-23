@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
 import { waitForLiveJob } from './support/liveJobs'
-import { commitComboboxValue, gotoJobsPage, openCreateDeleteJobDrawer } from './support/ui'
+import { clickBucketCardManageAction, dialogByName, gotoBucketsPage, namedTableRow } from './support/ui'
 
 const isLive = process.env.E2E_LIVE === '1'
 
@@ -188,13 +188,29 @@ test.describe('Live Jobs flow', () => {
 			expect(moveDestKeys).toContain(moveDestKey)
 
 			await seedStorage(page, { profileId, bucket: bucketName })
-			await gotoJobsPage(page)
+			await gotoBucketsPage(page)
+			const bucketRow = namedTableRow(page, bucketName)
+			await clickBucketCardManageAction(page, bucketRow, bucketName, /Delete bucket/)
+
+			const confirmDialog = dialogByName(page, `Delete bucket "${bucketName}"?`)
+			await confirmDialog.getByLabel(`Type "${bucketName}" to confirm`).fill(bucketName)
+			const deleteBucketResponse = page.waitForResponse((response) => (
+				response.request().method() === 'DELETE'
+				&& response.url().includes(`/api/v1/buckets/${encodeURIComponent(bucketName)}`)
+			))
+			await confirmDialog.getByRole('button', { name: 'Delete' }).click()
+			await deleteBucketResponse
+
+			const warningDialog = dialogByName(page, `Bucket "${bucketName}" isn’t empty`)
+			await warningDialog.getByRole('button', { name: 'Delete all objects (job)' }).click()
+			await expect(page).toHaveURL(/\/jobs$/)
 
 			const createResponse = page.waitForResponse(
 				(res) => res.url().includes('/api/v1/jobs') && res.request().method() === 'POST',
 			)
-			const deleteDrawer = await openCreateDeleteJobDrawer(page)
-			await commitComboboxValue(page, deleteDrawer, 'Bucket', bucketName)
+			const deleteDrawer = dialogByName(page, 'Create delete job (S3)')
+			await expect(deleteDrawer.getByRole('combobox', { name: 'Bucket' })).toHaveValue(bucketName)
+			await deleteDrawer.getByRole('switch', { name: 'Delete ALL objects in bucket' }).click()
 			await deleteDrawer.getByLabel('Prefix', { exact: true }).fill(deletePrefix)
 			await deleteDrawer.getByRole('button', { name: 'Create' }).click()
 

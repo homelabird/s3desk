@@ -918,22 +918,24 @@
 
   .listControlsCompactActions {
     min-width: var(--s3d-control-size-touch);
-    min-height: 24px;
+    min-height: var(--s3d-control-size-touch-lg);
   }
 
   .listControlsCompactFooter {
-    gap: 6px;
+    gap: 4px;
+    flex-wrap: nowrap;
   }
 
   .listControlsCompactActions,
   .listControlsViewToggle {
-    gap: 6px;
+    gap: 4px;
+    flex-wrap: nowrap;
   }
 
   .listControlsCompactActions :global(.ant-btn),
   .listControlsViewToggle :global(.ant-btn) {
-    min-height: 24px !important;
-    height: 24px !important;
+    min-height: var(--s3d-control-size-touch-lg) !important;
+    height: var(--s3d-control-size-touch-lg) !important;
     padding-inline: 6px;
     font-size: var(--s3d-font-size-xs);
   }

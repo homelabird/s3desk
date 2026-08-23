@@ -141,13 +141,12 @@
 
 	.mobileActionRow .actionGroup {
 		width: 100%;
-		flex-wrap: nowrap;
 	}
 
 	.mobileActionRow .actionGroup > :global(.ant-btn),
 	.mobileActionRow .actionGroup > span {
 		flex: 1 1 0;
-		min-width: 0;
+		min-width: max-content;
 	}
 
 	.mobileActionRow .actionGroup :global(.ant-btn) {

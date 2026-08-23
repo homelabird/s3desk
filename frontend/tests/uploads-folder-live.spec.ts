@@ -9,6 +9,7 @@ const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
 const s3Endpoint = process.env.E2E_S3_ENDPOINT ?? 'http://minio:9000'
+const s3PublicEndpoint = process.env.E2E_S3_PUBLIC_ENDPOINT ?? 'http://127.0.0.1:9000'
 const s3Region = process.env.E2E_S3_REGION ?? 'us-east-1'
 const s3AccessKey = process.env.E2E_S3_ACCESS_KEY ?? 'minioadmin'
 const s3SecretKey = process.env.E2E_S3_SECRET_KEY ?? 'minioadmin'
@@ -70,6 +71,7 @@ test.describe('Live folder uploads', () => {
 					provider: 's3_compatible',
 					name: profileName,
 					endpoint: s3Endpoint,
+					publicEndpoint: s3PublicEndpoint,
 					region: s3Region,
 					accessKeyId: s3AccessKey,
 					secretAccessKey: s3SecretKey,

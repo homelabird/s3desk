@@ -43,4 +43,10 @@ describe('BucketsList', () => {
 		expect(screen.getByText('bucket-0')).toBeInTheDocument()
 		expect(screen.queryByText('bucket-999')).not.toBeInTheDocument()
 	})
+
+	it('uses a human-readable created date heading on desktop', () => {
+		render(<BucketsList {...baseProps} useCompactList={false} />)
+
+		expect(screen.getByRole('columnheader', { name: 'Created at' })).toBeInTheDocument()
+	})
 })

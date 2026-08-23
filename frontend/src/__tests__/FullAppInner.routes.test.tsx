@@ -614,6 +614,7 @@ describe('FullAppInner route remounts', () => {
 		renderShell(['/uploads'], 'token-a')
 
 		expect(await screen.findByTestId('uploads-route-seeded-scope')).toHaveTextContent('token-a:profile-1')
+		expect(screen.getByRole('link', { name: 'Uploads' })).toHaveAttribute('aria-current', 'page')
 
 		await openSettings()
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
