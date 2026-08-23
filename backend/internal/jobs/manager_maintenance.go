@@ -125,14 +125,6 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 				logCleanupError("remote_state", err)
 				continue
 			}
-			if err := m.store.DeleteMultipartUploadsBySession(ctx, us.ProfileID, us.ID); err != nil {
-				logCleanupError("multipart_metadata", err)
-				continue
-			}
-			if err := m.store.DeleteUploadObjectsBySession(ctx, us.ProfileID, us.ID); err != nil {
-				logCleanupError("upload_object_metadata", err)
-				continue
-			}
 			if us.StagingDir != "" {
 				stagingDir, err := store.ResolveUploadStagingDir(m.dataDir, us.ID)
 				if err != nil {
@@ -145,7 +137,7 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 				}
 			}
 			if _, err := m.store.DeleteUploadSession(ctx, us.ProfileID, us.ID); err != nil {
-				logCleanupError("upload_session", err)
+				logCleanupError("upload_session_state", err)
 				continue
 			}
 			deleted++

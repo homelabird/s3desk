@@ -186,10 +186,6 @@ func (svc uploadSessionHTTPService) executePreparedDelete(r *http.Request, prepa
 			return uploadErr
 		}
 	}
-	if err := svc.server.store.DeleteMultipartUploadsBySession(r.Context(), prepared.profileID, prepared.uploadID); err != nil {
-		return newUploadInternalError("failed to delete multipart metadata", map[string]any{"error": err.Error()})
-	}
-
 	if prepared.us.StagingDir != "" {
 		stagingDir, err := store.ResolveUploadStagingDir(svc.server.cfg.DataDir, prepared.us.ID)
 		if err != nil {
@@ -200,11 +196,8 @@ func (svc uploadSessionHTTPService) executePreparedDelete(r *http.Request, prepa
 		}
 	}
 
-	if err := svc.server.store.DeleteUploadObjectsBySession(r.Context(), prepared.profileID, prepared.uploadID); err != nil {
-		return newUploadInternalError("failed to delete upload object metadata", map[string]any{"error": err.Error()})
-	}
 	if _, err := svc.server.store.DeleteUploadSession(r.Context(), prepared.profileID, prepared.uploadID); err != nil {
-		return newUploadInternalError("failed to delete upload session", map[string]any{"error": err.Error()})
+		return newUploadInternalError("failed to delete upload session state", map[string]any{"error": err.Error()})
 	}
 
 	return nil

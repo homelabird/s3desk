@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -298,6 +300,72 @@ func TestListAndCancelActiveProfileJobsInTwoStatements(t *testing.T) {
 		if err != nil || !ok || job.Status != tc.status {
 			t.Fatalf("job %s = (%s, %v, %v), want %s", tc.jobID, job.Status, ok, err, tc.status)
 		}
+	}
+}
+
+func TestCancelQueuedJobsByIDsRollsBackFailedBatch(t *testing.T) {
+	st := newTestStore(t)
+	testCancelQueuedJobsByIDsRollsBackFailedBatch(t, st)
+}
+
+func testCancelQueuedJobsByIDsRollsBackFailedBatch(t *testing.T, st *Store) {
+	t.Helper()
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+
+	const jobCount = 501
+	rows := make([]jobRow, 0, jobCount)
+	ids := make([]string, 0, jobCount)
+	createdAt := time.Now().UTC().Format(time.RFC3339Nano)
+	for i := 0; i < jobCount; i++ {
+		id := fmt.Sprintf("%s-cancel-batch-%03d", profile.ID, i)
+		ids = append(ids, id)
+		rows = append(rows, jobRow{
+			ID: id, ProfileID: profile.ID, Type: "test", Status: string(models.JobStatusQueued),
+			PayloadJSON: "{}", CreatedAt: createdAt,
+		})
+	}
+	if err := st.db.CreateInBatches(rows, 500).Error; err != nil {
+		t.Fatalf("create queued jobs: %v", err)
+	}
+
+	injectedErr := errors.New("injected second cancel batch failure")
+	updates := 0
+	const callback = "test:fail_second_cancel_batch"
+	if err := st.db.Callback().Update().Before("gorm:update").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "jobs" {
+			updates++
+			if updates == 2 {
+				tx.AddError(injectedErr)
+			}
+		}
+	}); err != nil {
+		t.Fatalf("register update callback: %v", err)
+	}
+	callbackRegistered := true
+	t.Cleanup(func() {
+		if callbackRegistered {
+			_ = st.db.Callback().Update().Remove(callback)
+		}
+	})
+
+	err := st.CancelQueuedJobsByIDs(ctx, profile.ID, ids, "2026-08-23T00:00:00Z", "canceled")
+	if !errors.Is(err, injectedErr) {
+		t.Fatalf("CancelQueuedJobsByIDs() error=%v, want %v", err, injectedErr)
+	}
+	if err := st.db.Callback().Update().Remove(callback); err != nil {
+		t.Fatalf("remove update callback: %v", err)
+	}
+	callbackRegistered = false
+
+	var canceled int64
+	if err := st.db.Model(&jobRow{}).
+		Where("id IN ? AND status = ?", ids, string(models.JobStatusCanceled)).
+		Count(&canceled).Error; err != nil {
+		t.Fatalf("count canceled jobs: %v", err)
+	}
+	if canceled != 0 {
+		t.Fatalf("canceled jobs=%d after failed batch, want rollback to 0", canceled)
 	}
 }
 

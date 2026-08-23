@@ -8,8 +8,11 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 
 	"s3desk/internal/db"
 	"s3desk/internal/models"
@@ -326,6 +329,166 @@ func TestUpdateProfileGcpRejectsUnsafeServiceAccountTokenURI(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "token_uri") {
 		t.Fatalf("expected token_uri error, got %v", err)
+	}
+}
+
+func TestUpdateProfileRollsBackWhenReloadFails(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	testUpdateProfileRollsBackWhenReloadFails(t, st)
+}
+
+func testUpdateProfileRollsBackWhenReloadFails(t *testing.T, st *Store) {
+	t.Helper()
+	profile := createAzureProfile(t, st)
+	ctx := context.Background()
+
+	injectedErr := errors.New("injected profile reload failure")
+	profileQueries := 0
+	const callback = "test:fail_updated_profile_reload"
+	if err := st.db.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "profiles" {
+			profileQueries++
+			if profileQueries == 2 {
+				tx.AddError(injectedErr)
+			}
+		}
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	callbackRegistered := true
+	t.Cleanup(func() {
+		if callbackRegistered {
+			_ = st.db.Callback().Query().Remove(callback)
+		}
+	})
+
+	updatedName := "azure-updated"
+	if _, _, err := st.UpdateProfile(ctx, profile.ID, models.ProfileUpdateRequest{Name: &updatedName}); !errors.Is(err, injectedErr) {
+		t.Fatalf("UpdateProfile() error=%v, want %v", err, injectedErr)
+	}
+	if err := st.db.Callback().Query().Remove(callback); err != nil {
+		t.Fatalf("remove query callback: %v", err)
+	}
+	callbackRegistered = false
+
+	got, ok, err := st.GetProfile(ctx, profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("GetProfile() ok=%v err=%v", ok, err)
+	}
+	if got.Name != profile.Name {
+		t.Fatalf("profile name=%q after failed update, want rollback to %q", got.Name, profile.Name)
+	}
+}
+
+func TestUpdateProfileNamePreservesEncryptedCredentials(t *testing.T) {
+	st := newProfileTestStore(t, Options{EncryptionKey: testStoreEncryptionKey()})
+	endpoint := "http://127.0.0.1:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	sessionToken := "session"
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider: models.ProfileProviderS3Compatible, Name: "encrypted",
+		Endpoint: &endpoint, Region: &region, AccessKeyID: &accessKey,
+		SecretAccessKey: &secretKey, SessionToken: &sessionToken,
+	})
+	if err != nil {
+		t.Fatalf("CreateProfile() error=%v", err)
+	}
+
+	var before profileRow
+	if err := st.db.Where("id = ?", profile.ID).Take(&before).Error; err != nil {
+		t.Fatalf("load profile before update: %v", err)
+	}
+	updatedName := "renamed"
+	if _, ok, err := st.UpdateProfile(context.Background(), profile.ID, models.ProfileUpdateRequest{Name: &updatedName}); err != nil || !ok {
+		t.Fatalf("UpdateProfile() ok=%v err=%v", ok, err)
+	}
+	var after profileRow
+	if err := st.db.Where("id = ?", profile.ID).Take(&after).Error; err != nil {
+		t.Fatalf("load profile after update: %v", err)
+	}
+	if after.AccessKeyID != before.AccessKeyID || after.SecretAccessKey != before.SecretAccessKey || before.SessionToken == nil || after.SessionToken == nil || *after.SessionToken != *before.SessionToken {
+		t.Fatal("name-only update rewrote encrypted credentials")
+	}
+}
+
+func TestUpdateProfileSerializesProviderConfigChanges(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	testUpdateProfileSerializesProviderConfigChanges(t, st)
+}
+
+func testUpdateProfileSerializesProviderConfigChanges(t *testing.T, st *Store) {
+	t.Helper()
+	profile := createAzureProfile(t, st)
+	type contextKey struct{}
+	key := contextKey{}
+
+	firstRead := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	secondUpdate := make(chan struct{})
+	releaseSecond := make(chan struct{})
+	var firstOnce, secondOnce sync.Once
+	const (
+		queryCallback  = "test:block_first_profile_update_read"
+		updateCallback = "test:block_second_profile_update_write"
+	)
+	if err := st.db.Callback().Query().After("gorm:query").Register(queryCallback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "profiles" && tx.Statement.Context.Value(key) == "first" {
+			firstOnce.Do(func() {
+				close(firstRead)
+				<-releaseFirst
+			})
+		}
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	if err := st.db.Callback().Update().Before("gorm:update").Register(updateCallback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "profiles" && tx.Statement.Context.Value(key) == "second" {
+			secondOnce.Do(func() {
+				close(secondUpdate)
+				<-releaseSecond
+			})
+		}
+	}); err != nil {
+		t.Fatalf("register update callback: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = st.db.Callback().Query().Remove(queryCallback)
+		_ = st.db.Callback().Update().Remove(updateCallback)
+	})
+
+	firstDone := make(chan error, 1)
+	accountName := "updated-account"
+	go func() {
+		_, _, err := st.UpdateProfile(context.WithValue(context.Background(), key, "first"), profile.ID, models.ProfileUpdateRequest{AccountName: &accountName})
+		firstDone <- err
+	}()
+	<-firstRead
+
+	secondDone := make(chan error, 1)
+	endpoint := "http://127.0.0.1:10001/updated-account"
+	go func() {
+		_, _, err := st.UpdateProfile(context.WithValue(context.Background(), key, "second"), profile.ID, models.ProfileUpdateRequest{Endpoint: &endpoint})
+		secondDone <- err
+	}()
+	<-secondUpdate
+
+	close(releaseFirst)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first UpdateProfile() error=%v", err)
+	}
+	close(releaseSecond)
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second UpdateProfile() error=%v", err)
+	}
+
+	got, ok, err := st.GetProfile(context.Background(), profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("GetProfile() ok=%v err=%v", ok, err)
+	}
+	if got.AccountName != accountName || got.Endpoint != endpoint {
+		t.Fatalf("provider config=(accountName=%q endpoint=%q), want (%q %q)", got.AccountName, got.Endpoint, accountName, endpoint)
 	}
 }
 

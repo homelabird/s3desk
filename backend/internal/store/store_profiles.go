@@ -493,6 +493,29 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 }
 
 func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.ProfileUpdateRequest) (models.Profile, bool, error) {
+	var profile models.Profile
+	var ok bool
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&profileRow{}).
+			Where("id = ?", profileID).
+			UpdateColumn("updated_at", gorm.Expr("updated_at"))
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil
+		}
+
+		txStore := *s
+		txStore.db = tx
+		var err error
+		profile, ok, err = txStore.updateProfile(ctx, profileID, req)
+		return err
+	})
+	return profile, ok, err
+}
+
+func (s *Store) updateProfile(ctx context.Context, profileID string, req models.ProfileUpdateRequest) (models.Profile, bool, error) {
 	currentSecrets, ok, err := s.GetProfileSecrets(ctx, profileID)
 	if err != nil || !ok {
 		return models.Profile{}, ok, err
@@ -525,27 +548,23 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 
 	switch provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		endpoint := currentSecrets.Endpoint
-		publicEndpoint := currentSecrets.PublicEndpoint
-		region := currentSecrets.Region
 		ak := currentSecrets.AccessKeyID
 		sk := currentSecrets.SecretAccessKey
 		sessionToken := currentSecrets.SessionToken
-		forcePathStyle := currentSecrets.ForcePathStyle
 
 		if req.Endpoint != nil {
-			endpoint = strings.TrimSpace(*req.Endpoint)
+			endpoint := strings.TrimSpace(*req.Endpoint)
 			if provider != models.ProfileProviderAwsS3 && endpoint == "" {
 				return models.Profile{}, true, errors.New("endpoint must not be empty")
 			}
 			updates["endpoint"] = endpoint
 		}
 		if req.PublicEndpoint != nil {
-			publicEndpoint = strings.TrimSpace(*req.PublicEndpoint)
+			publicEndpoint := strings.TrimSpace(*req.PublicEndpoint)
 			updates["public_endpoint"] = publicEndpoint
 		}
 		if req.Region != nil {
-			region = strings.TrimSpace(*req.Region)
+			region := strings.TrimSpace(*req.Region)
 			if region == "" {
 				return models.Profile{}, true, errors.New("region must not be empty")
 			}
@@ -572,40 +591,41 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 			}
 		}
 		if req.ForcePathStyle != nil {
-			forcePathStyle = *req.ForcePathStyle
-			updates["force_path_style"] = boolToInt(forcePathStyle)
+			updates["force_path_style"] = boolToInt(*req.ForcePathStyle)
 		}
 
 		if ak == "" || sk == "" {
 			return models.Profile{}, true, errors.New("credentials must not be empty")
 		}
 
-		if s.crypto != nil {
-			var err error
-			ak, err = s.crypto.encryptString(ak)
-			if err != nil {
-				return models.Profile{}, true, err
+		if req.AccessKeyID != nil {
+			if s.crypto != nil {
+				ak, err = s.crypto.encryptString(ak)
+				if err != nil {
+					return models.Profile{}, true, err
+				}
 			}
-			sk, err = s.crypto.encryptString(sk)
-			if err != nil {
-				return models.Profile{}, true, err
+			updates["access_key_id"] = ak
+		}
+		if req.SecretAccessKey != nil {
+			if s.crypto != nil {
+				sk, err = s.crypto.encryptString(sk)
+				if err != nil {
+					return models.Profile{}, true, err
+				}
 			}
-			if sessionToken != nil {
+			updates["secret_access_key"] = sk
+		}
+		if req.SessionToken != nil {
+			if s.crypto != nil && sessionToken != nil {
 				enc, err := s.crypto.encryptString(*sessionToken)
 				if err != nil {
 					return models.Profile{}, true, err
 				}
 				*sessionToken = enc
 			}
+			updates["session_token"] = sessionToken
 		}
-
-		updates["endpoint"] = endpoint
-		updates["public_endpoint"] = publicEndpoint
-		updates["region"] = region
-		updates["force_path_style"] = boolToInt(forcePathStyle)
-		updates["access_key_id"] = ak
-		updates["secret_access_key"] = sk
-		updates["session_token"] = sessionToken
 
 	case models.ProfileProviderAzureBlob:
 		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
@@ -620,6 +640,8 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		tenantID := strings.TrimSpace(currentSecrets.AzureTenantID)
 		clientID := strings.TrimSpace(currentSecrets.AzureClientID)
 		clientSecret := strings.TrimSpace(currentSecrets.AzureClientSecret)
+		configChanged := req.AccountName != nil || req.Endpoint != nil || req.UseEmulator != nil || req.SubscriptionID != nil || req.ResourceGroup != nil || req.TenantID != nil || req.ClientID != nil
+		secretsChanged := req.AccountKey != nil || req.ClientSecret != nil
 		if req.AccountName != nil {
 			accountName = strings.TrimSpace(*req.AccountName)
 			if accountName == "" {
@@ -660,34 +682,38 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		if armFieldsProvided && (subscriptionID == "" || resourceGroup == "" || tenantID == "" || clientID == "" || clientSecret == "") {
 			return models.Profile{}, true, errors.New("azure ARM configuration requires subscriptionId, resourceGroup, tenantId, clientId, and clientSecret together")
 		}
-		cfg, _ := json.Marshal(azureProfileConfig{
-			AccountName:    accountName,
-			Endpoint:       endpoint,
-			UseEmulator:    useEmulator,
-			SubscriptionID: subscriptionID,
-			ResourceGroup:  resourceGroup,
-			TenantID:       tenantID,
-			ClientID:       clientID,
-		})
-		secretVal := accountKey
-		if s.crypto != nil {
-			enc, err := s.crypto.encryptString(secretVal)
-			if err != nil {
-				return models.Profile{}, true, err
-			}
-			secretVal = enc
+		if configChanged {
+			cfg, _ := json.Marshal(azureProfileConfig{
+				AccountName:    accountName,
+				Endpoint:       endpoint,
+				UseEmulator:    useEmulator,
+				SubscriptionID: subscriptionID,
+				ResourceGroup:  resourceGroup,
+				TenantID:       tenantID,
+				ClientID:       clientID,
+			})
+			updates["config_json"] = string(cfg)
 		}
-		clientSecretVal := clientSecret
-		if s.crypto != nil && clientSecretVal != "" {
-			enc, err := s.crypto.encryptString(clientSecretVal)
-			if err != nil {
-				return models.Profile{}, true, err
+		if secretsChanged {
+			secretVal := accountKey
+			if s.crypto != nil {
+				enc, err := s.crypto.encryptString(secretVal)
+				if err != nil {
+					return models.Profile{}, true, err
+				}
+				secretVal = enc
 			}
-			clientSecretVal = enc
+			clientSecretVal := clientSecret
+			if s.crypto != nil && clientSecretVal != "" {
+				enc, err := s.crypto.encryptString(clientSecretVal)
+				if err != nil {
+					return models.Profile{}, true, err
+				}
+				clientSecretVal = enc
+			}
+			sec, _ := json.Marshal(azureProfileSecrets{AccountKey: secretVal, ClientSecret: clientSecretVal})
+			updates["secrets_json"] = string(sec)
 		}
-		sec, _ := json.Marshal(azureProfileSecrets{AccountKey: secretVal, ClientSecret: clientSecretVal})
-		updates["config_json"] = string(cfg)
-		updates["secrets_json"] = string(sec)
 
 	case models.ProfileProviderGcpGcs:
 		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
@@ -697,6 +723,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		anonymous := currentSecrets.GcpAnonymous
 		projectNumber := strings.TrimSpace(currentSecrets.GcpProjectNumber)
 		sa := strings.TrimSpace(currentSecrets.GcpServiceAccountJSON)
+		configChanged := req.Endpoint != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.ServiceAccountJSON != nil
 		if req.Endpoint != nil {
 			endpoint = strings.TrimSpace(*req.Endpoint)
 		}
@@ -721,25 +748,28 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 			}
 		}
 
-		projectID, clientEmail := extractGcpServiceAccountInfo(sa)
-		cfg, _ := json.Marshal(gcpProfileConfig{ProjectID: projectID, ClientEmail: clientEmail, Endpoint: endpoint, Anonymous: anonymous, ProjectNumber: projectNumber})
-		updates["config_json"] = string(cfg)
-
-		if sa == "" {
-			updates["secrets_json"] = "{}"
-			break
+		if configChanged {
+			projectID, clientEmail := extractGcpServiceAccountInfo(sa)
+			cfg, _ := json.Marshal(gcpProfileConfig{ProjectID: projectID, ClientEmail: clientEmail, Endpoint: endpoint, Anonymous: anonymous, ProjectNumber: projectNumber})
+			updates["config_json"] = string(cfg)
 		}
-
-		secretVal := sa
-		if s.crypto != nil {
-			enc, err := s.crypto.encryptString(secretVal)
-			if err != nil {
-				return models.Profile{}, true, err
+		if req.ServiceAccountJSON != nil {
+			if sa == "" {
+				updates["secrets_json"] = "{}"
+				break
 			}
-			secretVal = enc
+
+			secretVal := sa
+			if s.crypto != nil {
+				enc, err := s.crypto.encryptString(secretVal)
+				if err != nil {
+					return models.Profile{}, true, err
+				}
+				secretVal = enc
+			}
+			sec, _ := json.Marshal(gcpProfileSecrets{ServiceAccountJSON: secretVal})
+			updates["secrets_json"] = string(sec)
 		}
-		sec, _ := json.Marshal(gcpProfileSecrets{ServiceAccountJSON: secretVal})
-		updates["secrets_json"] = string(sec)
 
 	case models.ProfileProviderOciObjectStorage:
 		if req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil {
@@ -752,6 +782,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		authProvider := normalizeOciAuthProvider(currentSecrets.OciAuthProvider)
 		configFile := strings.TrimSpace(currentSecrets.OciConfigFile)
 		configProfile := strings.TrimSpace(currentSecrets.OciConfigProfile)
+		configChanged := req.Region != nil || req.Namespace != nil || req.Compartment != nil || req.Endpoint != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil
 
 		if req.Region != nil {
 			region = strings.TrimSpace(*req.Region)
@@ -778,17 +809,18 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 			return models.Profile{}, true, errors.New("region, namespace, and compartment are required")
 		}
 
-		cfg, _ := json.Marshal(ociObjectStorageProfileConfig{
-			Namespace:     namespace,
-			Compartment:   compartment,
-			Region:        region,
-			Endpoint:      endpoint,
-			AuthProvider:  normalizeOciAuthProvider(authProvider),
-			ConfigFile:    configFile,
-			ConfigProfile: configProfile,
-		})
-		updates["config_json"] = string(cfg)
-		updates["secrets_json"] = "{}"
+		if configChanged {
+			cfg, _ := json.Marshal(ociObjectStorageProfileConfig{
+				Namespace:     namespace,
+				Compartment:   compartment,
+				Region:        region,
+				Endpoint:      endpoint,
+				AuthProvider:  normalizeOciAuthProvider(authProvider),
+				ConfigFile:    configFile,
+				ConfigProfile: configProfile,
+			})
+			updates["config_json"] = string(cfg)
+		}
 	default:
 		return models.Profile{}, true, errors.New("unsupported provider")
 	}

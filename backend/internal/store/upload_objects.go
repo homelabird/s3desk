@@ -54,7 +54,7 @@ func (s *Store) UpsertUploadObjectWithByteLimitReservation(ctx context.Context, 
 	var reservation UploadObjectReservation
 	// Keep byte reservation and object upsert atomic; prior state enables rollback after external failure.
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := lockUploadSessionBytes(tx, obj.ProfileID, obj.UploadID); err != nil {
+		if err := lockUploadSession(tx, obj.ProfileID, obj.UploadID); err != nil {
 			return err
 		}
 
@@ -105,7 +105,7 @@ func (s *Store) UpsertUploadObjectWithByteLimitReservation(ctx context.Context, 
 
 func (s *Store) RollbackUploadObjectReservation(ctx context.Context, reservation UploadObjectReservation) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := lockUploadSessionBytes(tx, reservation.ProfileID, reservation.UploadID); err != nil {
+		if err := lockUploadSession(tx, reservation.ProfileID, reservation.UploadID); err != nil {
 			return err
 		}
 		if reservation.Delta != 0 {
@@ -129,7 +129,7 @@ func (s *Store) RollbackUploadObjectReservation(ctx context.Context, reservation
 	})
 }
 
-func lockUploadSessionBytes(tx *gorm.DB, profileID, uploadID string) error {
+func lockUploadSession(tx *gorm.DB, profileID, uploadID string) error {
 	res := tx.Model(&uploadSessionRow{}).
 		Where("profile_id = ? AND id = ?", profileID, uploadID).
 		UpdateColumn("bytes_tracked", gorm.Expr("bytes_tracked"))
@@ -198,10 +198,4 @@ func (s *Store) ListUploadObjects(ctx context.Context, profileID, uploadID strin
 		objects = append(objects, UploadObject(row))
 	}
 	return objects, nil
-}
-
-func (s *Store) DeleteUploadObjectsBySession(ctx context.Context, profileID, uploadID string) error {
-	return s.db.WithContext(ctx).
-		Where("profile_id = ? AND upload_id = ?", profileID, uploadID).
-		Delete(&uploadObjectRow{}).Error
 }

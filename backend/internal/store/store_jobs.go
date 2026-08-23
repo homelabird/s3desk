@@ -342,21 +342,26 @@ func (s *Store) UpdateJobStatusIfCurrent(ctx context.Context, jobID string, expe
 }
 
 func (s *Store) CancelQueuedJobsByIDs(ctx context.Context, profileID string, ids []string, finishedAt, errorCode string) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	updates := map[string]any{
 		"status":      string(models.JobStatusCanceled),
 		"finished_at": finishedAt,
 		"error_code":  errorCode,
 	}
-	for start := 0; start < len(ids); start += 500 {
-		end := min(start+500, len(ids))
-		if err := s.db.WithContext(ctx).
-			Model(&jobRow{}).
-			Where("profile_id = ? AND id IN ? AND status = ?", profileID, ids[start:end], string(models.JobStatusQueued)).
-			Updates(updates).Error; err != nil {
-			return err
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for start := 0; start < len(ids); start += 500 {
+			end := min(start+500, len(ids))
+			if err := tx.
+				Model(&jobRow{}).
+				Where("profile_id = ? AND id IN ? AND status = ?", profileID, ids[start:end], string(models.JobStatusQueued)).
+				Updates(updates).Error; err != nil {
+				return err
+			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func jobStatusUpdateMap(status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string, errorCode *string) (map[string]any, error) {

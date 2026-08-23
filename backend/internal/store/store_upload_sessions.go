@@ -152,10 +152,15 @@ func (s *Store) GetMultipartUpload(ctx context.Context, profileID, uploadID, pat
 
 func (s *Store) UpsertMultipartUpload(ctx context.Context, mu MultipartUpload) error {
 	row := uploadMultipartRow(mu)
-	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "upload_id"}, {Name: "path"}},
-		DoUpdates: clause.AssignmentColumns([]string{"bucket", "object_key", "s3_upload_id", "chunk_size", "file_size", "updated_at"}),
-	}).Create(&row).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUploadSession(tx, mu.ProfileID, mu.UploadID); err != nil {
+			return err
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "upload_id"}, {Name: "path"}},
+			DoUpdates: clause.AssignmentColumns([]string{"bucket", "object_key", "s3_upload_id", "chunk_size", "file_size", "updated_at"}),
+		}).Create(&row).Error
+	})
 }
 
 func (s *Store) ListMultipartUploads(ctx context.Context, profileID, uploadID string) ([]MultipartUpload, error) {
@@ -176,12 +181,6 @@ func (s *Store) ListMultipartUploads(ctx context.Context, profileID, uploadID st
 func (s *Store) DeleteMultipartUpload(ctx context.Context, profileID, uploadID, path string) error {
 	return s.db.WithContext(ctx).
 		Where("profile_id = ? AND upload_id = ? AND path = ?", profileID, uploadID, path).
-		Delete(&uploadMultipartRow{}).Error
-}
-
-func (s *Store) DeleteMultipartUploadsBySession(ctx context.Context, profileID, uploadID string) error {
-	return s.db.WithContext(ctx).
-		Where("profile_id = ? AND upload_id = ?", profileID, uploadID).
 		Delete(&uploadMultipartRow{}).Error
 }
 
@@ -239,13 +238,29 @@ func (s *Store) ListUploadSessionsByProfile(ctx context.Context, profileID strin
 }
 
 func (s *Store) DeleteUploadSession(ctx context.Context, profileID, uploadID string) (bool, error) {
-	res := s.db.WithContext(ctx).
-		Where("profile_id = ? AND id = ?", profileID, uploadID).
-		Delete(&uploadSessionRow{})
-	if res.Error != nil {
-		return false, res.Error
-	}
-	return res.RowsAffected > 0, nil
+	var rowsAffected int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUploadSession(tx, profileID, uploadID); err != nil {
+			if errors.Is(err, ErrUploadSessionNotFound) {
+				return nil
+			}
+			return err
+		}
+		if err := tx.
+			Where("profile_id = ? AND upload_id = ?", profileID, uploadID).
+			Delete(&uploadMultipartRow{}).Error; err != nil {
+			return err
+		}
+		res := tx.
+			Where("profile_id = ? AND id = ?", profileID, uploadID).
+			Delete(&uploadSessionRow{})
+		if res.Error != nil {
+			return res.Error
+		}
+		rowsAffected = res.RowsAffected
+		return nil
+	})
+	return err == nil && rowsAffected > 0, err
 }
 
 func (s *Store) ListExpiredUploadSessions(ctx context.Context, nowRFC3339Nano string, limit int) ([]UploadSession, error) {

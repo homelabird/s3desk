@@ -201,12 +201,6 @@ func (svc profileDeleteHTTPService) cleanupUploadSessions(ctx context.Context, p
 					return err
 				}
 			}
-			if err := svc.server.store.DeleteMultipartUploadsBySession(ctx, profileID, us.ID); err != nil {
-				return err
-			}
-			if err := svc.server.store.DeleteUploadObjectsBySession(ctx, profileID, us.ID); err != nil {
-				return err
-			}
 			if _, err := svc.server.store.DeleteUploadSession(ctx, profileID, us.ID); err != nil {
 				return err
 			}

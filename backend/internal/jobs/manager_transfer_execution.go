@@ -96,16 +96,8 @@ func (m *Manager) cleanupCompletedStagingUpload(ctx context.Context, profileID, 
 		logCleanupError("staging_directory", err)
 		return
 	}
-	if err := m.store.DeleteMultipartUploadsBySession(cleanupCtx, profileID, uploadID); err != nil {
-		logCleanupError("multipart_metadata", err)
-		return
-	}
-	if err := m.store.DeleteUploadObjectsBySession(cleanupCtx, profileID, uploadID); err != nil {
-		logCleanupError("upload_object_metadata", err)
-		return
-	}
 	_, err := m.store.DeleteUploadSession(cleanupCtx, profileID, uploadID)
-	logCleanupError("upload_session", err)
+	logCleanupError("upload_session_state", err)
 }
 
 func (m *Manager) runTransferSyncLocalToS3(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {

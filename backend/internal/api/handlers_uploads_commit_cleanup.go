@@ -26,8 +26,6 @@ func (s *server) cleanupImmediateUploadCommitState(ctx context.Context, profileI
 		})
 	}
 
-	cleanup("multipart_metadata", s.store.DeleteMultipartUploadsBySession(cleanupCtx, profileID, uploadID))
-	cleanup("upload_object_metadata", s.store.DeleteUploadObjectsBySession(cleanupCtx, profileID, uploadID))
 	_, err := s.store.DeleteUploadSession(cleanupCtx, profileID, uploadID)
-	cleanup("upload_session", err)
+	cleanup("upload_session_state", err)
 }
