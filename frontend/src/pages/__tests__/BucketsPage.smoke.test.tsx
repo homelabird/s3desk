@@ -495,6 +495,7 @@ describe("BucketsPage", () => {
         expect(getBucketGovernance).toHaveBeenCalledWith(
           "profile-1",
           "primary-bucket",
+          expect.any(AbortSignal),
         ),
       );
 
@@ -512,6 +513,7 @@ describe("BucketsPage", () => {
         expect(getBucketPolicy).toHaveBeenCalledWith(
           "profile-1",
           "primary-bucket",
+          expect.any(AbortSignal),
         ),
       );
       expect(
@@ -585,6 +587,7 @@ describe("BucketsPage", () => {
       expect(getBucketGovernance).toHaveBeenCalledWith(
         "profile-1",
         "primary-bucket",
+        expect.any(AbortSignal),
       ),
     );
   });

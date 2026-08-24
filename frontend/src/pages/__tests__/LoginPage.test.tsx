@@ -1,24 +1,34 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { APIClient } from '../../api/client'
+import { APIClient, APIError } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import { LoginPage } from '../LoginPage'
 import { ThemeModeProvider } from '../../themeMode'
+
+function createQueryClient() {
+	return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+}
 
 function renderLoginPage(props: Partial<Parameters<typeof LoginPage>[0]> = {}) {
 	const onLogin = vi.fn()
 	const onClearSavedToken = vi.fn()
+	const queryClient = createQueryClient()
 
 	render(
-		<ThemeModeProvider>
-			<LoginPage initialToken="" onLogin={onLogin} onClearSavedToken={onClearSavedToken} {...props} />
-		</ThemeModeProvider>,
+		<QueryClientProvider client={queryClient}>
+			<ThemeModeProvider>
+				<LoginPage initialToken="" onLogin={onLogin} onClearSavedToken={onClearSavedToken} {...props} />
+			</ThemeModeProvider>
+		</QueryClientProvider>,
 	)
 
 	return {
 		onLogin,
 		onClearSavedToken,
+		queryClient,
 	}
 }
 
@@ -61,7 +71,11 @@ describe('LoginPage', () => {
 	})
 
 	it('clears the input when the saved token is removed by the auth gate', () => {
-		render(<LoginPageHarness />)
+		render(
+			<QueryClientProvider client={createQueryClient()}>
+				<LoginPageHarness />
+			</QueryClientProvider>,
+		)
 
 		expect(screen.getByDisplayValue('saved-token')).toBeInTheDocument()
 
@@ -72,9 +86,9 @@ describe('LoginPage', () => {
 	})
 
 	it('validates the token locally before making the API request', async () => {
-		const getMetaSpy = vi.fn()
+		const getBootstrapSpy = vi.fn()
 		vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
-			getMeta: getMetaSpy,
+			getBootstrap: getBootstrapSpy,
 		} as never)
 		renderLoginPage()
 		const tokenInput = screen.getByPlaceholderText('API_TOKEN…')
@@ -85,17 +99,21 @@ describe('LoginPage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Login' }))
 
 		expect(await screen.findByText('API token must use only ASCII or Latin-1 characters.')).toBeInTheDocument()
-		expect(getMetaSpy).not.toHaveBeenCalled()
+		expect(getBootstrapSpy).not.toHaveBeenCalled()
 	})
 
-	it('trims the token and calls onLogin after the backend token check succeeds', async () => {
+	it('validates with bootstrap once and seeds the authenticated query data', async () => {
+		const meta = { version: 'test' }
+		const profiles = [{ id: 'profile-1' }]
+		const getBootstrapSpy = vi.fn().mockResolvedValue({ meta, profiles } as never)
 		const getMetaSpy = vi.fn().mockResolvedValue({
 			version: 'test',
 		} as never)
 		vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
+			getBootstrap: getBootstrapSpy,
 			getMeta: getMetaSpy,
 		} as never)
-		const { onLogin } = renderLoginPage()
+		const { onLogin, queryClient } = renderLoginPage()
 		const tokenInput = screen.getByPlaceholderText('API_TOKEN…')
 
 		fireEvent.change(tokenInput, {
@@ -104,8 +122,61 @@ describe('LoginPage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Login' }))
 
 		await waitFor(() => {
-			expect(getMetaSpy).toHaveBeenCalledTimes(1)
+			expect(getBootstrapSpy).toHaveBeenCalledTimes(1)
 		})
+		expect(getMetaSpy).not.toHaveBeenCalled()
+		expect(queryClient.getQueryData(queryKeys.server.meta('valid-token'))).toEqual(meta)
+		expect(queryClient.getQueryData(queryKeys.profiles.list('valid-token'))).toEqual(profiles)
 		expect(onLogin).toHaveBeenCalledWith('valid-token')
+	})
+
+	it('uses the legacy endpoints only when bootstrap is unavailable', async () => {
+		const meta = { version: 'legacy' }
+		const profiles = [{ id: 'profile-legacy' }]
+		const getBootstrapSpy = vi.fn().mockRejectedValue(
+			new APIError({ status: 404, code: 'not_found', message: 'not found' }),
+		)
+		const getMetaSpy = vi.fn().mockResolvedValue(meta as never)
+		const listProfilesSpy = vi.fn().mockResolvedValue(profiles as never)
+		vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
+			getBootstrap: getBootstrapSpy,
+			getMeta: getMetaSpy,
+		} as never)
+		vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue({
+			listProfiles: listProfilesSpy,
+		} as never)
+		const { onLogin, queryClient } = renderLoginPage()
+
+		fireEvent.change(screen.getByPlaceholderText('API_TOKEN…'), {
+			target: { value: 'legacy-token' },
+		})
+		fireEvent.click(screen.getByRole('button', { name: 'Login' }))
+
+		await waitFor(() => expect(onLogin).toHaveBeenCalledWith('legacy-token'))
+		expect(getBootstrapSpy).toHaveBeenCalledOnce()
+		expect(getMetaSpy).toHaveBeenCalledOnce()
+		expect(listProfilesSpy).toHaveBeenCalledOnce()
+		expect(queryClient.getQueryData(queryKeys.server.meta('legacy-token'))).toEqual(meta)
+		expect(queryClient.getQueryData(queryKeys.profiles.list('legacy-token'))).toEqual(profiles)
+	})
+
+	it('does not cache or store an invalid token', async () => {
+		const getBootstrapSpy = vi.fn().mockRejectedValue(
+			new APIError({ status: 401, code: 'unauthorized', message: 'invalid token' }),
+		)
+		vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
+			getBootstrap: getBootstrapSpy,
+		} as never)
+		const { onLogin, queryClient } = renderLoginPage()
+
+		fireEvent.change(screen.getByPlaceholderText('API_TOKEN…'), {
+			target: { value: 'invalid-token' },
+		})
+		fireEvent.click(screen.getByRole('button', { name: 'Login' }))
+
+		expect(await screen.findByText('Login failed: invalid API token.')).toBeInTheDocument()
+		expect(onLogin).not.toHaveBeenCalled()
+		expect(queryClient.getQueryData(queryKeys.server.meta('invalid-token'))).toBeUndefined()
+		expect(queryClient.getQueryData(queryKeys.profiles.list('invalid-token'))).toBeUndefined()
 	})
 })

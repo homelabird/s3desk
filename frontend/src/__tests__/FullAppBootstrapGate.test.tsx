@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -16,20 +17,23 @@ type RenderGateOptions = {
 }
 
 function renderGate(options: RenderGateOptions = {}) {
+	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 	return render(
-		<ThemeModeProvider>
-			<FullAppBootstrapGate
-				metaPending={options.metaPending ?? false}
-				metaError={options.metaError ?? null}
-				onRetry={options.onRetry ?? vi.fn()}
-				apiToken={options.apiToken ?? 'token-a'}
-				setApiToken={vi.fn()}
-				profileGate={options.profileGate ?? null}
-				profilesPending={options.profilesPending ?? false}
-			>
-				<div data-testid="shell-content">shell content</div>
-			</FullAppBootstrapGate>
-		</ThemeModeProvider>,
+		<QueryClientProvider client={queryClient}>
+			<ThemeModeProvider>
+				<FullAppBootstrapGate
+					metaPending={options.metaPending ?? false}
+					metaError={options.metaError ?? null}
+					onRetry={options.onRetry ?? vi.fn()}
+					apiToken={options.apiToken ?? 'token-a'}
+					setApiToken={vi.fn()}
+					profileGate={options.profileGate ?? null}
+					profilesPending={options.profilesPending ?? false}
+				>
+					<div data-testid="shell-content">shell content</div>
+				</FullAppBootstrapGate>
+			</ThemeModeProvider>
+		</QueryClientProvider>,
 	)
 }
 

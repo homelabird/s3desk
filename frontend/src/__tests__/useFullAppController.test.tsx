@@ -174,7 +174,6 @@ describe('useFullAppController', () => {
 				apiToken: 'token-a',
 				setApiToken,
 				pathname: '/objects',
-				routeLocationKey: 'route-key-1',
 				theme,
 				viewport,
 			}),
@@ -243,7 +242,6 @@ describe('useFullAppController', () => {
 			profileId: 'profile-1',
 			setProfileId,
 			shellScopeKey: 'token-a:profile-1',
-			routeLocationKey: 'route-key-1',
 		})
 
 		expect(result.current.chrome).toBe(chrome)
@@ -330,7 +328,6 @@ describe('useFullAppController', () => {
 				apiToken: '',
 				setApiToken,
 				pathname: '/profiles',
-				routeLocationKey: 'route-key-empty',
 				theme,
 				viewport,
 			}),

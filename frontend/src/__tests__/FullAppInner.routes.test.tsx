@@ -5,6 +5,8 @@ import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
+const { jobsPageMountSpy } = vi.hoisted(() => ({ jobsPageMountSpy: vi.fn() }))
+
 vi.mock('../pages/JobsPage', async () => {
 	const React = await import('react')
 	const { useLocation, useNavigate } = await import('react-router')
@@ -13,13 +15,16 @@ vi.mock('../pages/JobsPage', async () => {
 		JobsPage: function JobsPageMock(props: { apiToken: string }) {
 			const location = useLocation()
 			const navigate = useNavigate()
-			const [seededState] = React.useState(() => location.state ?? null)
+			React.useEffect(() => {
+				jobsPageMountSpy()
+			}, [])
 			const [seededToken] = React.useState(() => props.apiToken)
 
 			return (
 				<div>
 					<div data-testid="jobs-route-seeded-token">{seededToken}</div>
-					<pre data-testid="jobs-route-seeded-state">{JSON.stringify(seededState)}</pre>
+					<div data-testid="jobs-route-search">{location.search}</div>
+					<pre data-testid="jobs-route-state">{JSON.stringify(location.state ?? null)}</pre>
 					<button
 						type="button"
 						onClick={() =>
@@ -170,6 +175,7 @@ afterEach(() => {
 	window.matchMedia = originalMatchMedia
 	window.localStorage.clear()
 	window.sessionStorage.clear()
+	jobsPageMountSpy.mockClear()
 	vi.restoreAllMocks()
 })
 
@@ -485,19 +491,41 @@ describe('FullAppInner route remounts', () => {
 		expect(await screen.findByTestId(testId)).toBeInTheDocument()
 	})
 
-	it('remounts JobsPage when same-path navigation pushes new location.state', async () => {
+	it('delivers same-path route state without remounting JobsPage', async () => {
 		mockViewportWidth(1280)
 		mockAuthorizedShellApi()
 
 		renderShell([{ pathname: '/jobs', state: { openDeleteJob: true, bucket: 'primary-bucket', deleteAll: true } }])
 
-		expect(await screen.findByTestId('jobs-route-seeded-state')).toHaveTextContent('"bucket":"primary-bucket"')
+		expect(await screen.findByTestId('jobs-route-state')).toHaveTextContent('"bucket":"primary-bucket"')
+		expect(jobsPageMountSpy).toHaveBeenCalledTimes(1)
 
 		fireEvent.click(screen.getByRole('button', { name: 'Push jobs route state' }))
 
 		await waitFor(() => {
-			expect(screen.getByTestId('jobs-route-seeded-state')).toHaveTextContent('"bucket":"next-bucket"')
+			expect(screen.getByTestId('jobs-route-state')).toHaveTextContent('"bucket":"next-bucket"')
 		})
+		expect(jobsPageMountSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it('keeps JobsPage mounted when the Settings query parameter opens and closes', async () => {
+		mockViewportWidth(1280)
+		mockAuthorizedShellApi()
+
+		renderShell(['/jobs'], 'token-a')
+
+		expect(await screen.findByTestId('jobs-route-seeded-token')).toHaveTextContent('token-a')
+		expect(jobsPageMountSpy).toHaveBeenCalledTimes(1)
+
+		await openSettings()
+		expect(await screen.findByTestId('settings-drawer-mock')).toBeInTheDocument()
+		expect(screen.getByTestId('jobs-route-search')).toHaveTextContent('?settings=1')
+		expect(jobsPageMountSpy).toHaveBeenCalledTimes(1)
+
+		fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))
+		await waitFor(() => expect(screen.queryByTestId('settings-drawer-mock')).not.toBeInTheDocument())
+		expect(screen.getByTestId('jobs-route-search')).toBeEmptyDOMElement()
+		expect(jobsPageMountSpy).toHaveBeenCalledTimes(1)
 	})
 
 	it('remounts the jobs route after the api token changes', async () => {

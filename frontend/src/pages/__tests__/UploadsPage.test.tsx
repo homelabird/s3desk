@@ -10,8 +10,7 @@ import { failedToLoadBucketsTitle, goToBucketsLabel, noBucketsAvailableHint } fr
 import * as deviceFs from "../../lib/deviceFs";
 import { ensureDomShims } from "../../test/domShims";
 import { transfersStub } from "../../test/transfersStub";
-import { UploadsPage, UploadsPageLoadingFallback } from "../UploadsPage";
-import { UploadsPageExperience } from "../uploads/UploadsPageExperience";
+import { UploadsPage } from "../UploadsPage";
 
 const uploadsPageApiMock = vi.hoisted(() => ({
   current: null as null | {
@@ -143,11 +142,7 @@ function renderUploadsPage(
     props && "apiToken" in props ? (props.apiToken ?? "") : "token";
   const profileId =
     props && "profileId" in props ? (props.profileId ?? null) : "profile-1";
-  const pageElement = profileId ? (
-    <UploadsPageExperience apiToken={apiToken} profileId={profileId} />
-  ) : (
-    <UploadsPage apiToken={apiToken} profileId={profileId} />
-  );
+  const pageElement = <UploadsPage apiToken={apiToken} profileId={profileId} />;
 
   render(
     <QueryClientProvider client={createClient()}>
@@ -170,12 +165,6 @@ function renderUploadsPage(
 }
 
 describe("UploadsPage", () => {
-  it("renders a non-empty loading status while the upload workspace chunk loads", () => {
-    render(<UploadsPageLoadingFallback />);
-
-    expect(screen.getByRole("status")).toHaveTextContent("Loading uploads...");
-  });
-
   it("navigates to profiles from the profile-required callout", () => {
     renderUploadsPage({ apiToken: "", profileId: null });
 
@@ -298,7 +287,7 @@ describe("UploadsPage", () => {
               <Route
                 path="/uploads"
                 element={
-                  <UploadsPageExperience apiToken="token" profileId="profile-1" />
+                  <UploadsPage apiToken="token" profileId="profile-1" />
                 }
               />
             </Routes>
@@ -322,7 +311,7 @@ describe("UploadsPage", () => {
               <Route
                 path="/uploads"
                 element={
-                  <UploadsPageExperience apiToken="token" profileId="profile-2" />
+                  <UploadsPage apiToken="token" profileId="profile-2" />
                 }
               />
             </Routes>

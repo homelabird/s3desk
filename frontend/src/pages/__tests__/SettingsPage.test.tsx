@@ -70,6 +70,16 @@ function renderSettingsPage(props?: Partial<ComponentProps<typeof SettingsPage>>
 }
 
 describe('SettingsPage', () => {
+	it('does not mount hidden settings subscriptions on the access tab', async () => {
+		const addEventListenerSpy = vi.spyOn(window, 'addEventListener')
+
+		renderSettingsPage()
+		await screen.findByPlaceholderText('Must match API_TOKEN…', undefined, { timeout: 10_000 })
+
+		expect(addEventListenerSpy.mock.calls.filter(([type]) => type === 'local-storage')).toHaveLength(0)
+		expect(addEventListenerSpy.mock.calls.filter(([type]) => type === 'network-log')).toHaveLength(0)
+	})
+
 	it('applies a trimmed API token and keeps selected profile management out of settings', async () => {
 		const { setApiToken } = renderSettingsPage()
 

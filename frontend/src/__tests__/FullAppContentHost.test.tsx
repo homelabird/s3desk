@@ -54,7 +54,6 @@ describe('FullAppContentHost', () => {
 				profileId="profile-1"
 				setProfileId={setProfileId}
 				shellScopeKey="token-a:profile-1"
-				routeLocationKey="route-key-1"
 			/>,
 		)
 
@@ -73,7 +72,6 @@ describe('FullAppContentHost', () => {
 			apiToken: 'token-a',
 			profileId: 'profile-1',
 			shellScopeKey: 'token-a:profile-1',
-			routeLocationKey: 'route-key-1',
 		})
 		expect(routesPropsRef.current?.setProfileId).toBe(setProfileId)
 	})
