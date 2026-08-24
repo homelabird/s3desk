@@ -84,6 +84,10 @@ function buildProfile(overrides: Partial<Profile> = {}): Profile {
 
 describe('useUploadsPageQueriesState', () => {
 	it('derives selected profile, upload support, and bucket options from query data', async () => {
+		const listBuckets = vi.fn().mockResolvedValue([
+			{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' },
+			{ name: 'bucket-b', createdAt: '2026-04-08T00:00:00Z' },
+		])
 		const api = createMockApiClient({
 			server: {
 				getMeta: async () =>
@@ -113,10 +117,7 @@ describe('useUploadsPageQueriesState', () => {
 				listProfiles: async () => [buildProfile({ id: 'profile-1', name: 'Primary' })],
 			},
 			buckets: {
-				listBuckets: async () => [
-					{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' },
-					{ name: 'bucket-b', createdAt: '2026-04-08T00:00:00Z' },
-				],
+				listBuckets,
 			},
 		})
 
@@ -142,6 +143,7 @@ describe('useUploadsPageQueriesState', () => {
 			{ label: 'bucket-b', value: 'bucket-b' },
 		])
 		expect(result.current.showBucketsEmpty).toBe(false)
+		expect(listBuckets).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal))
 	})
 
 	it('does not list buckets when provider capability disables bucket CRUD', async () => {

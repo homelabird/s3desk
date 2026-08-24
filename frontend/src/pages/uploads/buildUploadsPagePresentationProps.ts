@@ -96,10 +96,7 @@ export function buildUploadsPagePresentationProps(state: UploadsPageState): Uplo
 			folderSelectionSupported: state.folderSelectionSupport.ok,
 			folderSelectionReason: state.folderSelectionSupport.reason,
 			busy: state.uploadSourceBusy,
-			onClose: () => {
-				if (state.uploadSourceBusy) return
-				state.setUploadSourceOpen(false)
-			},
+			onClose: state.closeUploadSource,
 			onSelectFiles: () => void state.chooseUploadFiles(),
 			onSelectFolder: () => void state.chooseUploadFolder(),
 		},

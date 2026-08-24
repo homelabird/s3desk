@@ -53,6 +53,58 @@ afterEach(() => {
 })
 
 describe('useUploadsPageSelectionActions', () => {
+	it('cancels an active folder scan without staging its stale result', async () => {
+		let resolveFolder!: (value: { files: File[]; label?: string; mode: 'picker' | 'input' } | null) => void
+		let requestSignal: AbortSignal | undefined
+		promptForFolderFilesMock.mockImplementation(
+			(options?: { signal?: AbortSignal }) =>
+				new Promise((resolve) => {
+					requestSignal = options?.signal
+					resolveFolder = resolve
+				}),
+		)
+		const setSelectedFiles = vi.fn()
+		const setUploadSourceOpen = vi.fn()
+		const setUploadSourceBusy = vi.fn()
+		const { result } = renderHook(() =>
+			useUploadsPageSelectionActions({
+				transfers: createTransfersValue(),
+				isOffline: false,
+				profileId: 'profile-1',
+				uploadsSupported: true,
+				uploadsUnsupportedReason: null,
+				bucket: 'bucket-a',
+				prefix: 'folder/',
+				selectedFiles: [],
+				selectedFolderLabel: '',
+				selectedDirectorySelectionMode: undefined,
+				setSelectedFiles,
+				setSelectedFolderLabel: vi.fn(),
+				setSelectedDirectorySelectionMode: vi.fn(),
+				setUploadSourceOpen,
+				setUploadSourceBusy,
+			}),
+		)
+
+		act(() => {
+			result.current.openUploadPicker()
+		})
+		let pending!: Promise<void>
+		act(() => {
+			pending = result.current.chooseUploadFolder()
+		})
+		act(() => {
+			result.current.closeUploadSource()
+		})
+
+		expect(requestSignal?.aborted).toBe(true)
+		expect(setUploadSourceOpen).toHaveBeenLastCalledWith(false)
+		expect(setUploadSourceBusy).toHaveBeenLastCalledWith(false)
+		resolveFolder({ files: [new File(['stale'], 'stale.txt')], label: 'folder', mode: 'picker' })
+		await pending
+		expect(setSelectedFiles).not.toHaveBeenCalled()
+	})
+
 	it('queues the selected folder payload and clears staged selection afterwards', async () => {
 		const queueUploadFiles = vi.fn()
 		const setSelectedFiles = vi.fn()

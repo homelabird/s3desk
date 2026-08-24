@@ -45,7 +45,7 @@ export function useUploadsPageQueriesState(props: UseUploadsPageQueriesStateArgs
 
 	const bucketsQuery = useQuery({
 		queryKey: queryKeys.buckets.list(props.profileId, props.apiToken),
-		queryFn: () => props.api.buckets.listBuckets(props.profileId!),
+		queryFn: ({ signal }) => props.api.buckets.listBuckets(props.profileId!, signal),
 		enabled: !!props.profileId && bucketCapabilityResolved && bucketCrudSupported,
 		retry: false,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),

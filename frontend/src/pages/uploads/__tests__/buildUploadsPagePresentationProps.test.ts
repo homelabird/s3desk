@@ -12,6 +12,7 @@ describe('buildUploadsPagePresentationProps', () => {
 		const setUploadSourceOpen = vi.fn()
 		const chooseUploadFiles = vi.fn()
 		const chooseUploadFolder = vi.fn()
+		const closeUploadSource = vi.fn()
 		const openTransfers = vi.fn()
 
 		const presentation = buildUploadsPagePresentationProps({
@@ -49,6 +50,7 @@ describe('buildUploadsPagePresentationProps', () => {
 			clearSelection,
 			queueUpload,
 			openUploadPicker: vi.fn(),
+			closeUploadSource,
 			chooseUploadFiles,
 			chooseUploadFolder,
 		})
@@ -74,7 +76,7 @@ describe('buildUploadsPagePresentationProps', () => {
 		expect(queueUpload).toHaveBeenCalledTimes(1)
 		expect(openTransfers).toHaveBeenCalledWith('uploads')
 		expect(clearSelection).toHaveBeenCalledTimes(1)
-		expect(setUploadSourceOpen).toHaveBeenCalledWith(false)
+		expect(closeUploadSource).toHaveBeenCalledTimes(1)
 		expect(chooseUploadFiles).toHaveBeenCalledTimes(1)
 		expect(chooseUploadFolder).toHaveBeenCalledTimes(1)
 	})
@@ -113,6 +115,7 @@ describe('buildUploadsPagePresentationProps', () => {
 			clearSelection: vi.fn(),
 			queueUpload: vi.fn(),
 			openUploadPicker: vi.fn(),
+			closeUploadSource: vi.fn(),
 			chooseUploadFiles: vi.fn(),
 			chooseUploadFolder: vi.fn(),
 		})
