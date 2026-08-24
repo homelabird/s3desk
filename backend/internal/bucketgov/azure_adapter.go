@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"s3desk/internal/azureacl"
@@ -103,26 +104,43 @@ func NewAzureAdapterWithOptions(opts AzureAdapterOptions) Adapter {
 func (a *azureAdapter) GetGovernance(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketGovernanceView, error) {
 	view := NewView(models.ProfileProviderAzureBlob, bucket)
 	view.Capabilities = ProviderGovernanceCapabilities(models.ProfileProviderAzureBlob)
+	requestAdapter := *a
+	if a.getPolicy != nil {
+		getPolicy := sync.OnceValues(func() (azureacl.Response, error) {
+			return a.getPolicy(ctx, profile, strings.TrimSpace(bucket))
+		})
+		requestAdapter.getPolicy = func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error) {
+			return getPolicy()
+		}
+	}
+	if a.getServiceProperties != nil {
+		getServiceProperties := sync.OnceValues(func() (azureacl.Response, error) {
+			return a.getServiceProperties(ctx, profile)
+		})
+		requestAdapter.getServiceProperties = func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			return getServiceProperties()
+		}
+	}
 
-	access, err := a.GetAccess(ctx, profile, bucket)
+	access, err := requestAdapter.GetAccess(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.Access = &access
 
-	publicExposure, err := a.GetPublicExposure(ctx, profile, bucket)
+	publicExposure, err := requestAdapter.GetPublicExposure(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.PublicExposure = &publicExposure
 
-	protection, err := a.GetProtection(ctx, profile, bucket)
+	protection, err := requestAdapter.GetProtection(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.Protection = &protection
 
-	versioning, err := a.GetVersioning(ctx, profile, bucket)
+	versioning, err := requestAdapter.GetVersioning(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -76,31 +77,39 @@ func (a *awsAdapter) GetGovernance(ctx context.Context, profile models.ProfileSe
 	view := NewView(models.ProfileProviderAwsS3, bucket)
 	view.Capabilities = ProviderGovernanceCapabilities(models.ProfileProviderAwsS3)
 
-	access, err := a.GetAccess(ctx, profile, bucket)
+	requestAdapter := *a
+	newClient := sync.OnceValues(func() (awsPublicAccessBlockClient, error) {
+		return a.newClient(profile)
+	})
+	requestAdapter.newClient = func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+		return newClient()
+	}
+
+	access, err := requestAdapter.GetAccess(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.Access = &access
 
-	publicExposure, err := a.GetPublicExposure(ctx, profile, bucket)
+	publicExposure, err := requestAdapter.GetPublicExposure(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.PublicExposure = &publicExposure
 
-	versioning, err := a.GetVersioning(ctx, profile, bucket)
+	versioning, err := requestAdapter.GetVersioning(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.Versioning = &versioning
 
-	encryption, err := a.GetEncryption(ctx, profile, bucket)
+	encryption, err := requestAdapter.GetEncryption(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.Encryption = &encryption
 
-	lifecycle, err := a.GetLifecycle(ctx, profile, bucket)
+	lifecycle, err := requestAdapter.GetLifecycle(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}

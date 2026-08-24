@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"s3desk/internal/models"
@@ -109,26 +110,35 @@ func NewOCIAdapterWithOptions(opts OCIAdapterOptions) Adapter {
 func (a *ociAdapter) GetGovernance(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketGovernanceView, error) {
 	view := NewView(models.ProfileProviderOciObjectStorage, bucket)
 	view.Capabilities = ProviderGovernanceCapabilities(models.ProfileProviderOciObjectStorage)
+	requestAdapter := *a
+	if a.getBucket != nil {
+		getBucket := sync.OnceValues(func() (ocicli.Response, error) {
+			return a.getBucket(ctx, profile, strings.TrimSpace(bucket))
+		})
+		requestAdapter.getBucket = func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return getBucket()
+		}
+	}
 
-	publicExposure, err := a.GetPublicExposure(ctx, profile, bucket)
+	publicExposure, err := requestAdapter.GetPublicExposure(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.PublicExposure = &publicExposure
 
-	protection, err := a.GetProtection(ctx, profile, bucket)
+	protection, err := requestAdapter.GetProtection(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.Protection = &protection
 
-	versioning, err := a.GetVersioning(ctx, profile, bucket)
+	versioning, err := requestAdapter.GetVersioning(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}
 	view.Versioning = &versioning
 
-	sharing, err := a.GetSharing(ctx, profile, bucket)
+	sharing, err := requestAdapter.GetSharing(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
 	}

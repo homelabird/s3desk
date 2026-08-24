@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -157,6 +158,49 @@ func TestGCSAdapterGetAccessAndPublicExposure(t *testing.T) {
 	}
 	if publicExposure.Mode != models.BucketPublicExposureModePublic {
 		t.Fatalf("mode=%q, want public", publicExposure.Mode)
+	}
+}
+
+func TestGCSAdapterGetGovernanceReusesProviderReads(t *testing.T) {
+	t.Parallel()
+
+	policyCalls := 0
+	bucketCalls := 0
+	adapter := &gcsAdapter{
+		getPolicy: func(context.Context, models.ProfileSecrets, string) (gcsiam.Response, error) {
+			policyCalls++
+			return gcsiam.Response{
+				Status: 200,
+				Body:   []byte(`{"etag":"etag-123","bindings":[{"role":"roles/storage.objectViewer","members":["allUsers"]}]}`),
+			}, nil
+		},
+		getBucket: func(context.Context, models.ProfileSecrets, string) (gcsbucket.Response, error) {
+			bucketCalls++
+			return gcsbucket.Response{
+				Status: 200,
+				Body:   []byte(`{"versioning":{"enabled":true},"iamConfiguration":{"uniformBucketLevelAccess":{"enabled":true},"publicAccessPrevention":"enforced"},"retentionPolicy":{"retentionPeriod":"86400"}}`),
+			}, nil
+		},
+	}
+
+	view, err := adapter.GetGovernance(context.Background(), models.ProfileSecrets{}, "demo")
+	if err != nil {
+		t.Fatalf("GetGovernance err=%v", err)
+	}
+	if policyCalls != 1 || bucketCalls != 1 {
+		t.Fatalf("policyCalls=%d bucketCalls=%d, want one read per resource", policyCalls, bucketCalls)
+	}
+	if view.Access == nil || view.Access.ETag != "etag-123" || len(view.Access.Bindings) != 1 {
+		t.Fatalf("access=%+v, want shared IAM policy", view.Access)
+	}
+	if view.PublicExposure == nil || view.PublicExposure.Mode != models.BucketPublicExposureModePublic || view.PublicExposure.PublicAccessPrevention == nil || !*view.PublicExposure.PublicAccessPrevention {
+		t.Fatalf("publicExposure=%+v, want public mode with prevention enabled", view.PublicExposure)
+	}
+	if view.Protection == nil || view.Protection.UniformAccess == nil || !*view.Protection.UniformAccess || view.Protection.Retention == nil || view.Protection.Retention.Days == nil || *view.Protection.Retention.Days != 1 {
+		t.Fatalf("protection=%+v, want shared metadata controls", view.Protection)
+	}
+	if view.Versioning == nil || view.Versioning.Status != models.BucketVersioningStatusEnabled {
+		t.Fatalf("versioning=%+v, want enabled", view.Versioning)
 	}
 }
 
@@ -452,6 +496,77 @@ func TestAzureAdapterGetAccessAndPublicExposure(t *testing.T) {
 	}
 	if publicExposure.Mode != models.BucketPublicExposureModeBlob || publicExposure.Visibility != "blob" {
 		t.Fatalf("publicExposure=%+v, want blob visibility", publicExposure)
+	}
+}
+
+func TestAzureAdapterGetGovernanceReusesProviderReads(t *testing.T) {
+	t.Parallel()
+
+	profile := models.ProfileSecrets{
+		AzureSubscriptionID: "subscription",
+		AzureResourceGroup:  "resource-group",
+		AzureTenantID:       "tenant",
+		AzureClientID:       "client",
+		AzureClientSecret:   "secret",
+	}
+	policyCalls := 0
+	serviceCalls := 0
+	containerPropertiesCalls := 0
+	armContainerCalls := 0
+	armPolicyCalls := 0
+	adapter := &azureAdapter{
+		getPolicy: func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error) {
+			policyCalls++
+			return azureacl.Response{
+				Status: 200,
+				Body:   []byte(`{"publicAccess":"blob","storedAccessPolicies":[{"id":"reader","permission":"rl"}]}`),
+			}, nil
+		},
+		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			serviceCalls++
+			return azureacl.Response{
+				Status: 200,
+				Body:   []byte(`{"isVersioningEnabled":true,"deleteRetentionPolicy":{"enabled":true,"days":14}}`),
+			}, nil
+		},
+		getContainerProperties: func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error) {
+			containerPropertiesCalls++
+			return azureacl.Response{Status: 200, Body: []byte(`{"hasImmutabilityPolicy":true,"hasLegalHold":true}`)}, nil
+		},
+		getContainer: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			armContainerCalls++
+			return azurearmimmutability.Response{
+				Status: 200,
+				Body:   []byte(`{"properties":{"legalHold":{"hasLegalHold":true,"tags":[{"tag":"Case123"}]}}}`),
+			}, nil
+		},
+		getImmutabilityPolicy: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			armPolicyCalls++
+			return azurearmimmutability.Response{}, errors.New("arm unavailable")
+		},
+	}
+
+	view, err := adapter.GetGovernance(context.Background(), profile, "demo")
+	if err != nil {
+		t.Fatalf("GetGovernance err=%v", err)
+	}
+	if policyCalls != 1 || serviceCalls != 1 || containerPropertiesCalls != 1 || armContainerCalls != 1 || armPolicyCalls != 1 {
+		t.Fatalf("calls policy=%d service=%d container=%d armContainer=%d armPolicy=%d, want one per resource", policyCalls, serviceCalls, containerPropertiesCalls, armContainerCalls, armPolicyCalls)
+	}
+	if view.Access == nil || len(view.Access.StoredAccessPolicies) != 1 || view.Access.StoredAccessPolicies[0].ID != "reader" {
+		t.Fatalf("access=%+v, want shared container policy", view.Access)
+	}
+	if view.PublicExposure == nil || view.PublicExposure.Mode != models.BucketPublicExposureModeBlob {
+		t.Fatalf("publicExposure=%+v, want blob visibility", view.PublicExposure)
+	}
+	if view.Protection == nil || view.Protection.SoftDelete == nil || !view.Protection.SoftDelete.Enabled || view.Protection.Immutability == nil || !reflect.DeepEqual(view.Protection.Immutability.LegalHoldTags, []string{"case123"}) {
+		t.Fatalf("protection=%+v, want service and ARM controls", view.Protection)
+	}
+	if !slices.Contains(view.Protection.Warnings, "Azure immutability policy lookup through ARM failed. Soft delete and versioning remain available, but immutability details may be stale.") {
+		t.Fatalf("warnings=%v, want optional ARM failure warning", view.Protection.Warnings)
+	}
+	if view.Versioning == nil || view.Versioning.Status != models.BucketVersioningStatusEnabled {
+		t.Fatalf("versioning=%+v, want enabled", view.Versioning)
 	}
 }
 
@@ -1018,20 +1133,29 @@ func TestAzureAdapterPutProtectionRollsBackSoftDeleteWhenImmutabilityFails(t *te
 func TestOCIAdapterGetGovernanceIncludesTypedControls(t *testing.T) {
 	t.Parallel()
 
+	bucketCalls := 0
+	retentionCalls := 0
+	sharingCalls := 0
 	adapter := &ociAdapter{
 		getBucket: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			bucketCalls++
 			return ocicli.Response{Body: []byte(`{"data":{"public-access-type":"ObjectReadWithoutList","versioning":"Enabled"}}`)}, nil
 		},
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			retentionCalls++
 			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-1","time-rule-locked":true,"duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
 		},
 		listPreauthenticatedRequests: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			sharingCalls++
 			return ocicli.Response{Body: []byte(`{"data":[]}`)}, nil
 		},
 	}
 	view, err := adapter.GetGovernance(context.Background(), models.ProfileSecrets{}, "demo")
 	if err != nil {
 		t.Fatalf("GetGovernance err=%v", err)
+	}
+	if bucketCalls != 1 || retentionCalls != 1 || sharingCalls != 1 {
+		t.Fatalf("bucketCalls=%d retentionCalls=%d sharingCalls=%d, want one read per resource", bucketCalls, retentionCalls, sharingCalls)
 	}
 	if view.Provider != models.ProfileProviderOciObjectStorage {
 		t.Fatalf("provider=%q, want %q", view.Provider, models.ProfileProviderOciObjectStorage)

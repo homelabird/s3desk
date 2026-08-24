@@ -3,6 +3,7 @@ package bucketgov
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -36,9 +37,11 @@ type fakePublicAccessBlockClient struct {
 	putLifecycleErr    error
 	deleteLifecycle    *s3.DeleteBucketLifecycleInput
 	deleteLifecycleErr error
+	getCalls           []string
 }
 
 func (f *fakePublicAccessBlockClient) GetPublicAccessBlock(_ context.Context, _ *s3.GetPublicAccessBlockInput, _ ...func(*s3.Options)) (*s3.GetPublicAccessBlockOutput, error) {
+	f.getCalls = append(f.getCalls, "public_exposure")
 	return f.getOutput, f.getErr
 }
 
@@ -51,6 +54,7 @@ func (f *fakePublicAccessBlockClient) PutPublicAccessBlock(_ context.Context, in
 }
 
 func (f *fakePublicAccessBlockClient) GetBucketOwnershipControls(_ context.Context, _ *s3.GetBucketOwnershipControlsInput, _ ...func(*s3.Options)) (*s3.GetBucketOwnershipControlsOutput, error) {
+	f.getCalls = append(f.getCalls, "access")
 	return f.ownershipOutput, f.ownershipErr
 }
 
@@ -63,6 +67,7 @@ func (f *fakePublicAccessBlockClient) PutBucketOwnershipControls(_ context.Conte
 }
 
 func (f *fakePublicAccessBlockClient) GetBucketVersioning(_ context.Context, _ *s3.GetBucketVersioningInput, _ ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error) {
+	f.getCalls = append(f.getCalls, "versioning")
 	return f.versioningOutput, f.versioningErr
 }
 
@@ -75,6 +80,7 @@ func (f *fakePublicAccessBlockClient) PutBucketVersioning(_ context.Context, inp
 }
 
 func (f *fakePublicAccessBlockClient) GetBucketEncryption(_ context.Context, _ *s3.GetBucketEncryptionInput, _ ...func(*s3.Options)) (*s3.GetBucketEncryptionOutput, error) {
+	f.getCalls = append(f.getCalls, "encryption")
 	return f.encryptionOutput, f.encryptionErr
 }
 
@@ -87,6 +93,7 @@ func (f *fakePublicAccessBlockClient) PutBucketEncryption(_ context.Context, inp
 }
 
 func (f *fakePublicAccessBlockClient) GetBucketLifecycleConfiguration(_ context.Context, _ *s3.GetBucketLifecycleConfigurationInput, _ ...func(*s3.Options)) (*s3.GetBucketLifecycleConfigurationOutput, error) {
+	f.getCalls = append(f.getCalls, "lifecycle")
 	return f.lifecycleOutput, f.lifecycleErr
 }
 
@@ -109,6 +116,40 @@ func (f *fakePublicAccessBlockClient) DeleteBucketLifecycle(_ context.Context, i
 func stubAWSClient(client awsPublicAccessBlockClient) func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
 	return func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
 		return client, nil
+	}
+}
+
+func TestAWSAdapterGetGovernanceReusesClient(t *testing.T) {
+	t.Parallel()
+
+	client := &fakePublicAccessBlockClient{
+		getOutput:        &s3.GetPublicAccessBlockOutput{},
+		ownershipOutput:  &s3.GetBucketOwnershipControlsOutput{},
+		versioningOutput: &s3.GetBucketVersioningOutput{},
+		encryptionOutput: &s3.GetBucketEncryptionOutput{},
+		lifecycleOutput:  &s3.GetBucketLifecycleConfigurationOutput{},
+	}
+	newClientCalls := 0
+	adapter := &awsAdapter{
+		newClient: func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+			newClientCalls++
+			return client, nil
+		},
+	}
+
+	view, err := adapter.GetGovernance(context.Background(), models.ProfileSecrets{}, "demo")
+	if err != nil {
+		t.Fatalf("GetGovernance err=%v", err)
+	}
+	if newClientCalls != 1 {
+		t.Fatalf("newClient calls=%d, want 1", newClientCalls)
+	}
+	wantCalls := []string{"access", "public_exposure", "versioning", "encryption", "lifecycle"}
+	if !reflect.DeepEqual(client.getCalls, wantCalls) {
+		t.Fatalf("get calls=%v, want %v", client.getCalls, wantCalls)
+	}
+	if view.Access == nil || view.PublicExposure == nil || view.Versioning == nil || view.Encryption == nil || view.Lifecycle == nil {
+		t.Fatalf("governance sections=%+v, want all AWS sections", view)
 	}
 }
 
