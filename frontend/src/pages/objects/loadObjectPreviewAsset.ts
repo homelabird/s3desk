@@ -32,6 +32,7 @@ export async function loadObjectPreviewAsset(args: LoadObjectPreviewAssetArgs): 
 			size: args.size,
 			contentType: args.contentType ?? undefined,
 			lastModified: args.lastModified ?? undefined,
+			signal,
 		})
 		const safeUrl = getSafeBrowserObjectUrl(presigned.url)
 		const res = await fetch(safeUrl.url.toString(), { signal })

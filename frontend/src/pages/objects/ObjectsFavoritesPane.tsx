@@ -61,14 +61,19 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
   const favoriteCount = disabled ? 0 : props.favoriteCount;
   const queryText = props.query.trim();
   const query = queryText.toLowerCase();
-  const sorted = useMemo(() => {
-    const filtered = query
-      ? availableFavorites.filter((item) =>
-          item.key.toLowerCase().includes(query),
-        )
-      : availableFavorites;
-    return [...filtered].sort((a, b) => a.key.localeCompare(b.key));
-  }, [availableFavorites, query]);
+  const sortedFavorites = useMemo(
+    () => [...availableFavorites].sort((a, b) => a.key.localeCompare(b.key)),
+    [availableFavorites],
+  );
+  const sorted = useMemo(
+    () =>
+      query
+        ? sortedFavorites.filter((item) =>
+            item.key.toLowerCase().includes(query),
+          )
+        : sortedFavorites,
+    [query, sortedFavorites],
+  );
   const favoritesListRef = useRef<HTMLDivElement | null>(null);
   const favoritesVirtualizer = useVirtualizer({
     count: sorted.length,

@@ -21,6 +21,7 @@ type UseObjectsPageActionsArgs = {
 	downloadLinkProxyEnabled: boolean
 	presignedDownloadSupported: boolean
 	createJobWithRetry: CreateJobWithRetry
+	eventsConnected: boolean
 	typeFilter: ObjectTypeFilter
 	favoritesOnly: boolean
 	deferredSearch: string
@@ -53,6 +54,7 @@ export function useObjectsPageActions({
 	downloadLinkProxyEnabled,
 	presignedDownloadSupported,
 	createJobWithRetry,
+	eventsConnected,
 	typeFilter,
 	favoritesOnly,
 	deferredSearch,
@@ -105,6 +107,7 @@ export function useObjectsPageActions({
 		downloadLinkProxyEnabled,
 		presignedDownloadSupported,
 		createJobWithRetry,
+		eventsConnected,
 		typeFilter,
 		favoritesOnly,
 		deferredSearch,

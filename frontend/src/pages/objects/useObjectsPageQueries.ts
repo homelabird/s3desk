@@ -7,8 +7,14 @@ import type { ObjectsPageQueriesAPI } from '../../lib/pageApiScopes'
 import { buildProfileCapabilityContext } from '../../lib/profileCapabilityContext'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 import { useObjectsFavorites } from './useObjectsFavorites'
-import { OBJECTS_LIST_PAGE_SIZE } from './objectsPageConstants'
+import {
+	OBJECTS_ADVANCED_AUTO_SCAN_CAP,
+	OBJECTS_AUTO_SCAN_CAP,
+	OBJECTS_LIST_CONTINUATION_PAGE_SIZE,
+	OBJECTS_LIST_PAGE_SIZE,
+} from './objectsPageConstants'
 import { logObjectsDebug } from './objectsPageDebug'
+import { uniquePrefixes } from './objectsListUtils'
 
 type UseObjectsPageQueriesArgs = {
 	api: ObjectsPageQueriesAPI
@@ -28,6 +34,11 @@ type GetNextObjectsContinuationTokenArgs = {
 	bucket: string
 	prefix: string
 	onWarn?: (message: string, context: Record<string, unknown>) => void
+}
+
+type ObjectsPageParam = {
+	continuationToken: string
+	maxKeys: number
 }
 
 export function getNextObjectsContinuationToken({
@@ -114,7 +125,7 @@ export function useObjectsPageQueries({
 
 	const bucketsQuery = useQuery({
 		queryKey: queryKeys.buckets.list(profileId, apiToken),
-		queryFn: () => api.buckets.listBuckets(profileId!),
+		queryFn: ({ signal }) => api.buckets.listBuckets(profileId!, signal),
 		enabled: !!profileId && profileCapabilityResolved && bucketCrudSupported,
 		retry: false,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
@@ -123,27 +134,40 @@ export function useObjectsPageQueries({
 	const objectsQuery = useInfiniteQuery({
 		queryKey: queryKeys.objects.list(profileId, bucket, prefix, apiToken),
 		enabled: !!profileId && !!bucket && profileCapabilityResolved && objectCrudSupported,
-		initialPageParam: undefined as string | undefined,
+		initialPageParam: undefined as ObjectsPageParam | undefined,
 		staleTime: 15_000,
-		queryFn: async ({ pageParam }) => {
+		queryFn: async ({ pageParam, signal }) => {
 			return api.objects.listObjects({
 				profileId: profileId!,
 				bucket,
 				prefix,
 				delimiter: '/',
-				maxKeys: OBJECTS_LIST_PAGE_SIZE,
-				continuationToken: pageParam,
+				maxKeys: pageParam?.maxKeys ?? OBJECTS_LIST_PAGE_SIZE,
+				continuationToken: pageParam?.continuationToken,
+				signal,
 			})
 		},
-		getNextPageParam: (lastPage, _allPages, lastPageParam, allPageParams) =>
-			getNextObjectsContinuationToken({
+		getNextPageParam: (lastPage, allPages, lastPageParam, allPageParams) => {
+			const continuationToken = getNextObjectsContinuationToken({
 				lastPage,
-				lastPageParam,
-				allPageParams,
+				lastPageParam: lastPageParam?.continuationToken,
+				allPageParams: allPageParams.map((pageParam) => pageParam?.continuationToken),
 				bucket,
 				prefix,
 				onWarn: (message, context) => logObjectsDebug(debugObjectsList, 'warn', message, context),
-			}),
+			})
+			if (!continuationToken) return undefined
+
+			const loadedCount = uniquePrefixes(allPages).length + allPages.reduce((total, page) => total + page.items.length, 0)
+			const nextBoundary = loadedCount < OBJECTS_AUTO_SCAN_CAP
+				? OBJECTS_AUTO_SCAN_CAP
+				: OBJECTS_ADVANCED_AUTO_SCAN_CAP
+			const maxKeys = loadedCount < OBJECTS_ADVANCED_AUTO_SCAN_CAP
+				? Math.min(OBJECTS_LIST_CONTINUATION_PAGE_SIZE, nextBoundary - loadedCount)
+				: OBJECTS_LIST_CONTINUATION_PAGE_SIZE
+
+			return { continuationToken, maxKeys }
+		},
 	})
 
 	const { favoritesQuery, favoriteCount, favoriteItems, favoriteKeys, favoritePendingKeys, toggleFavorite } = useObjectsFavorites({

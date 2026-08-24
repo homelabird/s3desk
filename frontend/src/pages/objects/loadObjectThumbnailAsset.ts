@@ -1,4 +1,4 @@
-import type { APIClientShape } from '../../api/client'
+import { RequestAbortedError, type APIClientShape } from '../../api/client'
 import {
 	buildThumbnailCacheKey,
 	getReusablePersistentThumbnailBlob,
@@ -51,10 +51,12 @@ export function loadObjectThumbnailAsset(args: LoadObjectThumbnailAssetArgs): Tr
 	}
 
 	const shouldUsePersistentCache = shouldPersistThumbnailLocally(args.request.objectKey)
+	let aborted = false
 	let abort = () => {}
 	const promise = (async () => {
 		if (shouldUsePersistentCache) {
 			const cachedBlob = await getReusablePersistentThumbnailBlob(args.request)
+			if (aborted) throw new RequestAbortedError('thumbnail request aborted')
 			if (cachedBlob) {
 				const url = URL.createObjectURL(cachedBlob.blob)
 				if (args.cache) {
@@ -91,6 +93,7 @@ export function loadObjectThumbnailAsset(args: LoadObjectThumbnailAssetArgs): Tr
 		const resp = await handle.promise
 		if (shouldUsePersistentCache) {
 			await setPersistentThumbnailBlob(cacheKey, resp.blob)
+			if (aborted) throw new RequestAbortedError('thumbnail request aborted')
 		}
 		const url = URL.createObjectURL(resp.blob)
 		if (args.cache) {
@@ -112,6 +115,10 @@ export function loadObjectThumbnailAsset(args: LoadObjectThumbnailAssetArgs): Tr
 
 	return {
 		promise,
-		abort: () => abort(),
+		abort: () => {
+			if (aborted) return
+			aborted = true
+			abort()
+		},
 	}
 }

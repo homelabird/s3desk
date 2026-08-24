@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ObjectsSelectionBar } from '../ObjectsSelectionBar'
@@ -17,6 +17,7 @@ function buildAction(overrides: Partial<UIAction> = {}): UIAction {
 
 describe('ObjectsSelectionBar', () => {
 	it('renders the shared selection shell with compact actions', () => {
+		const copyAction = buildAction({ id: 'copy_selected_keys', label: 'Copy selected keys', shortLabel: 'Copy' })
 		render(
 			<ObjectsSelectionBar
 				selectedCount={2}
@@ -27,8 +28,8 @@ describe('ObjectsSelectionBar', () => {
 				deleteAction={buildAction({ id: 'delete_selected', label: 'Delete selection', shortLabel: 'Delete', danger: true })}
 				downloadAction={buildAction({ id: 'download_selected', label: 'Download selection', shortLabel: 'Download' })}
 				moveAction={buildAction({ id: 'move_selected_to', label: 'Move selection to…', shortLabel: 'Move to…' })}
-				selectionMenuActions={[buildAction({ id: 'copy_selected_keys', label: 'Copy selected keys', shortLabel: 'Copy' })]}
-				getObjectActions={() => [buildAction({ id: 'copy_selected_keys', label: 'Copy selected keys', shortLabel: 'Copy' })]}
+				selectionMenuActions={[copyAction]}
+				getObjectActions={() => [copyAction]}
 				isDownloadLoading={false}
 				isDeleteLoading={false}
 			/>,
@@ -42,6 +43,10 @@ describe('ObjectsSelectionBar', () => {
 		const toolsButton = screen.getByRole('button', { name: 'Selection tools' })
 		expect(toolsButton).toBeVisible()
 		expect(toolsButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(toolsButton).toHaveAttribute('aria-expanded', 'false')
+		fireEvent.click(toolsButton)
+		fireEvent.click(screen.getByRole('menuitem', { name: 'Copy selected keys' }))
+		expect(copyAction.run).toHaveBeenCalledOnce()
 		expect(toolsButton).toHaveAttribute('aria-expanded', 'false')
 		expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
 	})

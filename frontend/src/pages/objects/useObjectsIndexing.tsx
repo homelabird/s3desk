@@ -105,15 +105,17 @@ export function useObjectsIndexing({
 			objectsFeedback.error(err)
 		},
 	})
+	const { isPending: indexObjectsJobPending, mutate: mutateIndexObjectsJob } = indexObjectsJobMutation
+	const hasGlobalSearchQuery = Boolean(globalSearchQueryText.trim())
 
 	useEffect(() => {
 		if (!globalSearchOpen || !autoIndexEnabled) return
 		if (!profileId || !bucket) return
-		if (!globalSearchQueryText) return
+		if (!hasGlobalSearchQuery) return
 		const targetPrefix = globalSearchPrefixNormalized || normalizePrefix(prefix)
 		if (!shouldAutoIndexForCostMode(objectsCostMode, targetPrefix)) return
 		if (!targetPrefix.trim()) return
-		if (indexObjectsJobMutation.isPending || autoIndexPendingRef.current) return
+		if (indexObjectsJobPending || autoIndexPendingRef.current) return
 
 		const key = `${profileId}:${bucket}:${targetPrefix}`
 		if (autoIndexLastKeyRef.current === key && Date.now() - autoIndexLastTriggeredRef.current < autoIndexCooldownMs) {
@@ -121,6 +123,7 @@ export function useObjectsIndexing({
 		}
 
 		let cancelled = false
+		const controller = new AbortController()
 		autoIndexPendingRef.current = true
 		void (async () => {
 			try {
@@ -130,28 +133,30 @@ export function useObjectsIndexing({
 					bucket,
 					prefix: targetPrefix,
 					sampleLimit: 1,
+					signal: controller.signal,
 				})
 				if (cancelled) return
 				if (summary.indexedAt) {
 					indexedAtMs = Date.parse(summary.indexedAt)
 				}
+				autoIndexLastKeyRef.current = key
+				autoIndexLastTriggeredRef.current = Date.now()
 
 				const stale = !indexedAtMs || Date.now() - indexedAtMs > autoIndexTtlMs
 				if (!stale) return
 
-				autoIndexLastKeyRef.current = key
-				autoIndexLastTriggeredRef.current = Date.now()
 				setIndexPrefix(targetPrefix)
-				indexObjectsJobMutation.mutate({ prefix: targetPrefix, fullReindex: true, silent: true })
+				mutateIndexObjectsJob({ prefix: targetPrefix, fullReindex: true, silent: true })
 			} catch {
 				// Ignore background summary probe failures and wait for the next trigger.
 			} finally {
-				autoIndexPendingRef.current = false
+				if (!cancelled) autoIndexPendingRef.current = false
 			}
 		})()
 
 		return () => {
 			cancelled = true
+			controller.abort()
 			autoIndexPendingRef.current = false
 		}
 	}, [
@@ -162,8 +167,9 @@ export function useObjectsIndexing({
 		bucket,
 		globalSearchOpen,
 		globalSearchPrefixNormalized,
-		globalSearchQueryText,
-		indexObjectsJobMutation,
+		hasGlobalSearchQuery,
+		indexObjectsJobPending,
+		mutateIndexObjectsJob,
 		objectsCostMode,
 		prefix,
 		profileId,

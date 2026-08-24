@@ -46,10 +46,18 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 	const [treeLoadingKeys, setTreeLoadingKeys] = useState<string[]>([])
 	const [treeErrorMessage, setTreeErrorMessage] = useState<string | null>(null)
 	const treeEpochRef = useRef(0)
+	const treeAbortControllerRef = useRef(new AbortController())
 	const [treeDrawerOpen, setTreeDrawerOpen] = useState(false)
 	const [treeDrawerScopeKey, setTreeDrawerScopeKey] = useState('')
 	const treeScopeKey = `${apiToken || '__no_server__'}:${profileId?.trim() || '__no_profile__'}:${bucket}`
 	const treeDrawerOpenVisible = treeDrawerOpen && treeDrawerScopeKey === treeScopeKey
+
+	useEffect(() => {
+		const controller = new AbortController()
+		treeAbortControllerRef.current.abort()
+		treeAbortControllerRef.current = controller
+		return () => controller.abort()
+	}, [treeScopeKey])
 
 	const setScopedTreeDrawerOpen = useCallback(
 		(next: SetStateAction<boolean>) => {
@@ -70,6 +78,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 			setTreeLoadingKeys((prev) => (prev.includes(nodeKey) ? prev : [...prev, nodeKey]))
 
 			const epoch = treeEpochRef.current
+			const signal = treeAbortControllerRef.current.signal
 			const prefixesSet = new Set<string>()
 			const seenTokens = new Set<string>()
 			let token: string | undefined
@@ -92,7 +101,10 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 						delimiter: '/',
 						maxKeys: 1000,
 						continuationToken: token,
+						prefixesOnly: true,
+						signal,
 					})
+					if (signal.aborted || treeEpochRef.current !== epoch) return
 					if (token) {
 						seenTokens.add(token)
 					}
@@ -127,6 +139,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 					token = nextToken
 				}
 			} catch (err) {
+				if (signal.aborted || treeEpochRef.current !== epoch) return
 				const nextErrorMessage = objectsFeedback.errorMessage(err)
 				setTreeErrorMessage(nextErrorMessage)
 				treeLoadingKeysRef.current.delete(nodeKey)
@@ -135,8 +148,6 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 			}
 
 			if (treeEpochRef.current !== epoch) {
-				treeLoadingKeysRef.current.delete(nodeKey)
-				setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
 				return
 			}
 

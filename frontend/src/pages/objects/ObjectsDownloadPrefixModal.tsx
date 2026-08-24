@@ -36,11 +36,10 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 			open={props.open}
 			title="Download to this device"
 			onClose={props.onCancel}
-			closeDisabled={props.isSubmitting}
 			width={640}
 			footer={
 				<>
-					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
+					<Button onClick={props.onCancel}>Cancel</Button>
 					<Button type="primary" loading={props.isSubmitting} disabled={!props.canSubmit} onClick={submit}>
 						Start download
 					</Button>

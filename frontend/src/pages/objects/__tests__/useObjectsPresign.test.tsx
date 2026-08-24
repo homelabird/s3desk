@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -69,6 +69,7 @@ describe('useObjectsPresign', () => {
 			proxy: true,
 			size: 128,
 			lastModified: '2026-03-07T11:00:00Z',
+			signal: expect.any(AbortSignal),
 		})
 		expect(result.current.presignKey).toBeNull()
 		expect(result.current.presignOpen).toBe(true)
@@ -109,6 +110,7 @@ describe('useObjectsPresign', () => {
 		act(() => {
 			result.current.closePresign()
 		})
+		expect(getObjectDownloadURL.mock.calls[0]?.[0].signal.aborted).toBe(true)
 
 		await act(async () => {
 			presignRequest.resolve({
@@ -118,6 +120,44 @@ describe('useObjectsPresign', () => {
 			await Promise.resolve()
 		})
 
+		expect(result.current.presignOpen).toBe(false)
+		expect(result.current.presign).toBeNull()
+		expect(result.current.presignKey).toBeNull()
+	})
+
+	it('does not start a presign request when the modal closes immediately', async () => {
+		const getObjectDownloadURL = vi.fn().mockResolvedValue({
+			url: 'https://example.com/stale-download',
+			expiresAt: '2026-03-12T00:00:00Z',
+		})
+		const api = createMockApiClient({
+			objects: {
+				getObjectDownloadURL,
+			},
+		})
+
+		const { result } = renderHook(
+			() =>
+				useObjectsPresign({
+					api,
+					apiToken: 'token-a',
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					downloadLinkProxyEnabled: true,
+					presignedDownloadSupported: false,
+				}),
+			{ wrapper: buildWrapper() },
+		)
+
+		act(() => {
+			result.current.presignMutation.mutate({ key: 'photos/cat.jpg' })
+			result.current.closePresign()
+		})
+
+		await waitFor(() => {
+			expect(result.current.presignMutation.isPending).toBe(false)
+		})
+		expect(getObjectDownloadURL).not.toHaveBeenCalled()
 		expect(result.current.presignOpen).toBe(false)
 		expect(result.current.presign).toBeNull()
 		expect(result.current.presignKey).toBeNull()
@@ -149,10 +189,14 @@ describe('useObjectsPresign', () => {
 			{ wrapper: buildWrapper() },
 		)
 
-		act(() => {
+		await act(async () => {
 			result.current.presignMutation.mutate({ key: 'photos/old.jpg' })
+			await Promise.resolve()
+		})
+		act(() => {
 			result.current.presignMutation.mutate({ key: 'photos/new.jpg' })
 		})
+		expect(getObjectDownloadURL.mock.calls[0]?.[0].signal.aborted).toBe(true)
 
 		await act(async () => {
 			secondRequest.resolve({
@@ -213,6 +257,7 @@ describe('useObjectsPresign', () => {
 		})
 
 		rerender({ apiToken: 'token-b' })
+		expect(getObjectDownloadURL.mock.calls[0]?.[0].signal.aborted).toBe(true)
 
 		await act(async () => {
 			presignRequest.resolve({

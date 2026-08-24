@@ -4,17 +4,17 @@ import { useCallback, useMemo } from 'react'
 
 import { useAPIClient } from '../../api/useAPIClient'
 import { queryKeys } from '../../api/queryKeys'
-import type { Job, JobCreateRequest } from '../../api/types'
+import type { JobCreateRequest } from '../../api/types'
 import {
 	useTransfersCommands,
 	useTransfersSummary,
 } from '../../components/useTransfers'
 import { withJobQueueRetry } from '../../lib/jobQueue'
 import { useIsOffline } from '../../lib/useIsOffline'
-import { useJobsRealtimeEvents } from '../jobs/useJobsRealtimeEvents'
+import { useJobsRealtimeEvents, type JobsRealtimeCompletion } from '../jobs/useJobsRealtimeEvents'
 import { isContextMenuDebugEnabled, isObjectsListDebugEnabled } from './objectsPageDebug'
 import { useObjectsDeferredOpener } from './useObjectsDeferredOpener'
-import { invalidateObjectQueriesForJob } from './objectsQueryCache'
+import { completeClaimedObjectJob, invalidateObjectQueriesForJob } from './objectsQueryCache'
 
 type UseObjectsPageEnvironmentArgs = {
 	apiToken: string
@@ -36,13 +36,18 @@ export function useObjectsPageEnvironment(args: UseObjectsPageEnvironmentArgs) {
 	const debugContextMenu = isContextMenuDebugEnabled()
 	const commandPaletteOpener = useObjectsDeferredOpener()
 	const handleJobCompleted = useCallback(
-		(job: Job | null) => {
-			if (!job || job.status !== 'succeeded' || !args.profileId) return
-			void invalidateObjectQueriesForJob(queryClient, job, args.profileId, args.apiToken)
+		(completion: JobsRealtimeCompletion) => {
+			if (!args.profileId) return
+			if (completeClaimedObjectJob(
+				{ apiToken: args.apiToken, profileId: args.profileId, jobId: completion.jobId },
+				{ status: completion.status, error: completion.error },
+			)) return
+			if (!completion.job || completion.status !== 'succeeded') return
+			void invalidateObjectQueriesForJob(queryClient, completion.job, args.profileId, args.apiToken)
 		},
 		[args.apiToken, args.profileId, queryClient],
 	)
-	useJobsRealtimeEvents({
+	const { eventsConnected } = useJobsRealtimeEvents({
 		apiToken: args.apiToken,
 		profileId: args.profileId,
 		queryClient,
@@ -65,6 +70,7 @@ export function useObjectsPageEnvironment(args: UseObjectsPageEnvironmentArgs) {
 		transfers,
 		screens,
 		isOffline,
+		eventsConnected,
 		debugObjectsList,
 		debugContextMenu,
 		commandPaletteOpener,

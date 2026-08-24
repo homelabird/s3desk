@@ -4,8 +4,14 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { APIError } from '../../../api/client'
 import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
+import {
+	completeClaimedObjectJob,
+	isObjectJobCompletionClaimed,
+	releaseObjectJobCompletion,
+} from '../objectsQueryCache'
 import { useObjectsDelete } from '../useObjectsDelete'
 
 const messageSuccessMock = vi.fn()
@@ -67,11 +73,434 @@ function createWrapper() {
 
 describe('useObjectsDelete', () => {
 	afterEach(() => {
+		vi.useRealTimers()
 		vi.restoreAllMocks()
 		messageSuccessMock.mockClear()
 		messageErrorMock.mockClear()
 		invalidateObjectQueriesForPrefixMock.mockClear()
 		publishObjectsRefreshMock.mockClear()
+	})
+
+	it('refreshes object queries and tree once immediately after a direct delete', async () => {
+		const { Wrapper } = createWrapper()
+		const api = createMockApiClient({
+			objects: {
+				deleteObjects: vi.fn().mockResolvedValue({ deleted: 1 }),
+			},
+			jobs: {
+				getJob: vi.fn(),
+			},
+		})
+		const createJobWithRetry = vi.fn()
+		const setSelectedKeys = vi.fn()
+		const { result } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys,
+				}),
+			{ wrapper: Wrapper },
+		)
+
+		await act(async () => {
+			await result.current.deleteMutation.mutateAsync(['logs/app.log'])
+		})
+
+		expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledTimes(1)
+		expect(publishObjectsRefreshMock).toHaveBeenCalledTimes(1)
+		expect(setSelectedKeys).toHaveBeenCalledTimes(1)
+		expect(createJobWithRetry).not.toHaveBeenCalled()
+		expect(api.jobs.getJob).not.toHaveBeenCalled()
+	})
+
+	it('waits for a delete job to succeed before refreshing object queries and tree once', async () => {
+		vi.useFakeTimers()
+		const { Wrapper } = createWrapper()
+		const getJob = vi
+			.fn()
+			.mockResolvedValueOnce({ id: 'job-1', status: 'running' })
+			.mockResolvedValueOnce({ id: 'job-1', status: 'succeeded' })
+		const api = createMockApiClient({
+			jobs: { getJob },
+		})
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-1', status: 'queued' })
+		const setSelectedKeys = vi.fn()
+		const { result } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys,
+				}),
+			{ wrapper: Wrapper },
+		)
+		const keys = Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`)
+
+		await act(async () => {
+			await result.current.deleteMutation.mutateAsync(keys)
+			await Promise.resolve()
+		})
+
+		expect(getJob).toHaveBeenCalledTimes(1)
+		expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
+		expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
+		expect(setSelectedKeys).toHaveBeenCalledTimes(1)
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1000)
+		})
+
+		expect(getJob).toHaveBeenCalledTimes(2)
+		expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledTimes(1)
+		expect(publishObjectsRefreshMock).toHaveBeenCalledTimes(1)
+	})
+
+	it.each([
+		{ status: 'failed' as const, prefixJob: false, refreshPrefix: 'logs/', source: 'delete_objects' },
+		{ status: 'canceled' as const, prefixJob: true, refreshPrefix: 'logs/archive/', source: 'delete_prefix' },
+	])('refreshes scoped object queries and tree once when a delete job is $status', async ({
+		status,
+		prefixJob,
+		refreshPrefix,
+		source,
+	}) => {
+		const { Wrapper } = createWrapper()
+		const jobId = `job-${status}`
+		const api = createMockApiClient({
+			jobs: {
+				getJob: vi.fn().mockResolvedValue({ id: jobId, status, error: `${status} detail` }),
+			},
+		})
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: jobId, status: 'queued' })
+		const setSelectedKeys = vi.fn()
+		const { result } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys,
+				}),
+			{ wrapper: Wrapper },
+		)
+
+		await act(async () => {
+			if (prefixJob) {
+				await result.current.deletePrefixJobMutation.mutateAsync({ prefix: refreshPrefix, dryRun: false })
+			} else {
+				await result.current.deleteMutation.mutateAsync(
+					Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`),
+				)
+			}
+		})
+		await waitFor(() => expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledTimes(1))
+
+		expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledWith(expect.anything(), {
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			changedPrefix: refreshPrefix,
+			apiToken: 'token-1',
+		})
+		expect(publishObjectsRefreshMock).toHaveBeenCalledWith({
+			apiToken: 'token-1',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			prefix: refreshPrefix,
+			source,
+		})
+		expect(messageErrorMock).toHaveBeenCalledWith(`${status} detail`)
+	})
+
+	it('keeps watching past the former 60-poll limit', async () => {
+		vi.useFakeTimers()
+		const { Wrapper } = createWrapper()
+		let pollCount = 0
+		const getJob = vi.fn().mockImplementation(async () => ({
+			id: 'job-long',
+			status: ++pollCount > 60 ? 'succeeded' : 'running',
+		}))
+		const api = createMockApiClient({ jobs: { getJob } })
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-long', status: 'queued' })
+		const { result } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys: vi.fn(),
+				}),
+			{ wrapper: Wrapper },
+		)
+
+		await act(async () => {
+			await result.current.deleteMutation.mutateAsync(
+				Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`),
+			)
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(60_000)
+		})
+
+		expect(getJob).toHaveBeenCalledTimes(61)
+		expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledTimes(1)
+		expect(publishObjectsRefreshMock).toHaveBeenCalledTimes(1)
+	})
+
+	it('uses realtime completion while connected and resumes polling after disconnect', async () => {
+		vi.useFakeTimers()
+		const { Wrapper } = createWrapper()
+		const getJob = vi
+			.fn()
+			.mockResolvedValueOnce({ id: 'job-reconnect', status: 'running' })
+			.mockResolvedValueOnce({ id: 'job-reconnect', status: 'succeeded' })
+		const api = createMockApiClient({ jobs: { getJob } })
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-reconnect', status: 'queued' })
+		const { result, rerender } = renderHook(
+			({ eventsConnected }: { eventsConnected: boolean }) =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys: vi.fn(),
+					eventsConnected,
+				}),
+			{
+				initialProps: { eventsConnected: true },
+				wrapper: Wrapper,
+			},
+		)
+
+		await act(async () => {
+			await result.current.deleteMutation.mutateAsync(
+				Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`),
+			)
+			await Promise.resolve()
+		})
+		expect(getJob).toHaveBeenCalledOnce()
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(29_000)
+		})
+		expect(getJob).toHaveBeenCalledOnce()
+
+		rerender({ eventsConnected: false })
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1000)
+		})
+		expect(getJob).toHaveBeenCalledTimes(2)
+		expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledOnce()
+		expect(publishObjectsRefreshMock).toHaveBeenCalledOnce()
+	})
+
+	it('stops the delete-job watcher and releases its realtime claim on unmount', async () => {
+		vi.useFakeTimers()
+		const { Wrapper } = createWrapper()
+		const getJob = vi.fn().mockResolvedValue({ id: 'job-running', status: 'running' })
+		const api = createMockApiClient({ jobs: { getJob } })
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-running', status: 'queued' })
+		const { result, unmount } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys: vi.fn(),
+				}),
+			{ wrapper: Wrapper },
+		)
+
+		await act(async () => {
+			await result.current.deleteMutation.mutateAsync(
+				Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`),
+			)
+			await Promise.resolve()
+		})
+		expect(getJob).toHaveBeenCalledTimes(1)
+		expect(isObjectJobCompletionClaimed({ apiToken: 'token-1', profileId: 'profile-1', jobId: 'job-running' })).toBe(true)
+
+		unmount()
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(5000)
+		})
+
+		expect(getJob).toHaveBeenCalledTimes(1)
+		expect(isObjectJobCompletionClaimed({ apiToken: 'token-1', profileId: 'profile-1', jobId: 'job-running' })).toBe(false)
+		expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
+		expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
+	})
+
+	it('does not start a delete-job watcher when job creation resolves after unmount', async () => {
+		const { Wrapper } = createWrapper()
+		const jobRequest = deferred<{ id: string; status: 'queued' }>()
+		const getJob = vi.fn()
+		const api = createMockApiClient({ jobs: { getJob } })
+		const createJobWithRetry = vi.fn().mockReturnValue(jobRequest.promise)
+		const { result, unmount } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys: vi.fn(),
+				}),
+			{ wrapper: Wrapper },
+		)
+
+		let deletePromise!: Promise<unknown>
+		await act(async () => {
+			deletePromise = result.current.deleteMutation.mutateAsync(
+				Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`),
+			)
+		})
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledOnce())
+		unmount()
+
+		await act(async () => {
+			jobRequest.resolve({ id: 'job-after-unmount', status: 'queued' })
+			await deletePromise
+		})
+
+		expect(getJob).not.toHaveBeenCalled()
+		expect(isObjectJobCompletionClaimed({
+			apiToken: 'token-1',
+			profileId: 'profile-1',
+			jobId: 'job-after-unmount',
+		})).toBe(false)
+	})
+
+	it('stops non-retryable polling and lets realtime complete the claimed job once', async () => {
+		vi.useFakeTimers()
+		const { Wrapper } = createWrapper()
+		const getJob = vi.fn().mockRejectedValue(new APIError({
+			status: 403,
+			code: 'forbidden',
+			message: 'forbidden',
+			normalizedError: { code: 'forbidden', retryable: false },
+		}))
+		const api = createMockApiClient({ jobs: { getJob } })
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-realtime', status: 'queued' })
+		const { result, unmount } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys: vi.fn(),
+				}),
+			{ wrapper: Wrapper },
+		)
+		const scope = { apiToken: 'token-1', profileId: 'profile-1', jobId: 'job-realtime' }
+
+		await act(async () => {
+			await result.current.deleteMutation.mutateAsync(
+				Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`),
+			)
+			await Promise.resolve()
+		})
+		expect(getJob).toHaveBeenCalledOnce()
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(60_000)
+		})
+		expect(getJob).toHaveBeenCalledOnce()
+		expect(isObjectJobCompletionClaimed(scope)).toBe(true)
+
+		const completion = { status: 'succeeded' as const }
+		await act(async () => {
+			expect(completeClaimedObjectJob(scope, completion)).toBe(true)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledOnce()
+		expect(isObjectJobCompletionClaimed(scope)).toBe(false)
+
+		act(() => {
+			expect(completeClaimedObjectJob(scope, completion)).toBe(true)
+		})
+		expect(invalidateObjectQueriesForPrefixMock).toHaveBeenCalledOnce()
+		expect(publishObjectsRefreshMock).toHaveBeenCalledOnce()
+
+		unmount()
+		expect(completeClaimedObjectJob(scope, completion)).toBe(true)
+		releaseObjectJobCompletion(scope)
+	})
+
+	it('backs off repeated transient delete-job poll failures', async () => {
+		vi.useFakeTimers()
+		const { Wrapper } = createWrapper()
+		const getJob = vi.fn().mockRejectedValue(new APIError({
+			status: 500,
+			code: 'internal_error',
+			message: 'temporary failure',
+			normalizedError: { code: 'internal_error', retryable: true },
+		}))
+		const api = createMockApiClient({ jobs: { getJob } })
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-backoff', status: 'queued' })
+		const { result } = renderHook(
+			() =>
+				useObjectsDelete({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'logs/',
+					createJobWithRetry,
+					setSelectedKeys: vi.fn(),
+				}),
+			{ wrapper: Wrapper },
+		)
+
+		await act(async () => {
+			await result.current.deleteMutation.mutateAsync(
+				Array.from({ length: 1001 }, (_, index) => `logs/object-${index}.txt`),
+			)
+			await Promise.resolve()
+		})
+		expect(getJob).toHaveBeenCalledOnce()
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(999)
+		})
+		expect(getJob).toHaveBeenCalledOnce()
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1)
+		})
+		expect(getJob).toHaveBeenCalledTimes(2)
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1999)
+		})
+		expect(getJob).toHaveBeenCalledTimes(2)
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1)
+		})
+		expect(getJob).toHaveBeenCalledTimes(3)
 	})
 
 	it('ignores stale direct-delete responses after the objects context changes', async () => {

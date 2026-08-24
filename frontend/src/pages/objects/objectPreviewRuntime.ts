@@ -108,8 +108,8 @@ async function loadVideoPreview(
 		args.setPreviewURL(resp.url, resp.owned)
 		args.commitPreview({ key, status: 'ready', kind: 'video', contentType: resp.contentType ?? contentType, url: resp.url })
 	} catch (err) {
-		args.setPreviewAbort(null)
 		if (args.isStale()) return
+		args.setPreviewAbort(null)
 		if (err instanceof RequestAbortedError) {
 			args.commitPreview({ key, status: 'blocked', kind: 'video', contentType, error: 'Preview canceled.' })
 			return
@@ -168,8 +168,8 @@ async function loadTextOrImagePreview(
 
 		args.commitPreview({ key, status: 'ready', kind, contentType: effectiveContentType, text, truncated })
 	} catch (err) {
-		args.setPreviewAbort(null)
 		if (args.isStale()) return
+		args.setPreviewAbort(null)
 		if (err instanceof RequestAbortedError || (err instanceof Error && err.name === 'AbortError')) {
 			args.commitPreview({ key, status: 'blocked', kind, contentType, error: 'Preview canceled.' })
 			return

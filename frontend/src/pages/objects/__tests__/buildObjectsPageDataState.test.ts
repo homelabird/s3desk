@@ -16,6 +16,7 @@ function namespace(label: string, overrides: Record<string, unknown> = {}) {
 function buildArgs(): BuildArgs {
 	const environment = namespace('environment', {
 		api: { id: 'api' },
+		eventsConnected: true,
 		queryClient: { id: 'query-client' },
 		screens: { md: true, xl: true },
 		transfers: { activeTransferCount: 0 },
@@ -110,6 +111,7 @@ describe('buildObjectsPageDataState', () => {
 		})
 		expect(state.operationVm).toMatchObject({
 			api: { id: 'api' },
+			eventsConnected: true,
 			profileCapabilities: { presignedUpload: true },
 			zipObjectsJobMutation: { isPending: false },
 		})

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 
+import { OBJECTS_ADVANCED_AUTO_SCAN_CAP, OBJECTS_AUTO_SCAN_CAP } from './objectsPageConstants'
 import type { ObjectTypeFilter } from './objectsTypes'
 
 type LogFn = (enabled: boolean, level: 'debug' | 'warn', message: string, context?: Record<string, unknown>) => void
@@ -59,8 +60,8 @@ export function useObjectsAutoScan(args: UseObjectsAutoScanArgs): ObjectsAutoSca
 		debugEnabled,
 		log,
 	} = args
-	const searchAutoScanCap = isAdvanced ? 3_000 : 1_000
-	const filterAutoScanCap = isAdvanced ? 3_000 : 1_000
+	const searchAutoScanCap = isAdvanced ? OBJECTS_ADVANCED_AUTO_SCAN_CAP : OBJECTS_AUTO_SCAN_CAP
+	const filterAutoScanCap = isAdvanced ? OBJECTS_ADVANCED_AUTO_SCAN_CAP : OBJECTS_AUTO_SCAN_CAP
 	const hasSearch = !!search.trim()
 	const hasNonSearchFilters =
 		!!extFilter.trim() ||

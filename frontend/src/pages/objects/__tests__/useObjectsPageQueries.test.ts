@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { createElement, type PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ListObjectsResponse, MetaResponse, Profile } from '../../../api/types'
 import { createMockApiClient } from '../../../test/mockApiClient'
+import { useObjectsAutoScan } from '../useObjectsAutoScan'
 import { getNextObjectsContinuationToken, useObjectsPageQueries } from '../useObjectsPageQueries'
 
 type MetaOverrides = Omit<Partial<MetaResponse>, 'capabilities'> & {
@@ -184,6 +185,173 @@ describe('getNextObjectsContinuationToken', () => {
 })
 
 describe('useObjectsPageQueries', () => {
+	it('aborts the stale object list request when the prefix changes', async () => {
+		const signals: AbortSignal[] = []
+		const listBuckets = vi.fn().mockResolvedValue([{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' }])
+		const listObjects = vi.fn(({ signal }: { signal?: AbortSignal }) => {
+			if (signal) signals.push(signal)
+			return new Promise<ListObjectsResponse>(() => {})
+		})
+		const api = createMockApiClient({
+			server: { getMeta: async () => buildMeta() },
+			profiles: { listProfiles: async () => [buildProfile()] },
+			buckets: { listBuckets },
+			objects: {
+				listObjects,
+				listObjectFavorites: async () => ({
+					bucket: 'bucket-a',
+					prefix: '',
+					count: 0,
+					keys: [],
+					hydrated: false,
+					items: [],
+				}),
+				createObjectFavorite: vi.fn(),
+				deleteObjectFavorite: vi.fn(),
+			},
+		})
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+		const { rerender, unmount } = renderHook(
+			({ prefix }: { prefix: string }) =>
+				useObjectsPageQueries({
+					api,
+					apiToken: 'token-a',
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					prefix,
+					debugObjectsList: false,
+					favoritesPaneExpanded: false,
+					favoritesOnly: false,
+				}),
+			{
+				initialProps: { prefix: 'photos/' },
+				wrapper: createWrapper(queryClient),
+			},
+		)
+
+		await waitFor(() => expect(listObjects).toHaveBeenCalledTimes(1))
+		expect(listBuckets).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal))
+		rerender({ prefix: 'reports/' })
+
+		await waitFor(() => expect(listObjects).toHaveBeenCalledTimes(2))
+		expect(signals[0]?.aborted).toBe(true)
+		expect(signals[1]?.aborted).toBe(false)
+
+		unmount()
+		expect(signals[1]?.aborted).toBe(true)
+	})
+
+	it.each([
+		{ isAdvanced: false, cap: 1_000, pageSizes: [200, 800] },
+		{ isAdvanced: true, cap: 3_000, pageSizes: [200, 800, 1_000, 1_000] },
+	])('stops automatic search scanning exactly at the $cap item cap', async ({ isAdvanced, cap, pageSizes }) => {
+		let offset = 0
+		const listObjects = vi.fn(async ({ maxKeys }: { maxKeys?: number; continuationToken?: string }) => {
+			const size = maxKeys ?? 0
+			const start = offset
+			offset += size
+			return buildPage({
+				items: Array.from({ length: size }, (_, index) => ({
+					key: `photos/item-${start + index}.jpg`,
+					size: 128,
+					lastModified: '2026-03-06T00:00:00Z',
+				})),
+				isTruncated: true,
+				nextContinuationToken: `page-${offset}`,
+			})
+		})
+		const api = createMockApiClient({
+			server: { getMeta: async () => buildMeta() },
+			profiles: { listProfiles: async () => [buildProfile()] },
+			buckets: { listBuckets: async () => [{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' }] },
+			objects: {
+				listObjects,
+				listObjectFavorites: async () => ({
+					bucket: 'bucket-a',
+					prefix: '',
+					count: 0,
+					keys: [],
+					hydrated: false,
+					items: [],
+				}),
+				createObjectFavorite: vi.fn(),
+				deleteObjectFavorite: vi.fn(),
+			},
+		})
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		const { result } = renderHook(
+			() => {
+				const queries = useObjectsPageQueries({
+					api,
+					apiToken: 'token-a',
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					prefix: 'photos/',
+					debugObjectsList: false,
+					favoritesPaneExpanded: false,
+					favoritesOnly: false,
+				})
+				const rawTotalCount = (queries.objectsQuery.data?.pages ?? []).reduce(
+					(total, page) => total + page.items.length + (page.commonPrefixes?.length ?? 0),
+					0,
+				)
+				const autoScan = useObjectsAutoScan({
+					favoritesOnly: false,
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					prefix: 'photos/',
+					search: 'item',
+					isAdvanced,
+					extFilter: '',
+					minSize: null,
+					maxSize: null,
+					minModifiedMs: null,
+					maxModifiedMs: null,
+					typeFilter: 'all',
+					rawTotalCount,
+					rowsLength: rawTotalCount,
+					virtualItems: [],
+					autoScanReady: true,
+					hasNextPage: queries.objectsQuery.hasNextPage,
+					isFetchingNextPage: queries.objectsQuery.isFetchingNextPage,
+					fetchNextPage: queries.objectsQuery.fetchNextPage,
+					debugEnabled: false,
+					log: vi.fn(),
+				})
+				return { queries, autoScan, rawTotalCount }
+			},
+			{ wrapper: createWrapper(queryClient) },
+		)
+
+		await waitFor(() => {
+			expect(result.current.rawTotalCount).toBe(cap)
+			expect(result.current.queries.objectsQuery.isFetchingNextPage).toBe(false)
+			expect(result.current.autoScan.showLoadMore).toBe(true)
+		})
+		await act(async () => {
+			await Promise.resolve()
+		})
+
+		expect(listObjects).toHaveBeenCalledTimes(pageSizes.length)
+		expect(listObjects.mock.calls.map(([request]) => request.maxKeys)).toEqual(pageSizes)
+		expect(listObjects.mock.calls.map(([request]) => request.continuationToken)).toEqual([
+			undefined,
+			...pageSizes.slice(1).map((_, index) => `page-${pageSizes.slice(0, index + 1).reduce((sum, size) => sum + size, 0)}`),
+		])
+		expect(result.current.autoScan.searchAutoScanCap).toBe(cap)
+	})
+
 	it('does not list buckets, objects, or favorites when provider capability disables object and bucket CRUD', async () => {
 		const listBuckets = vi.fn().mockResolvedValue([{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' }])
 		const listObjects = vi.fn().mockResolvedValue(buildPage())

@@ -38,9 +38,21 @@ export function useObjectsPrefetch({
 	pageSize,
 }: UseObjectsPrefetchParams): { handleBucketDropdownVisibleChange: (open: boolean) => void } {
 	const prefetchScopeKey = `${apiToken}:${profileId ?? ''}:${profileProvider ?? ''}:${objectsCostMode}`
+	const prefetchRequestScopeKey = `${apiToken}:${profileId ?? ''}`
+	const prefetchAbortControllerRef = useRef(new AbortController())
+
+	useEffect(() => {
+		const controller = new AbortController()
+		prefetchAbortControllerRef.current.abort()
+		prefetchAbortControllerRef.current = controller
+		return () => controller.abort()
+	}, [prefetchRequestScopeKey])
+
 	const prefetchObjectsPage = useCallback(
 		async (bucketName: string) => {
 			if (!profileId || !bucketName) return
+			const requestScopeSignal = prefetchAbortControllerRef.current.signal
+			if (requestScopeSignal.aborted) return
 			const savedPrefix = prefixByBucketRef.current[bucketName] ?? ''
 			const queryKey = queryKeys.objects.list(profileId, bucketName, savedPrefix, apiToken)
 			const existing = queryClient.getQueryState(queryKey)
@@ -50,7 +62,7 @@ export function useObjectsPrefetch({
 					queryKey,
 					initialPageParam: undefined as string | undefined,
 					staleTime: 15_000,
-					queryFn: ({ pageParam }) =>
+					queryFn: ({ pageParam, signal }) =>
 						api.objects.listObjects({
 							profileId,
 							bucket: bucketName,
@@ -58,6 +70,7 @@ export function useObjectsPrefetch({
 							delimiter: '/',
 							maxKeys: pageSize,
 							continuationToken: pageParam,
+							signal: AbortSignal.any([signal, requestScopeSignal]),
 						}),
 					getNextPageParam: (lastPage: ListObjectsResponse) =>
 						lastPage.isTruncated ? lastPage.nextContinuationToken ?? undefined : undefined,
@@ -97,7 +110,7 @@ export function useObjectsPrefetch({
 	const prefetchQueueRef = useRef<string[]>([])
 	const prefetchInFlightRef = useRef(0)
 	const prefetchStartedRef = useRef(false)
-	// A scope change invalidates queued and in-flight work from the prior generation.
+	// A scope change invalidates queued work and completions from the prior generation.
 	const prefetchGenerationRef = useRef(0)
 	const lastPrefetchScopeKeyRef = useRef<string | null>(null)
 
@@ -116,12 +129,19 @@ export function useObjectsPrefetch({
 	}, [prefetchObjectsPage])
 
 	useEffect(() => {
-		if (lastPrefetchScopeKeyRef.current === prefetchScopeKey) return
-		lastPrefetchScopeKeyRef.current = prefetchScopeKey
-		prefetchGenerationRef.current += 1
-		prefetchQueueRef.current = []
-		prefetchInFlightRef.current = 0
-		prefetchStartedRef.current = false
+		if (lastPrefetchScopeKeyRef.current !== prefetchScopeKey) {
+			lastPrefetchScopeKeyRef.current = prefetchScopeKey
+			prefetchGenerationRef.current += 1
+			prefetchQueueRef.current = []
+			prefetchInFlightRef.current = 0
+			prefetchStartedRef.current = false
+		}
+		return () => {
+			prefetchGenerationRef.current += 1
+			prefetchQueueRef.current = []
+			prefetchInFlightRef.current = 0
+			prefetchStartedRef.current = false
+		}
 	}, [prefetchScopeKey])
 
 	useEffect(() => {

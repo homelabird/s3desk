@@ -135,6 +135,104 @@ describe('useObjectPreview', () => {
 		unmount()
 	})
 
+	it('keeps the current video preview abort handle when a stale cache lookup finishes', async () => {
+		const firstCacheKey = buildThumbnailCacheKey(
+			buildObjectThumbnailRequest({
+				apiToken: 'token-a',
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				objectKey: 'clip.mp4',
+				size: 360,
+			}),
+		)
+		const secondCacheKey = buildThumbnailCacheKey(
+			buildObjectThumbnailRequest({
+				apiToken: 'token-a',
+				profileId: 'profile-2',
+				bucket: 'bucket-a',
+				objectKey: 'clip.mp4',
+				size: 360,
+			}),
+		)
+		let resolveFirstMatch: ((value: Response | undefined) => void) | undefined
+		const match = vi
+			.fn()
+			.mockImplementationOnce(
+				() =>
+					new Promise<Response | undefined>((resolve) => {
+						resolveFirstMatch = resolve
+					}),
+			)
+			.mockResolvedValueOnce(undefined)
+		window.localStorage.setItem(
+			PERSISTENT_THUMBNAIL_INDEX_KEY,
+			JSON.stringify({ [firstCacheKey]: Date.now(), [secondCacheKey]: Date.now() }),
+		)
+		;(window as typeof window & { caches?: CacheStorage }).caches = {
+			open: vi.fn().mockResolvedValue({
+				match,
+				put: vi.fn(),
+			}),
+		} as unknown as CacheStorage
+		let resolveThumbnail: ((value: { blob: Blob; contentType: string }) => void) | undefined
+		const abortThumbnail = vi.fn()
+		const downloadObjectThumbnail = vi.fn(() => ({
+			promise: new Promise<{ blob: Blob; contentType: string }>((resolve) => {
+				resolveThumbnail = resolve
+			}),
+			abort: abortThumbnail,
+		}))
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
+		const { result, rerender } = renderHook(
+			({ profileId }: { profileId: string }) =>
+				useObjectPreview({
+					api,
+					apiToken: 'token-a',
+					profileId,
+					bucket: 'bucket-a',
+					detailsKey: 'clip.mp4',
+					detailsVisible: true,
+					detailsMeta: {
+						key: 'clip.mp4',
+						contentType: 'video/mp4',
+						size: 52_386_776,
+					} as never,
+					downloadLinkProxyEnabled: false,
+					presignedDownloadSupported: true,
+				}),
+			{ initialProps: { profileId: 'profile-1' } },
+		)
+		let firstLoad: Promise<void> | undefined
+		await act(async () => {
+			firstLoad = result.current.loadPreview()
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(match).toHaveBeenCalledTimes(1))
+
+		rerender({ profileId: 'profile-2' })
+		let secondLoad: Promise<void> | undefined
+		await act(async () => {
+			secondLoad = result.current.loadPreview()
+			await Promise.resolve()
+		})
+		await waitFor(() => {
+			expect(match).toHaveBeenCalledTimes(2)
+			expect(downloadObjectThumbnail).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'profile-2' }))
+		})
+
+		await act(async () => {
+			resolveFirstMatch?.(undefined)
+			await firstLoad
+		})
+		act(() => result.current.cancelPreview())
+
+		expect(abortThumbnail).toHaveBeenCalledTimes(1)
+		await act(async () => {
+			resolveThumbnail?.({ blob: new Blob(['thumb'], { type: 'image/jpeg' }), contentType: 'image/jpeg' })
+			await secondLoad
+		})
+	})
+
 	it('forces proxy download URLs when direct presigned links are unsupported', async () => {
 		const fetchSpy = vi
 			.spyOn(globalThis, 'fetch')
@@ -176,6 +274,48 @@ describe('useObjectPreview', () => {
 			proxy: true,
 		}))
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it('aborts a pending preview presign when the details scope closes', async () => {
+		const fetchSpy = vi.spyOn(globalThis, 'fetch')
+		let presignSignal: AbortSignal | undefined
+		const getObjectDownloadURL = vi.fn((request: { signal?: AbortSignal }) => {
+			presignSignal = request.signal
+			return new Promise<{ url: string; expiresAt: string }>((_resolve, reject) => {
+				request.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+			})
+		})
+		const api = createMockApiClient({ objects: { getObjectDownloadURL } })
+		const { result, rerender } = renderHook(
+			({ detailsVisible }: { detailsVisible: boolean }) =>
+				useObjectPreview({
+					api,
+					apiToken: 'token-a',
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					detailsKey: 'report.txt',
+					detailsVisible,
+					detailsMeta: {
+						key: 'report.txt',
+						contentType: 'text/plain',
+						size: 5,
+					} as never,
+					downloadLinkProxyEnabled: false,
+					presignedDownloadSupported: true,
+				}),
+			{ initialProps: { detailsVisible: true } },
+		)
+
+		await act(async () => {
+			void result.current.loadPreview()
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(getObjectDownloadURL).toHaveBeenCalledTimes(1))
+
+		rerender({ detailsVisible: false })
+
+		expect(presignSignal?.aborted).toBe(true)
+		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 
 	it('loads a direct image preview for PNG objects and reuses it as an image preview asset', async () => {

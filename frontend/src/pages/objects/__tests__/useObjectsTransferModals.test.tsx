@@ -4,12 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { APIClientShape } from '../../../api/client'
 import type { TransfersContextValue } from '../../../components/transfersTypes'
 import {
-	noFilesFoundInSelectedFolderHint,
 	noObjectsFoundUnderPrefixHint,
 	selectLocalFolderFirstHint,
 } from '../../../lib/secureContext'
 import { useObjectsDownloadPrefix } from '../useObjectsDownloadPrefix'
-import { useObjectsUploadFolder } from '../useObjectsUploadFolder'
 
 const messageErrorMock = vi.fn()
 const messageInfoMock = vi.fn()
@@ -44,34 +42,18 @@ type ListObjectsResponse = {
 	nextContinuationToken?: string | null
 }
 
-function createApiStub(listObjects: () => Promise<ListObjectsResponse>): APIClientShape {
+type ListObjectsArgs = {
+	prefix?: string
+	continuationToken?: string
+	signal?: AbortSignal
+}
+
+function createApiStub(listObjects: (args: ListObjectsArgs) => Promise<ListObjectsResponse>): APIClientShape {
 	return {
 		objects: {
 			listObjects: vi.fn(listObjects),
 		},
 	} as unknown as APIClientShape
-}
-
-function createFileHandle(file: Promise<File> | File): FileSystemFileHandle {
-	return {
-		kind: 'file',
-		getFile: async () => await file,
-	} as unknown as FileSystemFileHandle
-}
-
-function createDirectoryHandle(
-	name: string,
-	entries: Array<[string, FileSystemFileHandle | FileSystemDirectoryHandle]> = [],
-): FileSystemDirectoryHandle {
-	return {
-		kind: 'directory',
-		name,
-		async *entries() {
-			for (const entry of entries) {
-				yield entry
-			}
-		},
-	} as unknown as FileSystemDirectoryHandle
 }
 
 function createTransfersStub(): TransfersContextValue {
@@ -106,7 +88,11 @@ describe('objects transfer modals', () => {
 		const listRequest = deferred<ListObjectsResponse>()
 		const transfers = createTransfersStub()
 		const handle = { name: 'restore-target' } as unknown as FileSystemDirectoryHandle
-		const api = createApiStub(() => listRequest.promise)
+		let requestSignal: AbortSignal | undefined
+		const api = createApiStub((args) => {
+			requestSignal = args.signal
+			return listRequest.promise
+		})
 
 		const { result } = renderHook(() =>
 			useObjectsDownloadPrefix({
@@ -126,8 +112,9 @@ describe('objects transfer modals', () => {
 
 		await waitFor(() => expect(result.current.downloadPrefixCanSubmit).toBe(true))
 
+		let pending!: Promise<void>
 		act(() => {
-			void result.current.handleDownloadPrefixSubmit({ localFolder: 'restore-target' })
+			pending = result.current.handleDownloadPrefixSubmit({ localFolder: 'restore-target' })
 		})
 
 		act(() => {
@@ -138,67 +125,66 @@ describe('objects transfer modals', () => {
 			listRequest.resolve({
 				items: [{ key: 'logs/app.log', size: 128 }],
 				commonPrefixes: [],
-				isTruncated: false,
-				nextContinuationToken: undefined,
+				isTruncated: true,
+				nextContinuationToken: 'page-2',
 			})
-			await Promise.resolve()
+			await pending
 		})
 
+		expect(requestSignal?.aborted).toBe(true)
+		expect(api.objects.listObjects).toHaveBeenCalledTimes(1)
 		expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
 		expect(transfers.openTransfers).not.toHaveBeenCalled()
 		expect(result.current.downloadPrefixOpen).toBe(false)
 		expect(result.current.downloadPrefixSubmitting).toBe(false)
 	})
 
-	it('ignores stale upload-folder responses after the modal closes', async () => {
-		const fileRequest = deferred<File>()
+	it('lists and queues the prefix selected from a folder action', async () => {
 		const transfers = createTransfersStub()
-		const file = new File(['photo'], 'cat.jpg', { type: 'image/jpeg' })
-		const handle = createDirectoryHandle('photos', [['cat.jpg', createFileHandle(fileRequest.promise)]])
+		const handle = { name: 'restore-target' } as unknown as FileSystemDirectoryHandle
+		const api = createApiStub(async () => ({
+			items: [{ key: 'logs/archive/app.log', size: 128 }],
+			commonPrefixes: [],
+			isTruncated: false,
+		}))
 
 		const { result } = renderHook(() =>
-			useObjectsUploadFolder({
+			useObjectsDownloadPrefix({
+				api,
 				apiToken: 'token-1',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
-				prefix: 'images/',
-				uploadsEnabled: true,
-				uploadsDisabledReason: null,
+				prefix: 'logs/',
 				transfers,
 			}),
 		)
 
 		act(() => {
-			result.current.openUploadFolderModal()
-			result.current.handleUploadFolderPick(handle)
+			result.current.openDownloadPrefix('logs/archive/')
+			result.current.handleDownloadPrefixPick(handle)
 		})
+		await waitFor(() => expect(result.current.downloadPrefixCanSubmit).toBe(true))
 
-		await waitFor(() => expect(result.current.uploadFolderCanSubmit).toBe(true))
-
-		act(() => {
-			void result.current.handleUploadFolderSubmit()
-		})
-
-		act(() => {
-			result.current.handleUploadFolderCancel()
-		})
-
+		expect(result.current.downloadPrefixSourcePrefix).toBe('logs/archive/')
 		await act(async () => {
-			fileRequest.resolve(file)
-			await Promise.resolve()
+			await result.current.handleDownloadPrefixSubmit({ localFolder: 'restore-target' })
 		})
 
-		expect(transfers.queueUploadFiles).not.toHaveBeenCalled()
-		expect(transfers.openTransfers).not.toHaveBeenCalled()
-		expect(result.current.uploadFolderOpen).toBe(false)
-		expect(result.current.uploadFolderSubmitting).toBe(false)
+		expect(api.objects.listObjects).toHaveBeenCalledWith(expect.objectContaining({ prefix: 'logs/archive/' }))
+		expect(transfers.queueDownloadObjectsToDevice).toHaveBeenCalledWith(
+			expect.objectContaining({ prefix: 'logs/archive/' }),
+		)
 	})
 
 	it('ignores stale prefix-download responses after the api token changes', async () => {
 		const listRequest = deferred<ListObjectsResponse>()
 		const transfers = createTransfersStub()
 		const handle = { name: 'restore-target' } as unknown as FileSystemDirectoryHandle
-		const api = createApiStub(() => listRequest.promise)
+		let requestSignal: AbortSignal | undefined
+		const api = createApiStub((args) => {
+			requestSignal = args.signal
+			return listRequest.promise
+		})
 
 		const { result, rerender } = renderHook(
 			({ apiToken }: { apiToken: string }) =>
@@ -220,8 +206,9 @@ describe('objects transfer modals', () => {
 
 		await waitFor(() => expect(result.current.downloadPrefixCanSubmit).toBe(true))
 
+		let pending!: Promise<void>
 		act(() => {
-			void result.current.handleDownloadPrefixSubmit({ localFolder: 'restore-target' })
+			pending = result.current.handleDownloadPrefixSubmit({ localFolder: 'restore-target' })
 		})
 
 		rerender({ apiToken: 'token-2' })
@@ -230,60 +217,24 @@ describe('objects transfer modals', () => {
 			listRequest.resolve({
 				items: [{ key: 'logs/app.log', size: 128 }],
 				commonPrefixes: [],
-				isTruncated: false,
-				nextContinuationToken: undefined,
+				isTruncated: true,
+				nextContinuationToken: 'page-2',
 			})
-			await Promise.resolve()
+			await pending
 		})
 
+		expect(requestSignal?.aborted).toBe(true)
+		expect(api.objects.listObjects).toHaveBeenCalledTimes(1)
 		expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
 		expect(transfers.openTransfers).not.toHaveBeenCalled()
 		expect(result.current.downloadPrefixOpen).toBe(false)
 		expect(result.current.downloadPrefixSubmitting).toBe(false)
-	})
 
-	it('ignores stale upload-folder responses after the api token changes', async () => {
-		const fileRequest = deferred<File>()
-		const transfers = createTransfersStub()
-		const file = new File(['photo'], 'cat.jpg', { type: 'image/jpeg' })
-		const handle = createDirectoryHandle('photos', [['cat.jpg', createFileHandle(fileRequest.promise)]])
+		rerender({ apiToken: 'token-1' })
 
-		const { result, rerender } = renderHook(
-			({ apiToken }: { apiToken: string }) =>
-				useObjectsUploadFolder({
-					apiToken,
-					profileId: 'profile-1',
-					bucket: 'bucket-a',
-					prefix: 'images/',
-					uploadsEnabled: true,
-					uploadsDisabledReason: null,
-					transfers,
-				}),
-			{ initialProps: { apiToken: 'token-1' } },
-		)
-
-		act(() => {
-			result.current.openUploadFolderModal()
-			result.current.handleUploadFolderPick(handle)
-		})
-
-		await waitFor(() => expect(result.current.uploadFolderCanSubmit).toBe(true))
-
-		act(() => {
-			void result.current.handleUploadFolderSubmit()
-		})
-
-		rerender({ apiToken: 'token-2' })
-
-		await act(async () => {
-			fileRequest.resolve(file)
-			await Promise.resolve()
-		})
-
-		expect(transfers.queueUploadFiles).not.toHaveBeenCalled()
-		expect(transfers.openTransfers).not.toHaveBeenCalled()
-		expect(result.current.uploadFolderOpen).toBe(false)
-		expect(result.current.uploadFolderSubmitting).toBe(false)
+		expect(result.current.downloadPrefixOpen).toBe(false)
+		expect(result.current.downloadPrefixSubmitting).toBe(false)
+		expect(result.current.downloadPrefixSourcePrefix).toBe('')
 	})
 
 	it('uses the shared local-folder required hint when prefix download submit runs without a picked folder', async () => {
@@ -310,34 +261,6 @@ describe('objects transfer modals', () => {
 
 		expect(messageInfoMock).toHaveBeenCalledWith(selectLocalFolderFirstHint())
 		expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
-		expect(transfers.openTransfers).not.toHaveBeenCalled()
-	})
-
-	it('uses the shared local-folder required hint when upload-folder submit runs without a picked folder', async () => {
-		const transfers = createTransfersStub()
-
-		const { result } = renderHook(() =>
-			useObjectsUploadFolder({
-				apiToken: 'token-1',
-				profileId: 'profile-1',
-				bucket: 'bucket-a',
-				prefix: 'images/',
-				uploadsEnabled: true,
-				uploadsDisabledReason: null,
-				transfers,
-			}),
-		)
-
-		act(() => {
-			result.current.openUploadFolderModal()
-		})
-
-		await act(async () => {
-			await result.current.handleUploadFolderSubmit()
-		})
-
-		expect(messageInfoMock).toHaveBeenCalledWith(selectLocalFolderFirstHint())
-		expect(transfers.queueUploadFiles).not.toHaveBeenCalled()
 		expect(transfers.openTransfers).not.toHaveBeenCalled()
 	})
 
@@ -378,35 +301,4 @@ describe('objects transfer modals', () => {
 		expect(transfers.openTransfers).not.toHaveBeenCalled()
 	})
 
-	it('uses the shared empty-folder hint when a picked upload folder has no files', async () => {
-		const transfers = createTransfersStub()
-		const handle = createDirectoryHandle('photos')
-
-		const { result } = renderHook(() =>
-			useObjectsUploadFolder({
-				apiToken: 'token-1',
-				profileId: 'profile-1',
-				bucket: 'bucket-a',
-				prefix: 'images/',
-				uploadsEnabled: true,
-				uploadsDisabledReason: null,
-				transfers,
-			}),
-		)
-
-		act(() => {
-			result.current.openUploadFolderModal()
-			result.current.handleUploadFolderPick(handle)
-		})
-
-		await waitFor(() => expect(result.current.uploadFolderCanSubmit).toBe(true))
-
-		await act(async () => {
-			await result.current.handleUploadFolderSubmit()
-		})
-
-		expect(messageInfoMock).toHaveBeenCalledWith(noFilesFoundInSelectedFolderHint())
-		expect(transfers.queueUploadFiles).not.toHaveBeenCalled()
-		expect(transfers.openTransfers).not.toHaveBeenCalled()
-	})
 })

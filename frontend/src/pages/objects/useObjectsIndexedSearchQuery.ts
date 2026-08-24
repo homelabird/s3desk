@@ -78,7 +78,7 @@ export function useObjectsIndexedSearchQuery({
 		}),
 		enabled: globalSearchOpen && !!profileId && !!bucket && !!globalSearchQueryText,
 		initialPageParam: undefined as string | undefined,
-		queryFn: async ({ pageParam }) =>
+		queryFn: async ({ pageParam, signal }) =>
 			api.objects.searchObjectsIndex({
 				profileId: profileId!,
 				bucket,
@@ -91,6 +91,7 @@ export function useObjectsIndexedSearchQuery({
 				maxSize: globalSearchMaxSizeBytes ?? undefined,
 				modifiedAfter: globalSearchModifiedAfter,
 				modifiedBefore: globalSearchModifiedBefore,
+				signal,
 			}),
 		getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
 	})

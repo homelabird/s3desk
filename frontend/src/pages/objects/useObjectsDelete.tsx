@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { APIClientShape } from '../../api/client'
+import { APIError, type APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { objectsFeedback } from './objectsFeedback'
-import { invalidateObjectQueriesForPrefix } from './objectsQueryCache'
+import {
+	claimObjectJobCompletion,
+	invalidateObjectQueriesForPrefix,
+	markObjectJobCompletionHandled,
+	releaseObjectJobCompletion,
+	type ObjectJobCompletion,
+} from './objectsQueryCache'
 import { publishObjectsRefresh, type ObjectsRefreshEventDetail } from './objectsRefreshEvents'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
@@ -19,6 +25,7 @@ type UseObjectsDeleteArgs = {
 	bucket: string
 	prefix: string
 	createJobWithRetry: CreateJobWithRetry
+	eventsConnected?: boolean
 	setSelectedKeys: React.Dispatch<React.SetStateAction<Set<string>>>
 }
 
@@ -29,6 +36,7 @@ export function useObjectsDelete({
 	bucket,
 	prefix,
 	createJobWithRetry,
+	eventsConnected = false,
 	setSelectedKeys,
 }: UseObjectsDeleteArgs) {
 	const queryClient = useQueryClient()
@@ -52,15 +60,35 @@ export function useObjectsDelete({
 		contextKey: string
 	} | null>(null)
 	const deleteContextVersionRef = useRef(0)
+	const eventsConnectedRef = useRef(eventsConnected)
+	eventsConnectedRef.current = eventsConnected
+	const deleteJobWatchersRef = useRef(new Map<string, {
+		apiToken: string
+		controller: AbortController
+		profileId: string
+	}>())
 	const deleteMutationPending =
 		rawContextMatches(deletePendingState, currentContextKey, deleteContextVersion)
 	const deletePrefixJobMutationPending =
 		rawContextMatches(deletePrefixPendingState, currentContextKey, deleteContextVersion)
 
 	useEffect(() => {
+		const deleteJobWatchers = deleteJobWatchersRef.current
 		const nextContextVersion = deleteContextVersionRef.current + 1
 		deleteContextVersionRef.current = nextContextVersion
 		setDeleteContextVersion(nextContextVersion)
+		return () => {
+			deleteContextVersionRef.current += 1
+			for (const [jobId, watcher] of deleteJobWatchers) {
+				watcher.controller.abort()
+				releaseObjectJobCompletion({
+					apiToken: watcher.apiToken,
+					profileId: watcher.profileId,
+					jobId,
+				})
+			}
+			deleteJobWatchers.clear()
+		}
 	}, [apiToken, bucket, prefix, profileId])
 
 	const watchDeleteJobCompletion = async (
@@ -69,44 +97,92 @@ export function useObjectsDelete({
 		source: ObjectsRefreshEventDetail['source'],
 		contextVersion: number,
 	) => {
-		if (!profileId) return
-
-		for (let attempt = 0; attempt < 60; attempt += 1) {
-			if (contextVersion !== deleteContextVersionRef.current) return
+		const scopeProfileId = profileId
+		if (
+			!scopeProfileId ||
+			contextVersion !== deleteContextVersionRef.current ||
+			deleteJobWatchersRef.current.has(jobId)
+		) return
+		const controller = new AbortController()
+		deleteJobWatchersRef.current.set(jobId, {
+			apiToken,
+			controller,
+			profileId: scopeProfileId,
+		})
+		let settled = false
+		const completionScope = { apiToken, profileId: scopeProfileId, jobId }
+		const finishDeleteJob = async (completion: ObjectJobCompletion) => {
+			if (
+				settled ||
+				controller.signal.aborted ||
+				contextVersion !== deleteContextVersionRef.current
+			) return
+			settled = true
+			controller.abort()
+			deleteJobWatchersRef.current.delete(jobId)
+			markObjectJobCompletionHandled(completionScope)
 			try {
-				const job = await api.jobs.getJob(profileId, jobId)
-				if (contextVersion !== deleteContextVersionRef.current) return
-				if (job.status === 'succeeded') {
-					await invalidateObjectQueriesForPrefix(queryClient, {
-						profileId,
-						bucket,
-						changedPrefix: refreshPrefix,
-						apiToken,
-					})
-					publishObjectsRefresh({
-						apiToken,
-						profileId,
-						bucket,
-						prefix: refreshPrefix,
-						source,
-					})
-					return
-				}
-				if (job.status === 'failed' || job.status === 'canceled') {
-					if (job.error) {
-						objectsFeedback.errorText(job.error)
-					}
-					return
-				}
+				await invalidateObjectQueriesForPrefix(queryClient, {
+					profileId: scopeProfileId,
+					bucket,
+					changedPrefix: refreshPrefix,
+					apiToken,
+				})
 			} catch {
-				// ignore transient poll errors and retry until timeout
+				// A cache refresh failure must not restart a completed job watcher.
 			}
-			await new Promise((resolve) => window.setTimeout(resolve, 1000))
+			if (contextVersion !== deleteContextVersionRef.current) return
+			publishObjectsRefresh({
+				apiToken,
+				profileId: scopeProfileId,
+				bucket,
+				prefix: refreshPrefix,
+				source,
+			})
+			if ((completion.status === 'failed' || completion.status === 'canceled') && completion.error) {
+				objectsFeedback.errorText(completion.error)
+			}
+		}
+		claimObjectJobCompletion(
+			completionScope,
+			(completion) => void finishDeleteJob(completion),
+		)
+
+		let consecutivePollErrors = 0
+		let hasPolled = false
+		let lastPollAt = 0
+		for (;;) {
+			if (settled || controller.signal.aborted || contextVersion !== deleteContextVersionRef.current) return
+			if (hasPolled && eventsConnectedRef.current && Date.now() - lastPollAt < 30_000) {
+				await waitForDeleteJobPoll(controller.signal, 1000)
+				continue
+			}
+			hasPolled = true
+			lastPollAt = Date.now()
+			let job: Job
+			try {
+				job = await api.jobs.getJob(scopeProfileId, jobId)
+			} catch (err) {
+				if (isNonRetryableDeleteJobPollError(err)) return
+				consecutivePollErrors += 1
+				const delayMs = eventsConnectedRef.current
+					? 1000
+					: Math.min(20_000, 1000 * 2 ** Math.min(consecutivePollErrors - 1, 5))
+				await waitForDeleteJobPoll(controller.signal, delayMs)
+				continue
+			}
+			consecutivePollErrors = 0
+			if (settled || controller.signal.aborted || contextVersion !== deleteContextVersionRef.current) return
+			if (isDeleteJobTerminal(job)) {
+				await finishDeleteJob({ status: job.status, error: job.error })
+				return
+			}
+			await waitForDeleteJobPoll(controller.signal, 1000)
 		}
 	}
 
 	const rawDeleteMutation = useMutation({
-		mutationFn: async ({ keys }: DeleteMutationArgs) => {
+		mutationFn: async ({ keys, contextVersion }: DeleteMutationArgs) => {
 			if (keys.length < 1) throw new Error('select objects first')
 			if (keys.length > 50_000) throw new Error('too many keys; use a prefix delete job instead')
 			if (keys.length > 1000) {
@@ -114,6 +190,7 @@ export function useObjectsDelete({
 					type: 's3_delete_objects',
 					payload: { bucket, keys },
 				})
+				void watchDeleteJobCompletion(job.id, prefix, 'delete_objects', contextVersion)
 				return { kind: 'job' as const, job }
 			}
 			let deleted = 0
@@ -149,7 +226,6 @@ export function useObjectsDelete({
 				})
 				if (contextVersion !== deleteContextVersionRef.current) return
 				objectsFeedback.deleteTaskStarted(result.job.id)
-				void watchDeleteJobCompletion(result.job.id, prefix, 'delete_objects', contextVersion)
 			}
 			if (contextVersion !== deleteContextVersionRef.current) return
 			setSelectedKeys((prev) => {
@@ -158,7 +234,7 @@ export function useObjectsDelete({
 				for (const k of keys) next.delete(k)
 				return next
 			})
-			if (profileId) {
+			if (result.kind === 'direct' && profileId) {
 				await invalidateObjectQueriesForPrefix(queryClient, {
 					profileId,
 					bucket,
@@ -192,8 +268,8 @@ export function useObjectsDelete({
 	})
 
 	const rawDeletePrefixJobMutation = useMutation({
-		mutationFn: ({ prefix, dryRun }: DeletePrefixMutationArgs) =>
-			createJobWithRetry({
+		mutationFn: async ({ prefix, dryRun, contextVersion }: DeletePrefixMutationArgs) => {
+			const job = await createJobWithRetry({
 				type: 'transfer_delete_prefix',
 				payload: {
 					bucket,
@@ -204,7 +280,10 @@ export function useObjectsDelete({
 					exclude: [],
 					dryRun,
 				},
-		}),
+			})
+			void watchDeleteJobCompletion(job.id, prefix, 'delete_prefix', contextVersion)
+			return job
+		},
 		onMutate: (variables) => {
 			setDeletePrefixPendingState({
 				contextVersion: variables.contextVersion,
@@ -224,7 +303,6 @@ export function useObjectsDelete({
 			})
 			if (variables.contextVersion !== deleteContextVersionRef.current) return
 			objectsFeedback.deleteTaskStarted(job.id)
-			void watchDeleteJobCompletion(job.id, variables.prefix, 'delete_prefix', variables.contextVersion)
 		},
 		onError: (err, variables, context) => {
 			if ((context?.contextVersion ?? variables.contextVersion) !== deleteContextVersionRef.current) return
@@ -265,6 +343,31 @@ export function useObjectsDelete({
 		deleteMutation,
 		deletePrefixJobMutation,
 	}
+}
+
+function isDeleteJobTerminal(job: Job): job is Job & { status: ObjectJobCompletion['status'] } {
+	return job.status === 'succeeded' || job.status === 'failed' || job.status === 'canceled'
+}
+
+function isNonRetryableDeleteJobPollError(error: unknown): boolean {
+	if (!(error instanceof APIError)) return false
+	if (error.normalizedError?.retryable === false) return true
+	return error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 425 && error.status !== 429
+}
+
+function waitForDeleteJobPoll(signal: AbortSignal, delayMs: number): Promise<void> {
+	if (signal.aborted) return Promise.resolve()
+	return new Promise((resolve) => {
+		const timer = window.setTimeout(() => {
+			signal.removeEventListener('abort', handleAbort)
+			resolve()
+		}, delayMs)
+		function handleAbort() {
+			window.clearTimeout(timer)
+			resolve()
+		}
+		signal.addEventListener('abort', handleAbort, { once: true })
+	})
 }
 
 function rawContextMatches(

@@ -50,6 +50,63 @@ export type ObjectsQueryLocation = {
 	apiToken: string
 }
 
+type ObjectJobCompletionScope = {
+	apiToken: string
+	profileId: string
+	jobId: string
+}
+
+export type ObjectJobCompletion = {
+	status: 'succeeded' | 'failed' | 'canceled'
+	error?: string | null
+}
+
+const maxHandledObjectJobCompletions = 256
+const claimedObjectJobCompletions = new Map<string, (completion: ObjectJobCompletion) => void>()
+const handledObjectJobCompletions = new Set<string>()
+
+function objectJobCompletionKey(scope: ObjectJobCompletionScope): string {
+	return JSON.stringify([scope.apiToken, scope.profileId, scope.jobId])
+}
+
+export function claimObjectJobCompletion(
+	scope: ObjectJobCompletionScope,
+	onCompleted: (completion: ObjectJobCompletion) => void,
+): void {
+	const key = objectJobCompletionKey(scope)
+	handledObjectJobCompletions.delete(key)
+	claimedObjectJobCompletions.set(key, onCompleted)
+}
+
+export function releaseObjectJobCompletion(scope: ObjectJobCompletionScope): void {
+	const key = objectJobCompletionKey(scope)
+	claimedObjectJobCompletions.delete(key)
+	handledObjectJobCompletions.delete(key)
+}
+
+export function isObjectJobCompletionClaimed(scope: ObjectJobCompletionScope): boolean {
+	return claimedObjectJobCompletions.has(objectJobCompletionKey(scope))
+}
+
+export function markObjectJobCompletionHandled(scope: ObjectJobCompletionScope): void {
+	const key = objectJobCompletionKey(scope)
+	claimedObjectJobCompletions.delete(key)
+	handledObjectJobCompletions.delete(key)
+	handledObjectJobCompletions.add(key)
+	if (handledObjectJobCompletions.size <= maxHandledObjectJobCompletions) return
+	const oldest = handledObjectJobCompletions.values().next().value
+	if (oldest) handledObjectJobCompletions.delete(oldest)
+}
+
+export function completeClaimedObjectJob(scope: ObjectJobCompletionScope, completion: ObjectJobCompletion): boolean {
+	const key = objectJobCompletionKey(scope)
+	if (handledObjectJobCompletions.has(key)) return true
+	const onCompleted = claimedObjectJobCompletions.get(key)
+	if (!onCompleted) return false
+	onCompleted(completion)
+	return true
+}
+
 function isPrefixRelated(queryPrefix: string, changedPrefix: string): boolean {
 	const normalizedQueryPrefix = normalizePrefix(queryPrefix)
 	const normalizedChangedPrefix = normalizePrefix(changedPrefix)

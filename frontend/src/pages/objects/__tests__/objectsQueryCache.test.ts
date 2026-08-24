@@ -3,12 +3,17 @@ import { describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '../../../api/queryKeys'
 import type { Job } from '../../../api/types'
 import {
+	claimObjectJobCompletion,
+	completeClaimedObjectJob,
 	getVisibleCreatedPrefix,
 	hasVisiblePrefixInObjectsData,
 	insertOptimisticPrefixIntoObjectsData,
+	isObjectJobCompletionClaimed,
 	isObjectsQueryKeyRelevantToPrefix,
 	invalidateObjectQueriesForPrefix,
+	markObjectJobCompletionHandled,
 	objectQueryLocationsForJob,
+	releaseObjectJobCompletion,
 } from '../objectsQueryCache'
 
 describe('objectsQueryCache', () => {
@@ -202,5 +207,28 @@ describe('objectsQueryCache', () => {
 				apiToken: 'token-a',
 			}),
 		})).toBe(true)
+	})
+
+	it('drops terminal callbacks and bounds late-realtime handled markers', () => {
+		const firstScope = { apiToken: 'token-a', profileId: 'profile-1', jobId: 'job-0' }
+		const completion = { status: 'succeeded' as const }
+		const onCompleted = vi.fn()
+		claimObjectJobCompletion(firstScope, onCompleted)
+		markObjectJobCompletionHandled(firstScope)
+
+		expect(isObjectJobCompletionClaimed(firstScope)).toBe(false)
+		expect(completeClaimedObjectJob(firstScope, completion)).toBe(true)
+		expect(onCompleted).not.toHaveBeenCalled()
+
+		const laterScopes = Array.from({ length: 256 }, (_, index) => ({
+			apiToken: 'token-a',
+			profileId: 'profile-1',
+			jobId: `job-${index + 1}`,
+		}))
+		for (const scope of laterScopes) markObjectJobCompletionHandled(scope)
+
+		expect(completeClaimedObjectJob(firstScope, completion)).toBe(false)
+		expect(completeClaimedObjectJob(laterScopes.at(-1)!, completion)).toBe(true)
+		for (const scope of [firstScope, ...laterScopes]) releaseObjectJobCompletion(scope)
 	})
 })

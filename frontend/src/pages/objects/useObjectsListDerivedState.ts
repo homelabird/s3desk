@@ -14,6 +14,9 @@ import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
 import type { SearchHighlightResult } from './useSearchHighlight'
 import { useSearchHighlight } from './useSearchHighlight'
 
+const EMPTY_FAVORITE_ITEMS: ObjectItem[] = []
+const EMPTY_FAVORITE_KEYS = new Set<string>()
+
 export type ObjectsListDerivedState = {
 	searchTokens: string[]
 	searchTokensNormalized: string[]
@@ -54,14 +57,16 @@ export function useObjectsListDerivedState(args: {
 	const searchTokens = useMemo(() => splitSearchTokens(args.deferredSearch), [args.deferredSearch])
 	const searchTokensNormalized = useMemo(() => searchTokens.map((token) => normalizeForSearch(token)), [searchTokens])
 	const { highlightText } = useSearchHighlight(searchTokens)
+	const rowFavoriteItems = args.favoritesOnly ? args.favoriteItems : EMPTY_FAVORITE_ITEMS
+	const rowFavoriteKeys = args.favoritesFirst ? args.favoriteKeys : EMPTY_FAVORITE_KEYS
 
 	const rows: ObjectRow[] = useMemo(
 		() =>
 			buildObjectRows({
 				pages: args.objectsPages,
-				favoriteItems: args.favoriteItems,
+				favoriteItems: rowFavoriteItems,
 				favoritesOnly: args.favoritesOnly,
-				favoriteKeys: args.favoriteKeys,
+				favoriteKeys: rowFavoriteKeys,
 				prefix: args.prefix,
 				searchTokens,
 				searchTokensNormalized,
@@ -76,8 +81,6 @@ export function useObjectsListDerivedState(args: {
 			}),
 		[
 			args.extFilter,
-			args.favoriteItems,
-			args.favoriteKeys,
 			args.favoritesFirst,
 			args.favoritesOnly,
 			args.maxModifiedMs,
@@ -88,6 +91,8 @@ export function useObjectsListDerivedState(args: {
 			args.prefix,
 			args.sort,
 			args.typeFilter,
+			rowFavoriteItems,
+			rowFavoriteKeys,
 			searchTokens,
 			searchTokensNormalized,
 		],
@@ -180,4 +185,3 @@ export function useObjectsListDerivedState(args: {
 		extOptions,
 	}
 }
-

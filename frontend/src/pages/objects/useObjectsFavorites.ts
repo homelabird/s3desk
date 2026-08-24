@@ -33,7 +33,8 @@ function updateFavoriteResponse(
 		mode: 'add' | 'remove'
 		item?: FavoriteObjectItem
 	},
-): ObjectFavoritesResponse {
+): ObjectFavoritesResponse | undefined {
+	if (!response) return undefined
 	const nextKeys = favoriteKeysFromResponse(response)
 	if (args.mode === 'add') {
 		nextKeys.unshift(args.favoriteKey)
@@ -59,10 +60,11 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	const queryClient = useQueryClient()
 	const currentScopeKey = `${profileId ?? ''}:${bucket}:${apiToken}`
 	const favoriteContextVersionRef = useRef(0)
-	const [favoritePendingState, setFavoritePendingState] = useState<{ scopeKey: string; keys: Set<string> }>(() => ({
-		scopeKey: currentScopeKey,
-		keys: new Set(),
-	}))
+	const favoriteMutationRequestIdRef = useRef(0)
+	const favoriteMutationOwnerByKeyRef = useRef(new Map<string, number>())
+	const [favoritePendingOwnersByScope, setFavoritePendingOwnersByScope] = useState(
+		() => new Map<string, Map<string, number>>(),
+	)
 
 	useEffect(() => {
 		favoriteContextVersionRef.current += 1
@@ -76,30 +78,29 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 		() => queryKeys.objects.favoritesItems(profileId, bucket, apiToken),
 		[apiToken, bucket, profileId],
 	)
-	const favoriteSummaryQuery = useQuery({
-		queryKey: favoriteSummaryQueryKey,
-		enabled: enabled && !!profileId && !!bucket,
-		retry: false,
-		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false }),
-	})
+	const favoriteItemsEnabled = enabled && !!profileId && !!bucket && hydrateItems
 	const favoriteItemsQuery = useQuery({
-		queryKey: favoriteItemsQueryKey,
-		enabled: enabled && !!profileId && !!bucket && hydrateItems,
+		queryKey: favoriteItemsEnabled ? favoriteItemsQueryKey : [...favoriteItemsQueryKey, 'disabled'],
+		enabled: favoriteItemsEnabled,
 		retry: false,
-		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true }),
+		queryFn: ({ signal }) => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true, signal }),
+	})
+	const favoriteSummaryEnabled = enabled && !!profileId && !!bucket && (!hydrateItems || favoriteItemsQuery.isError)
+	const favoriteSummaryQuery = useQuery({
+		queryKey: favoriteSummaryEnabled ? favoriteSummaryQueryKey : [...favoriteSummaryQueryKey, 'disabled'],
+		enabled: favoriteSummaryEnabled,
+		retry: false,
+		queryFn: ({ signal }) => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false, signal }),
 	})
 	const favoritesQuery = hydrateItems ? favoriteItemsQuery : favoriteSummaryQuery
-	const favoriteItems = useMemo(() => favoriteItemsQuery.data?.items ?? [], [favoriteItemsQuery.data?.items])
-	const favoriteKeys = useMemo(
-		() =>
-			new Set(
-				favoriteKeysFromResponse(favoriteSummaryQuery.data).concat(
-					favoriteItemsQuery.data?.items?.map((item) => item.key) ?? [],
-				),
-			),
-		[favoriteItemsQuery.data?.items, favoriteSummaryQuery.data],
-	)
-	const favoriteCount = favoriteSummaryQuery.data?.count ?? favoriteItemsQuery.data?.count ?? favoriteKeys.size
+	const favoriteItemsResponse = favoriteItemsQuery.data ?? queryClient.getQueryData<ObjectFavoritesResponse>(favoriteItemsQueryKey)
+	const favoriteSummaryResponse = favoriteSummaryQuery.data ?? queryClient.getQueryData<ObjectFavoritesResponse>(favoriteSummaryQueryKey)
+	const favoriteResponse = hydrateItems && !favoriteItemsQuery.isError
+		? favoriteItemsResponse ?? favoriteSummaryResponse
+		: favoriteSummaryResponse ?? favoriteItemsResponse
+	const favoriteItems = useMemo(() => favoriteItemsResponse?.items ?? [], [favoriteItemsResponse?.items])
+	const favoriteKeys = useMemo(() => new Set(favoriteKeysFromResponse(favoriteResponse)), [favoriteResponse])
+	const favoriteCount = favoriteResponse?.count ?? favoriteKeys.size
 
 	const objectsItemMap = useMemo(() => {
 		const map = new Map<string, ObjectItem>()
@@ -115,20 +116,38 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 		(key: string) => objectsItemMap.get(key) ?? favoriteItems.find((item) => item.key === key),
 		[favoriteItems, objectsItemMap],
 	)
+	const favoriteQueryKeys = [favoriteSummaryQueryKey, favoriteItemsQueryKey]
+	const cancelFavoriteQueriesForMutation = async () => {
+		const queryKeysToRecover = favoriteQueryKeys.filter((queryKey) => {
+			const state = queryClient.getQueryState(queryKey)
+			return state?.fetchStatus === 'fetching' || state?.data === undefined
+		})
+		await Promise.all(favoriteQueryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey, exact: true })))
+		return queryKeysToRecover
+	}
 
 	const addFavoriteMutation = useMutation({
 		mutationFn: (key: string) => api.objects.createObjectFavorite({ profileId: profileId!, bucket, key }),
-		onMutate: (key) => {
+		onMutate: async (key) => {
 			const contextVersion = favoriteContextVersionRef.current
+			const requestId = ++favoriteMutationRequestIdRef.current
+			const ownerKey = JSON.stringify([currentScopeKey, key])
+			favoriteMutationOwnerByKeyRef.current.set(ownerKey, requestId)
 			const sourceItem = getFavoriteSourceItem(key)
-			setFavoritePendingState((prev) => {
-				const next = prev.scopeKey === currentScopeKey ? new Set(prev.keys) : new Set<string>()
-				next.add(key)
-				return { scopeKey: currentScopeKey, keys: next }
+			setFavoritePendingOwnersByScope((prev) => {
+				const next = new Map(prev)
+				const owners = new Map(prev.get(currentScopeKey) ?? [])
+				owners.set(key, requestId)
+				next.set(currentScopeKey, owners)
+				return next
 			})
+			const queryKeysToRecover = await cancelFavoriteQueriesForMutation()
 			return {
 				contextVersion,
+				ownerKey,
+				requestId,
 				scopeKey: currentScopeKey,
+				queryKeysToRecover,
 				summaryQueryKey: favoriteSummaryQueryKey,
 				itemsQueryKey: favoriteItemsQueryKey,
 				scopeBucket: bucket,
@@ -136,6 +155,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 			}
 		},
 		onSuccess: (fav, _key, context) => {
+			if (!context || favoriteMutationOwnerByKeyRef.current.get(context.ownerKey) !== context.requestId) return
 			const item = {
 				key: fav.key,
 				size: context?.sourceItem?.size ?? 0,
@@ -164,38 +184,60 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 			)
 		},
 		onSettled: (_, __, key, context) => {
-			if (!context || context.contextVersion !== favoriteContextVersionRef.current) return
-			setFavoritePendingState((prev) => {
-				if (prev.scopeKey !== context.scopeKey) return prev
-				const next = new Set(prev.keys)
-				next.delete(key)
-				return { scopeKey: prev.scopeKey, keys: next }
+			if (!context || favoriteMutationOwnerByKeyRef.current.get(context.ownerKey) !== context.requestId) return
+			favoriteMutationOwnerByKeyRef.current.delete(context.ownerKey)
+			for (const queryKey of context?.queryKeysToRecover ?? []) {
+				void queryClient.invalidateQueries({ queryKey, exact: true })
+			}
+			setFavoritePendingOwnersByScope((prev) => {
+				const currentOwners = prev.get(context.scopeKey)
+				if (currentOwners?.get(key) !== context.requestId) return prev
+				const next = new Map(prev)
+				const owners = new Map(currentOwners)
+				owners.delete(key)
+				if (owners.size === 0) next.delete(context.scopeKey)
+				else next.set(context.scopeKey, owners)
+				return next
 			})
 		},
 		onError: (err, _key, context) => {
-			if (context?.contextVersion !== favoriteContextVersionRef.current) return
+			if (
+				!context ||
+				context.contextVersion !== favoriteContextVersionRef.current ||
+				favoriteMutationOwnerByKeyRef.current.get(context.ownerKey) !== context.requestId
+			) return
 			objectsFeedback.error(err)
 		},
 	})
 
 	const removeFavoriteMutation = useMutation({
 		mutationFn: (key: string) => api.objects.deleteObjectFavorite({ profileId: profileId!, bucket, key }),
-		onMutate: (key) => {
+		onMutate: async (key) => {
 			const contextVersion = favoriteContextVersionRef.current
-			setFavoritePendingState((prev) => {
-				const next = prev.scopeKey === currentScopeKey ? new Set(prev.keys) : new Set<string>()
-				next.add(key)
-				return { scopeKey: currentScopeKey, keys: next }
+			const requestId = ++favoriteMutationRequestIdRef.current
+			const ownerKey = JSON.stringify([currentScopeKey, key])
+			favoriteMutationOwnerByKeyRef.current.set(ownerKey, requestId)
+			setFavoritePendingOwnersByScope((prev) => {
+				const next = new Map(prev)
+				const owners = new Map(prev.get(currentScopeKey) ?? [])
+				owners.set(key, requestId)
+				next.set(currentScopeKey, owners)
+				return next
 			})
+			const queryKeysToRecover = await cancelFavoriteQueriesForMutation()
 			return {
 				contextVersion,
+				ownerKey,
+				requestId,
 				scopeKey: currentScopeKey,
+				queryKeysToRecover,
 				summaryQueryKey: favoriteSummaryQueryKey,
 				itemsQueryKey: favoriteItemsQueryKey,
 				scopeBucket: bucket,
 			}
 		},
 		onSuccess: (_, key, context) => {
+			if (!context || favoriteMutationOwnerByKeyRef.current.get(context.ownerKey) !== context.requestId) return
 			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(context?.summaryQueryKey ?? favoriteSummaryQueryKey, (prev) =>
 				updateFavoriteResponse(prev, {
 					bucket: context?.scopeBucket ?? bucket,
@@ -214,19 +256,40 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 			)
 		},
 		onSettled: (_, __, key, context) => {
-			if (!context || context.contextVersion !== favoriteContextVersionRef.current) return
-			setFavoritePendingState((prev) => {
-				if (prev.scopeKey !== context.scopeKey) return prev
-				const next = new Set(prev.keys)
-				next.delete(key)
-				return { scopeKey: prev.scopeKey, keys: next }
+			if (!context || favoriteMutationOwnerByKeyRef.current.get(context.ownerKey) !== context.requestId) return
+			favoriteMutationOwnerByKeyRef.current.delete(context.ownerKey)
+			for (const queryKey of context?.queryKeysToRecover ?? []) {
+				void queryClient.invalidateQueries({ queryKey, exact: true })
+			}
+			setFavoritePendingOwnersByScope((prev) => {
+				const currentOwners = prev.get(context.scopeKey)
+				if (currentOwners?.get(key) !== context.requestId) return prev
+				const next = new Map(prev)
+				const owners = new Map(currentOwners)
+				owners.delete(key)
+				if (owners.size === 0) next.delete(context.scopeKey)
+				else next.set(context.scopeKey, owners)
+				return next
 			})
 		},
 		onError: (err, _key, context) => {
-			if (context?.contextVersion !== favoriteContextVersionRef.current) return
+			if (
+				!context ||
+				context.contextVersion !== favoriteContextVersionRef.current ||
+				favoriteMutationOwnerByKeyRef.current.get(context.ownerKey) !== context.requestId
+			) return
 			objectsFeedback.error(err)
 		},
-	})
+		})
+
+	const favoritesReady = favoriteResponse !== undefined
+	const favoritePendingKeys = useMemo(() => {
+		const scopedPending = new Set(favoritePendingOwnersByScope.get(currentScopeKey)?.keys() ?? [])
+		if (favoritesReady) return scopedPending
+		const pending = new Set(scopedPending)
+		for (const key of objectsItemMap.keys()) pending.add(key)
+		return pending
+	}, [currentScopeKey, favoritePendingOwnersByScope, favoritesReady, objectsItemMap])
 
 	const toggleFavorite = useCallback(
 		(key: string) => {
@@ -239,13 +302,14 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 				objectsFeedback.selectBucketFirst()
 				return
 			}
+			if (!favoritesReady || favoritePendingKeys.has(key)) return
 			if (favoriteKeys.has(key)) {
 				removeFavoriteMutation.mutate(key)
 				return
 			}
 			addFavoriteMutation.mutate(key)
 		},
-		[addFavoriteMutation, bucket, enabled, favoriteKeys, profileId, removeFavoriteMutation],
+		[addFavoriteMutation, bucket, enabled, favoriteKeys, favoritePendingKeys, favoritesReady, profileId, removeFavoriteMutation],
 	)
 
 	return {
@@ -253,7 +317,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 		favoriteCount,
 		favoriteItems,
 		favoriteKeys,
-		favoritePendingKeys: favoritePendingState.scopeKey === currentScopeKey ? favoritePendingState.keys : new Set<string>(),
+		favoritePendingKeys,
 		toggleFavorite,
 	}
 }

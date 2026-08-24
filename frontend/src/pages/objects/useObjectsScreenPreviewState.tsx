@@ -98,7 +98,7 @@ export function useObjectsScreenPreviewState({
 	const detailsMetaQueryRaw = useQuery({
 		queryKey: queryKeys.objects.meta(profileId, bucket, detailsKey, apiToken),
 		enabled: !!profileId && !!bucket && !!detailsKey && detailsVisible,
-		queryFn: () => api.objects.getObjectMeta({ profileId: profileId!, bucket, key: detailsKey! }),
+		queryFn: ({ signal }) => api.objects.getObjectMeta({ profileId: profileId!, bucket, key: detailsKey!, signal }),
 		retry: false,
 	})
 	const detailsMetaQuery: QueryState<ObjectMeta> = {
@@ -126,7 +126,7 @@ export function useObjectsScreenPreviewState({
 	const largePreviewMetaQueryRaw = useQuery({
 		queryKey: queryKeys.objects.meta(profileId, bucket, largePreviewKey, apiToken),
 		enabled: !!profileId && !!bucket && !!largePreviewKey && largePreviewOpen,
-		queryFn: () => api.objects.getObjectMeta({ profileId: profileId!, bucket, key: largePreviewKey! }),
+		queryFn: ({ signal }) => api.objects.getObjectMeta({ profileId: profileId!, bucket, key: largePreviewKey!, signal }),
 		retry: false,
 	})
 	const largePreviewMeta = largePreviewMetaQueryRaw.data ?? null

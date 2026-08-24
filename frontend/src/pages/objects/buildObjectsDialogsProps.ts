@@ -76,7 +76,7 @@ export function buildObjectsDialogsProps(args: BuildObjectsPageOverlaysPropsArgs
 		downloadPrefixModalProps: actions.downloadPrefixOpen
 			? {
 				open: actions.downloadPrefixOpen,
-				sourceLabel: bucket ? `s3://${bucket}/${normalizePrefix(args.prefix)}*` : '-',
+				sourceLabel: bucket ? `s3://${bucket}/${actions.downloadPrefixSourcePrefix}*` : '-',
 				values: actions.downloadPrefixValues,
 				onValuesChange: actions.setDownloadPrefixValues,
 				isSubmitting: actions.downloadPrefixSubmitting,

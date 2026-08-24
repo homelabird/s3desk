@@ -140,6 +140,7 @@ export interface ObjectsOperationVm extends Pick<
 	| 'createJobWithRetry'
 	| 'debugContextMenu'
 	| 'debugObjectsList'
+	| 'eventsConnected'
 	| 'isOffline'
 	| 'queryClient'
 	| 'transfers'
@@ -366,6 +367,7 @@ export function buildObjectsPageDataState(args: ObjectsPageDataStateArgs): Objec
 		createJobWithRetry: args.environment.createJobWithRetry,
 		debugContextMenu: args.environment.debugContextMenu,
 		downloadLinkProxyEnabled: args.view.downloadLinkProxyEnabled,
+		eventsConnected: args.environment.eventsConnected,
 		indexObjectsJobMutation: args.jobs.indexObjectsJobMutation,
 		isOffline: args.environment.isOffline,
 		objectCrudSupported: args.queries.objectCrudSupported,

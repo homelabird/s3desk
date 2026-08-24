@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
@@ -56,6 +56,92 @@ describe('ObjectThumbnail', () => {
 
 		await waitFor(() => expect(match).toHaveBeenCalled())
 		expect(downloadObjectThumbnail).not.toHaveBeenCalled()
+	})
+
+	it('does not start a thumbnail request when an unmounted cache lookup resolves as a miss', async () => {
+		const cache = createThumbnailCache()
+		const cacheKey = buildThumbnailCacheKey(
+			buildObjectThumbnailRequest({
+				apiToken: 'token-a',
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				objectKey: 'clip.mp4',
+				size: 24,
+			}),
+		)
+		let resolveMatch: ((value: Response | undefined) => void) | undefined
+		const match = vi.fn(
+			() => new Promise<Response | undefined>((resolve) => {
+				resolveMatch = resolve
+			}),
+		)
+		window.localStorage.setItem(PERSISTENT_THUMBNAIL_INDEX_KEY, JSON.stringify({ [cacheKey]: Date.now() }))
+		;(window as typeof window & { caches?: CacheStorage }).caches = {
+			open: vi.fn().mockResolvedValue({
+				match,
+				put: vi.fn(),
+			}),
+		} as unknown as CacheStorage
+		const downloadObjectThumbnail = vi.fn(() => ({
+			promise: Promise.resolve({
+				blob: new Blob(['thumb-network'], { type: 'image/jpeg' }),
+				contentType: 'image/jpeg',
+			}),
+			abort: vi.fn(),
+		}))
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
+		const view = render(
+			<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,
+		)
+
+		await waitFor(() => expect(match).toHaveBeenCalledTimes(1))
+		view.unmount()
+		await act(async () => {
+			resolveMatch?.(undefined)
+			await Promise.resolve()
+		})
+
+		expect(downloadObjectThumbnail).not.toHaveBeenCalled()
+	})
+
+	it('does not publish a fetched thumbnail when unmounted during persistent cache write', async () => {
+		const cache = createThumbnailCache()
+		const cacheSet = vi.spyOn(cache, 'set')
+		let resolvePut: (() => void) | undefined
+		const put = vi.fn(
+			() => new Promise<void>((resolve) => {
+				resolvePut = resolve
+			}),
+		)
+		;(window as typeof window & { caches?: CacheStorage }).caches = {
+			open: vi.fn().mockResolvedValue({
+				match: vi.fn(),
+				put,
+			}),
+		} as unknown as CacheStorage
+		const downloadObjectThumbnail = vi.fn(() => ({
+			promise: Promise.resolve({
+				blob: new Blob(['thumb-network'], { type: 'image/jpeg' }),
+				contentType: 'image/jpeg',
+			}),
+			abort: vi.fn(),
+		}))
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
+		const view = render(
+			<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,
+		)
+
+		await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+		view.unmount()
+		await act(async () => {
+			resolvePut?.()
+			await Promise.resolve()
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		expect(URL.createObjectURL).not.toHaveBeenCalled()
+		expect(cacheSet).not.toHaveBeenCalled()
 	})
 
 	it('does not reuse persistent thumbnails from a different api token scope', async () => {

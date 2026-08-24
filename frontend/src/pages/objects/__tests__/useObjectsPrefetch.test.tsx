@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
@@ -69,13 +70,30 @@ describe('useObjectsPrefetch', () => {
 		expect(args.queryClient.prefetchInfiniteQuery).not.toHaveBeenCalled()
 	})
 
-	it('keeps initial background bucket prefetch for non-OCI profiles', async () => {
+	it('skips initial background bucket prefetch in balanced mode', async () => {
 		const args = buildArgs()
 
 		renderHook(() => useObjectsPrefetch(args))
 		await vi.runAllTimersAsync()
 
-		expect(args.queryClient.prefetchInfiniteQuery).toHaveBeenCalled()
+		expect(args.queryClient.prefetchInfiniteQuery).not.toHaveBeenCalled()
+	})
+
+	it('keeps balanced bucket-dropdown prefetch intent-driven', async () => {
+		const args = buildArgs({ recentBuckets: ['bucket-c'] })
+		const { result } = renderHook(() => useObjectsPrefetch(args))
+
+		await act(async () => {
+			result.current.handleBucketDropdownVisibleChange(true)
+		})
+
+		const prefetchQueryKeys = vi
+			.mocked(args.queryClient.prefetchInfiniteQuery)
+			.mock.calls.map((call) => call[0]?.queryKey)
+		expect(prefetchQueryKeys).toEqual([
+			queryKeys.objects.list('profile-1', 'bucket-c', '', 'token'),
+			queryKeys.objects.list('profile-1', 'bucket-b', '', 'token'),
+		])
 	})
 
 	it('limits OCI bucket dropdown prefetch to one recent bucket and skips fallback buckets', async () => {
@@ -98,7 +116,7 @@ describe('useObjectsPrefetch', () => {
 	})
 
 	it('restarts initial background prefetch after the session scope changes', async () => {
-		const args = buildArgs()
+		const args = buildArgs({ objectsCostMode: 'aggressive' })
 		const { rerender } = renderHook(
 			(props: Parameters<typeof useObjectsPrefetch>[0]) => useObjectsPrefetch(props),
 			{ initialProps: args },
@@ -117,7 +135,7 @@ describe('useObjectsPrefetch', () => {
 	})
 
 	it('drops scheduled initial prefetch work from stale session scopes before it starts', async () => {
-		const args = buildArgs()
+		const args = buildArgs({ objectsCostMode: 'aggressive' })
 		const { rerender } = renderHook(
 			(props: Parameters<typeof useObjectsPrefetch>[0]) => useObjectsPrefetch(props),
 			{ initialProps: args },
@@ -132,5 +150,53 @@ describe('useObjectsPrefetch', () => {
 
 		expect(prefetchQueryKeys).not.toContainEqual(queryKeys.objects.list('profile-1', 'bucket-b', '', 'token'))
 		expect(prefetchQueryKeys).toContainEqual(queryKeys.objects.list('profile-2', 'bucket-b', '', 'token-2'))
+	})
+
+	it('drops queued background prefetch work after unmount', async () => {
+		let releaseFirstRequest!: () => void
+		const firstRequest = new Promise<void>((resolve) => {
+			releaseFirstRequest = resolve
+		})
+		const args = buildArgs({ objectsCostMode: 'aggressive' })
+		let firstRequestSignal: AbortSignal | undefined
+		vi.mocked(args.api.objects.listObjects).mockImplementationOnce(async ({ signal }) => {
+			firstRequestSignal = signal
+			await firstRequest
+			return {
+				bucket: 'bucket-b',
+				prefix: '',
+				delimiter: '/',
+				items: [],
+				commonPrefixes: [],
+				isTruncated: false,
+			}
+		})
+		const queryController = new AbortController()
+		vi.mocked(args.queryClient.prefetchInfiniteQuery).mockImplementationOnce(async (options) => {
+			if (typeof options.queryFn !== 'function') throw new Error('queryFn is required')
+			await options.queryFn({
+				client: args.queryClient,
+				queryKey: options.queryKey,
+				pageParam: undefined,
+				direction: 'forward',
+				meta: undefined,
+				signal: queryController.signal,
+			} as never)
+		})
+		const { unmount } = renderHook(() => useObjectsPrefetch(args), { wrapper: StrictMode })
+
+		await vi.advanceTimersByTimeAsync(300)
+		expect(args.queryClient.prefetchInfiniteQuery).toHaveBeenCalledTimes(1)
+		expect(firstRequestSignal?.aborted).toBe(false)
+
+		unmount()
+		expect(firstRequestSignal?.aborted).toBe(true)
+		expect(queryController.signal.aborted).toBe(false)
+		await act(async () => {
+			releaseFirstRequest()
+			await firstRequest
+		})
+
+		expect(args.queryClient.prefetchInfiniteQuery).toHaveBeenCalledTimes(1)
 	})
 })

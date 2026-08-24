@@ -1,7 +1,7 @@
-import { Button, Dropdown, Typography } from 'antd'
+import { Button, Typography } from 'antd'
 import { DeleteOutlined, DownloadOutlined, MoreOutlined } from '@ant-design/icons'
-import { useState } from 'react'
 
+import { MenuPopover } from '../../components/MenuPopover'
 import styles from './ObjectsListView.module.css'
 import { ObjectsSelectionBar } from './ObjectsListPane'
 import type { UIAction, UIActionOrDivider } from './objectsActions'
@@ -23,7 +23,6 @@ type ObjectsSelectionBarContentProps = {
 }
 
 export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProps) {
-	const [selectionToolsOpen, setSelectionToolsOpen] = useState(false)
 	const selectionMenuActions = trimActionDividers(props.selectionMenuActions)
 	const menuActions: UIActionOrDivider[] = props.singleSelectedKey
 		? trimActionDividers(
@@ -82,23 +81,23 @@ export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProp
 					</Button>
 				) : null}
 				{hasActions ? (
-					<Dropdown
-						trigger={['click']}
+					<MenuPopover
 						menu={buildActionMenu(menuActions, props.isAdvanced)}
-						open={selectionToolsOpen}
-						onOpenChange={setSelectionToolsOpen}
 					>
-						<Button
-							size="small"
-							className={`${styles.selectionBarButton} ${styles.selectionBarMoreButton}`}
-							icon={<MoreOutlined />}
-							aria-label="Selection tools"
-							aria-haspopup="menu"
-							aria-expanded={selectionToolsOpen}
-						>
-							Tools
-						</Button>
-					</Dropdown>
+						{({ open, toggle }) => (
+							<Button
+								size="small"
+								className={`${styles.selectionBarButton} ${styles.selectionBarMoreButton}`}
+								icon={<MoreOutlined />}
+								aria-label="Selection tools"
+								aria-haspopup="menu"
+								aria-expanded={open}
+								onClick={toggle}
+							>
+								Tools
+							</Button>
+						)}
+					</MenuPopover>
 				) : null}
 				<Button
 					size="small"

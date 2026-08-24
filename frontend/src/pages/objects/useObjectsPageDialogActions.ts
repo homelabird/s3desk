@@ -26,6 +26,7 @@ type Args = {
 	downloadLinkProxyEnabled: boolean
 	presignedDownloadSupported: boolean
 	createJobWithRetry: CreateJobWithRetry
+	eventsConnected: boolean
 	typeFilter: ObjectTypeFilter
 	favoritesOnly: boolean
 	deferredSearch: string
@@ -48,6 +49,7 @@ export function useObjectsPageDialogActions({
 	downloadLinkProxyEnabled,
 	presignedDownloadSupported,
 	createJobWithRetry,
+	eventsConnected,
 	typeFilter,
 	favoritesOnly,
 	deferredSearch,
@@ -103,6 +105,7 @@ export function useObjectsPageDialogActions({
 		bucket,
 		prefix,
 		createJobWithRetry,
+		eventsConnected,
 		setSelectedKeys,
 	})
 

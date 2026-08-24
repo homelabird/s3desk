@@ -94,12 +94,13 @@ describe('useObjectsIndexing', () => {
 		)
 
 		await waitFor(() => {
-			expect(getObjectIndexSummary).toHaveBeenCalledWith({
-				profileId: 'profile-1',
-				bucket: 'bucket-a',
-				prefix: 'reports/',
-				sampleLimit: 1,
-			})
+				expect(getObjectIndexSummary).toHaveBeenCalledWith({
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					prefix: 'reports/',
+					sampleLimit: 1,
+					signal: expect.any(AbortSignal),
+				})
 		})
 
 		await waitFor(() => {
@@ -115,9 +116,78 @@ describe('useObjectsIndexing', () => {
 		expect(setIndexPrefix).toHaveBeenCalledWith('reports/')
 	})
 
-	it('ignores stale async auto-index responses after the profile changes', async () => {
+	it('does not repeat a fresh summary probe for the same location during cooldown', async () => {
 		const deferred = createDeferred<{ indexedAt?: string }>()
 		const getObjectIndexSummary = vi.fn().mockReturnValue(deferred.promise)
+		const createJobWithRetry = vi.fn()
+		const setIndexPrefix = vi.fn()
+		const api = createMockApiClient({
+			objects: {
+				getObjectIndexSummary,
+			},
+		})
+		const { Wrapper } = createWrapper()
+		const { rerender } = renderHook(
+			(props: { queryText: string; renderNonce: number }) => {
+				void props.renderNonce
+				return useObjectsIndexing({
+					api,
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'reports/',
+					globalSearchOpen: true,
+					globalSearchQueryText: props.queryText,
+					globalSearchPrefixNormalized: 'reports/',
+					objectsCostMode: 'balanced',
+					autoIndexEnabled: true,
+					autoIndexTtlMs: 60_000,
+					autoIndexCooldownMs: 300_000,
+					setIndexPrefix,
+					createJobWithRetry,
+				})
+			},
+			{
+				initialProps: { queryText: 'alpha', renderNonce: 0 },
+				wrapper: Wrapper,
+			},
+		)
+
+		await waitFor(() => expect(getObjectIndexSummary).toHaveBeenCalledTimes(1))
+		rerender({ queryText: 'beta', renderNonce: 1 })
+		await flushEffects()
+		expect(getObjectIndexSummary).toHaveBeenCalledTimes(1)
+
+		await act(async () => {
+			deferred.resolve({ indexedAt: new Date().toISOString() })
+			await deferred.promise
+		})
+		await flushEffects()
+
+		rerender({ queryText: 'beta', renderNonce: 2 })
+		await flushEffects()
+		rerender({ queryText: '', renderNonce: 3 })
+		await flushEffects()
+		rerender({ queryText: 'gamma', renderNonce: 4 })
+		await flushEffects()
+
+		expect(getObjectIndexSummary).toHaveBeenCalledTimes(1)
+		expect(createJobWithRetry).not.toHaveBeenCalled()
+	})
+
+	it('ignores stale async auto-index responses after the profile changes', async () => {
+		const deferred = createDeferred<{
+			bucket: string
+			objectCount: number
+			totalBytes: number
+			sampleKeys: string[]
+			indexedAt?: string
+		}>()
+		let summarySignal: AbortSignal | undefined
+		const getObjectIndexSummary = vi.fn((args: { signal?: AbortSignal }) => {
+			summarySignal = args.signal
+			return deferred.promise
+		})
 		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-1' })
 		const setIndexPrefix = vi.fn()
 		const api = createMockApiClient({
@@ -152,17 +222,25 @@ describe('useObjectsIndexing', () => {
 		)
 
 		await waitFor(() => {
-			expect(getObjectIndexSummary).toHaveBeenCalledWith({
-				profileId: 'profile-1',
-				bucket: 'bucket-a',
-				prefix: 'reports/',
-				sampleLimit: 1,
+				expect(getObjectIndexSummary).toHaveBeenCalledWith({
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					prefix: 'reports/',
+					sampleLimit: 1,
+					signal: expect.any(AbortSignal),
+				})
 			})
-		})
 
 		rerender({ profileId: 'profile-2', bucket: 'bucket-b', globalSearchOpen: false })
+		expect(summarySignal?.aborted).toBe(true)
 
-		deferred.resolve({ indexedAt: '2020-01-01T00:00:00Z' })
+		deferred.resolve({
+			bucket: 'bucket-a',
+			objectCount: 0,
+			totalBytes: 0,
+			sampleKeys: [],
+			indexedAt: '2020-01-01T00:00:00Z',
+		})
 		await flushEffects()
 
 		expect(createJobWithRetry).not.toHaveBeenCalled()

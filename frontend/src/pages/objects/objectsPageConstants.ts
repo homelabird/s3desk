@@ -11,6 +11,9 @@ export type LocationTab = {
 export type ObjectsUIMode = 'simple' | 'advanced'
 
 export const OBJECTS_LIST_PAGE_SIZE = 200
+export const OBJECTS_LIST_CONTINUATION_PAGE_SIZE = 1_000
+export const OBJECTS_AUTO_SCAN_CAP = 1_000
+export const OBJECTS_ADVANCED_AUTO_SCAN_CAP = 3_000
 export const AUTO_INDEX_COOLDOWN_MS = 5 * 60 * 1000
 export const COMPACT_ROW_HEIGHT_PX = 60
 export const WIDE_ROW_HEIGHT_PX = 72

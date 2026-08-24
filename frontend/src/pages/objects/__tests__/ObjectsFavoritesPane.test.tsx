@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
 	clearFavoritesFilterHint,
@@ -42,6 +42,10 @@ function buildProps(
 	}
 }
 
+afterEach(() => {
+	vi.restoreAllMocks()
+})
+
 describe('ObjectsFavoritesPane', () => {
 	it('windows large favorite collections', () => {
 		const favorites = Array.from({ length: 1_000 }, (_, index) => ({
@@ -60,6 +64,30 @@ describe('ObjectsFavoritesPane', () => {
 		expect(screen.getAllByTestId('objects-favorite-item')).toHaveLength(20)
 		expect(screen.getByTitle('archive/0000/report.json')).toBeInTheDocument()
 		expect(screen.queryByTitle('archive/0999/report.json')).not.toBeInTheDocument()
+	})
+
+	it('does not re-sort unchanged favorites for each search query', () => {
+		const favorites = [
+			{ key: 'zebra.txt', size: 1, lastModified: '2026-03-09T00:00:00Z', createdAt: '2026-03-09T00:00:00Z' },
+			{ key: 'alpha.txt', size: 2, lastModified: '2026-03-09T00:00:00Z', createdAt: '2026-03-09T00:00:00Z' },
+		]
+		const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+		const { rerender } = render(
+			<ObjectsFavoritesPane {...buildProps({ favoriteCount: favorites.length, favorites })} />,
+		)
+
+		expect(localeCompare).toHaveBeenCalled()
+		localeCompare.mockClear()
+
+		rerender(
+			<ObjectsFavoritesPane {...buildProps({ favoriteCount: favorites.length, favorites, query: 'a' })} />,
+		)
+
+		expect(localeCompare).not.toHaveBeenCalled()
+		expect(screen.getAllByTestId('objects-favorite-item').map((item) => item.getAttribute('data-favorite-key'))).toEqual([
+			'alpha.txt',
+			'zebra.txt',
+		])
 	})
 
 	it('shows shared prerequisite copy before a profile or bucket is selected', () => {
