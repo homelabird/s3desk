@@ -9,32 +9,31 @@
   "initialJsGzip": {
     "label": "initial JS gzip budget",
     "env": "BUNDLE_BUDGET_INITIAL_JS_GZIP_KB",
-    "defaultKB": 185,
+    "defaultKB": 170,
     "reviewAction": "shrink first",
-    "rationale": "The optimized desktop shell baseline is about 180.5 kB gzip after removing broad UI vendor grouping; this cap keeps limited headroom without restoring the former 293.8 kB preload."
+    "rationale": "The authenticated shell baseline is about 163 kB gzip after splitting the Profiles route; this cap preserves headroom while catching accidental route code re-entry."
+  },
+  "profilesPageGzip": {
+    "label": "ProfilesPage gzip budget",
+    "env": "BUNDLE_BUDGET_PROFILES_PAGE_GZIP_KB",
+    "defaultKB": 15.5,
+    "reviewAction": "shrink first",
+    "rationale": "Profiles is preloaded on direct route entry; its split route baseline is about 13.4 kB gzip and remains capped outside the initial shell budget."
   },
   "objectsPageGzip": {
     "label": "ObjectsPage gzip budget",
     "env": "BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB",
-    "defaultKB": 85,
-    "reviewAction": "rebaseline if stable",
-    "rationale": "Objects is the heaviest task-completion surface; optional overlays already lazy-load, and the stable automatic chunk boundary leaves about 82.1 kB gzip in its route entry."
+    "defaultKB": 72,
+    "reviewAction": "shrink first",
+    "rationale": "Objects is the heaviest task-completion surface; reusing the shared menu removes the route-local Ant Design menu runtime and leaves about 67.3 kB gzip in its route entry."
   },
   "uploadsPageGzip": {
     "label": "UploadsPage gzip budget",
     "env": "BUNDLE_BUDGET_UPLOADS_PAGE_GZIP_KB",
-    "defaultKB": 1.2,
+    "defaultKB": 5.25,
     "reviewTightHeadroomKB": 0.25,
     "reviewAction": "shrink first",
-    "rationale": "Uploads route entry should stay a thin gate over setup/profile state and defer the full authenticated upload workspace until a profile is active."
-  },
-  "uploadsExperienceGzip": {
-    "label": "UploadsPageExperience gzip budget",
-    "env": "BUNDLE_BUDGET_UPLOADS_EXPERIENCE_GZIP_KB",
-    "defaultKB": 5,
-    "reviewTightHeadroomKB": 0.25,
-    "reviewAction": "shrink first",
-    "rationale": "Authenticated Uploads carries bucket selection, source picking, and selection preview; its optimized route baseline is about 4.6 kB gzip and remains capped after the route gate."
+    "rationale": "Uploads keeps one route-level lazy boundary around setup, bucket selection, source picking, and selection preview; its merged baseline is about 4.8 kB gzip."
   },
   "transfersGzip": {
     "label": "Transfers gzip budget",
