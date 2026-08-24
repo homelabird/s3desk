@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ensureReadWritePermission, getDevicePickerSupport } from '../deviceFs'
+import { collectFilesFromDirectoryHandle, ensureReadWritePermission, getDevicePickerSupport } from '../deviceFs'
 import { directoryPickerInsecureOriginReason, directoryPickerUnsupportedBrowserReason, localFolderWritePermissionDeniedHint } from '../secureContext'
 
 const originalSecureContext = Object.getOwnPropertyDescriptor(window, 'isSecureContext')
@@ -99,5 +99,67 @@ describe('ensureReadWritePermission', () => {
 		await expect(ensureReadWritePermission(handle)).rejects.toThrow(
 			localFolderWritePermissionDeniedHint(),
 		)
+	})
+})
+
+describe('collectFilesFromDirectoryHandle', () => {
+	it('counts files, not remaining directory entries, against the limit', async () => {
+		const emptyDirectory = {
+			kind: 'directory',
+			async *entries() {},
+		} as unknown as FileSystemDirectoryHandle
+		const handle = {
+			async *entries() {
+				yield ['only.txt', {
+					kind: 'file',
+					getFile: vi.fn().mockResolvedValue(new File(['only'], 'only.txt')),
+				}]
+			yield ['empty', emptyDirectory]
+			},
+		} as unknown as FileSystemDirectoryHandle
+
+		await expect(collectFilesFromDirectoryHandle(handle, '', { maxFiles: 1 })).resolves.toHaveLength(1)
+
+		const twoFiles = {
+			async *entries() {
+				yield ['first.txt', {
+					kind: 'file',
+					getFile: vi.fn().mockResolvedValue(new File(['first'], 'first.txt')),
+				}]
+				yield ['second.txt', {
+					kind: 'file',
+					getFile: vi.fn().mockResolvedValue(new File(['second'], 'second.txt')),
+				}]
+			},
+		} as unknown as FileSystemDirectoryHandle
+		await expect(collectFilesFromDirectoryHandle(twoFiles, '', { maxFiles: 1 })).rejects.toThrow(
+			'Selected folder exceeds the 1 file safety limit.',
+		)
+	})
+
+	it('stops before reading the next entry when the caller aborts', async () => {
+		let resolveFirstFile!: (file: File) => void
+		const firstGetFile = vi.fn(
+			() =>
+				new Promise<File>((resolve) => {
+					resolveFirstFile = resolve
+				}),
+		)
+		const nextGetFile = vi.fn().mockResolvedValue(new File(['next'], 'next.txt'))
+		const handle = {
+			async *entries() {
+				yield ['first.txt', { kind: 'file', getFile: firstGetFile }]
+				yield ['next.txt', { kind: 'file', getFile: nextGetFile }]
+			},
+		} as unknown as FileSystemDirectoryHandle
+		const controller = new AbortController()
+
+		const pending = collectFilesFromDirectoryHandle(handle, '', { signal: controller.signal })
+		await vi.waitFor(() => expect(firstGetFile).toHaveBeenCalledTimes(1))
+		controller.abort()
+		resolveFirstFile(new File(['first'], 'first.txt'))
+
+		await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+		expect(nextGetFile).not.toHaveBeenCalled()
 	})
 })

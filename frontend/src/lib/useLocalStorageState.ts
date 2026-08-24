@@ -80,6 +80,10 @@ export function useLocalStorageState<T>(
 		if (typeof window === 'undefined') return
 		try {
 			const serialized = JSON.stringify(sanitize(state))
+			if (
+				window.localStorage.getItem(key) === serialized &&
+				!allLegacyLocalStorageKeys.some((legacyKey) => window.localStorage.getItem(legacyKey) !== null)
+			) return
 			window.localStorage.setItem(key, serialized)
 			for (const legacyKey of allLegacyLocalStorageKeys) {
 				window.localStorage.removeItem(legacyKey)

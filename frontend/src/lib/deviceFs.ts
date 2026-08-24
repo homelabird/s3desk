@@ -17,6 +17,7 @@ export type DirectorySelectionSupport = DevicePickerSupport & {
 
 type CollectFilesOptions = {
 	maxFiles?: number
+	signal?: AbortSignal
 }
 
 type ShowDirectoryPicker = (options?: { mode?: 'read' | 'readwrite'; startIn?: FileSystemHandle | string }) => Promise<FileSystemDirectoryHandle>
@@ -74,7 +75,15 @@ export async function collectFilesFromDirectoryHandle(
 	options: CollectFilesOptions = {},
 ): Promise<File[]> {
 	const items: File[] = []
-	await collectFilesFromDirectoryHandleInto(handle, prefix, items, options.maxFiles ?? Number.POSITIVE_INFINITY)
+	options.signal?.throwIfAborted()
+	await collectFilesFromDirectoryHandleInto(
+		handle,
+		prefix,
+		items,
+		options.maxFiles ?? Number.POSITIVE_INFINITY,
+		options.signal,
+	)
+	options.signal?.throwIfAborted()
 	return items
 }
 
@@ -83,14 +92,18 @@ async function collectFilesFromDirectoryHandleInto(
 	prefix: string,
 	items: File[],
 	maxFiles: number,
+	signal?: AbortSignal,
 ): Promise<void> {
+	signal?.throwIfAborted()
 	for await (const [name, entry] of handle.entries()) {
-		if (items.length >= maxFiles) {
-			throw new Error(`Selected folder exceeds the ${maxFiles} file safety limit.`)
-		}
+		signal?.throwIfAborted()
 		if (entry.kind === 'file') {
+			if (items.length >= maxFiles) {
+				throw new Error(`Selected folder exceeds the ${maxFiles} file safety limit.`)
+			}
 			const fileHandle = entry as FileSystemFileHandle
 			const file = await fileHandle.getFile()
+			signal?.throwIfAborted()
 			const fileWithPath = file as File & { relativePath?: string }
 			fileWithPath.relativePath = `${prefix}${name}`
 			items.push(fileWithPath)
@@ -98,7 +111,7 @@ async function collectFilesFromDirectoryHandleInto(
 		}
 		const dir = entry as FileSystemDirectoryHandle
 		const nextPrefix = `${prefix}${name}/`
-		await collectFilesFromDirectoryHandleInto(dir, nextPrefix, items, maxFiles)
+		await collectFilesFromDirectoryHandleInto(dir, nextPrefix, items, maxFiles, signal)
 	}
 }
 

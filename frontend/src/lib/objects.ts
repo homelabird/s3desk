@@ -24,6 +24,7 @@ export async function listAllObjects(args: {
 	bucket: string
 	prefix?: string
 	maxKeys?: number
+	signal?: AbortSignal
 }): Promise<ObjectItem[]> {
 	const items: ObjectItem[] = []
 	let continuationToken: string | undefined
@@ -33,6 +34,7 @@ export async function listAllObjects(args: {
 	let pageCount = 0
 
 	while (true) {
+		args.signal?.throwIfAborted()
 		pageCount += 1
 		if (pageCount > 10000) {
 			logObjectsDebug(debugEnabled, 'List all objects exceeded page cap; stopping pagination', {
@@ -47,7 +49,9 @@ export async function listAllObjects(args: {
 			prefix: args.prefix,
 			maxKeys,
 			continuationToken,
+			signal: args.signal,
 		})
+		args.signal?.throwIfAborted()
 		items.push(...(resp.items ?? []))
 		if (continuationToken) {
 			seenTokens.add(continuationToken)

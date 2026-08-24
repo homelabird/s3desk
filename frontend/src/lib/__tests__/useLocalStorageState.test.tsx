@@ -1,11 +1,48 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useLocalStorageState } from '../useLocalStorageState'
 
 describe('useLocalStorageState', () => {
 	afterEach(() => {
 		window.localStorage.clear()
+		vi.restoreAllMocks()
+	})
+
+	it('does not rewrite or rebroadcast an unchanged scoped value', async () => {
+		const key = 'objects:token-a:profile-1:bucket'
+		window.localStorage.setItem(key, JSON.stringify('archive-bucket'))
+		const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
+		const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent')
+
+		const { result } = renderHook(() => useLocalStorageState(key, 'archive-bucket'))
+
+		expect(setItemSpy).not.toHaveBeenCalled()
+		expect(dispatchEventSpy.mock.calls.filter(([event]) => event.type === 'local-storage')).toHaveLength(0)
+
+		act(() => result.current[1]('next-bucket'))
+
+		await waitFor(() => expect(window.localStorage.getItem(key)).toBe(JSON.stringify('next-bucket')))
+		expect(setItemSpy).toHaveBeenCalledTimes(1)
+		expect(dispatchEventSpy.mock.calls.filter(([event]) => event.type === 'local-storage')).toHaveLength(1)
+	})
+
+	it('removes and rebroadcasts a matching legacy value during scoped migration', async () => {
+		const key = 'objects:token-a:profile-1:bucket'
+		const legacyKey = 'objects:profile-1:bucket'
+		const serialized = JSON.stringify('archive-bucket')
+		window.localStorage.setItem(key, serialized)
+		window.localStorage.setItem(legacyKey, serialized)
+		const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent')
+
+		renderHook(() => useLocalStorageState(key, '', { legacyLocalStorageKey: legacyKey }))
+
+		await waitFor(() => expect(window.localStorage.getItem(legacyKey)).toBeNull())
+		const events = dispatchEventSpy.mock.calls
+			.map(([event]) => event)
+			.filter((event): event is CustomEvent<{ key: string; value: string }> => event.type === 'local-storage')
+		expect(events).toHaveLength(1)
+		expect(events[0]?.detail).toEqual({ key, value: serialized })
 	})
 
 	it('falls back to the legacy localStorage key and migrates the value into the scoped key', async () => {

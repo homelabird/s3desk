@@ -49,7 +49,7 @@ export function getBucketPrefetchPlan(
 
 	return mode === 'aggressive'
 		? { initial: 12, dropdownPreferred: 3, dropdownFallback: 3 }
-		: { initial: 4, dropdownPreferred: 2, dropdownFallback: 1 }
+		: { initial: 0, dropdownPreferred: 2, dropdownFallback: 1 }
 }
 
 export function getThumbnailRequestConcurrency(mode: ObjectsCostMode): number {
