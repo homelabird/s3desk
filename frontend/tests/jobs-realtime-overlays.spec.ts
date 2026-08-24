@@ -199,6 +199,55 @@ async function installRealtimeJobsApi(page: Page, args: {
 }
 
 test.describe('Jobs realtime overlays', () => {
+	test('settings overlay keeps the jobs realtime transport mounted', async ({ page }) => {
+		await page.addInitScript(() => {
+			class MockWebSocket {
+				onopen: ((event: Event) => void) | null = null
+
+				constructor() {
+					window.setTimeout(() => this.onopen?.(new Event('open')), 0)
+				}
+
+				close() {}
+			}
+
+			Object.defineProperty(window, 'WebSocket', {
+				configurable: true,
+				writable: true,
+				value: MockWebSocket,
+			})
+		})
+
+		let ticketRequestCount = 0
+		page.on('request', (request) => {
+			if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/realtime-ticket') {
+				ticketRequestCount += 1
+			}
+		})
+		await installRealtimeJobsApi(page, {
+			jobs: [],
+			eventBody: ': keepalive\n\n',
+			realtimeTransport: 'ws',
+		})
+		await seedStorage(page)
+		await gotoJobsPage(page)
+		await expect(page.getByText('Realtime: WS', { exact: true })).toBeVisible()
+		const initialTicketRequestCount = ticketRequestCount
+		expect(initialTicketRequestCount).toBeGreaterThan(0)
+
+		await page.getByRole('button', { name: 'App menu' }).click()
+		await page.getByRole('menuitem', { name: /Settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Settings' })
+		await expect(settings).toBeVisible()
+		await page.waitForTimeout(100)
+		expect(ticketRequestCount).toBe(initialTicketRequestCount)
+		await settings.getByRole('button', { name: 'Close' }).click()
+		await expect(settings).toHaveCount(0)
+		await page.waitForTimeout(100)
+
+		expect(ticketRequestCount).toBe(initialTicketRequestCount)
+	})
+
 	test('details drawer refreshes into completed upload details after live status changes', async ({ page }) => {
 		const jobId = 'job-live-progress'
 		const initialJob = buildUploadJob(jobId)

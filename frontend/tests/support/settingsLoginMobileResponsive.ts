@@ -45,6 +45,17 @@ export async function installLoginMobileResponsiveFixtures(page: Page, validToke
 	await installApiFixtures(page, [
 		{
 			method: 'GET',
+			path: '/api/v1/bootstrap',
+			handler: ({ request }) => {
+				const token = request.headers()['x-api-token'] ?? ''
+				if (!validTokens.includes(token)) {
+					return { status: 401, json: { error: { code: 'unauthorized', message: 'invalid token' } } }
+				}
+				return { json: { meta: metaJson(), profiles: [] } }
+			},
+		},
+		{
+			method: 'GET',
 			path: '/api/v1/meta',
 			handler: ({ request }) => {
 				const token = request.headers()['x-api-token'] ?? ''

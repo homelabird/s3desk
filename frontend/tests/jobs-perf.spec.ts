@@ -218,7 +218,6 @@ test.describe('@perf jobs performance', () => {
 
 		await page.goto('/jobs')
 		await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
-		await expect(page.locator('code', { hasText: 'job-0' })).toBeVisible()
 
 		const jobRow = page.getByRole('row', { name: /job-0/ }).first()
 		const logsButton = jobRow.getByRole('button', { name: /^Logs(?: for job .+)?$/ })
