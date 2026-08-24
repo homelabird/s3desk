@@ -65,7 +65,7 @@ export function useBucketsPageQueriesState({
 
 	const bucketsQuery = useQuery({
 		queryKey: queryKeys.buckets.list(profileId, apiToken),
-		queryFn: () => api.buckets.listBuckets(profileId!),
+		queryFn: ({ signal }) => api.buckets.listBuckets(profileId!, signal),
 		enabled: !!profileId && bucketCapabilityResolved && bucketCrudSupported,
 		retry: false,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),

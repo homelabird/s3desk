@@ -307,6 +307,40 @@ function renderModal(
 }
 
 describe("BucketGovernanceModal", () => {
+  it("aborts the governance request when the modal closes", async () => {
+    const getBucketGovernance = vi.fn(
+      (_profileId: string, _bucket: string, signal?: AbortSignal) =>
+        new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    const api = createApi("aws_s3", { getBucketGovernance });
+    const view = renderModal(api);
+
+    await waitFor(() => expect(getBucketGovernance).toHaveBeenCalledOnce());
+    const signal = getBucketGovernance.mock.calls[0]?.[2];
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketGovernanceModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket={null}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("renders AWS controls summary and updates public exposure", async () => {
     const api = createApi("aws_s3");
 
@@ -416,6 +450,7 @@ describe("BucketGovernanceModal", () => {
       expect(api.buckets.getBucketGovernance).toHaveBeenCalledWith(
         "profile-2",
         "demo-bucket",
+        expect.any(AbortSignal),
       ),
     );
 
@@ -611,6 +646,7 @@ describe("BucketGovernanceModal", () => {
         expect(api.buckets.getBucketGovernance).toHaveBeenCalledWith(
           "profile-2",
           "demo-bucket",
+          expect.any(AbortSignal),
         ),
       );
 
@@ -1198,6 +1234,7 @@ describe("BucketGovernanceModal", () => {
       expect(api.buckets.getBucketGovernance).toHaveBeenCalledWith(
         "profile-2",
         "demo-bucket",
+        expect.any(AbortSignal),
       ),
     );
 

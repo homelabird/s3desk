@@ -30,7 +30,7 @@ export function BucketGovernanceModal(props: {
 
   const governanceQuery = useQuery({
     queryKey: queryKeys.buckets.governance(props.profileId, bucket, props.apiToken),
-    queryFn: () => props.api.buckets.getBucketGovernance(props.profileId, bucket),
+    queryFn: ({ signal }) => props.api.buckets.getBucketGovernance(props.profileId, bucket, signal),
     enabled: open && !!props.profileId && !!bucket,
   });
   const governance = governanceQuery.data;

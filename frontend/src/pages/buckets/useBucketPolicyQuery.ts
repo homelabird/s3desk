@@ -12,7 +12,7 @@ export function useBucketPolicyQuery(
 ) {
   return useQuery({
     queryKey: queryKeys.buckets.policy(profileId, bucket, apiToken),
-    queryFn: () => api.buckets.getBucketPolicy(profileId, bucket),
+    queryFn: ({ signal }) => api.buckets.getBucketPolicy(profileId, bucket, signal),
     enabled,
   });
 }

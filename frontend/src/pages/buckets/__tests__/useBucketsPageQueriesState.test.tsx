@@ -70,6 +70,35 @@ afterEach(() => {
 })
 
 describe('useBucketsPageQueriesState', () => {
+	it('aborts the bucket lookup when the page unmounts', async () => {
+		let signal: AbortSignal | undefined
+		const listBuckets = vi.fn((_profileId: string, querySignal?: AbortSignal) => {
+			signal = querySignal
+			return new Promise<never>(() => {})
+		})
+		const api = createMockApiClient({
+			server: { getMeta: vi.fn().mockResolvedValue(buildMeta()) },
+			profiles: { listProfiles: vi.fn().mockResolvedValue([buildProfile()]) },
+			buckets: { listBuckets },
+		})
+
+		const { unmount } = renderHook(
+			() =>
+				useBucketsPageQueriesState({
+					api,
+					apiToken: 'token-a',
+					profileId: 'profile-1',
+				}),
+			{ wrapper: createWrapper(createQueryClient()) },
+		)
+
+		await waitFor(() => expect(listBuckets).toHaveBeenCalledTimes(1))
+		expect(signal).toBeInstanceOf(AbortSignal)
+
+		unmount()
+		expect(signal?.aborted).toBe(true)
+	})
+
 	it('disables bucket queries when the selected profile cannot perform bucket CRUD', async () => {
 		const listBuckets = vi.fn().mockResolvedValue([
 			{ name: 'primary-bucket', createdAt: '2026-04-08T00:00:00Z' },

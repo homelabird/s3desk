@@ -302,6 +302,41 @@ async function expectTwoAzurePolicyControls() {
 }
 
 describe("BucketPolicyModal", () => {
+  it("aborts the policy request when the modal closes", async () => {
+    mockViewportWidth(1280);
+    const getBucketPolicy = vi.fn(
+      (_profileId: string, _bucket: string, signal?: AbortSignal) =>
+        new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    const api = createApi({ getBucketPolicy });
+    const view = renderModal(api);
+
+    await waitFor(() => expect(getBucketPolicy).toHaveBeenCalledOnce());
+    const signal = getBucketPolicy.mock.calls[0]?.[2];
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket={null}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("renders the desktop modal shell by default", async () => {
     mockViewportWidth(1280);
     const api = createApi();
@@ -667,6 +702,7 @@ describe("BucketPolicyModal", () => {
       expect(api.buckets.getBucketPolicy).toHaveBeenCalledWith(
         "profile-2",
         "demo-bucket",
+        expect.any(AbortSignal),
       ),
     );
     await waitFor(() => {
