@@ -24,6 +24,7 @@ export function useTransfersUploadJobLifecycle({
 		(taskId: string, progress?: JobProgress | null) => {
 			if (!progress) return
 			updateUploadTask(taskId, (prev) => {
+				if (prev.status !== 'waiting_job') return prev
 				const loadedBytes = progress.bytesDone ?? prev.loadedBytes
 				const totalBytes = progress.bytesTotal ?? prev.totalBytes
 				const speedBps = progress.speedBps ?? prev.speedBps
@@ -68,38 +69,50 @@ export function useTransfersUploadJobLifecycle({
 					prefix: current.prefix,
 					source: 'upload',
 				})
-				updateUploadTask(taskId, (prev) => ({
-					...prev,
-					status: 'succeeded',
-					finishedAtMs: Date.now(),
-					error: undefined,
-					speedBps: 0,
-					etaSeconds: 0,
-					loadedBytes: prev.totalBytes,
-				}))
+				updateUploadTask(taskId, (prev) =>
+					prev.status === 'waiting_job'
+						? {
+								...prev,
+								status: 'succeeded',
+								finishedAtMs: Date.now(),
+								error: undefined,
+								speedBps: 0,
+								etaSeconds: 0,
+								loadedBytes: prev.totalBytes,
+							}
+						: prev,
+				)
 				return
 			}
 
 			if (status === 'failed') {
-				updateUploadTask(taskId, (prev) => ({
-					...prev,
-					status: 'failed',
-					finishedAtMs: Date.now(),
-					error: error ?? 'upload job failed',
-					speedBps: 0,
-					etaSeconds: 0,
-				}))
+				updateUploadTask(taskId, (prev) =>
+					prev.status === 'waiting_job'
+						? {
+								...prev,
+								status: 'failed',
+								finishedAtMs: Date.now(),
+								error: error ?? 'upload job failed',
+								speedBps: 0,
+								etaSeconds: 0,
+							}
+						: prev,
+				)
 				return
 			}
 
-			updateUploadTask(taskId, (prev) => ({
-				...prev,
-				status: 'canceled',
-				finishedAtMs: Date.now(),
-				error: error ?? prev.error,
-				speedBps: 0,
-				etaSeconds: 0,
-			}))
+			updateUploadTask(taskId, (prev) =>
+				prev.status === 'waiting_job'
+					? {
+							...prev,
+							status: 'canceled',
+							finishedAtMs: Date.now(),
+							error: error ?? prev.error,
+							speedBps: 0,
+							etaSeconds: 0,
+						}
+					: prev,
+			)
 		},
 		[apiToken, queryClient, updateUploadTask, uploadTasksRef],
 	)

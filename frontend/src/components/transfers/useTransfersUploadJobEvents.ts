@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 
 import { buildApiHttpUrl, buildApiWsUrl } from '../../api/baseUrl'
@@ -44,6 +44,110 @@ export function useTransfersUploadJobEvents({
 }: UseTransfersUploadJobEventsArgs) {
 	const [connected, setConnected] = useState(false)
 	const lastSeqRef = useRef(0)
+	const refreshInFlightRef = useRef(false)
+	const refreshSignalRef = useRef<AbortSignal | null>(null)
+	const pendingRefreshRef = useRef<{ isStopped: () => boolean; signal: AbortSignal } | null>(null)
+	const refreshInputsRef = useRef({ api, handleUploadJobUpdate, updateUploadTask, uploadTasksRef })
+	useEffect(() => {
+		refreshInputsRef.current = { api, handleUploadJobUpdate, updateUploadTask, uploadTasksRef }
+	}, [api, handleUploadJobUpdate, updateUploadTask, uploadTasksRef])
+
+	const refreshWaitingJobs = useCallback(async (isStopped: () => boolean, signal: AbortSignal, queueIfBusy = false) => {
+		if (isStopped() || signal.aborted) return
+		if (refreshInFlightRef.current) {
+			if (queueIfBusy || refreshSignalRef.current !== signal) pendingRefreshRef.current = { isStopped, signal }
+			return
+		}
+
+		refreshInFlightRef.current = true
+		refreshSignalRef.current = signal
+		let shouldStop = isStopped
+		let currentSignal = signal
+		try {
+			while (true) {
+				if (!shouldStop() && !currentSignal.aborted) {
+					const {
+						api: currentApi,
+						handleUploadJobUpdate: handleUpdate,
+						updateUploadTask: updateTask,
+						uploadTasksRef: tasksRef,
+					} = refreshInputsRef.current
+					const waiting = tasksRef.current.filter((task) => task.status === 'waiting_job' && !!task.jobId)
+					const byProfile = new Map<string, UploadTask[]>()
+					for (const task of waiting) {
+						const tasks = byProfile.get(task.profileId) ?? []
+						tasks.push(task)
+						byProfile.set(task.profileId, tasks)
+					}
+
+					for (const [profileId, tasks] of byProfile) {
+						if (shouldStop() || currentSignal.aborted) break
+						for (let index = 0; index < tasks.length; index += 200) {
+							if (shouldStop() || currentSignal.aborted) break
+							const batch = tasks.slice(index, index + 200)
+							try {
+								const response = await currentApi.jobs.listJobs(profileId, {
+									ids: batch.map((task) => task.jobId as string),
+									limit: batch.length,
+									signal: currentSignal,
+								})
+								if (shouldStop() || currentSignal.aborted) break
+								const jobsByID = new Map(response.items.map((job) => [job.id, job]))
+								await Promise.all(
+									batch.map(async (task) => {
+										if (shouldStop() || currentSignal.aborted) return
+										const current = tasksRef.current.find((candidate) => candidate.id === task.id)
+										if (
+											!current ||
+											current.status !== 'waiting_job' ||
+											current.profileId !== task.profileId ||
+											current.jobId !== task.jobId
+										) {
+											return
+										}
+										const job = jobsByID.get(task.jobId as string)
+										if (job) {
+											await handleUpdate(task.id, job)
+											return
+										}
+										updateTask(task.id, (prev) =>
+											prev.status === 'waiting_job' &&
+											prev.profileId === task.profileId &&
+											prev.jobId === task.jobId
+												? { ...prev, error: 'job not found' }
+												: prev,
+										)
+									}),
+								)
+							} catch (err) {
+								if (shouldStop() || currentSignal.aborted) break
+								maybeReportNetworkError(err)
+								for (const task of batch) {
+									updateTask(task.id, (prev) =>
+										prev.status === 'waiting_job' &&
+										prev.profileId === task.profileId &&
+										prev.jobId === task.jobId
+											? { ...prev, error: formatErr(err) }
+											: prev,
+									)
+								}
+							}
+						}
+					}
+				}
+
+				const pending = pendingRefreshRef.current
+				pendingRefreshRef.current = null
+				if (!pending) return
+				shouldStop = pending.isStopped
+				currentSignal = pending.signal
+				refreshSignalRef.current = currentSignal
+			}
+		} finally {
+			refreshInFlightRef.current = false
+			refreshSignalRef.current = null
+		}
+	}, [])
 
 	useEffect(() => {
 		if (!hasPendingUploadJobs) {
@@ -56,29 +160,20 @@ export function useTransfersUploadJobEvents({
 		}
 
 		let stopped = false
+		const controller = new AbortController()
 		let ws: WebSocket | null = null
 		let es: EventSource | null = null
 		let reconnectTimer: number | null = null
 		let reconnectAttempt = 0
-		let wsProbeTimer: number | null = null
 		let connectNonce = 0
 		let wsUnavailable = false
 		let hadConnected = false
 		let shouldRefreshOnOpen = false
-		let refreshInFlight = false
-		let currentTransport: 'ws' | 'sse' | null = null
 
 		const clearReconnect = () => {
 			if (reconnectTimer) {
 				window.clearTimeout(reconnectTimer)
 				reconnectTimer = null
-			}
-		}
-
-		const clearWSProbeTimer = () => {
-			if (wsProbeTimer) {
-				window.clearTimeout(wsProbeTimer)
-				wsProbeTimer = null
 			}
 		}
 
@@ -114,28 +209,6 @@ export function useTransfersUploadJobEvents({
 			closeEventSource()
 		}
 
-		const refreshWaitingJobs = async () => {
-			if (stopped || refreshInFlight) return
-			refreshInFlight = true
-			const waiting = uploadTasksRef.current.filter((t) => t.status === 'waiting_job' && !!t.jobId)
-			try {
-				for (const task of waiting) {
-					if (stopped) return
-					try {
-						const job = await api.jobs.getJob(task.profileId, task.jobId as string)
-						if (stopped) return
-						await handleUploadJobUpdate(task.id, job)
-					} catch (err) {
-						maybeReportNetworkError(err)
-						if (stopped) return
-						updateUploadTask(task.id, (prev) => ({ ...prev, error: formatErr(err) }))
-					}
-				}
-			} finally {
-				refreshInFlight = false
-			}
-		}
-
 		const markRefreshOnReconnect = () => {
 			if (hadConnected) {
 				shouldRefreshOnOpen = true
@@ -158,29 +231,16 @@ export function useTransfersUploadJobEvents({
 			}, delay)
 		}
 
-		const scheduleWSProbe = () => {
-			if (stopped || wsProbeTimer) return
-			wsProbeTimer = window.setTimeout(() => {
-				wsProbeTimer = null
-				if (stopped) return
-				if (currentTransport !== 'ws') void connectWS()
-			}, 15_000)
-		}
-
 		const handleTransportOpen = (transport: 'ws' | 'sse') => {
-			currentTransport = transport
 			setConnected(true)
 			reconnectAttempt = 0
 			clearReconnect()
 			if (transport === 'ws') {
 				wsUnavailable = false
-				clearWSProbeTimer()
-			} else {
-				scheduleWSProbe()
 			}
 			if (shouldRefreshOnOpen) {
 				shouldRefreshOnOpen = false
-				void refreshWaitingJobs()
+				void refreshWaitingJobs(() => stopped, controller.signal, true)
 			}
 			hadConnected = true
 		}
@@ -190,7 +250,7 @@ export function useTransfersUploadJobEvents({
 				const msg = JSON.parse(data) as WSEvent
 				const { hasGap, resolvedSeq } = getRealtimeSequenceState(lastSeqRef.current, msg.seq)
 				if (hasGap) {
-					void refreshWaitingJobs()
+					void refreshWaitingJobs(() => stopped, controller.signal, true)
 				}
 				lastSeqRef.current = resolvedSeq
 				if (!msg.jobId || typeof msg.payload !== 'object' || msg.payload === null) return
@@ -228,19 +288,21 @@ export function useTransfersUploadJobEvents({
 		}
 
 		const connectSSE = async () => {
-			if (stopped || typeof window.EventSource === 'undefined') {
+			if (stopped) return
+			if (typeof window.EventSource === 'undefined') {
+				wsUnavailable = false
 				setConnected(false)
 				scheduleReconnect()
 				return
 			}
 			const nonce = ++connectNonce
 			clearReconnect()
-			clearWSProbeTimer()
 			closeTransport()
 			let ticket = ''
 			try {
 				ticket = await fetchRealtimeTicket('sse')
 			} catch {
+				wsUnavailable = false
 				setConnected(false)
 				scheduleReconnect()
 				return
@@ -249,6 +311,7 @@ export function useTransfersUploadJobEvents({
 			try {
 				es = new EventSource(buildSSEURL(ticket, lastSeqRef.current))
 			} catch {
+				wsUnavailable = false
 				setConnected(false)
 				scheduleReconnect()
 				return
@@ -258,9 +321,8 @@ export function useTransfersUploadJobEvents({
 			}
 			es.onerror = () => {
 				markRefreshOnReconnect()
-				clearWSProbeTimer()
 				closeEventSource()
-				currentTransport = 'sse'
+				wsUnavailable = false
 				setConnected(false)
 				scheduleReconnect()
 			}
@@ -274,7 +336,6 @@ export function useTransfersUploadJobEvents({
 			}
 			const nonce = ++connectNonce
 			clearReconnect()
-			clearWSProbeTimer()
 			closeTransport()
 			let ticket = ''
 			try {
@@ -316,7 +377,6 @@ export function useTransfersUploadJobEvents({
 				const failedBeforeOpen = !wsOpened
 				if (failedBeforeOpen) wsUnavailable = true
 				markRefreshOnReconnect()
-				currentTransport = null
 				setConnected(false)
 				void connectSSE()
 				if (!failedBeforeOpen) scheduleReconnect()
@@ -330,45 +390,29 @@ export function useTransfersUploadJobEvents({
 		void connectWS()
 		return () => {
 			stopped = true
+			controller.abort()
 			clearReconnect()
-			clearWSProbeTimer()
 			closeTransport()
 		}
-	}, [api, apiToken, handleUploadJobUpdate, hasPendingUploadJobs, updateUploadTask, uploadTasksRef])
+	}, [apiToken, handleUploadJobUpdate, hasPendingUploadJobs, refreshWaitingJobs, uploadTasksRef])
 
 	useEffect(() => {
 		if (!hasPendingUploadJobs || connected) return
 
 		let stopped = false
-		let pollInFlight = false
+		const controller = new AbortController()
 		const tick = async () => {
-			if (pollInFlight) return
-			pollInFlight = true
-			const waiting = uploadTasksRef.current.filter((t) => t.status === 'waiting_job' && !!t.jobId)
-			try {
-				for (const task of waiting) {
-					if (stopped) return
-					try {
-						const job = await api.jobs.getJob(task.profileId, task.jobId as string)
-						if (stopped) return
-						await handleUploadJobUpdate(task.id, job)
-					} catch (err) {
-						maybeReportNetworkError(err)
-						updateUploadTask(task.id, (prev) => ({ ...prev, error: formatErr(err) }))
-					}
-				}
-			} finally {
-				pollInFlight = false
-			}
+			await refreshWaitingJobs(() => stopped, controller.signal)
 		}
 
 		void tick()
 		const id = window.setInterval(() => void tick(), 2000)
 		return () => {
 			stopped = true
+			controller.abort()
 			window.clearInterval(id)
 		}
-	}, [api, connected, handleUploadJobUpdate, hasPendingUploadJobs, updateUploadTask, uploadTasksRef])
+	}, [apiToken, connected, hasPendingUploadJobs, refreshWaitingJobs])
 }
 
 function buildWSURL(realtimeTicket: string, afterSeq?: number): string {

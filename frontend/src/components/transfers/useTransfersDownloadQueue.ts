@@ -118,6 +118,12 @@ export function useTransfersDownloadQueue({
 			}
 
 			if (current.kind === 'object') {
+				const controller = new AbortController()
+				let abortRawDownload = () => {}
+				downloadAbortByTaskIdRef.current[taskId] = () => {
+					controller.abort()
+					abortRawDownload()
+				}
 				try {
 					const runDownload = async (proxy: boolean) => {
 						const presigned = await api.objects.getObjectDownloadURL({
@@ -126,9 +132,10 @@ export function useTransfersDownloadQueue({
 							key: current.key,
 							proxy,
 							size: current.totalBytes,
+							signal: controller.signal,
 						})
 						const latest = downloadTasksRef.current.find((t) => t.id === taskId)
-						if (!latest || latest.status !== 'running') {
+						if (controller.signal.aborted || !latest || latest.status !== 'running') {
 							throw new RequestAbortedError()
 						}
 						const handle = downloadURLWithProgress(presigned.url, {
@@ -145,7 +152,7 @@ export function useTransfersDownloadQueue({
 								}))
 							},
 						})
-						downloadAbortByTaskIdRef.current[taskId] = handle.abort
+						abortRawDownload = handle.abort
 						return await handle.promise
 					}
 
@@ -253,6 +260,7 @@ export function useTransfersDownloadQueue({
 
 		let stopped = false
 		let pollInFlight = false
+		const controller = new AbortController()
 		const tick = async () => {
 			if (pollInFlight) return
 			pollInFlight = true
@@ -260,36 +268,70 @@ export function useTransfersDownloadQueue({
 				(t): t is JobArtifactDownloadTask => t.kind === 'job_artifact' && t.status === 'waiting',
 			)
 			try {
-				for (const t of waiting) {
-					if (stopped) return
-					try {
-						const job = await api.jobs.getJob(t.profileId, t.jobId)
+				const byProfile = new Map<string, JobArtifactDownloadTask[]>()
+				for (const task of waiting) {
+					const tasks = byProfile.get(task.profileId) ?? []
+					tasks.push(task)
+					byProfile.set(task.profileId, tasks)
+				}
+				for (const [profileId, tasks] of byProfile) {
+					for (let index = 0; index < tasks.length; index += 200) {
 						if (stopped) return
-
-						if (job.status === 'succeeded') {
-							updateDownloadTask(t.id, (prev) => ({ ...prev, status: 'queued', error: undefined }))
-							continue
+						const batch = tasks.slice(index, index + 200)
+						try {
+							const response = await api.jobs.listJobs(profileId, {
+								ids: batch.map((task) => task.jobId),
+								limit: batch.length,
+								signal: controller.signal,
+							})
+							if (stopped) return
+							const jobsByID = new Map(response.items.map((job) => [job.id, job]))
+							for (const task of batch) {
+								const job = jobsByID.get(task.jobId)
+								updateDownloadTask(task.id, (prev) => {
+									if (
+										prev.kind !== 'job_artifact' ||
+										prev.status !== 'waiting' ||
+										prev.profileId !== task.profileId ||
+										prev.jobId !== task.jobId
+									) {
+										return prev
+									}
+									if (!job) return { ...prev, error: 'job not found' }
+									if (job.status === 'succeeded') return { ...prev, status: 'queued', error: undefined }
+									if (job.status === 'failed') {
+										return {
+											...prev,
+											status: 'failed',
+											finishedAtMs: Date.now(),
+											error: job.error ?? 'job failed',
+										}
+									}
+									if (job.status === 'canceled') {
+										return {
+											...prev,
+											status: 'canceled',
+											finishedAtMs: Date.now(),
+											error: job.error ?? prev.error,
+										}
+									}
+									return prev
+								})
+							}
+						} catch (err) {
+							if (stopped || controller.signal.aborted) return
+							maybeReportNetworkError(err)
+							for (const task of batch) {
+								updateDownloadTask(task.id, (prev) =>
+									prev.kind === 'job_artifact' &&
+									prev.status === 'waiting' &&
+									prev.profileId === task.profileId &&
+									prev.jobId === task.jobId
+										? { ...prev, error: formatErr(err) }
+										: prev,
+								)
+							}
 						}
-						if (job.status === 'failed') {
-							updateDownloadTask(t.id, (prev) => ({
-								...prev,
-								status: 'failed',
-								finishedAtMs: Date.now(),
-								error: job.error ?? 'job failed',
-							}))
-							continue
-						}
-						if (job.status === 'canceled') {
-							updateDownloadTask(t.id, (prev) => ({
-								...prev,
-								status: 'canceled',
-								finishedAtMs: Date.now(),
-								error: job.error ?? prev.error,
-							}))
-						}
-					} catch (err) {
-						maybeReportNetworkError(err)
-						updateDownloadTask(t.id, (prev) => ({ ...prev, error: formatErr(err) }))
 					}
 				}
 			} finally {
@@ -301,6 +343,7 @@ export function useTransfersDownloadQueue({
 		const id = window.setInterval(() => void tick(), 1500)
 		return () => {
 			stopped = true
+			controller.abort()
 			window.clearInterval(id)
 		}
 	}, [api, hasWaitingJobArtifactDownloads, updateDownloadTask])

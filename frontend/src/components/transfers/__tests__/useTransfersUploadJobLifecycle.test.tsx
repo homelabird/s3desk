@@ -94,4 +94,31 @@ describe('useTransfersUploadJobLifecycle', () => {
 			source: 'upload',
 		})
 	})
+
+	it('does not overwrite a task canceled after a stale job read', async () => {
+		const waiting = buildUploadTask()
+		const uploadTasksRef = { current: [waiting] }
+		const updateUploadTask = vi.fn()
+		const { result } = renderHook(() =>
+			useTransfersUploadJobLifecycle({
+				apiToken: 'token-a',
+				queryClient: { invalidateQueries: vi.fn() } as unknown as QueryClient,
+				uploadTasksRef,
+				updateUploadTask,
+			}),
+		)
+
+		await act(async () => {
+			await result.current.handleUploadJobUpdate('upload-1', {
+				status: 'succeeded',
+				progress: { bytesDone: 100, bytesTotal: 100 },
+			})
+		})
+
+		const progressUpdater = updateUploadTask.mock.calls[0]?.[1] as ((task: UploadTask) => UploadTask) | undefined
+		const terminalUpdater = updateUploadTask.mock.calls[1]?.[1] as ((task: UploadTask) => UploadTask) | undefined
+		const canceled = { ...waiting, status: 'canceled' as const, finishedAtMs: 2 }
+		expect(progressUpdater?.(canceled)).toBe(canceled)
+		expect(terminalUpdater?.(canceled)).toBe(canceled)
+	})
 })

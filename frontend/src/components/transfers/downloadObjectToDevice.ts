@@ -22,6 +22,7 @@ export async function downloadObjectToDevice(args: {
 			key: task.key,
 			proxy: true,
 			size: task.totalBytes,
+			signal,
 		})
 		res = await fetch(proxy.url, { signal })
 	} else {
@@ -31,6 +32,7 @@ export async function downloadObjectToDevice(args: {
 				bucket: task.bucket,
 				key: task.key,
 				size: task.totalBytes,
+				signal,
 			})
 			res = await fetch(direct.url, { signal })
 		} catch (err) {
@@ -43,6 +45,7 @@ export async function downloadObjectToDevice(args: {
 				key: task.key,
 				proxy: true,
 				size: task.totalBytes,
+				signal,
 			})
 			res = await fetch(proxy.url, { signal })
 		}

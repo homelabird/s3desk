@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { APIClientShape } from '../../../api/client'
@@ -7,8 +7,10 @@ import { directoryPickerUnavailableHint } from '../../../lib/secureContext'
 import type { DownloadTask, JobArtifactDownloadTask } from '../transferTypes'
 import { useTransfersDownloadQueue } from '../useTransfersDownloadQueue'
 
-const { devicePickerSupportRef } = vi.hoisted(() => ({
+const { devicePickerSupportRef, downloadURLWithProgressMock, saveBlobMock } = vi.hoisted(() => ({
 	devicePickerSupportRef: { current: { ok: true } as { ok: boolean; reason?: string } },
+	downloadURLWithProgressMock: vi.fn(),
+	saveBlobMock: vi.fn(),
 }))
 
 const messageErrorMock = vi.fn()
@@ -30,6 +32,15 @@ vi.mock('antd', async () => {
 vi.mock('../../../lib/deviceFs', () => ({
 	getDevicePickerSupport: () => devicePickerSupportRef.current,
 }))
+
+vi.mock('../transferDownloadUtils', async () => {
+	const actual = await vi.importActual<typeof import('../transferDownloadUtils')>('../transferDownloadUtils')
+	return {
+		...actual,
+		downloadURLWithProgress: downloadURLWithProgressMock,
+		saveBlob: saveBlobMock,
+	}
+})
 
 function createApiStub(): APIClientShape {
 	return {
@@ -56,6 +67,8 @@ describe('useTransfersDownloadQueue', () => {
 		messageErrorMock.mockClear()
 		messageInfoMock.mockClear()
 		messageSuccessMock.mockClear()
+		downloadURLWithProgressMock.mockReset()
+		saveBlobMock.mockReset()
 	})
 
 	it('does not queue the same device download twice for the same target', async () => {
@@ -73,9 +86,9 @@ describe('useTransfersDownloadQueue', () => {
 			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
 			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
 			const downloadEstimatorByTaskIdRef = useRef({})
-			const updateDownloadTask = (taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
+			const updateDownloadTask = useCallback((taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
 				setDownloadTasks((prev) => prev.map((task) => (task.id === taskId ? updater(task) : task)))
-			}
+			}, [])
 
 			return {
 				downloadTasks,
@@ -261,31 +274,23 @@ describe('useTransfersDownloadQueue', () => {
 		expect(messageErrorMock).toHaveBeenCalledWith(directoryPickerUnavailableHint())
 	})
 
-	it('does not overlap waiting-job polling while a previous fetch is still running', async () => {
-		vi.useFakeTimers()
-		let resolveJob: ((value: { status: string }) => void) | null = null
-		const getJob = vi.fn().mockImplementation(
-			() =>
-				new Promise((resolve) => {
-					resolveJob = resolve
-				}),
-		)
-		const waitingTask: JobArtifactDownloadTask = {
-			id: 'job-artifact-1',
-			kind: 'job_artifact',
-			profileId: 'profile-1',
-			jobId: 'job-1',
-			label: 'Job artifact',
-			status: 'waiting',
-			createdAtMs: 1,
-			loadedBytes: 0,
-			totalBytes: 10,
-			speedBps: 0,
-			etaSeconds: 0,
-		}
+	it('aborts a pending object presign before raw download or save starts', async () => {
+		let resolvePresign!: (value: { url: string }) => void
+		const presignRequest = new Promise<{ url: string }>((resolve) => {
+			resolvePresign = resolve
+		})
+		let presignSignal: AbortSignal | undefined
+		const getObjectDownloadURL = vi.fn((args: { signal?: AbortSignal }) => {
+			presignSignal = args.signal
+			return presignRequest
+		})
+		downloadURLWithProgressMock.mockReturnValue({
+			promise: Promise.resolve({ blob: new Blob(['download']), contentDisposition: null, contentType: null }),
+			abort: vi.fn(),
+		})
 
-		const { result, unmount } = renderHook(() => {
-			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([waitingTask])
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
 			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
 			const downloadEstimatorByTaskIdRef = useRef({})
 			const updateDownloadTask = (taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
@@ -294,16 +299,87 @@ describe('useTransfersDownloadQueue', () => {
 
 			return {
 				downloadTasks,
+				downloadAbortByTaskIdRef,
 				...useTransfersDownloadQueue({
 					api: {
-						jobs: {
-							getJob,
-							downloadJobArtifact: vi.fn(),
-						},
-						objects: {
-							getObjectDownloadURL: vi.fn(),
-						},
+						objects: { getObjectDownloadURL },
+						jobs: { getJob: vi.fn(), downloadJobArtifact: vi.fn() },
 					} as unknown as APIClientShape,
+					downloadLinkProxyEnabled: false,
+					downloadConcurrency: 1,
+					downloadTasks,
+					setDownloadTasks,
+					downloadAbortByTaskIdRef,
+					downloadEstimatorByTaskIdRef,
+					updateDownloadTask,
+					openTransfers: vi.fn(),
+				}),
+			}
+		})
+
+		act(() => {
+			result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf' })
+		})
+		await waitFor(() => expect(getObjectDownloadURL).toHaveBeenCalledTimes(1))
+		const taskId = result.current.downloadTasks[0]!.id
+
+		act(() => {
+			result.current.downloadAbortByTaskIdRef.current[taskId]?.()
+		})
+		await act(async () => {
+			resolvePresign({ url: 'https://storage.local/report.pdf' })
+			await Promise.resolve()
+		})
+
+		expect(presignSignal).toBeInstanceOf(AbortSignal)
+		expect(presignSignal?.aborted).toBe(true)
+		expect(downloadURLWithProgressMock).not.toHaveBeenCalled()
+		expect(saveBlobMock).not.toHaveBeenCalled()
+	})
+
+	it('batches waiting jobs, preserves canceled tasks, and aborts polling on unmount', async () => {
+		vi.useFakeTimers()
+		let resolveFirstBatch: ((value: { items: Array<{ id: string; status: string }> }) => void) | undefined
+		const listJobs = vi
+			.fn()
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirstBatch = resolve
+					}),
+			)
+			.mockImplementationOnce(() => new Promise(() => {}))
+		const api = {
+			jobs: { listJobs, downloadJobArtifact: vi.fn() },
+			objects: { getObjectDownloadURL: vi.fn() },
+		} as unknown as APIClientShape
+		const waitingTasks: JobArtifactDownloadTask[] = Array.from({ length: 201 }, (_, index) => ({
+			id: `job-artifact-${index + 1}`,
+			kind: 'job_artifact',
+			profileId: 'profile-1',
+			jobId: `job-${index + 1}`,
+			label: `Job artifact ${index + 1}`,
+			status: 'waiting',
+			createdAtMs: index + 1,
+			loadedBytes: 0,
+			totalBytes: 10,
+			speedBps: 0,
+			etaSeconds: 0,
+		}))
+
+		const { result, unmount } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>(waitingTasks)
+			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
+			const downloadEstimatorByTaskIdRef = useRef({})
+			const updateDownloadTask = useCallback((taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
+				setDownloadTasks((prev) => prev.map((task) => (task.id === taskId ? updater(task) : task)))
+			}, [])
+
+			return {
+				downloadTasks,
+				setDownloadTasks,
+				...useTransfersDownloadQueue({
+					api,
 					downloadLinkProxyEnabled: false,
 					downloadConcurrency: 0,
 					downloadTasks,
@@ -319,21 +395,38 @@ describe('useTransfersDownloadQueue', () => {
 		await act(async () => {
 			await Promise.resolve()
 		})
-		expect(result.current.downloadTasks).toHaveLength(1)
-		expect(getJob).toHaveBeenCalledTimes(1)
-
-		await act(async () => {
-			vi.advanceTimersByTime(4_500)
-			await Promise.resolve()
+		expect(listJobs).toHaveBeenCalledTimes(1)
+		expect(listJobs.mock.calls[0]?.[0]).toBe('profile-1')
+		expect(listJobs.mock.calls[0]?.[1]).toMatchObject({
+			ids: waitingTasks.slice(0, 200).map((task) => task.jobId),
+			limit: 200,
+			signal: expect.any(AbortSignal),
 		})
 
-		expect(getJob).toHaveBeenCalledTimes(1)
-
-		await act(async () => {
-			resolveJob?.({ status: 'running' })
-			await Promise.resolve()
+		act(() => {
+			result.current.setDownloadTasks((prev) =>
+				prev.map((task) => (task.id === waitingTasks[0]?.id ? { ...task, status: 'canceled' } : task)),
+			)
 		})
 
+		await act(async () => {
+			resolveFirstBatch?.({
+				items: waitingTasks.slice(0, 200).map((task) => ({ id: task.jobId, status: 'succeeded' })),
+			})
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		expect(result.current.downloadTasks[0]?.status).toBe('canceled')
+		expect(result.current.downloadTasks[1]?.status).toBe('queued')
+		expect(listJobs).toHaveBeenCalledTimes(2)
+		expect(listJobs.mock.calls[1]?.[1]).toMatchObject({
+			ids: [waitingTasks[200]?.jobId],
+			limit: 1,
+			signal: expect.any(AbortSignal),
+		})
+
+		const signal = listJobs.mock.calls[1]?.[1]?.signal
 		unmount()
+		expect(signal?.aborted).toBe(true)
 	})
 })

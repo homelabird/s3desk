@@ -14,6 +14,7 @@ type PersistedTransfers = {
 
 const TRANSFERS_STORAGE_KEY = 'transfersHistoryV1'
 const MAX_PERSISTED_TRANSFERS = 200
+const PERSIST_INTERVAL_MS = 1_000
 
 function parsePersistedTransfers(raw: string | null): PersistedTransfers | null {
 	if (!raw) return null
@@ -89,6 +90,25 @@ const toPersistedUploadTask = (task: UploadTask): PersistedUploadTask => {
 	return withoutPreview(task)
 }
 
+const persistTransfers = (downloadTasks: DownloadTask[], uploadTasks: UploadTask[]) => {
+	if (typeof window === 'undefined') return
+	const downloads = downloadTasks
+		.filter((task): task is PersistedDownloadTask => task.kind !== 'object_device')
+		.slice(0, MAX_PERSISTED_TRANSFERS)
+	const uploads = uploadTasks.slice(0, MAX_PERSISTED_TRANSFERS).map(toPersistedUploadTask)
+	const payload: PersistedTransfers = {
+		version: 1,
+		savedAtMs: Date.now(),
+		downloads,
+		uploads,
+	}
+	try {
+		window.sessionStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
+	} catch {
+		// ignore
+	}
+}
+
 const loadPersistedTransfers = (): PersistedTransfers | null => {
 	if (typeof window === 'undefined') return null
 	try {
@@ -131,6 +151,8 @@ export function useTransfersPersistence({
 	setUploadTasks,
 }: UseTransfersPersistenceArgs) {
 	const hasLoadedPersistedRef = useRef(false)
+	const latestTransfersRef = useRef({ downloadTasks, uploadTasks })
+	const persistenceDirtyRef = useRef(true)
 
 	useEffect(() => {
 		if (hasLoadedPersistedRef.current) return
@@ -143,21 +165,25 @@ export function useTransfersPersistence({
 	}, [setDownloadTasks, setUploadTasks])
 
 	useEffect(() => {
-		if (typeof window === 'undefined') return
-		const downloads = downloadTasks
-			.filter((task): task is PersistedDownloadTask => task.kind !== 'object_device')
-			.slice(0, MAX_PERSISTED_TRANSFERS)
-		const uploads = uploadTasks.slice(0, MAX_PERSISTED_TRANSFERS).map(toPersistedUploadTask)
-		const payload: PersistedTransfers = {
-			version: 1,
-			savedAtMs: Date.now(),
-			downloads,
-			uploads,
-		}
-		try {
-			window.sessionStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
-		} catch {
-			// ignore
-		}
+		latestTransfersRef.current = { downloadTasks, uploadTasks }
+		persistenceDirtyRef.current = true
 	}, [downloadTasks, uploadTasks])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const flush = () => {
+			if (!persistenceDirtyRef.current) return
+			persistenceDirtyRef.current = false
+			const { downloadTasks: latestDownloads, uploadTasks: latestUploads } = latestTransfersRef.current
+			persistTransfers(latestDownloads, latestUploads)
+		}
+		flush()
+		const intervalId = window.setInterval(flush, PERSIST_INTERVAL_MS)
+		window.addEventListener('pagehide', flush)
+		return () => {
+			window.clearInterval(intervalId)
+			window.removeEventListener('pagehide', flush)
+			flush()
+		}
+	}, [])
 }

@@ -80,6 +80,10 @@ function buildUploadTask(): UploadTask {
 	}
 }
 
+function jobsListResponse(jobId = 'job-1', status = 'running') {
+	return { items: [{ id: jobId, status }], nextCursor: undefined }
+}
+
 async function flushRealtimeSetup() {
 	await act(async () => {
 		await Promise.resolve()
@@ -136,7 +140,7 @@ describe('useTransfersUploadJobEvents', () => {
 		const handleUploadJobUpdate = vi.fn(async () => {})
 		const api = {
 			jobs: {
-				getJob: vi.fn().mockResolvedValue({ status: 'running' }),
+				listJobs: vi.fn().mockResolvedValue(jobsListResponse()),
 			},
 		} as unknown as APIClientShape
 		const uploadTasksRef = { current: [buildUploadTask()] }
@@ -183,13 +187,14 @@ describe('useTransfersUploadJobEvents', () => {
 		unmount()
 	})
 
-	it('falls back to sse when websocket fails before opening and reprobes websocket later', async () => {
+	it('keeps a healthy sse stream without periodic websocket probes', async () => {
 		const api = {
 			jobs: {
-				getJob: vi.fn().mockResolvedValue({ status: 'running' }),
+				listJobs: vi.fn().mockResolvedValue(jobsListResponse()),
 			},
 		} as unknown as APIClientShape
 		const uploadTasksRef = { current: [buildUploadTask()] }
+		const handleUploadJobUpdate = vi.fn(async () => {})
 
 		const { unmount } = renderHook(() =>
 			useTransfersUploadJobEvents({
@@ -197,7 +202,7 @@ describe('useTransfersUploadJobEvents', () => {
 				apiToken: 'token-123',
 				hasPendingUploadJobs: true,
 				uploadTasksRef,
-				handleUploadJobUpdate: vi.fn(async () => {}),
+				handleUploadJobUpdate,
 				updateUploadTask: vi.fn(),
 			}),
 		)
@@ -222,17 +227,61 @@ describe('useTransfersUploadJobEvents', () => {
 		act(() => {
 			es.emitOpen()
 		})
+		const ticketRequests = fetchMock.mock.calls.length
 
 		await act(async () => {
-			vi.advanceTimersByTime(15_000)
+			vi.advanceTimersByTime(60_000)
 			await Promise.resolve()
 			await Promise.resolve()
 		})
 
+		expect(MockWebSocket.instances).toHaveLength(1)
+		expect(MockEventSource.instances).toHaveLength(1)
+		expect(es.closed).toBe(false)
+		expect(fetchMock).toHaveBeenCalledTimes(ticketRequests)
+
+		act(() => {
+			es.emitError()
+		})
+		await act(async () => {
+			vi.advanceTimersByTime(1_000)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
 		await flushRealtimeSetup()
-		const retriedWs = activeWebSocket()
-		expect(retriedWs?.url).toContain('/ws')
-		expect(retriedWs?.url).toContain('realtimeTicket=ws-ticket')
+		expect(MockWebSocket.instances).toHaveLength(2)
+		expect(activeWebSocket().url).toContain('realtimeTicket=ws-ticket')
+
+		unmount()
+	})
+
+	it('retries websocket when sse setup fails', async () => {
+		const api = { jobs: { listJobs: vi.fn().mockResolvedValue(jobsListResponse()) } } as unknown as APIClientShape
+		const uploadTasksRef = { current: [buildUploadTask()] }
+		const { unmount } = renderHook(() =>
+			useTransfersUploadJobEvents({
+				api,
+				apiToken: 'token-123',
+				hasPendingUploadJobs: true,
+				uploadTasksRef,
+				handleUploadJobUpdate: vi.fn(async () => {}),
+				updateUploadTask: vi.fn(),
+			}),
+		)
+
+		await flushRealtimeSetup()
+		fetchMock.mockRejectedValueOnce(new Error('sse unavailable'))
+		act(() => activeWebSocket().emitClose())
+		await flushRealtimeSetup()
+
+		await act(async () => {
+			vi.advanceTimersByTime(1_000)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		await flushRealtimeSetup()
+		expect(MockWebSocket.instances).toHaveLength(2)
+		expect(MockEventSource.instances).toHaveLength(0)
 
 		unmount()
 	})
@@ -240,7 +289,7 @@ describe('useTransfersUploadJobEvents', () => {
 	it('reuses the last sequence number when reconnecting after a disconnect', async () => {
 		const api = {
 			jobs: {
-				getJob: vi.fn().mockResolvedValue({ status: 'running' }),
+				listJobs: vi.fn().mockResolvedValue(jobsListResponse()),
 			},
 		} as unknown as APIClientShape
 		const uploadTasksRef = { current: [buildUploadTask()] }
@@ -286,20 +335,105 @@ describe('useTransfersUploadJobEvents', () => {
 		expect(getRealtimeSequenceState(5, undefined)).toEqual({ hasGap: false, resolvedSeq: 5 })
 	})
 
-	it('does not overlap fallback polling while a previous job fetch is still running', async () => {
-		let resolveJob: ((value: { status: string }) => void) | null = null
-		const getJob = vi.fn().mockImplementation(
+	it('reruns a reconnect refresh queued behind disconnected polling', async () => {
+		let resolveJobs: ((value: ReturnType<typeof jobsListResponse>) => void) | null = null
+		const listJobs = vi.fn().mockResolvedValue(jobsListResponse())
+		const api = { jobs: { listJobs } } as unknown as APIClientShape
+		const uploadTasksRef = { current: [buildUploadTask()] }
+		const handleUploadJobUpdate = vi.fn(async () => {})
+		const updateUploadTask = vi.fn()
+
+		const { unmount } = renderHook(() =>
+			useTransfersUploadJobEvents({
+				api,
+				apiToken: 'token-123',
+				hasPendingUploadJobs: true,
+				uploadTasksRef,
+				handleUploadJobUpdate,
+				updateUploadTask,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		act(() => activeWebSocket().emitOpen())
+		await flushRealtimeSetup()
+
+		listJobs.mockClear()
+		listJobs.mockImplementation(
 			() =>
 				new Promise((resolve) => {
-					resolveJob = resolve
+					resolveJobs = resolve
 				}),
 		)
+
+		act(() => activeWebSocket().emitClose())
+		await flushRealtimeSetup()
+		expect(listJobs).toHaveBeenCalledTimes(1)
+
+		act(() => activeEventSource().emitOpen())
+		await flushRealtimeSetup()
+		expect(listJobs).toHaveBeenCalledTimes(1)
+
+		await act(async () => {
+			resolveJobs?.(jobsListResponse())
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		expect(listJobs).toHaveBeenCalledTimes(2)
+
+		unmount()
+	})
+
+	it('does not attach a late refresh error to a completed upload', async () => {
+		const api = { jobs: { listJobs: vi.fn().mockRejectedValue(new Error('offline')) } } as unknown as APIClientShape
+		const updateUploadTask = vi.fn()
+		const uploadTasksRef = { current: [buildUploadTask()] }
+
+		const { unmount } = renderHook(() =>
+			useTransfersUploadJobEvents({
+				api,
+				apiToken: 'token-123',
+				hasPendingUploadJobs: true,
+				uploadTasksRef,
+				handleUploadJobUpdate: vi.fn(async () => {}),
+				updateUploadTask,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const updater = updateUploadTask.mock.calls[0]?.[1] as ((task: UploadTask) => UploadTask) | undefined
+		expect(updater).toBeTypeOf('function')
+
+		const completed = { ...buildUploadTask(), status: 'succeeded' as const }
+		expect(updater?.(completed)).toBe(completed)
+		expect(updater?.(buildUploadTask()).error).toContain('offline')
+
+		unmount()
+	})
+
+	it('batches at most 200 waiting jobs without overlapping and aborts on unmount', async () => {
+		let resolveFirstBatch: ((value: { items: Array<{ id: string; status: string }> }) => void) | undefined
+		const listJobs = vi
+			.fn()
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirstBatch = resolve
+					}),
+			)
+			.mockImplementationOnce(() => new Promise(() => {}))
 		const api = {
 			jobs: {
-				getJob,
+				listJobs,
 			},
 		} as unknown as APIClientShape
-		const uploadTasksRef = { current: [buildUploadTask()] }
+		const uploadTasksRef = {
+			current: Array.from({ length: 201 }, (_, index) => ({
+				...buildUploadTask(),
+				id: `upload-${index + 1}`,
+				jobId: `job-${index + 1}`,
+			})),
+		}
 
 		const { unmount } = renderHook(() =>
 			useTransfersUploadJobEvents({
@@ -313,20 +447,45 @@ describe('useTransfersUploadJobEvents', () => {
 		)
 
 		await flushRealtimeSetup()
-		expect(getJob).toHaveBeenCalledTimes(1)
+		expect(listJobs).toHaveBeenCalledTimes(1)
+		expect(listJobs.mock.calls[0]?.[0]).toBe('profile-1')
+		expect(listJobs.mock.calls[0]?.[1]).toMatchObject({
+			ids: uploadTasksRef.current.slice(0, 200).map((task) => task.jobId),
+			limit: 200,
+			signal: expect.any(AbortSignal),
+		})
 
 		await act(async () => {
 			vi.advanceTimersByTime(6_000)
 			await Promise.resolve()
 		})
 
-		expect(getJob).toHaveBeenCalledTimes(1)
+		expect(listJobs).toHaveBeenCalledTimes(1)
 
 		await act(async () => {
-			resolveJob?.({ status: 'running' })
+			resolveFirstBatch?.({
+				items: uploadTasksRef.current
+					.slice(0, 200)
+					.map((task) => ({ id: task.jobId as string, status: 'running' })),
+			})
+			await Promise.resolve()
 			await Promise.resolve()
 		})
+		expect(listJobs).toHaveBeenCalledTimes(2)
+		expect(listJobs.mock.calls[1]?.[1]).toMatchObject({
+			ids: ['job-201'],
+			limit: 1,
+			signal: expect.any(AbortSignal),
+		})
 
+		await act(async () => {
+			vi.advanceTimersByTime(2_000)
+			await Promise.resolve()
+		})
+		expect(listJobs).toHaveBeenCalledTimes(2)
+
+		const signal = listJobs.mock.calls[1]?.[1]?.signal
 		unmount()
+		expect(signal?.aborted).toBe(true)
 	})
 })

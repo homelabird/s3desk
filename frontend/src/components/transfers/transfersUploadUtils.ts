@@ -10,9 +10,13 @@ type UploadPathFile = File & {
 
 const fileChooserFocusSettleMs = 300
 
-export const promptForFiles = (args: { multiple: boolean; directory: boolean }): Promise<File[] | null> =>
+export const promptForFiles = (args: { multiple: boolean; directory: boolean; signal?: AbortSignal }): Promise<File[] | null> =>
 	new Promise((resolve) => {
 		if (typeof document === 'undefined' || typeof window === 'undefined') {
+			resolve(null)
+			return
+		}
+		if (args.signal?.aborted) {
 			resolve(null)
 			return
 		}
@@ -37,12 +41,16 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 			}
 			input.removeEventListener('change', handleChange)
 			input.removeEventListener('cancel', handleCancel)
+			args.signal?.removeEventListener('abort', handleAbort)
 			input.remove()
 		}
 		const handleChange = () => {
 			finish(input.files ? Array.from(input.files) : null)
 		}
 		const handleCancel = () => {
+			finish(null)
+		}
+		const handleAbort = () => {
 			finish(null)
 		}
 		const handleWindowFocus = () => {
@@ -53,6 +61,7 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 		}
 		input.addEventListener('change', handleChange)
 		input.addEventListener('cancel', handleCancel)
+		args.signal?.addEventListener('abort', handleAbort, { once: true })
 		if (shouldUseFocusFallback) {
 			window.addEventListener('focus', handleWindowFocus, true)
 		}
@@ -65,6 +74,8 @@ export type FolderSelectionResult = {
 	label?: string
 	mode: 'picker' | 'input'
 }
+
+const maxFolderSelectionFiles = 5000
 
 function stripSharedBrowserDirectoryRoot(paths: string[]): string[] {
 	if (paths.length === 0) return paths
@@ -86,17 +97,26 @@ function deriveFolderSelectionLabel(files: File[]): string | undefined {
 	return root || undefined
 }
 
-export async function promptForFolderFiles(): Promise<FolderSelectionResult | null> {
+export async function promptForFolderFiles(options: { signal?: AbortSignal } = {}): Promise<FolderSelectionResult | null> {
+	options.signal?.throwIfAborted()
 	const support = getDirectorySelectionSupport()
 	if (!support.ok || !support.mode) {
 		throw new Error(support.reason ?? 'Folder selection is not supported in this browser.')
 	}
 	if (support.mode === 'picker') {
 		const handle = await pickDirectory('read')
-		const files = await collectFilesFromDirectoryHandle(handle)
+		options.signal?.throwIfAborted()
+		const files = await collectFilesFromDirectoryHandle(handle, '', {
+			maxFiles: maxFolderSelectionFiles,
+			signal: options.signal,
+		})
 		return files.length > 0 ? { files, label: handle.name, mode: 'picker' } : null
 	}
-	const files = await promptForFiles({ multiple: true, directory: true })
+	const files = await promptForFiles({ multiple: true, directory: true, signal: options.signal })
+	options.signal?.throwIfAborted()
+	if (files && files.length > maxFolderSelectionFiles) {
+		throw new Error(`Selected folder exceeds the ${maxFolderSelectionFiles} file safety limit.`)
+	}
 	return files && files.length > 0 ? { files, label: deriveFolderSelectionLabel(files), mode: 'input' } : null
 }
 

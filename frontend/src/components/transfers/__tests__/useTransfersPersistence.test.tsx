@@ -1,6 +1,6 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useState } from 'react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DownloadTask, UploadTask } from '../transferTypes'
 import { clearPersistedTransfersStorage, useTransfersPersistence } from '../useTransfersPersistence'
@@ -83,6 +83,8 @@ describe('useTransfersPersistence', () => {
 	})
 
 	afterEach(() => {
+		vi.useRealTimers()
+		vi.restoreAllMocks()
 		window.localStorage.clear()
 		window.sessionStorage.clear()
 	})
@@ -180,6 +182,76 @@ describe('useTransfersPersistence', () => {
 		expect(saved.downloads?.every((item) => item.kind !== 'object_device')).toBe(true)
 		expect(saved.uploads?.map((item) => item.id)).toEqual(['u1'])
 		expect(saved.uploads?.[0]?.preview).toBeUndefined()
+	})
+
+	it('coalesces rapid progress persistence and flushes the latest task on page hide', () => {
+		vi.useFakeTimers()
+		const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
+		const stringifySpy = vi.spyOn(JSON, 'stringify')
+		const largeUpload = {
+			...buildUploadTask('large', 'staging'),
+			fileCount: 5_000,
+			filePaths: Array.from({ length: 5_000 }, (_, index) => `folder/file-${index}.bin`),
+		}
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
+			const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([])
+			useTransfersPersistence({ downloadTasks, uploadTasks, setDownloadTasks, setUploadTasks })
+			return { setUploadTasks }
+		})
+		setItemSpy.mockClear()
+		stringifySpy.mockClear()
+
+		act(() => {
+			result.current.setUploadTasks([largeUpload])
+		})
+		for (let loadedBytes = 1; loadedBytes <= 5; loadedBytes += 1) {
+			act(() => {
+				result.current.setUploadTasks((tasks) =>
+					tasks.map((task) => ({ ...task, loadedBytes })),
+				)
+			})
+		}
+
+		expect(setItemSpy).not.toHaveBeenCalled()
+		expect(stringifySpy).not.toHaveBeenCalled()
+
+		act(() => {
+			window.dispatchEvent(new Event('pagehide'))
+		})
+		expect(setItemSpy.mock.calls.filter(([key]) => key === 'transfersHistoryV1')).toHaveLength(1)
+		expect(stringifySpy).toHaveBeenCalledTimes(1)
+		const pageHidden = JSON.parse(window.sessionStorage.getItem('transfersHistoryV1') ?? '{}') as {
+			uploads?: Array<{ loadedBytes?: number; filePaths?: string[] }>
+		}
+		expect(pageHidden.uploads?.[0]?.loadedBytes).toBe(5)
+		expect(pageHidden.uploads?.[0]?.filePaths).toHaveLength(5_000)
+		setItemSpy.mockClear()
+		stringifySpy.mockClear()
+
+		for (let loadedBytes = 6; loadedBytes <= 10; loadedBytes += 1) {
+			act(() => {
+				result.current.setUploadTasks((tasks) =>
+					tasks.map((task) => ({ ...task, loadedBytes })),
+				)
+			})
+		}
+		act(() => {
+			vi.advanceTimersByTime(999)
+		})
+		expect(setItemSpy).not.toHaveBeenCalled()
+		expect(stringifySpy).not.toHaveBeenCalled()
+
+		act(() => {
+			vi.advanceTimersByTime(1)
+		})
+		expect(setItemSpy.mock.calls.filter(([key]) => key === 'transfersHistoryV1')).toHaveLength(1)
+		expect(stringifySpy).toHaveBeenCalledTimes(1)
+		const saved = JSON.parse(window.sessionStorage.getItem('transfersHistoryV1') ?? '{}') as {
+			uploads?: Array<{ loadedBytes?: number; filePaths?: string[] }>
+		}
+		expect(saved.uploads?.[0]?.loadedBytes).toBe(10)
+		expect(saved.uploads?.[0]?.filePaths).toHaveLength(5_000)
 	})
 
 	it('clears persisted transfers from both sessionStorage and legacy localStorage', () => {
