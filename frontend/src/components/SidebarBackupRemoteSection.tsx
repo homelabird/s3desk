@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query'
 import { Alert, Button, Input, InputNumber, Radio, Select, Typography } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import type { APIClientShape, ServerBackupConfidentialityMode, ServerBackupScope, ServerBackupTransferLocation } from '../api/client'
-import type { Profile, ServerRestoreResponse } from '../api/types'
+import { queryKeys } from '../api/queryKeys'
+import type { ServerRestoreResponse } from '../api/types'
+import { useAuth } from '../auth/useAuth'
 import { formatErrorWithHint } from '../lib/errors'
 import styles from './SidebarBackupAction.module.css'
 
@@ -18,9 +21,9 @@ type Props = {
 }
 
 export function SidebarBackupRemoteSection(props: Props) {
+	const { apiToken } = useAuth()
 	const [operation, setOperation] = useState<'export' | 'restore'>('export')
 	const [protocol, setProtocol] = useState<Protocol>('object_storage')
-	const [profiles, setProfiles] = useState<Profile[]>([])
 	const [profileId, setProfileId] = useState('')
 	const [bucket, setBucket] = useState('')
 	const [path, setPath] = useState('backups/')
@@ -33,23 +36,22 @@ export function SidebarBackupRemoteSection(props: Props) {
 	const [error, setError] = useState<string | null>(null)
 	const [result, setResult] = useState<string | null>(null)
 
-	useEffect(() => {
-		let active = true
-		void props.api.profiles.listProfiles().then((items) => {
-			if (!active) return
-			setProfiles(items)
-			setProfileId((current) => current || items[0]?.id || '')
-		}).catch(() => undefined)
-		return () => { active = false }
-	}, [props.api])
+	const profilesQuery = useQuery({
+		queryKey: queryKeys.profiles.list(apiToken),
+		queryFn: () => props.api.profiles.listProfiles(),
+		enabled: !!apiToken,
+		retry: false,
+	})
+	const profiles = profilesQuery.data ?? []
+	const selectedProfileId = profileId || profiles[0]?.id || ''
 
 	const location = useMemo<ServerBackupTransferLocation>(() => ({
 		protocol,
 		path,
 		port,
-		...(protocol === 'object_storage' ? { profileId, bucket } : {}),
+		...(protocol === 'object_storage' ? { profileId: selectedProfileId, bucket } : {}),
 		...(protocol === 'ftp' ? { host, username, password: ftpPassword } : {}),
-	}), [bucket, ftpPassword, host, path, port, profileId, protocol, username])
+	}), [bucket, ftpPassword, host, path, port, protocol, selectedProfileId, username])
 
 	const run = async () => {
 		if (operation === 'export' && props.exportBlockedReason) {
@@ -103,7 +105,7 @@ export function SidebarBackupRemoteSection(props: Props) {
 					<Select
 						aria-label="Object storage profile"
 						placeholder="Object storage profile"
-						value={profileId || undefined}
+						value={selectedProfileId || undefined}
 						onChange={setProfileId}
 						options={profiles.map((profile) => ({ value: profile.id, label: profile.name }))}
 					/>

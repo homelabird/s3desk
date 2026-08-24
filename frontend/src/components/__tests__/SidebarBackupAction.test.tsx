@@ -1,7 +1,10 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { MetaResponse, ServerPortableImportResponse } from '../../api/types'
+import { queryKeys } from '../../api/queryKeys'
+import type { MetaResponse, Profile, ServerPortableImportResponse } from '../../api/types'
+import { AuthContext } from '../../auth/useAuth'
 import { ensureDomShims } from '../../test/domShims'
 import { createMockApiClient } from '../../test/mockApiClient'
 import { SidebarBackupAction } from '../SidebarBackupAction'
@@ -102,6 +105,19 @@ function buildRestoreResponse() {
 	}
 }
 
+const remoteProfiles: Profile[] = [{
+	id: 'profile-1',
+	name: 'Primary profile',
+	provider: 's3_compatible',
+	endpoint: 'http://127.0.0.1:9000',
+	region: 'us-east-1',
+	forcePathStyle: true,
+	preserveLeadingSlash: false,
+	tlsInsecureSkipVerify: false,
+	createdAt: '2026-08-24T00:00:00Z',
+	updatedAt: '2026-08-24T00:00:00Z',
+}]
+
 function createApi(serverOverrides: Record<string, unknown> = {}) {
 	return createMockApiClient({
 		server: {
@@ -119,6 +135,22 @@ function createApi(serverOverrides: Record<string, unknown> = {}) {
 async function openBackupDrawer() {
 	fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
 	return screen.findByRole('dialog', { name: 'Backup and restore' })
+}
+
+function renderRemoteBackupAction(api: ReturnType<typeof createMockApiClient>, queryClient: QueryClient) {
+	return render(
+		<AuthContext.Provider value={{ apiToken: 'token-a', setApiToken: vi.fn(), clearApiToken: vi.fn() }}>
+			<QueryClientProvider client={queryClient}>
+				<SidebarBackupAction api={api} meta={buildMeta()} />
+			</QueryClientProvider>
+		</AuthContext.Provider>,
+	)
+}
+
+async function openRemoteBackupStorage() {
+	await openBackupDrawer()
+	fireEvent.click(screen.getByRole('button', { name: 'Remote storage' }))
+	return screen.findByRole('combobox', { name: 'Object storage profile' })
 }
 
 function deferred<T>() {
@@ -185,6 +217,35 @@ describe('SidebarBackupAction', () => {
 
 		fireEvent.click(screen.getByRole('button', { name: 'Clean staged restores' }))
 		expect(screen.getByText('Staged restores')).toBeInTheDocument()
+	})
+
+	it.each([
+		{ scenario: 'cache miss', cacheAgeMs: null, expectedCalls: 1 },
+		{ scenario: 'fresh cached profiles', cacheAgeMs: 0, expectedCalls: 0 },
+		{ scenario: 'stale cached profiles', cacheAgeMs: 30_001, expectedCalls: 1 },
+	])('uses finite profile caching across remote backup mounts with $scenario', async ({ cacheAgeMs, expectedCalls }) => {
+		const listProfiles = vi.fn().mockResolvedValue(remoteProfiles)
+		const api = createMockApiClient({
+			profiles: { listProfiles },
+			server: { listServerRestores: vi.fn().mockResolvedValue({ items: [] }) },
+		})
+		const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } })
+		if (cacheAgeMs !== null) {
+			queryClient.setQueryData(queryKeys.profiles.list('token-a'), remoteProfiles, {
+				updatedAt: Date.now() - cacheAgeMs,
+			})
+		}
+
+		renderRemoteBackupAction(api, queryClient)
+		await openRemoteBackupStorage()
+
+		expect(await screen.findByText('Primary profile')).toBeInTheDocument()
+		await waitFor(() => expect(listProfiles).toHaveBeenCalledTimes(expectedCalls))
+
+		fireEvent.click(screen.getByRole('button', { name: 'Export backup' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Remote storage' }))
+		expect(await screen.findByText('Primary profile')).toBeInTheDocument()
+		expect(listProfiles).toHaveBeenCalledTimes(expectedCalls)
 	})
 
 	it('updates the trigger subtitle as backup capabilities change', () => {

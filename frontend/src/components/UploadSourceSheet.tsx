@@ -35,9 +35,8 @@ export function UploadSourceSheet(props: Props) {
 			placement={screens.md ? 'right' : 'bottom'}
 			width={screens.md ? 420 : undefined}
 			height={!screens.md ? 'auto' : undefined}
-			closeDisabled={!!props.busy}
 		>
-			<div className={styles.stack}>
+			<div className={styles.stack} aria-busy={props.busy || undefined}>
 				<div className={styles.intro}>
 					<Typography.Text type="secondary">
 						Files and folders are classified automatically. Relative paths preserve folder structure.
@@ -64,10 +63,10 @@ export function UploadSourceSheet(props: Props) {
 						size="large"
 						icon={<FolderOutlined />}
 						className={[styles.button, styles.secondaryButton].join(' ')}
-						disabled={props.busy || !props.folderSelectionSupported}
-						onClick={props.onSelectFolder}
+						disabled={!props.folderSelectionSupported}
+						onClick={props.busy ? props.onClose : props.onSelectFolder}
 					>
-						Choose folder
+						{props.busy ? 'Cancel folder scan' : 'Choose folder'}
 					</Button>
 				</div>
 

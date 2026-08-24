@@ -129,7 +129,7 @@ describe('UploadSourceSheet', () => {
 		expect(screen.getByRole('button', { name: /Choose folder/i })).toBeDisabled()
 	})
 
-	it('disables both actions while the sheet is busy', () => {
+	it('keeps a busy folder scan cancelable', () => {
 		const onClose = vi.fn()
 		const onSelectFiles = vi.fn()
 		const onSelectFolder = vi.fn()
@@ -146,18 +146,18 @@ describe('UploadSourceSheet', () => {
 		)
 
 		const chooseFiles = screen.getByRole('button', { name: /Choose files/i })
-		const chooseFolder = screen.getByRole('button', { name: /Choose folder/i })
+		const cancelFolderScan = screen.getByRole('button', { name: /Cancel folder scan/i })
 		const closeButton = screen.getByRole('button', { name: 'Mock close' })
 		expect(chooseFiles).toBeDisabled()
-		expect(chooseFolder).toBeDisabled()
-		expect(closeButton).toBeDisabled()
+		expect(cancelFolderScan).toBeEnabled()
+		expect(closeButton).toBeEnabled()
 
 		fireEvent.click(chooseFiles)
-		fireEvent.click(chooseFolder)
+		fireEvent.click(cancelFolderScan)
 		fireEvent.click(closeButton)
 
 		expect(onSelectFiles).not.toHaveBeenCalled()
 		expect(onSelectFolder).not.toHaveBeenCalled()
-		expect(onClose).not.toHaveBeenCalled()
+		expect(onClose).toHaveBeenCalledTimes(2)
 	})
 })
