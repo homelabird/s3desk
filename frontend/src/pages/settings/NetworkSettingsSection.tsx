@@ -1,27 +1,22 @@
 import { Button, Collapse, Space, Tag, Typography } from 'antd'
+import { useEffect, useState } from 'react'
 
 import {
 	DEFAULT_RETRY_COUNT,
 	DEFAULT_RETRY_DELAY_MS,
+	RETRY_COUNT_STORAGE_KEY,
 	RETRY_COUNT_MAX,
 	RETRY_COUNT_MIN,
+	RETRY_DELAY_STORAGE_KEY,
 	RETRY_DELAY_MAX_MS,
 	RETRY_DELAY_MIN_MS,
 } from '../../api/client'
 import { FormField } from '../../components/FormField'
 import { NumberField } from '../../components/NumberField'
 import { formatTime } from '../../lib/format'
-import type { NetworkLogEvent } from '../../lib/networkStatus'
+import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../../lib/networkStatus'
+import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import styles from '../SettingsPage.module.css'
-
-type NetworkSettingsSectionProps = {
-	apiRetryCount: number
-	setApiRetryCount: (v: number) => void
-	apiRetryDelayMs: number
-	setApiRetryDelayMs: (v: number) => void
-	networkLog: NetworkLogEvent[]
-	onClearNetworkLog: () => void
-}
 
 function networkLogTagColor(kind: NetworkLogEvent['kind']): string {
 	return kind === 'retry' ? 'orange' : 'blue'
@@ -32,7 +27,20 @@ function clampNumber(value: number | null, fallback: number, min: number, max: n
 	return Math.min(max, Math.max(min, value))
 }
 
-export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
+export function NetworkSettingsSection() {
+	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
+	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
+	const [networkLog, setNetworkLog] = useState<NetworkLogEvent[]>(() => getNetworkLog())
+
+	useEffect(() => {
+		return subscribeNetworkLog(
+			(entry) => {
+				setNetworkLog((prev) => [entry, ...prev].slice(0, 50))
+			},
+			() => setNetworkLog([]),
+		)
+	}, [])
+
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
@@ -47,9 +55,9 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 					id="settings-http-retry-count"
 					min={RETRY_COUNT_MIN}
 					max={RETRY_COUNT_MAX}
-					value={props.apiRetryCount}
+					value={apiRetryCount}
 					onChange={(value) =>
-						props.setApiRetryCount(clampNumber(value, DEFAULT_RETRY_COUNT, RETRY_COUNT_MIN, RETRY_COUNT_MAX))
+						setApiRetryCount(clampNumber(value, DEFAULT_RETRY_COUNT, RETRY_COUNT_MIN, RETRY_COUNT_MAX))
 					}
 					className={styles.fullWidth}
 				/>
@@ -64,9 +72,9 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 					min={RETRY_DELAY_MIN_MS}
 					max={RETRY_DELAY_MAX_MS}
 					step={100}
-					value={props.apiRetryDelayMs}
+					value={apiRetryDelayMs}
 					onChange={(value) =>
-						props.setApiRetryDelayMs(clampNumber(value, DEFAULT_RETRY_DELAY_MS, RETRY_DELAY_MIN_MS, RETRY_DELAY_MAX_MS))
+						setApiRetryDelayMs(clampNumber(value, DEFAULT_RETRY_DELAY_MS, RETRY_DELAY_MIN_MS, RETRY_DELAY_MAX_MS))
 					}
 					className={styles.fullWidth}
 				/>
@@ -76,7 +84,7 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 				items={[
 					{
 						key: 'advanced',
-						label: `Network troubleshooting log (${props.networkLog.length})`,
+						label: `Network troubleshooting log (${networkLog.length})`,
 						children: (
 							<FormField
 								label="Network diagnostics"
@@ -84,20 +92,20 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 								className={styles.marginBottom0}
 							>
 								<Space orientation="vertical" size={8} className={styles.fullWidth}>
-									<Typography.Text type="secondary">Session log ({props.networkLog.length})</Typography.Text>
+										<Typography.Text type="secondary">Session log ({networkLog.length})</Typography.Text>
 									<Typography.Text type="secondary">
 										Retry entries include wait time and reason. If <Typography.Text code>Retry-After</Typography.Text> appears, wait that
 										interval before manual retry.
 									</Typography.Text>
-									<Button size="small" onClick={props.onClearNetworkLog} disabled={props.networkLog.length === 0}>
+										<Button size="small" onClick={clearNetworkLog} disabled={networkLog.length === 0}>
 										Clear log
 									</Button>
 									<div className={styles.networkLogBox}>
 										<Space orientation="vertical" size={4} className={styles.fullWidth}>
-											{props.networkLog.length === 0 ? (
+											{networkLog.length === 0 ? (
 												<Typography.Text type="secondary">No network events yet.</Typography.Text>
 											) : (
-												props.networkLog.map((entry, index) => (
+												networkLog.map((entry, index) => (
 													<Space key={`${entry.ts}-${index}`} size={8} wrap>
 														<Typography.Text type="secondary">{formatTime(entry.ts)}</Typography.Text>
 														<Tag color={networkLogTagColor(entry.kind)}>{entry.kind.toUpperCase()}</Tag>

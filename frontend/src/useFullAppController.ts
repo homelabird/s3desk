@@ -36,7 +36,6 @@ export type FullAppRoutesState = {
 	profileId: string | null
 	setProfileId: (profileId: string | null) => void
 	shellScopeKey: string
-	routeLocationKey: string
 }
 
 type UseFullAppControllerArgs = {
@@ -44,7 +43,6 @@ type UseFullAppControllerArgs = {
 	apiToken: string
 	setApiToken: Dispatch<SetStateAction<string>>
 	pathname: string
-	routeLocationKey: string
 	theme: FullAppShellChromeTheme
 	viewport: FullAppViewportState
 }
@@ -54,7 +52,6 @@ export function useFullAppController({
 	apiToken,
 	setApiToken,
 	pathname,
-	routeLocationKey,
 	theme,
 	viewport,
 }: UseFullAppControllerArgs) {
@@ -137,7 +134,6 @@ export function useFullAppController({
 		profileId: safeProfileId,
 		setProfileId,
 		shellScopeKey,
-		routeLocationKey,
 	}
 
 	return {

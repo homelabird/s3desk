@@ -6,44 +6,67 @@ import { ToggleSwitch } from '../../components/ToggleSwitch'
 import {
 	DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
 	DEFAULT_UPLOAD_TASK_CONCURRENCY,
+	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 	MAX_DOWNLOAD_TASK_CONCURRENCY,
 	MAX_UPLOAD_TASK_CONCURRENCY,
 	MIN_DOWNLOAD_TASK_CONCURRENCY,
 	MIN_UPLOAD_TASK_CONCURRENCY,
+	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+	sanitizeDownloadTaskConcurrency,
+	sanitizeUploadTaskConcurrency,
 } from '../../components/transfers/transferConcurrencyPreferences'
+import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import styles from '../SettingsPage.module.css'
-
-type TransfersSettingsSectionProps = {
-	downloadLinkProxyEnabled: boolean
-	setDownloadLinkProxyEnabled: (v: boolean) => void
-	downloadTaskConcurrencySetting: number
-	setDownloadTaskConcurrencySetting: (v: number) => void
-	uploadAutoTuneEnabled: boolean
-	setUploadAutoTuneEnabled: (v: boolean) => void
-	uploadTaskConcurrencySetting: number
-	setUploadTaskConcurrencySetting: (v: number) => void
-	uploadBatchConcurrencySetting: number
-	setUploadBatchConcurrencySetting: (v: number) => void
-	uploadBatchBytesMiBSetting: number
-	setUploadBatchBytesMiBSetting: (v: number) => void
-	uploadChunkSizeMiBSetting: number
-	setUploadChunkSizeMiBSetting: (v: number) => void
-	uploadChunkConcurrencySetting: number
-	setUploadChunkConcurrencySetting: (v: number) => void
-	uploadChunkThresholdMiBSetting: number
-	setUploadChunkThresholdMiBSetting: (v: number) => void
-	uploadChunkFileConcurrencySetting: number
-	setUploadChunkFileConcurrencySetting: (v: number) => void
-	uploadResumeConversionEnabled: boolean
-	setUploadResumeConversionEnabled: (v: boolean) => void
-}
 
 function clampNumber(value: number | null, fallback: number, min: number, max: number): number {
 	if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
 	return Math.min(max, Math.max(min, value))
 }
 
-export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
+export function TransfersSettingsSection() {
+	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
+		'downloadLinkProxyEnabled',
+		false,
+	)
+	const [downloadTaskConcurrencySetting, setDownloadTaskConcurrencySetting] = useLocalStorageState<number>(
+		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+		DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+		{ sanitize: sanitizeDownloadTaskConcurrency },
+	)
+	const [uploadAutoTuneEnabled, setUploadAutoTuneEnabled] = useLocalStorageState<boolean>('uploadAutoTuneEnabled', true)
+	const [uploadTaskConcurrencySetting, setUploadTaskConcurrencySetting] = useLocalStorageState<number>(
+		UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+		DEFAULT_UPLOAD_TASK_CONCURRENCY,
+		{ sanitize: sanitizeUploadTaskConcurrency },
+	)
+	const [uploadBatchConcurrencySetting, setUploadBatchConcurrencySetting] = useLocalStorageState<number>(
+		'uploadBatchConcurrency',
+		16,
+	)
+	const [uploadBatchBytesMiBSetting, setUploadBatchBytesMiBSetting] = useLocalStorageState<number>(
+		'uploadBatchBytesMiB',
+		64,
+	)
+	const [uploadChunkSizeMiBSetting, setUploadChunkSizeMiBSetting] = useLocalStorageState<number>(
+		'uploadChunkSizeMiB',
+		128,
+	)
+	const [uploadChunkConcurrencySetting, setUploadChunkConcurrencySetting] = useLocalStorageState<number>(
+		'uploadChunkConcurrency',
+		8,
+	)
+	const [uploadChunkThresholdMiBSetting, setUploadChunkThresholdMiBSetting] = useLocalStorageState<number>(
+		'uploadChunkThresholdMiB',
+		256,
+	)
+	const [uploadChunkFileConcurrencySetting, setUploadChunkFileConcurrencySetting] = useLocalStorageState<number>(
+		'uploadChunkFileConcurrency',
+		2,
+	)
+	const [uploadResumeConversionEnabled, setUploadResumeConversionEnabled] = useLocalStorageState<boolean>(
+		'uploadResumeConversionEnabled',
+		false,
+	)
 	const advancedSummary = 'Advanced transfer options'
 
 	return (
@@ -68,8 +91,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 									extra="Leave this off unless direct downloads fail in this browser. When off, S3Desk tries direct links first and falls back automatically when needed."
 								>
 									<ToggleSwitch
-										checked={props.downloadLinkProxyEnabled}
-										onChange={props.setDownloadLinkProxyEnabled}
+										checked={downloadLinkProxyEnabled}
+										onChange={setDownloadLinkProxyEnabled}
 										ariaLabel="Force server proxy for downloads and previews"
 									/>
 								</FormField>
@@ -78,8 +101,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 									extra="Automatically adjusts batch/chunk settings based on file size."
 								>
 									<ToggleSwitch
-										checked={props.uploadAutoTuneEnabled}
-										onChange={props.setUploadAutoTuneEnabled}
+										checked={uploadAutoTuneEnabled}
+										onChange={setUploadAutoTuneEnabled}
 										ariaLabel="Upload auto-tuning"
 									/>
 								</FormField>
@@ -92,9 +115,9 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="transfers-download-task-concurrency"
 										min={MIN_DOWNLOAD_TASK_CONCURRENCY}
 										max={MAX_DOWNLOAD_TASK_CONCURRENCY}
-										value={props.downloadTaskConcurrencySetting}
+										value={downloadTaskConcurrencySetting}
 										onChange={(value) =>
-											props.setDownloadTaskConcurrencySetting(
+											setDownloadTaskConcurrencySetting(
 												clampNumber(value, DEFAULT_DOWNLOAD_TASK_CONCURRENCY, MIN_DOWNLOAD_TASK_CONCURRENCY, MAX_DOWNLOAD_TASK_CONCURRENCY),
 											)
 										}
@@ -110,9 +133,9 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="transfers-upload-task-concurrency"
 										min={MIN_UPLOAD_TASK_CONCURRENCY}
 										max={MAX_UPLOAD_TASK_CONCURRENCY}
-										value={props.uploadTaskConcurrencySetting}
+										value={uploadTaskConcurrencySetting}
 										onChange={(value) =>
-											props.setUploadTaskConcurrencySetting(
+											setUploadTaskConcurrencySetting(
 												clampNumber(value, DEFAULT_UPLOAD_TASK_CONCURRENCY, MIN_UPLOAD_TASK_CONCURRENCY, MAX_UPLOAD_TASK_CONCURRENCY),
 											)
 										}
@@ -128,8 +151,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="settings-upload-batch-concurrency"
 										min={1}
 										max={32}
-										value={props.uploadBatchConcurrencySetting}
-										onChange={(value) => props.setUploadBatchConcurrencySetting(clampNumber(value, 16, 1, 32))}
+										value={uploadBatchConcurrencySetting}
+										onChange={(value) => setUploadBatchConcurrencySetting(clampNumber(value, 16, 1, 32))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -143,8 +166,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										min={8}
 										max={256}
 										step={8}
-										value={props.uploadBatchBytesMiBSetting}
-										onChange={(value) => props.setUploadBatchBytesMiBSetting(clampNumber(value, 64, 8, 256))}
+										value={uploadBatchBytesMiBSetting}
+										onChange={(value) => setUploadBatchBytesMiBSetting(clampNumber(value, 64, 8, 256))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -155,33 +178,33 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 									<Space wrap>
 										<Button
 											onClick={() => {
-												props.setUploadBatchConcurrencySetting(8)
-												props.setUploadBatchBytesMiBSetting(32)
-												props.setUploadChunkSizeMiBSetting(64)
-												props.setUploadChunkConcurrencySetting(4)
-												props.setUploadChunkThresholdMiBSetting(128)
+												setUploadBatchConcurrencySetting(8)
+												setUploadBatchBytesMiBSetting(32)
+												setUploadChunkSizeMiBSetting(64)
+												setUploadChunkConcurrencySetting(4)
+												setUploadChunkThresholdMiBSetting(128)
 											}}
 										>
 											Stable
 										</Button>
 										<Button
 											onClick={() => {
-												props.setUploadBatchConcurrencySetting(16)
-												props.setUploadBatchBytesMiBSetting(64)
-												props.setUploadChunkSizeMiBSetting(128)
-												props.setUploadChunkConcurrencySetting(8)
-												props.setUploadChunkThresholdMiBSetting(256)
+												setUploadBatchConcurrencySetting(16)
+												setUploadBatchBytesMiBSetting(64)
+												setUploadChunkSizeMiBSetting(128)
+												setUploadChunkConcurrencySetting(8)
+												setUploadChunkThresholdMiBSetting(256)
 											}}
 										>
 											Balanced
 										</Button>
 										<Button
 											onClick={() => {
-												props.setUploadBatchConcurrencySetting(32)
-												props.setUploadBatchBytesMiBSetting(128)
-												props.setUploadChunkSizeMiBSetting(256)
-												props.setUploadChunkConcurrencySetting(16)
-												props.setUploadChunkThresholdMiBSetting(512)
+												setUploadBatchConcurrencySetting(32)
+												setUploadBatchBytesMiBSetting(128)
+												setUploadChunkSizeMiBSetting(256)
+												setUploadChunkConcurrencySetting(16)
+												setUploadChunkThresholdMiBSetting(512)
 											}}
 										>
 											High throughput
@@ -198,8 +221,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										min={16}
 										max={512}
 										step={16}
-										value={props.uploadChunkSizeMiBSetting}
-										onChange={(value) => props.setUploadChunkSizeMiBSetting(clampNumber(value, 128, 16, 512))}
+										value={uploadChunkSizeMiBSetting}
+										onChange={(value) => setUploadChunkSizeMiBSetting(clampNumber(value, 128, 16, 512))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -212,8 +235,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="settings-upload-chunk-concurrency"
 										min={1}
 										max={16}
-										value={props.uploadChunkConcurrencySetting}
-										onChange={(value) => props.setUploadChunkConcurrencySetting(clampNumber(value, 8, 1, 16))}
+										value={uploadChunkConcurrencySetting}
+										onChange={(value) => setUploadChunkConcurrencySetting(clampNumber(value, 8, 1, 16))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -226,8 +249,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										id="settings-upload-file-concurrency-chunked"
 										min={1}
 										max={8}
-										value={props.uploadChunkFileConcurrencySetting}
-										onChange={(value) => props.setUploadChunkFileConcurrencySetting(clampNumber(value, 2, 1, 8))}
+										value={uploadChunkFileConcurrencySetting}
+										onChange={(value) => setUploadChunkFileConcurrencySetting(clampNumber(value, 2, 1, 8))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -241,8 +264,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										min={64}
 										max={2048}
 										step={64}
-										value={props.uploadChunkThresholdMiBSetting}
-										onChange={(value) => props.setUploadChunkThresholdMiBSetting(clampNumber(value, 256, 64, 2048))}
+										value={uploadChunkThresholdMiBSetting}
+										onChange={(value) => setUploadChunkThresholdMiBSetting(clampNumber(value, 256, 64, 2048))}
 										className={styles.fullWidth}
 									/>
 								</FormField>
@@ -251,8 +274,8 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 									extra="Allows resuming uploads even if chunk sizes changed between sessions."
 								>
 									<ToggleSwitch
-										checked={props.uploadResumeConversionEnabled}
-										onChange={props.setUploadResumeConversionEnabled}
+										checked={uploadResumeConversionEnabled}
+										onChange={setUploadResumeConversionEnabled}
 										ariaLabel="Resume conversion mode"
 									/>
 								</FormField>

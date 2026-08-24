@@ -23,7 +23,6 @@ export default function FullAppInner() {
 		apiToken,
 		setApiToken,
 		pathname: location.pathname,
-		routeLocationKey: location.key,
 		theme,
 		viewport,
 	})

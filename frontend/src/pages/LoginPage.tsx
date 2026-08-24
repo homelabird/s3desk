@@ -1,8 +1,10 @@
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from 'antd'
 import { useState } from 'react'
 
 import { APIClient, APIError } from '../api/client'
+import { queryKeys } from '../api/queryKeys'
 import { TokenLoginPanel } from '../components/TokenLoginPanel'
 import { useThemeMode } from '../useThemeMode'
 import styles from './LoginPage.module.css'
@@ -17,6 +19,7 @@ type Props = {
 export function LoginPage(props: Props) {
 	const [submitting, setSubmitting] = useState(false)
 	const [validationError, setValidationError] = useState<string | null>(null)
+	const queryClient = useQueryClient()
 	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 	const { mode, toggleMode } = useThemeMode()
 	const showSavedTokenWarning = !!props.initialToken
@@ -27,8 +30,16 @@ export function LoginPage(props: Props) {
 		setValidationError(null)
 		try {
 			const api = new APIClient({ apiToken: trimmed })
-			// Validate token by calling /meta
-			await api.server.getMeta()
+			const bootstrap = await api.server.getBootstrap().catch(async (error) => {
+				if (!(error instanceof APIError) || error.status !== 404) throw error
+				const [meta, profiles] = await Promise.all([
+					api.server.getMeta(),
+					api.profiles.listProfiles(),
+				])
+				return { meta, profiles }
+			})
+			queryClient.setQueryData(queryKeys.server.meta(trimmed), bootstrap.meta)
+			queryClient.setQueryData(queryKeys.profiles.list(trimmed), bootstrap.profiles)
 			props.onLogin(trimmed)
 		} catch (err) {
 			if (err instanceof APIError && err.status === 401) {

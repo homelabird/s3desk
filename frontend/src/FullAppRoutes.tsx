@@ -1,7 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { Suspense, lazy, type ReactNode } from 'react'
 
-import { ProfilesPage } from './pages/ProfilesPage'
+const loadProfilesPage = async () => {
+	const m = await import('./pages/ProfilesPage')
+	return { default: m.ProfilesPage }
+}
 
 const loadBucketsPage = async () => {
 	const m = await import('./pages/BucketsPage')
@@ -23,12 +26,14 @@ const loadJobsPage = async () => {
 	return { default: m.JobsPage }
 }
 
+const ProfilesPage = lazy(loadProfilesPage)
 const BucketsPage = lazy(loadBucketsPage)
 const ObjectsPage = lazy(loadObjectsPage)
 const UploadsPage = lazy(loadUploadsPage)
 const JobsPage = lazy(loadJobsPage)
 
 const initialPageLoader = {
+	'/profiles': loadProfilesPage,
 	'/buckets': loadBucketsPage,
 	'/objects': loadObjectsPage,
 	'/uploads': loadUploadsPage,
@@ -42,7 +47,6 @@ export type FullAppRoutesProps = {
 	profileId: string | null
 	setProfileId: (profileId: string | null) => void
 	shellScopeKey: string
-	routeLocationKey: string
 	loadingFallback: ReactNode
 }
 
@@ -51,7 +55,6 @@ export function FullAppRoutes({
 	profileId,
 	setProfileId,
 	shellScopeKey,
-	routeLocationKey,
 	loadingFallback,
 }: FullAppRoutesProps) {
 	return (
@@ -88,7 +91,7 @@ export function FullAppRoutes({
 					path="/jobs"
 					element={
 						<JobsPage
-							key={`jobs:${apiToken || 'none'}:${profileId ?? 'none'}:${routeLocationKey}`}
+							key={`jobs:${apiToken || 'none'}:${profileId ?? 'none'}`}
 							apiToken={apiToken}
 							profileId={profileId}
 						/>

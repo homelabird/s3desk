@@ -1,42 +1,14 @@
 import { Button, Collapse, Space, Typography } from 'antd'
-import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { Suspense, useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useSearchParams } from 'react-router'
 
-import {
-	DEFAULT_RETRY_COUNT,
-	DEFAULT_RETRY_DELAY_MS,
-	RETRY_COUNT_STORAGE_KEY,
-	RETRY_DELAY_STORAGE_KEY,
-} from '../api/client'
 import type { APIClientShape } from '../api/client'
 import type { MetaResponse } from '../api/types'
 import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
 import { AppTabs } from '../components/AppTabs'
-import {
-	DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
-	DEFAULT_UPLOAD_TASK_CONCURRENCY,
-	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
-	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
-	sanitizeDownloadTaskConcurrency,
-	sanitizeUploadTaskConcurrency,
-} from '../components/transfers/transferConcurrencyPreferences'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { clearDismissedDialogs, countDismissedDialogs, subscribeDialogPreferences } from '../lib/dialogPreferences'
-import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
-import {
-	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
-	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
-} from '../lib/objectIndexing'
-import {
-	OBJECTS_COST_MODE_DEFAULT,
-	OBJECTS_COST_MODE_STORAGE_KEY,
-	type ObjectsCostMode,
-} from '../lib/objectsCostMode'
-import {
-	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
-} from '../lib/thumbnailCache'
 import { appFeedback } from '../lib/appFeedback'
-import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { reloadPage } from '../lib/reloadPage'
 import { clearResettableUiState } from '../lib/storageResetRegistry'
 import {
@@ -68,14 +40,20 @@ function SettingsSectionFallback() {
 }
 
 function RecoverySettingsSection({
-	dismissedDialogCount,
+	apiToken,
 	onResetDismissedDialogs,
 	onResetUiState,
 }: {
-	dismissedDialogCount: number
+	apiToken: string
 	onResetDismissedDialogs: () => void
 	onResetUiState: () => void
 }) {
+	const dismissedDialogCount = useSyncExternalStore(
+		subscribeDialogPreferences,
+		() => countDismissedDialogs(apiToken),
+		() => 0,
+	)
+
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<div className={styles.recoveryCard}>
@@ -113,84 +91,6 @@ export function SettingsPage(props: Props) {
 		next.set('settings', key)
 		setSearchParams(next, { replace: true })
 	}
-	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
-		'downloadLinkProxyEnabled',
-		false,
-	)
-	const [downloadTaskConcurrencySetting, setDownloadTaskConcurrencySetting] = useLocalStorageState<number>(
-		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
-		DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
-		{ sanitize: sanitizeDownloadTaskConcurrency },
-	)
-	const [uploadAutoTuneEnabled, setUploadAutoTuneEnabled] = useLocalStorageState<boolean>('uploadAutoTuneEnabled', true)
-	const [uploadTaskConcurrencySetting, setUploadTaskConcurrencySetting] = useLocalStorageState<number>(
-		UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
-		DEFAULT_UPLOAD_TASK_CONCURRENCY,
-		{ sanitize: sanitizeUploadTaskConcurrency },
-	)
-	const [uploadBatchConcurrencySetting, setUploadBatchConcurrencySetting] = useLocalStorageState<number>(
-		'uploadBatchConcurrency',
-		16,
-	)
-	const [uploadBatchBytesMiBSetting, setUploadBatchBytesMiBSetting] = useLocalStorageState<number>(
-		'uploadBatchBytesMiB',
-		64,
-	)
-	const [uploadChunkSizeMiBSetting, setUploadChunkSizeMiBSetting] = useLocalStorageState<number>(
-		'uploadChunkSizeMiB',
-		128,
-	)
-	const [uploadChunkConcurrencySetting, setUploadChunkConcurrencySetting] = useLocalStorageState<number>(
-		'uploadChunkConcurrency',
-		8,
-	)
-	const [uploadChunkThresholdMiBSetting, setUploadChunkThresholdMiBSetting] = useLocalStorageState<number>(
-		'uploadChunkThresholdMiB',
-		256,
-	)
-	const [uploadChunkFileConcurrencySetting, setUploadChunkFileConcurrencySetting] = useLocalStorageState<number>(
-		'uploadChunkFileConcurrency',
-		2,
-	)
-	const [uploadResumeConversionEnabled, setUploadResumeConversionEnabled] = useLocalStorageState<boolean>(
-		'uploadResumeConversionEnabled',
-		false,
-	)
-	const [objectsShowThumbnails, setObjectsShowThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
-	const [objectsThumbnailCacheSize, setObjectsThumbnailCacheSize] = useLocalStorageState<number>(
-		'objectsThumbnailCacheSize',
-		THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
-	)
-	const [objectsCostMode, setObjectsCostMode] = useLocalStorageState<ObjectsCostMode>(
-		OBJECTS_COST_MODE_STORAGE_KEY,
-		OBJECTS_COST_MODE_DEFAULT,
-	)
-	const [objectsAutoIndexEnabled, setObjectsAutoIndexEnabled] = useLocalStorageState<boolean>(
-		'objectsAutoIndexEnabled',
-		OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
-	)
-	const [objectsAutoIndexTtlHours, setObjectsAutoIndexTtlHours] = useLocalStorageState<number>(
-		'objectsAutoIndexTtlHours',
-		OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
-	)
-	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
-	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
-	const [networkLog, setNetworkLog] = useState<NetworkLogEvent[]>(() => getNetworkLog())
-	const dismissedDialogCount = useSyncExternalStore(
-		subscribeDialogPreferences,
-		() => countDismissedDialogs(props.apiToken),
-		() => 0,
-	)
-
-	useEffect(() => {
-		return subscribeNetworkLog(
-			(entry) => {
-				setNetworkLog((prev) => [entry, ...prev].slice(0, 50))
-			},
-			() => setNetworkLog([]),
-		)
-	}, [])
-
 	const apiDocsBase = useMemo(() => {
 		const apiBaseUrl = getApiBaseUrl()
 		const api = new URL(apiBaseUrl, window.location.origin)
@@ -251,18 +151,7 @@ export function SettingsPage(props: Props) {
 						label: 'Objects',
 						children: (
 							<Suspense fallback={<SettingsSectionFallback />}>
-								<ObjectsSettingsSection
-									objectsShowThumbnails={objectsShowThumbnails}
-									setObjectsShowThumbnails={setObjectsShowThumbnails}
-									objectsThumbnailCacheSize={objectsThumbnailCacheSize}
-									setObjectsThumbnailCacheSize={setObjectsThumbnailCacheSize}
-									objectsCostMode={objectsCostMode}
-									setObjectsCostMode={setObjectsCostMode}
-									objectsAutoIndexEnabled={objectsAutoIndexEnabled}
-									setObjectsAutoIndexEnabled={setObjectsAutoIndexEnabled}
-									objectsAutoIndexTtlHours={objectsAutoIndexTtlHours}
-									setObjectsAutoIndexTtlHours={setObjectsAutoIndexTtlHours}
-								/>
+								<ObjectsSettingsSection />
 							</Suspense>
 						),
 					},
@@ -271,30 +160,7 @@ export function SettingsPage(props: Props) {
 						label: 'Transfers',
 						children: (
 							<Suspense fallback={<SettingsSectionFallback />}>
-								<TransfersSettingsSection
-									downloadLinkProxyEnabled={downloadLinkProxyEnabled}
-									setDownloadLinkProxyEnabled={setDownloadLinkProxyEnabled}
-									downloadTaskConcurrencySetting={downloadTaskConcurrencySetting}
-									setDownloadTaskConcurrencySetting={setDownloadTaskConcurrencySetting}
-									uploadAutoTuneEnabled={uploadAutoTuneEnabled}
-									setUploadAutoTuneEnabled={setUploadAutoTuneEnabled}
-									uploadTaskConcurrencySetting={uploadTaskConcurrencySetting}
-									setUploadTaskConcurrencySetting={setUploadTaskConcurrencySetting}
-									uploadBatchConcurrencySetting={uploadBatchConcurrencySetting}
-									setUploadBatchConcurrencySetting={setUploadBatchConcurrencySetting}
-									uploadBatchBytesMiBSetting={uploadBatchBytesMiBSetting}
-									setUploadBatchBytesMiBSetting={setUploadBatchBytesMiBSetting}
-									uploadChunkSizeMiBSetting={uploadChunkSizeMiBSetting}
-									setUploadChunkSizeMiBSetting={setUploadChunkSizeMiBSetting}
-									uploadChunkConcurrencySetting={uploadChunkConcurrencySetting}
-									setUploadChunkConcurrencySetting={setUploadChunkConcurrencySetting}
-									uploadChunkThresholdMiBSetting={uploadChunkThresholdMiBSetting}
-									setUploadChunkThresholdMiBSetting={setUploadChunkThresholdMiBSetting}
-									uploadChunkFileConcurrencySetting={uploadChunkFileConcurrencySetting}
-									setUploadChunkFileConcurrencySetting={setUploadChunkFileConcurrencySetting}
-									uploadResumeConversionEnabled={uploadResumeConversionEnabled}
-									setUploadResumeConversionEnabled={setUploadResumeConversionEnabled}
-								/>
+								<TransfersSettingsSection />
 							</Suspense>
 						),
 					},
@@ -319,14 +185,7 @@ export function SettingsPage(props: Props) {
 										label: 'Network',
 										children: (
 											<Suspense fallback={<SettingsSectionFallback />}>
-												<NetworkSettingsSection
-													apiRetryCount={apiRetryCount}
-													setApiRetryCount={setApiRetryCount}
-													apiRetryDelayMs={apiRetryDelayMs}
-													setApiRetryDelayMs={setApiRetryDelayMs}
-													networkLog={networkLog}
-													onClearNetworkLog={() => clearNetworkLog()}
-												/>
+												<NetworkSettingsSection />
 											</Suspense>
 										),
 									},
@@ -335,7 +194,7 @@ export function SettingsPage(props: Props) {
 										label: 'Browser recovery',
 										children: (
 											<RecoverySettingsSection
-												dismissedDialogCount={dismissedDialogCount}
+												apiToken={props.apiToken}
 												onResetDismissedDialogs={onResetDismissedDialogs}
 												onResetUiState={onResetUiState}
 											/>

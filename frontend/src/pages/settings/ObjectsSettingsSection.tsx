@@ -3,33 +3,44 @@ import { Collapse, Select, Space, Typography } from 'antd'
 import { FormField } from '../../components/FormField'
 import { NumberField } from '../../components/NumberField'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
-import type { ObjectsCostMode } from '../../lib/objectsCostMode'
 import {
+	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MIN_HOURS,
 } from '../../lib/objectIndexing'
 import {
+	OBJECTS_COST_MODE_DEFAULT,
+	OBJECTS_COST_MODE_STORAGE_KEY,
+	type ObjectsCostMode,
+} from '../../lib/objectsCostMode'
+import {
 	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
 	THUMBNAIL_CACHE_MAX_ENTRIES,
 	THUMBNAIL_CACHE_MIN_ENTRIES,
 } from '../../lib/thumbnailCache'
+import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import styles from '../SettingsPage.module.css'
 
-type ObjectsSettingsSectionProps = {
-	objectsShowThumbnails: boolean
-	setObjectsShowThumbnails: (v: boolean) => void
-	objectsThumbnailCacheSize: number
-	setObjectsThumbnailCacheSize: (v: number) => void
-	objectsCostMode: ObjectsCostMode
-	setObjectsCostMode: (v: ObjectsCostMode) => void
-	objectsAutoIndexEnabled: boolean
-	setObjectsAutoIndexEnabled: (v: boolean) => void
-	objectsAutoIndexTtlHours: number
-	setObjectsAutoIndexTtlHours: (v: number) => void
-}
+export function ObjectsSettingsSection() {
+	const [objectsShowThumbnails, setObjectsShowThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
+	const [objectsThumbnailCacheSize, setObjectsThumbnailCacheSize] = useLocalStorageState<number>(
+		'objectsThumbnailCacheSize',
+		THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
+	)
+	const [objectsCostMode, setObjectsCostMode] = useLocalStorageState<ObjectsCostMode>(
+		OBJECTS_COST_MODE_STORAGE_KEY,
+		OBJECTS_COST_MODE_DEFAULT,
+	)
+	const [objectsAutoIndexEnabled, setObjectsAutoIndexEnabled] = useLocalStorageState<boolean>(
+		'objectsAutoIndexEnabled',
+		OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
+	)
+	const [objectsAutoIndexTtlHours, setObjectsAutoIndexTtlHours] = useLocalStorageState<number>(
+		'objectsAutoIndexTtlHours',
+		OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
+	)
 
-export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
@@ -37,8 +48,8 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 			</Typography.Text>
 			<FormField label="Show image thumbnails" extra="Controls thumbnails in the object list and details panel.">
 				<ToggleSwitch
-					checked={props.objectsShowThumbnails}
-					onChange={props.setObjectsShowThumbnails}
+					checked={objectsShowThumbnails}
+					onChange={setObjectsShowThumbnails}
 					ariaLabel="Show image thumbnails"
 				/>
 			</FormField>
@@ -50,8 +61,8 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 				<Select
 					id="settings-objects-cost-mode"
 					aria-label="Object storage cost mode"
-					value={props.objectsCostMode}
-					onChange={(value) => props.setObjectsCostMode(value as ObjectsCostMode)}
+					value={objectsCostMode}
+					onChange={(value) => setObjectsCostMode(value as ObjectsCostMode)}
 					options={[
 						{ value: 'conservative', label: 'Conservative' },
 						{ value: 'balanced', label: 'Balanced' },
@@ -77,9 +88,9 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 										min={THUMBNAIL_CACHE_MIN_ENTRIES}
 										max={THUMBNAIL_CACHE_MAX_ENTRIES}
 										step={50}
-										value={props.objectsThumbnailCacheSize}
+										value={objectsThumbnailCacheSize}
 										onChange={(value) =>
-											props.setObjectsThumbnailCacheSize(
+											setObjectsThumbnailCacheSize(
 												typeof value === 'number'
 													? Math.min(THUMBNAIL_CACHE_MAX_ENTRIES, Math.max(THUMBNAIL_CACHE_MIN_ENTRIES, value))
 													: THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
@@ -93,8 +104,8 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 									extra="When Search bucket is used, build/refresh the index for the current prefix automatically."
 								>
 									<ToggleSwitch
-										checked={props.objectsAutoIndexEnabled}
-										onChange={props.setObjectsAutoIndexEnabled}
+										checked={objectsAutoIndexEnabled}
+										onChange={setObjectsAutoIndexEnabled}
 										ariaLabel="Auto index current prefix"
 									/>
 								</FormField>
@@ -108,15 +119,15 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 										min={OBJECTS_AUTO_INDEX_TTL_MIN_HOURS}
 										max={OBJECTS_AUTO_INDEX_TTL_MAX_HOURS}
 										step={1}
-										value={props.objectsAutoIndexTtlHours}
+										value={objectsAutoIndexTtlHours}
 										onChange={(value) =>
-											props.setObjectsAutoIndexTtlHours(
+											setObjectsAutoIndexTtlHours(
 												typeof value === 'number'
 													? Math.min(OBJECTS_AUTO_INDEX_TTL_MAX_HOURS, Math.max(OBJECTS_AUTO_INDEX_TTL_MIN_HOURS, value))
 													: OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 											)
 										}
-										disabled={!props.objectsAutoIndexEnabled}
+										disabled={!objectsAutoIndexEnabled}
 										className={styles.fullWidth}
 									/>
 								</FormField>
