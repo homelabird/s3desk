@@ -18,8 +18,8 @@ import type {
 
 type RequestFn = <T>(path: string, init: RequestInit, options?: RequestOptions) => Promise<T>
 
-export function listBuckets(request: RequestFn, profileId: string): Promise<Bucket[]> {
-	return request('/buckets', { method: 'GET' }, { profileId })
+export function listBuckets(request: RequestFn, profileId: string, signal?: AbortSignal): Promise<Bucket[]> {
+	return request('/buckets', { method: 'GET', signal }, { profileId })
 }
 
 export function createBucket(request: RequestFn, profileId: string, req: BucketCreateRequest): Promise<Bucket> {
@@ -34,8 +34,8 @@ export function deleteBucket(request: RequestFn, profileId: string, bucket: stri
 	return request(`/buckets/${encodeURIComponent(bucket)}`, { method: 'DELETE' }, { profileId })
 }
 
-export function getBucketGovernance(request: RequestFn, profileId: string, bucket: string): Promise<BucketGovernanceView> {
-	return request(`/buckets/${encodeURIComponent(bucket)}/governance`, { method: 'GET' }, { profileId })
+export function getBucketGovernance(request: RequestFn, profileId: string, bucket: string, signal?: AbortSignal): Promise<BucketGovernanceView> {
+	return request(`/buckets/${encodeURIComponent(bucket)}/governance`, { method: 'GET', signal }, { profileId })
 }
 
 export function putBucketAccess(request: RequestFn, profileId: string, bucket: string, req: BucketAccessPutRequest): Promise<void> {
@@ -94,8 +94,8 @@ export function putBucketSharing(request: RequestFn, profileId: string, bucket: 
 	}, { profileId })
 }
 
-export function getBucketPolicy(request: RequestFn, profileId: string, bucket: string): Promise<BucketPolicyResponse> {
-	return request(`/buckets/${encodeURIComponent(bucket)}/policy`, { method: 'GET' }, { profileId })
+export function getBucketPolicy(request: RequestFn, profileId: string, bucket: string, signal?: AbortSignal): Promise<BucketPolicyResponse> {
+	return request(`/buckets/${encodeURIComponent(bucket)}/policy`, { method: 'GET', signal }, { profileId })
 }
 
 export function putBucketPolicy(request: RequestFn, profileId: string, bucket: string, req: BucketPolicyPutRequest): Promise<void> {

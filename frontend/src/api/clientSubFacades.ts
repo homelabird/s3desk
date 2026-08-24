@@ -165,8 +165,8 @@ export function createProfilesSubFacade(deps: SubFacadeDeps) {
 
 export function createBucketsSubFacade(deps: SubFacadeDeps) {
 	return {
-		listBuckets(profileId: string): Promise<Bucket[]> {
-			return bucketsDomain.listBuckets(deps.requestFn, profileId)
+		listBuckets(profileId: string, signal?: AbortSignal): Promise<Bucket[]> {
+			return bucketsDomain.listBuckets(deps.requestFn, profileId, signal)
 		},
 		createBucket(profileId: string, req: BucketCreateRequest): Promise<Bucket> {
 			return bucketsDomain.createBucket(deps.requestFn, profileId, req)
@@ -174,8 +174,8 @@ export function createBucketsSubFacade(deps: SubFacadeDeps) {
 		deleteBucket(profileId: string, bucket: string): Promise<void> {
 			return bucketsDomain.deleteBucket(deps.requestFn, profileId, bucket)
 		},
-		getBucketGovernance(profileId: string, bucket: string): Promise<BucketGovernanceView> {
-			return bucketsDomain.getBucketGovernance(deps.requestFn, profileId, bucket)
+		getBucketGovernance(profileId: string, bucket: string, signal?: AbortSignal): Promise<BucketGovernanceView> {
+			return bucketsDomain.getBucketGovernance(deps.requestFn, profileId, bucket, signal)
 		},
 		putBucketAccess(profileId: string, bucket: string, req: BucketAccessPutRequest): Promise<void> {
 			return bucketsDomain.putBucketAccess(deps.requestFn, profileId, bucket, req)
@@ -198,8 +198,8 @@ export function createBucketsSubFacade(deps: SubFacadeDeps) {
 		putBucketSharing(profileId: string, bucket: string, req: BucketSharingPutClientRequest): Promise<BucketSharingClientView> {
 			return bucketsDomain.putBucketSharing(deps.requestFn, profileId, bucket, req)
 		},
-		getBucketPolicy(profileId: string, bucket: string): Promise<BucketPolicyResponse> {
-			return bucketsDomain.getBucketPolicy(deps.requestFn, profileId, bucket)
+		getBucketPolicy(profileId: string, bucket: string, signal?: AbortSignal): Promise<BucketPolicyResponse> {
+			return bucketsDomain.getBucketPolicy(deps.requestFn, profileId, bucket, signal)
 		},
 		putBucketPolicy(profileId: string, bucket: string, req: BucketPolicyPutRequest): Promise<void> {
 			return bucketsDomain.putBucketPolicy(deps.requestFn, profileId, bucket, req)
@@ -222,6 +222,8 @@ export function createObjectsSubFacade(deps: SubFacadeDeps) {
 			delimiter?: string
 			maxKeys?: number
 			continuationToken?: string
+			prefixesOnly?: boolean
+			signal?: AbortSignal
 		}): Promise<ListObjectsResponse> {
 			return objectsDomain.listObjects(deps.requestFn, args)
 		},
@@ -237,6 +239,7 @@ export function createObjectsSubFacade(deps: SubFacadeDeps) {
 			maxSize?: number
 			modifiedAfter?: string
 			modifiedBefore?: string
+			signal?: AbortSignal
 		}): Promise<SearchObjectsResponse> {
 			return objectsDomain.searchObjectsIndex(deps.requestFn, args)
 		},
@@ -245,13 +248,14 @@ export function createObjectsSubFacade(deps: SubFacadeDeps) {
 			bucket: string
 			prefix?: string
 			sampleLimit?: number
+			signal?: AbortSignal
 		}): Promise<ObjectIndexSummaryResponse> {
 			return objectsDomain.getObjectIndexSummary(deps.requestFn, args)
 		},
 		listLocalEntries(args: { profileId: string; path?: string; limit?: number }): Promise<ListLocalEntriesResponse> {
 			return objectsDomain.listLocalEntries(deps.requestFn, args)
 		},
-		getObjectMeta(args: { profileId: string; bucket: string; key: string }): Promise<ObjectMeta> {
+		getObjectMeta(args: { profileId: string; bucket: string; key: string; signal?: AbortSignal }): Promise<ObjectMeta> {
 			return objectsDomain.getObjectMeta(deps.requestFn, args)
 		},
 		getObjectDownloadURL(args: {
@@ -263,6 +267,7 @@ export function createObjectsSubFacade(deps: SubFacadeDeps) {
 			size?: number
 			contentType?: string
 			lastModified?: string
+			signal?: AbortSignal
 		}): Promise<PresignedURLResponse> {
 			return objectsDomain.getObjectDownloadURL(deps.requestFn, args)
 		},
@@ -272,7 +277,7 @@ export function createObjectsSubFacade(deps: SubFacadeDeps) {
 		deleteObjects(args: { profileId: string; bucket: string; keys: string[] }): Promise<DeleteObjectsResponse> {
 			return objectsDomain.deleteObjects(deps.requestFn, args)
 		},
-		listObjectFavorites(args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean }): Promise<ObjectFavoritesResponse> {
+		listObjectFavorites(args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean; signal?: AbortSignal }): Promise<ObjectFavoritesResponse> {
 			return objectsDomain.listObjectFavorites(deps.requestFn, args)
 		},
 		createObjectFavorite(args: { profileId: string; bucket: string; key: string }): Promise<ObjectFavorite> {
@@ -363,7 +368,15 @@ export function createJobsSubFacade(deps: SubFacadeDeps) {
 	return {
 		listJobs(
 			profileId: string,
-			args: { status?: string; type?: string; errorCode?: string; limit?: number; cursor?: string } = {},
+			args: {
+				status?: string
+				type?: string
+				errorCode?: string
+				ids?: string[]
+				limit?: number
+				cursor?: string
+				signal?: AbortSignal
+			} = {},
 		): Promise<JobsListResponse> {
 			return jobsDomain.listJobs(deps.requestFn, profileId, args)
 		},
@@ -379,16 +392,22 @@ export function createJobsSubFacade(deps: SubFacadeDeps) {
 		getJobLogs(profileId: string, jobId: string, tailBytes = 64 * 1024): Promise<string> {
 			return jobsDomain.getJobLogs(deps.requestFn, profileId, jobId, tailBytes)
 		},
-		getJobLogsTail(profileId: string, jobId: string, tailBytes = 64 * 1024): Promise<{ text: string; nextOffset: number }> {
-			return jobsDomain.getJobLogsTail(deps.fetchResponseFn, profileId, jobId, tailBytes)
+		getJobLogsTail(
+			profileId: string,
+			jobId: string,
+			tailBytes = 64 * 1024,
+			options: { signal?: AbortSignal } = {},
+		): Promise<{ text: string; nextOffset: number }> {
+			return jobsDomain.getJobLogsTail(deps.fetchResponseFn, profileId, jobId, tailBytes, options)
 		},
 		getJobLogsAfterOffset(
 			profileId: string,
 			jobId: string,
 			afterOffset: number,
 			maxBytes = 64 * 1024,
+			options: { signal?: AbortSignal } = {},
 		): Promise<{ text: string; nextOffset: number }> {
-			return jobsDomain.getJobLogsAfterOffset(deps.fetchResponseFn, profileId, jobId, afterOffset, maxBytes)
+			return jobsDomain.getJobLogsAfterOffset(deps.fetchResponseFn, profileId, jobId, afterOffset, maxBytes, options)
 		},
 		cancelJob(profileId: string, jobId: string): Promise<Job> {
 			return jobsDomain.cancelJob(deps.requestFn, profileId, jobId)

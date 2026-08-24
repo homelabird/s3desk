@@ -1167,6 +1167,10 @@ paths:
         - name: continuationToken
           in: query
           schema: { type: string }
+        - name: prefixesOnly
+          in: query
+          description: Return direct common prefixes and omit object items. Requires delimiter "/"; maxKeys and continuationToken paginate prefixes only.
+          schema: { type: boolean, default: false }
       responses:
         "200":
           description: OK
@@ -1815,6 +1819,15 @@ paths:
         - name: type
           in: query
           schema: { type: string }
+        - name: id
+          in: query
+          description: Filter by repeated job IDs (at most 200).
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 200
+            items: { type: string, minLength: 1 }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }

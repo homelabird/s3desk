@@ -7,16 +7,25 @@ type FetchResponseFn = (path: string, init: RequestInit, options?: RequestOption
 export function listJobs(
 	request: RequestFn,
 	profileId: string,
-	args: { status?: string; type?: string; errorCode?: string; limit?: number; cursor?: string } = {},
+	args: {
+		status?: string
+		type?: string
+		errorCode?: string
+		ids?: string[]
+		limit?: number
+		cursor?: string
+		signal?: AbortSignal
+	} = {},
 ): Promise<JobsListResponse> {
 	const params = new URLSearchParams()
 	if (args.status) params.set('status', args.status)
 	if (args.type) params.set('type', args.type)
 	if (args.errorCode) params.set('errorCode', args.errorCode)
+	for (const id of args.ids ?? []) params.append('id', id)
 	if (args.limit) params.set('limit', String(args.limit))
 	if (args.cursor) params.set('cursor', args.cursor)
 	const qs = params.toString()
-	return request(`/jobs${qs ? `?${qs}` : ''}`, { method: 'GET' }, { profileId })
+	return request(`/jobs${qs ? `?${qs}` : ''}`, { method: 'GET', signal: args.signal }, { profileId })
 }
 
 export function createJob(request: RequestFn, profileId: string, req: JobCreateRequest): Promise<Job> {
@@ -41,10 +50,20 @@ export function getJobLogs(request: RequestFn, profileId: string, jobId: string,
 	return request(`/jobs/${encodeURIComponent(jobId)}/logs?${params.toString()}`, { method: 'GET' }, { profileId })
 }
 
-export async function getJobLogsTail(fetchResponse: FetchResponseFn, profileId: string, jobId: string, tailBytes = 64 * 1024): Promise<{ text: string; nextOffset: number }> {
+export async function getJobLogsTail(
+	fetchResponse: FetchResponseFn,
+	profileId: string,
+	jobId: string,
+	tailBytes = 64 * 1024,
+	options: { signal?: AbortSignal } = {},
+): Promise<{ text: string; nextOffset: number }> {
 	const params = new URLSearchParams()
 	params.set('tailBytes', String(tailBytes))
-	const res = await fetchResponse(`/jobs/${encodeURIComponent(jobId)}/logs?${params.toString()}`, { method: 'GET' }, { profileId })
+	const res = await fetchResponse(
+		`/jobs/${encodeURIComponent(jobId)}/logs?${params.toString()}`,
+		{ method: 'GET', signal: options.signal },
+		{ profileId },
+	)
 	const text = res.status === 204 ? '' : await res.text()
 	const rawOffset = res.headers.get('X-Log-Next-Offset') ?? res.headers.get('x-log-next-offset') ?? '0'
 	const nextOffset = Number.parseInt(rawOffset, 10)
@@ -57,11 +76,16 @@ export async function getJobLogsAfterOffset(
 	jobId: string,
 	afterOffset: number,
 	maxBytes = 64 * 1024,
+	options: { signal?: AbortSignal } = {},
 ): Promise<{ text: string; nextOffset: number }> {
 	const params = new URLSearchParams()
 	params.set('afterOffset', String(afterOffset))
 	params.set('maxBytes', String(maxBytes))
-	const res = await fetchResponse(`/jobs/${encodeURIComponent(jobId)}/logs?${params.toString()}`, { method: 'GET' }, { profileId })
+	const res = await fetchResponse(
+		`/jobs/${encodeURIComponent(jobId)}/logs?${params.toString()}`,
+		{ method: 'GET', signal: options.signal },
+		{ profileId },
+	)
 	const text = res.status === 204 ? '' : await res.text()
 	const rawOffset = res.headers.get('X-Log-Next-Offset') ?? res.headers.get('x-log-next-offset') ?? '0'
 	const nextOffset = Number.parseInt(rawOffset, 10)

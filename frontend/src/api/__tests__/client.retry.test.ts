@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { APIClient, RETRY_COUNT_STORAGE_KEY, RETRY_DELAY_STORAGE_KEY } from '../client'
+import { APIClient, RequestAbortedError, RequestTimeoutError, RETRY_COUNT_STORAGE_KEY, RETRY_DELAY_STORAGE_KEY } from '../client'
+import { fetchWithTimeout } from '../retryTransport'
 import { clearNetworkLog, getNetworkLog } from '../../lib/networkStatus'
 
 function jsonResponse(status: number, body: unknown, headers: Record<string, string> = {}): Response {
@@ -11,6 +12,23 @@ function jsonResponse(status: number, body: unknown, headers: Record<string, str
 			...headers,
 		},
 	})
+}
+
+function stalledJSONResponse(signal?: AbortSignal): Response {
+	return new Response(
+		new ReadableStream<Uint8Array>({
+			start(controller) {
+				if (!signal) return
+				const abort = () => controller.error(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'))
+				if (signal.aborted) {
+					abort()
+					return
+				}
+				signal.addEventListener('abort', abort, { once: true })
+			},
+		}),
+		{ status: 200, headers: { 'content-type': 'application/json' } },
+	)
 }
 
 describe('APIClient retry semantics', () => {
@@ -108,5 +126,110 @@ describe('APIClient retry semantics', () => {
 		const retryEntry = getNetworkLog().find((entry) => entry.kind === 'retry')
 		expect(retryEntry?.message ?? '').toContain('Retry-After 2s')
 		expect(retryEntry?.message ?? '').toContain('in 2s')
+	})
+
+	it('stops a Retry-After backoff as soon as the caller aborts', async () => {
+		vi.useFakeTimers()
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				jsonResponse(
+					429,
+					{
+						error: {
+							code: 'rate_limited',
+							message: 'too many requests',
+							normalizedError: { code: 'rate_limited', retryable: true },
+						},
+					},
+					{ 'Retry-After': '2' },
+				),
+			)
+			.mockResolvedValueOnce(
+				jsonResponse(200, {
+					bucket: 'bucket-a',
+					prefix: '',
+					delimiter: '/',
+					commonPrefixes: [],
+					items: [],
+					isTruncated: false,
+				}),
+			)
+		vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+		const controller = new AbortController()
+		const api = new APIClient()
+		const promise = api.objects.listObjects({
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			signal: controller.signal,
+		})
+		await vi.advanceTimersByTimeAsync(0)
+		expect(fetchMock).toHaveBeenCalledTimes(1)
+
+		let outcome: unknown = 'pending'
+		void promise.then(
+			() => {
+				outcome = 'resolved'
+			},
+			(error: unknown) => {
+				outcome = error
+			},
+		)
+		controller.abort()
+		await vi.advanceTimersByTimeAsync(0)
+		const outcomeAfterAbort = outcome
+		await vi.runAllTimersAsync()
+
+		expect(outcomeAfterAbort).toBeInstanceOf(RequestAbortedError)
+		expect(fetchMock).toHaveBeenCalledTimes(1)
+	})
+
+	it('keeps timeout and caller abort active while reading a body after headers', async () => {
+		vi.useFakeTimers()
+		const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+			Promise.resolve(stalledJSONResponse(init?.signal ?? undefined)),
+		)
+		vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+		let timeoutOutcome: unknown = 'pending'
+		void fetchWithTimeout('/stalled', { method: 'GET' }, 25).then(
+			() => {
+				timeoutOutcome = 'resolved'
+			},
+			(error: unknown) => {
+				timeoutOutcome = error
+			},
+		)
+		await vi.advanceTimersByTimeAsync(0)
+		expect(timeoutOutcome).toBe('pending')
+		await vi.advanceTimersByTimeAsync(25)
+		expect(timeoutOutcome).toBeInstanceOf(RequestTimeoutError)
+
+		const controller = new AbortController()
+		const api = new APIClient()
+		let abortOutcome: unknown = 'pending'
+		void api.objects.listObjects({ profileId: 'profile-1', bucket: 'bucket-a', signal: controller.signal }).then(
+			() => {
+				abortOutcome = 'resolved'
+			},
+			(error: unknown) => {
+				abortOutcome = error
+			},
+		)
+		await vi.advanceTimersByTimeAsync(0)
+		expect(abortOutcome).toBe('pending')
+		controller.abort()
+		await vi.advanceTimersByTimeAsync(0)
+		expect(abortOutcome).toBeInstanceOf(RequestAbortedError)
+	})
+
+	it('returns timeout-free raw streams without buffering their body', async () => {
+		const response = stalledJSONResponse()
+		const fetchMock = vi.fn().mockResolvedValue(response)
+		vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+		await expect(fetchWithTimeout('/stream', { method: 'GET' }, 0)).resolves.toBe(response)
+		expect(response.bodyUsed).toBe(false)
 	})
 })

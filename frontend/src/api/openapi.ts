@@ -1950,6 +1950,8 @@ export interface paths {
                     delimiter?: string;
                     maxKeys?: number;
                     continuationToken?: string;
+                    /** @description Return direct common prefixes and omit object items. Requires delimiter "/"; maxKeys and continuationToken paginate prefixes only. */
+                    prefixesOnly?: boolean;
                 };
                 header: {
                     "X-Profile-Id": components["parameters"]["XProfileId"];
@@ -2957,6 +2959,8 @@ export interface paths {
                 query?: {
                     status?: components["schemas"]["JobStatus"];
                     type?: string;
+                    /** @description Filter by repeated job IDs (at most 200). */
+                    id?: string[];
                     limit?: number;
                     cursor?: string;
                     errorCode?: string;

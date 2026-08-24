@@ -38,17 +38,18 @@ function normalizeListObjectsResponse(
 
 export function listObjects(
 	request: RequestFn,
-	args: { profileId: string; bucket: string; prefix?: string; delimiter?: string; maxKeys?: number; continuationToken?: string },
+	args: { profileId: string; bucket: string; prefix?: string; delimiter?: string; maxKeys?: number; continuationToken?: string; prefixesOnly?: boolean; signal?: AbortSignal },
 ): Promise<ListObjectsResponse> {
 	const params = new URLSearchParams()
 	if (args.prefix) params.set('prefix', args.prefix)
 	if (args.delimiter) params.set('delimiter', args.delimiter)
 	if (args.maxKeys) params.set('maxKeys', String(args.maxKeys))
 	if (args.continuationToken) params.set('continuationToken', args.continuationToken)
+	if (args.prefixesOnly) params.set('prefixesOnly', 'true')
 	const qs = params.toString()
 	return request<ListObjectsResponse>(
 		`/buckets/${encodeURIComponent(args.bucket)}/objects${qs ? `?${qs}` : ''}`,
-		{ method: 'GET' },
+		{ method: 'GET', signal: args.signal },
 		{ profileId: args.profileId },
 	).then((resp) =>
 		normalizeListObjectsResponse(resp, {
@@ -73,6 +74,7 @@ export function searchObjectsIndex(
 		maxSize?: number
 		modifiedAfter?: string
 		modifiedBefore?: string
+		signal?: AbortSignal
 	},
 ): Promise<SearchObjectsResponse> {
 	const params = new URLSearchParams()
@@ -87,14 +89,14 @@ export function searchObjectsIndex(
 	if (args.modifiedBefore) params.set('modifiedBefore', args.modifiedBefore)
 	return request(
 		`/buckets/${encodeURIComponent(args.bucket)}/objects/search?${params.toString()}`,
-		{ method: 'GET' },
+		{ method: 'GET', signal: args.signal },
 		{ profileId: args.profileId },
 	)
 }
 
 export function getObjectIndexSummary(
 	request: RequestFn,
-	args: { profileId: string; bucket: string; prefix?: string; sampleLimit?: number },
+	args: { profileId: string; bucket: string; prefix?: string; sampleLimit?: number; signal?: AbortSignal },
 ): Promise<ObjectIndexSummaryResponse> {
 	const params = new URLSearchParams()
 	if (args.prefix) params.set('prefix', args.prefix)
@@ -102,7 +104,7 @@ export function getObjectIndexSummary(
 	const qs = params.toString()
 	return request(
 		`/buckets/${encodeURIComponent(args.bucket)}/objects/index-summary${qs ? `?${qs}` : ''}`,
-		{ method: 'GET' },
+		{ method: 'GET', signal: args.signal },
 		{ profileId: args.profileId },
 	)
 }
@@ -115,12 +117,15 @@ export function listLocalEntries(request: RequestFn, args: { profileId: string; 
 	return request(`/local/entries${qs ? `?${qs}` : ''}`, { method: 'GET' }, { profileId: args.profileId })
 }
 
-export function getObjectMeta(request: RequestFn, args: { profileId: string; bucket: string; key: string }): Promise<ObjectMeta> {
+export function getObjectMeta(
+	request: RequestFn,
+	args: { profileId: string; bucket: string; key: string; signal?: AbortSignal },
+): Promise<ObjectMeta> {
 	const params = new URLSearchParams()
 	params.set('key', args.key)
 	return request(
 		`/buckets/${encodeURIComponent(args.bucket)}/objects/meta?${params.toString()}`,
-		{ method: 'GET' },
+		{ method: 'GET', signal: args.signal },
 		{ profileId: args.profileId },
 	)
 }
@@ -136,6 +141,7 @@ export function getObjectDownloadURL(
 		size?: number
 		contentType?: string
 		lastModified?: string
+		signal?: AbortSignal
 	},
 ): Promise<PresignedURLResponse> {
 	const params = new URLSearchParams()
@@ -149,7 +155,7 @@ export function getObjectDownloadURL(
 	if (args.lastModified) params.set('lastModified', args.lastModified)
 	return request(
 		`/buckets/${encodeURIComponent(args.bucket)}/objects/download-url?${params.toString()}`,
-		{ method: 'GET' },
+		{ method: 'GET', signal: args.signal },
 		{ profileId: args.profileId },
 	)
 }
@@ -181,7 +187,7 @@ export function deleteObjects(request: RequestFn, args: { profileId: string; buc
 
 export function listObjectFavorites(
 	request: RequestFn,
-	args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean },
+	args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean; signal?: AbortSignal },
 ): Promise<ObjectFavoritesResponse> {
 	return (async () => {
 		const keys: string[] = []
@@ -189,15 +195,17 @@ export function listObjectFavorites(
 		let response: ObjectFavoritesResponse | undefined
 		let cursor: string | undefined
 		do {
+			args.signal?.throwIfAborted()
 			const params = new URLSearchParams({ limit: '200' })
 			if (args.prefix) params.set('prefix', args.prefix)
 			if (typeof args.hydrate === 'boolean') params.set('hydrate', String(args.hydrate))
 			if (cursor) params.set('cursor', cursor)
 			response = await request<ObjectFavoritesResponse>(
 				`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites?${params.toString()}`,
-				{ method: 'GET' },
+				{ method: 'GET', signal: args.signal },
 				{ profileId: args.profileId },
 			)
+			args.signal?.throwIfAborted()
 			keys.push(...response.keys)
 			items.push(...response.items)
 			cursor = response.nextCursor
