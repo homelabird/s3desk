@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -80,5 +82,32 @@ func TestMetaHTTPService_HandleGetMeta_ReturnsConfiguredMetaResponse(t *testing.
 	}
 	if resp.TransferEngine.Name != "rclone" {
 		t.Fatalf("resp.TransferEngine.Name=%q, want rclone", resp.TransferEngine.Name)
+	}
+}
+
+func TestBuildMetaTransferEngineInfoCachesRcloneVersionCheck(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rclone")
+	marker := filepath.Join(dir, "version-calls")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nset -eu\nprintf x >> \"$S3DESK_TEST_RCLONE_MARKER\"\nprintf 'rclone v1.72.0\\n'\n"), 0o700); err != nil {
+		t.Fatalf("write fake rclone: %v", err)
+	}
+	t.Setenv("RCLONE_PATH", path)
+	t.Setenv("S3DESK_TEST_RCLONE_MARKER", marker)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil)
+	for range 2 {
+		info := buildMetaTransferEngineInfo(req)
+		if !info.Available || !info.Compatible || info.Path != path || info.Version != "rclone v1.72.0" {
+			t.Fatalf("transfer engine=%+v, want available compatible fake rclone", info)
+		}
+	}
+
+	calls, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("read version call marker: %v", err)
+	}
+	if string(calls) != "x" {
+		t.Fatalf("version calls=%q, want one execution", calls)
 	}
 }

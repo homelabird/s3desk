@@ -74,21 +74,17 @@ func buildMetaCapabilities(cfg cfgpkg.Config, dbBackend db.Backend) models.MetaC
 }
 
 func buildMetaTransferEngineInfo(r *http.Request) models.TransferEngineInfo {
-	path, ok := jobs.DetectRclone()
-	rcloneVersion, vok := jobs.DetectRcloneVersion(r.Context())
-	compatible := false
-	if ok && vok {
-		compatible = jobs.IsRcloneVersionCompatible(rcloneVersion)
-	}
+	path, rcloneVersion, err := jobs.EnsureRcloneCompatible(r.Context())
+	available := path != ""
 
 	info := models.TransferEngineInfo{
 		Name:       "rclone",
-		Available:  ok,
-		Compatible: compatible,
+		Available:  available,
+		Compatible: available && err == nil,
 		MinVersion: jobs.MinSupportedRcloneVersion,
 		Path:       path,
 	}
-	if vok {
+	if rcloneVersion != "" {
 		info.Version = rcloneVersion
 	}
 	return info

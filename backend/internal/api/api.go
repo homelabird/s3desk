@@ -79,6 +79,16 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.Post("/server/import-portable", api.handleImportPortableBackup)
 	apiRouter.Get("/server/restores", api.handleListServerRestores)
 	apiRouter.Delete("/server/restores/{restoreId}", api.handleDeleteServerRestore)
+	apiRouter.Get("/jobs/{jobId}/logs", api.handleGetJobLogs)
+	apiRouter.With(api.requireStoredProfile).Get("/jobs", api.handleListJobs)
+	apiRouter.With(api.requireStoredProfile).Get("/jobs/{jobId}", api.handleGetJob)
+	apiRouter.With(api.requireStoredProfile).Get("/jobs/{jobId}/artifact", api.handleGetJobArtifact)
+	apiRouter.With(api.requireStoredProfile).Get("/buckets/{bucket}/objects/search", api.handleSearchObjects)
+	apiRouter.With(api.requireStoredProfile).Get("/buckets/{bucket}/objects/index-summary", api.handleGetObjectIndexSummary)
+	apiRouter.With(api.requireStoredProfile).Post("/buckets/{bucket}/objects/favorites", api.handleCreateObjectFavorite)
+	apiRouter.With(api.requireStoredProfile).Delete("/buckets/{bucket}/objects/favorites", api.handleDeleteObjectFavorite)
+	apiRouter.With(api.requireStoredProfile).Get("/local/entries", api.handleListLocalEntries)
+	apiRouter.Post("/uploads/{uploadId}/files", api.handleUploadFiles)
 
 	apiRouter.Route("/profiles", func(r chi.Router) {
 		r.Get("/", api.handleListProfiles)
@@ -154,22 +164,15 @@ func New(dep Dependencies) http.Handler {
 			r.Get("/", api.handleListObjects)
 			r.Delete("/", api.handleDeleteObjects)
 		})
-		r.Get("/buckets/{bucket}/objects/search", api.handleSearchObjects)
-		r.Get("/buckets/{bucket}/objects/index-summary", api.handleGetObjectIndexSummary)
 		r.Get("/buckets/{bucket}/objects/meta", api.handleGetObjectMeta)
 		r.Post("/buckets/{bucket}/objects/folder", api.handleCreateObjectFolder)
 		r.Get("/buckets/{bucket}/objects/download", api.handleDownloadObject)
 		r.Get("/buckets/{bucket}/objects/download-url", api.handleGetObjectDownloadURL)
 		r.Get("/buckets/{bucket}/objects/favorites", api.handleListObjectFavorites)
-		r.Post("/buckets/{bucket}/objects/favorites", api.handleCreateObjectFavorite)
-		r.Delete("/buckets/{bucket}/objects/favorites", api.handleDeleteObjectFavorite)
 		r.Get("/buckets/{bucket}/objects/thumbnail", api.handleGetObjectThumbnail)
-
-		r.Get("/local/entries", api.handleListLocalEntries)
 
 		r.Route("/uploads", func(r chi.Router) {
 			r.Post("/", api.handleCreateUploadSession)
-			r.Post("/{uploadId}/files", api.handleUploadFiles)
 			r.Post("/{uploadId}/presign", api.handlePresignUpload)
 			r.Post("/{uploadId}/multipart/complete", api.handleCompleteMultipartUpload)
 			r.Post("/{uploadId}/multipart/abort", api.handleAbortMultipartUpload)
@@ -178,18 +181,10 @@ func New(dep Dependencies) http.Handler {
 			r.Delete("/{uploadId}", api.handleDeleteUploadSession)
 		})
 
-		r.Route("/jobs", func(r chi.Router) {
-			r.Get("/", api.handleListJobs)
-			r.Post("/", api.handleCreateJob)
-			r.Route("/{jobId}", func(r chi.Router) {
-				r.Get("/", api.handleGetJob)
-				r.Delete("/", api.handleDeleteJob)
-				r.Get("/artifact", api.handleGetJobArtifact)
-				r.Get("/logs", api.handleGetJobLogs)
-				r.Post("/retry", api.handleRetryJob)
-				r.Post("/cancel", api.handleCancelJob)
-			})
-		})
+		r.Post("/jobs", api.handleCreateJob)
+		r.Delete("/jobs/{jobId}", api.handleDeleteJob)
+		r.Post("/jobs/{jobId}/retry", api.handleRetryJob)
+		r.Post("/jobs/{jobId}/cancel", api.handleCancelJob)
 	})
 
 	r.Mount("/api/v1", apiRouter)

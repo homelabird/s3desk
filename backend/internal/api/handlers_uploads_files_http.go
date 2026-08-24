@@ -61,6 +61,10 @@ func (svc uploadFilesHTTPService) prepareUpload(r *http.Request) uploadFilesPrep
 }
 
 func (svc uploadFilesHTTPService) executePrepared(w http.ResponseWriter, r *http.Request, prepared uploadFilesPreparedRequest) {
+	if prepared.err != nil {
+		writeError(w, prepared.err.status, prepared.err.code, prepared.err.message, prepared.err.details)
+		return
+	}
 	switch {
 	case prepared.mode == uploadModeDirect && prepared.chunkIndexRaw != "":
 		svc.server.handleDirectMultipartChunkUpload(w, r, prepared.profileID, prepared.uploadID, prepared.us, prepared.chunkIndexRaw)
@@ -74,20 +78,23 @@ func (svc uploadFilesHTTPService) executePrepared(w http.ResponseWriter, r *http
 }
 
 func (svc uploadFilesHTTPService) executeUpload(w http.ResponseWriter, r *http.Request) {
-	prepared := svc.prepareUpload(r)
-	if prepared.err != nil {
-		writeError(w, prepared.err.status, prepared.err.code, prepared.err.message, prepared.err.details)
-		return
-	}
-	svc.executePrepared(w, r, prepared)
+	svc.executePrepared(w, r, svc.prepareUpload(r))
 }
 
 func (svc uploadFilesHTTPService) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
-	release, ok := svc.server.acquireUploadSlot(w)
-	if !ok {
+	prepared := svc.prepareUpload(r)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		release, ok := svc.server.acquireUploadSlot(w)
+		if !ok {
+			return
+		}
+		defer release()
+		svc.executePrepared(w, r, prepared)
+	})
+
+	if prepared.err != nil || prepared.mode != uploadModeStaging {
+		svc.server.requireProfile(next).ServeHTTP(w, r)
 		return
 	}
-	defer release()
-
-	svc.executeUpload(w, r)
+	next.ServeHTTP(w, r)
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"s3desk/internal/jobs"
@@ -18,7 +19,7 @@ func TestBuildJobListFilter_UsesQueryValues(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/api/v1/jobs?status=failed&type=s3_delete_objects&errorCode=rate_limited&limit=25&cursor=job-3",
+		"/api/v1/jobs?status=failed&type=s3_delete_objects&errorCode=rate_limited&id=job-1&id=job-2&limit=25&cursor=job-3",
 		nil,
 	)
 
@@ -35,11 +36,31 @@ func TestBuildJobListFilter_UsesQueryValues(t *testing.T) {
 	if filter.ErrorCode == nil || *filter.ErrorCode != jobs.ErrorCodeRateLimited {
 		t.Fatalf("filter.ErrorCode=%v, want %q", filter.ErrorCode, jobs.ErrorCodeRateLimited)
 	}
+	if len(filter.IDs) != 2 || filter.IDs[0] != "job-1" || filter.IDs[1] != "job-2" {
+		t.Fatalf("filter.IDs=%v, want [job-1 job-2]", filter.IDs)
+	}
 	if filter.Limit != 25 {
 		t.Fatalf("filter.Limit=%d, want 25", filter.Limit)
 	}
 	if filter.Cursor == nil || *filter.Cursor != "job-3" {
 		t.Fatalf("filter.Cursor=%v, want job-3", filter.Cursor)
+	}
+}
+
+func TestBuildJobListFilter_RejectsMoreThan200IDs(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs", nil)
+	query := req.URL.Query()
+	for i := 0; i < 201; i++ {
+		query.Add("id", "job-"+strconv.Itoa(i))
+	}
+	req.URL.RawQuery = query.Encode()
+
+	_, err := buildJobListFilter(req)
+	var prepErr *jobListPreparationError
+	if !errors.As(err, &prepErr) || prepErr.status != http.StatusBadRequest {
+		t.Fatalf("err=%v, want bad-request jobListPreparationError", err)
 	}
 }
 

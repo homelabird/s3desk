@@ -4,10 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
+
+const maxJobListIDs = 200
 
 type jobListPreparationError struct {
 	status  int
@@ -41,20 +44,44 @@ func newJobListPreparationError(status int, code, message string, details map[st
 
 func buildJobListFilter(r *http.Request) (store.JobFilter, error) {
 	var filter store.JobFilter
+	query := r.URL.Query()
 
-	if status := r.URL.Query().Get("status"); status != "" {
+	if status := query.Get("status"); status != "" {
 		js := models.JobStatus(status)
 		filter.Status = &js
 	}
-	if t := r.URL.Query().Get("type"); t != "" {
+	if t := query.Get("type"); t != "" {
 		filter.Type = &t
 	}
-	if ec := r.URL.Query().Get("errorCode"); ec != "" {
+	if ec := query.Get("errorCode"); ec != "" {
 		filter.ErrorCode = &ec
+	}
+	if rawIDs := query["id"]; len(rawIDs) > 0 {
+		if len(rawIDs) > maxJobListIDs {
+			return store.JobFilter{}, newJobListPreparationError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"too many job ids",
+				map[string]any{"maximum": maxJobListIDs},
+			)
+		}
+		filter.IDs = make([]string, 0, len(rawIDs))
+		for _, rawID := range rawIDs {
+			id := strings.TrimSpace(rawID)
+			if id == "" {
+				return store.JobFilter{}, newJobListPreparationError(
+					http.StatusBadRequest,
+					"invalid_request",
+					"job id is invalid",
+					nil,
+				)
+			}
+			filter.IDs = append(filter.IDs, id)
+		}
 	}
 
 	limit := 50
-	if raw := r.URL.Query().Get("limit"); raw != "" {
+	if raw := query.Get("limit"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil {
 			limit = parsed
 		} else {
@@ -68,7 +95,7 @@ func buildJobListFilter(r *http.Request) (store.JobFilter, error) {
 	}
 	filter.Limit = limit
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+	if cursor := query.Get("cursor"); cursor != "" {
 		filter.Cursor = &cursor
 	}
 

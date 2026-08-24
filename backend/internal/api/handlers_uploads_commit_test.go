@@ -55,7 +55,7 @@ func TestBuildVerifiedUploadCommitArtifactsUsesVerifiedState(t *testing.T) {
 		RootName: "  docs  ",
 		RootKind: "folder",
 	}, []verifiedUploadObject{
-		{Path: "docs/readme.txt", Key: "incoming/docs/readme.txt", Size: 11},
+		{Path: "docs/readme.txt", Key: "incoming/docs/readme.txt", Size: 11, ETag: "etag-readme"},
 		{Path: "docs/notes.txt", Key: "incoming/docs/notes.txt", Size: 3},
 	}, true, false)
 
@@ -81,6 +81,12 @@ func TestBuildVerifiedUploadCommitArtifactsUsesVerifiedState(t *testing.T) {
 	}
 	if items[0]["size"] != int64(11) {
 		t.Fatalf("expected verified size, got %#v", items[0]["size"])
+	}
+	if items[0]["etag"] != "etag-readme" {
+		t.Fatalf("expected verified etag, got %#v", items[0]["etag"])
+	}
+	if etag, ok := items[1]["etag"]; !ok || etag != "" {
+		t.Fatalf("expected verified empty etag, got %#v", items[1])
 	}
 	if got := artifacts.payload["totalFiles"]; got != 2 {
 		t.Fatalf("expected totalFiles 2, got %#v", got)
@@ -137,6 +143,101 @@ func TestCommitDirectNonS3UsesRcloneVerification(t *testing.T) {
 		t.Fatalf("get upload session: %v", err)
 	} else if ok {
 		t.Fatal("expected committed upload session to be removed")
+	}
+}
+
+func TestCommitDirectNonS3BatchesRcloneVerification(t *testing.T) {
+	st, _, srv, _ := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, true)
+	profile := createAzureBlobSmokeProfile(t, st)
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeDirect, "", expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+	for _, obj := range []store.UploadObject{
+		{Path: "a.bin", ObjectKey: "incoming/a.bin", ExpectedSize: ptrInt64(5)},
+		{Path: "b.bin", ObjectKey: "incoming/b.bin", ExpectedSize: ptrInt64(7)},
+	} {
+		obj.UploadID = upload.ID
+		obj.ProfileID = profile.ID
+		obj.Bucket = "test-bucket"
+		if err := st.UpsertUploadObject(context.Background(), obj); err != nil {
+			t.Fatalf("seed upload object %s: %v", obj.Path, err)
+		}
+	}
+
+	var calls [][]string
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		if len(args) != 8 {
+			t.Fatalf("rclone args=%v, want batch lsjson args", args)
+		}
+		keys, err := os.ReadFile(args[6])
+		if err != nil {
+			t.Fatalf("read batch keys: %v", err)
+		}
+		if got, want := string(keys), "incoming/a.bin\nincoming/b.bin\n"; got != want {
+			t.Fatalf("batch keys=%q, want %q", got, want)
+		}
+		return `[
+			{"Path":"incoming/b.bin","Size":7,"ModTime":"2026-08-06T12:00:01Z","Hashes":{"MD5":"etag-b"}},
+			{"Path":"incoming/a.bin","Size":5,"ModTime":"2026-08-06T12:00:00Z","Hashes":{"MD5":"etag-a"}}
+		]`, "", nil
+	})
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.ID+"/commit", profile.ID, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("status=%d, want %d: %s", res.StatusCode, http.StatusCreated, string(body))
+	}
+	if len(calls) != 1 || calls[0][0] != "lsjson" || calls[0][1] != "--recursive" || calls[0][2] != "--files-only" || calls[0][3] != "--no-mimetype" || calls[0][4] != "--hash" || calls[0][5] != "--files-from-raw" || calls[0][7] != "remote:test-bucket" {
+		t.Fatalf("rclone calls=%v, want one batch lsjson call", calls)
+	}
+
+	var created models.JobCreatedResponse
+	decodeJSONResponse(t, res, &created)
+	job, ok, err := st.GetJob(context.Background(), profile.ID, created.JobID)
+	if err != nil || !ok {
+		t.Fatalf("get committed job: ok=%v err=%v", ok, err)
+	}
+	items, ok := job.Payload["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("job items=%#v, want two items", job.Payload["items"])
+	}
+	first, ok := items[0].(map[string]any)
+	if !ok || first["path"] != "a.bin" || first["etag"] != "etag-a" {
+		t.Fatalf("first job item=%#v, want original target order and etag-a", items[0])
+	}
+}
+
+func TestVerifyTargetsRcloneFallsBackToPerObjectAttribution(t *testing.T) {
+	var calls [][]string
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		switch len(calls) {
+		case 1:
+			return "[", "", nil
+		case 2:
+			return `{"Size":5}`, "", nil
+		default:
+			return "", "object not found", errors.New("exit status 3")
+		}
+	})
+
+	_, uploadErr := (uploadCommitVerificationService{server: &server{}}).verifyTargetsRclone(
+		context.Background(),
+		models.ProfileSecrets{Provider: models.ProfileProviderAwsS3},
+		[]uploadVerificationTarget{
+			{Path: "a.bin", Bucket: "test-bucket", Key: "incoming/a.bin", ExpectedSize: ptrInt64(5)},
+			{Path: "b.bin", Bucket: "test-bucket", Key: "incoming/b.bin", ExpectedSize: ptrInt64(7)},
+		},
+	)
+	if uploadErr == nil || uploadErr.code != "upload_incomplete" || uploadErr.details["path"] != "b.bin" {
+		t.Fatalf("upload error=%+v, want missing b.bin attribution", uploadErr)
+	}
+	if len(calls) != 3 || calls[1][1] != "--stat" || calls[2][3] != "remote:test-bucket/incoming/b.bin" {
+		t.Fatalf("rclone calls=%v, want one batch then ordered per-object fallback", calls)
 	}
 }
 

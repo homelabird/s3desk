@@ -446,6 +446,26 @@ func normalizeHost(host string) string {
 	return strings.TrimSuffix(host, ".")
 }
 
+func (s *server) requireStoredProfile(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		profileID := r.Header.Get("X-Profile-Id")
+		if profileID == "" {
+			writeError(w, http.StatusBadRequest, "missing_profile", "X-Profile-Id header is required", nil)
+			return
+		}
+		exists, err := s.store.ProfileExists(r.Context(), profileID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load profile", nil)
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, "profile_not_found", "profile not found", map[string]any{"profileId": profileID})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *server) requireProfile(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		profileID := r.Header.Get("X-Profile-Id")

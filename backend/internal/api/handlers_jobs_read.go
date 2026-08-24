@@ -125,9 +125,51 @@ func (svc jobReadHTTPService) executeArtifact(r *http.Request) (string, int64, t
 }
 
 func (svc jobReadHTTPService) executeLogs(r *http.Request) ([]byte, int64, error) {
-	request, err := svc.server.prepareJobRequest(r.Context(), r)
+	if r.Header.Get("X-Profile-Id") == "" {
+		return nil, 0, newJobRequestPreparationError(
+			http.StatusBadRequest,
+			"missing_profile",
+			"X-Profile-Id header is required",
+			nil,
+		)
+	}
+	request := extractJobRequest(r)
+	if request.err != nil {
+		return nil, 0, request.err
+	}
+	exists, err := svc.server.store.JobExists(r.Context(), request.profileID, request.jobID)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, newJobRequestPreparationError(
+			http.StatusInternalServerError,
+			"internal_error",
+			"failed to load job",
+			nil,
+		)
+	}
+	if !exists {
+		profileExists, err := svc.server.store.ProfileExists(r.Context(), request.profileID)
+		if err != nil {
+			return nil, 0, newJobRequestPreparationError(
+				http.StatusInternalServerError,
+				"internal_error",
+				"failed to load profile",
+				nil,
+			)
+		}
+		if !profileExists {
+			return nil, 0, newJobRequestPreparationError(
+				http.StatusBadRequest,
+				"profile_not_found",
+				"profile not found",
+				map[string]any{"profileId": request.profileID},
+			)
+		}
+		return nil, 0, newJobRequestPreparationError(
+			http.StatusNotFound,
+			"not_found",
+			"job not found",
+			map[string]any{"jobId": request.jobID},
+		)
 	}
 	options, err := parseJobLogReadOptions(r)
 	if err != nil {

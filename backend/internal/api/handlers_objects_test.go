@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -71,6 +73,66 @@ func TestHandleListObjectsMapsDecodeFailureToUpstreamInvalidCredentials(t *testi
 	}
 	if errResp.Error.NormalizedError == nil || errResp.Error.NormalizedError.Code != models.NormalizedErrorInvalidCredentials {
 		t.Fatalf("normalizedError=%+v, want invalid_credentials", errResp.Error.NormalizedError)
+	}
+}
+
+func TestHandleListObjectsPrefixesOnlyPaginatesPrefixesWithoutCountingObjects(t *testing.T) {
+	lockTestEnv(t)
+	var calls [][]string
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		return `[
+			{"Path":"alpha.txt","Name":"alpha.txt","Size":128},
+			{"Path":"docs","Name":"docs","IsDir":true},
+			{"Path":"empty/","Name":"empty/","Size":0},
+			{"Path":"reports","Name":"reports","IsDir":true}
+		]`, "", nil
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	profile := models.ProfileSecrets{Provider: models.ProfileProviderAwsS3}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects?delimiter=%2F&maxKeys=2&prefixesOnly=true", nil)
+	req = withBucketParam(req, "my-test")
+	req = withProfileSecrets(req, profile)
+	rr := httptest.NewRecorder()
+
+	srv.handleListObjects(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusOK)
+	}
+	var first models.ListObjectsResponse
+	decodeJSONResponse(t, res, &first)
+	if got, want := first.CommonPrefixes, []string{"docs/", "empty/"}; !slices.Equal(got, want) {
+		t.Fatalf("first commonPrefixes=%v, want %v", got, want)
+	}
+	if len(first.Items) != 0 || !first.IsTruncated || first.NextContinuationToken == nil {
+		t.Fatalf("first response=%+v, want bounded prefix page", first)
+	}
+
+	nextReq := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects?delimiter=%2F&maxKeys=2&prefixesOnly=true&continuationToken="+url.QueryEscape(*first.NextContinuationToken), nil)
+	nextReq = withBucketParam(nextReq, "my-test")
+	nextReq = withProfileSecrets(nextReq, profile)
+	nextRR := httptest.NewRecorder()
+	srv.handleListObjects(nextRR, nextReq)
+
+	nextRes := nextRR.Result()
+	defer nextRes.Body.Close()
+	if nextRes.StatusCode != http.StatusOK {
+		t.Fatalf("next status=%d, want %d", nextRes.StatusCode, http.StatusOK)
+	}
+	var next models.ListObjectsResponse
+	decodeJSONResponse(t, nextRes, &next)
+	if len(calls) != 2 {
+		t.Fatalf("rclone calls=%d, want one per prefix page", len(calls))
+	}
+	if got, want := next.CommonPrefixes, []string{"reports/"}; !slices.Equal(got, want) {
+		t.Fatalf("next commonPrefixes=%v, want %v", got, want)
+	}
+	if len(next.Items) != 0 || next.IsTruncated || next.NextContinuationToken != nil {
+		t.Fatalf("next response=%+v, want final prefix page", next)
 	}
 }
 

@@ -31,8 +31,8 @@ func TestUploadFilesHTTPService_HandleUploadFiles_ReturnsMissingProfileAndUpload
 
 	var resp models.ErrorResponse
 	decodeJSONResponse(t, res, &resp)
-	if resp.Error.Code != "invalid_request" {
-		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	if resp.Error.Code != "missing_profile" {
+		t.Fatalf("resp.Error.Code=%q, want missing_profile", resp.Error.Code)
 	}
 }
 

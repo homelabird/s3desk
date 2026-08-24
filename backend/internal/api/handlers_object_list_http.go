@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -73,6 +74,20 @@ func (svc objectListHTTPService) prepareListObjects(metric *storageMetric, r *ht
 }
 
 func (svc objectListHTTPService) executePrepared(metric *storageMetric, r *http.Request, secrets models.ProfileSecrets, bucket string, prefix string, delimiter string, token string, maxKeys int) (*models.ListObjectsResponse, error, string, rcloneAPIErrorContext, map[string]any, error) {
+	prefixesOnly := false
+	if raw := strings.TrimSpace(r.URL.Query().Get("prefixesOnly")); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			metric.SetStatus("invalid_request")
+			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectListHTTPError(http.StatusBadRequest, "invalid_request", "prefixesOnly is invalid", map[string]any{"prefixesOnly": raw})
+		}
+		prefixesOnly = parsed
+	}
+	if prefixesOnly && delimiter != "/" {
+		metric.SetStatus("invalid_request")
+		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectListHTTPError(http.StatusBadRequest, "invalid_request", "prefixesOnly requires delimiter '/'", nil)
+	}
+
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
@@ -139,6 +154,9 @@ func (svc objectListHTTPService) executePrepared(metric *storageMetric, r *http.
 				return nil
 			}
 			return pag.addPrefix(rcloneTokenForPrefix(objKey), objKey, &resp)
+		}
+		if prefixesOnly {
+			return nil
 		}
 
 		entryToken := rcloneTokenForObject(objKey)

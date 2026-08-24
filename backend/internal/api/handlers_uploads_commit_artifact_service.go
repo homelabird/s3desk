@@ -144,6 +144,7 @@ func (svc uploadCommitArtifactService) buildFromVerified(uploadID string, us sto
 				"path": obj.Path,
 				"key":  obj.Key,
 				"size": obj.Size,
+				"etag": obj.ETag,
 			})
 		}
 		payload["items"] = cleaned

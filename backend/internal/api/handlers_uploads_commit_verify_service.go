@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/smithy-go"
 
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/store"
 )
 
@@ -174,6 +176,100 @@ func (svc uploadCommitVerificationService) verifyTargetsRclone(
 	secrets models.ProfileSecrets,
 	targets []uploadVerificationTarget,
 ) ([]verifiedUploadObject, *uploadHTTPError) {
+	if len(targets) < 2 {
+		return svc.verifyTargetsRcloneIndividually(ctx, secrets, targets)
+	}
+
+	bucket, keys, ok := buildRcloneUploadVerificationBatch(targets, secrets.PreserveLeadingSlash)
+	if !ok {
+		return svc.verifyTargetsRcloneIndividually(ctx, secrets, targets)
+	}
+	tmpPath, err := writeLinesToTempFile("rclone-upload-verify-*.txt", keys)
+	if err != nil {
+		return svc.verifyTargetsRcloneIndividually(ctx, secrets, targets)
+	}
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	args := []string{"lsjson", "--recursive", "--files-only", "--no-mimetype", "--hash", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
+	batchCtx, cancelBatch := context.WithCancel(ctx)
+	defer cancelBatch()
+	proc, err := svc.server.startRclone(batchCtx, secrets, args, "verify-upload-batch")
+	if err != nil {
+		return svc.fallbackTargetsRclone(ctx, secrets, targets)
+	}
+
+	entries := make(map[string]rcloneListEntry, len(keys))
+	listErr := decodeRcloneList(proc.stdout, func(entry rcloneListEntry) error {
+		key := entry.Path
+		if strings.TrimSpace(key) == "" {
+			key = entry.Name
+		}
+		key = rcloneconfig.NormalizePathInput(key, secrets.PreserveLeadingSlash)
+		if key != "" {
+			entries[key] = entry
+		}
+		return nil
+	})
+	if listErr != nil {
+		cancelBatch()
+		_ = proc.stdout.Close()
+	}
+	waitErr := proc.wait()
+	if listErr != nil || waitErr != nil {
+		return svc.fallbackTargetsRclone(ctx, secrets, targets)
+	}
+
+	verified := make([]verifiedUploadObject, 0, len(targets))
+	for i, target := range targets {
+		entry, ok := entries[keys[i]]
+		if !ok {
+			return nil, uploadRcloneObjectNotFound(target.Path)
+		}
+		object, uploadErr := verifiedRcloneUploadObject(target, entry)
+		if uploadErr != nil {
+			return nil, uploadErr
+		}
+		verified = append(verified, object)
+	}
+	return verified, nil
+}
+
+func buildRcloneUploadVerificationBatch(targets []uploadVerificationTarget, preserveLeadingSlash bool) (string, []string, bool) {
+	bucket := strings.TrimSpace(targets[0].Bucket)
+	if bucket == "" || rcloneconfig.ValidateSingleLineValue("bucket", bucket) != nil {
+		return "", nil, false
+	}
+
+	keys := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if strings.TrimSpace(target.Bucket) != bucket {
+			return "", nil, false
+		}
+		key := rcloneconfig.NormalizePathInput(target.Key, preserveLeadingSlash)
+		if key == "" || rcloneconfig.ValidateSingleLineValue("key", key) != nil {
+			return "", nil, false
+		}
+		keys = append(keys, key)
+	}
+	return bucket, keys, true
+}
+
+func (svc uploadCommitVerificationService) fallbackTargetsRclone(
+	ctx context.Context,
+	secrets models.ProfileSecrets,
+	targets []uploadVerificationTarget,
+) ([]verifiedUploadObject, *uploadHTTPError) {
+	if ctx.Err() != nil {
+		return nil, uploadRcloneVerificationFailed(targets[0].Path)
+	}
+	return svc.verifyTargetsRcloneIndividually(ctx, secrets, targets)
+}
+
+func (svc uploadCommitVerificationService) verifyTargetsRcloneIndividually(
+	ctx context.Context,
+	secrets models.ProfileSecrets,
+	targets []uploadVerificationTarget,
+) ([]verifiedUploadObject, *uploadHTTPError) {
 	verified := make([]verifiedUploadObject, 0, len(targets))
 	for _, target := range targets {
 		entry, stderr, err := svc.server.rcloneStat(
@@ -186,41 +282,57 @@ func (svc uploadCommitVerificationService) verifyTargetsRclone(
 		)
 		if err != nil {
 			if rcloneIsNotFound(err, stderr) {
-				return nil, &uploadHTTPError{
-					status:  http.StatusBadRequest,
-					code:    "upload_incomplete",
-					message: "uploaded object not found",
-					details: map[string]any{"path": target.Path},
-				}
+				return nil, uploadRcloneObjectNotFound(target.Path)
 			}
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadGateway,
-				code:    "upload_failed",
-				message: "failed to verify uploaded object",
-				details: map[string]any{"path": target.Path},
-			}
+			return nil, uploadRcloneVerificationFailed(target.Path)
 		}
-		if target.ExpectedSize != nil && *target.ExpectedSize >= 0 && entry.Size != *target.ExpectedSize {
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadRequest,
-				code:    "upload_incomplete",
-				message: "uploaded object size mismatch",
-				details: map[string]any{
-					"path":         target.Path,
-					"expectedSize": *target.ExpectedSize,
-					"actualSize":   entry.Size,
-				},
-			}
+		object, uploadErr := verifiedRcloneUploadObject(target, entry)
+		if uploadErr != nil {
+			return nil, uploadErr
 		}
-		verified = append(verified, verifiedUploadObject{
-			Path:         target.Path,
-			Key:          target.Key,
-			Size:         entry.Size,
-			ETag:         rcloneETagFromHashes(entry.Hashes),
-			LastModified: rcloneParseTime(entry.ModTime),
-		})
+		verified = append(verified, object)
 	}
 	return verified, nil
+}
+
+func verifiedRcloneUploadObject(target uploadVerificationTarget, entry rcloneListEntry) (verifiedUploadObject, *uploadHTTPError) {
+	if target.ExpectedSize != nil && *target.ExpectedSize >= 0 && entry.Size != *target.ExpectedSize {
+		return verifiedUploadObject{}, &uploadHTTPError{
+			status:  http.StatusBadRequest,
+			code:    "upload_incomplete",
+			message: "uploaded object size mismatch",
+			details: map[string]any{
+				"path":         target.Path,
+				"expectedSize": *target.ExpectedSize,
+				"actualSize":   entry.Size,
+			},
+		}
+	}
+	return verifiedUploadObject{
+		Path:         target.Path,
+		Key:          target.Key,
+		Size:         entry.Size,
+		ETag:         rcloneETagFromHashes(entry.Hashes),
+		LastModified: rcloneParseTime(entry.ModTime),
+	}, nil
+}
+
+func uploadRcloneObjectNotFound(path string) *uploadHTTPError {
+	return &uploadHTTPError{
+		status:  http.StatusBadRequest,
+		code:    "upload_incomplete",
+		message: "uploaded object not found",
+		details: map[string]any{"path": path},
+	}
+}
+
+func uploadRcloneVerificationFailed(path string) *uploadHTTPError {
+	return &uploadHTTPError{
+		status:  http.StatusBadGateway,
+		code:    "upload_failed",
+		message: "failed to verify uploaded object",
+		details: map[string]any{"path": path},
+	}
 }
 
 func uploadVerifyObjectNotFound(err error) bool {

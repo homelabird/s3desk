@@ -161,15 +161,7 @@ func (svc uploadCommitFinalizeService) persistImmediateJobResult(
 		}
 	}
 
-	updated, ok, err := svc.server.store.GetJob(ctx, profileID, job.ID)
-	if err != nil || !ok {
-		return models.Job{}, "", &uploadHTTPError{
-			status:  http.StatusInternalServerError,
-			code:    "internal_error",
-			message: "failed to reload finalized job",
-		}
-	}
-	return updated, now, nil
+	return job, now, nil
 }
 
 func (svc uploadCommitFinalizeService) publishImmediateCommitCompleted(jobID string, progress *models.JobProgress) {
