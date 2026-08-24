@@ -32,23 +32,23 @@ test('bundle report emits action hints for tight route review candidates', () =>
 
 		const vendorName = 'vendor-ui-test.js'
 		const entryName = 'index-test.js'
+		const profilesName = 'ProfilesPage-test.js'
 		const objectsName = 'ObjectsPage-test.js'
 		const uploadsName = 'UploadsPage-test.js'
-		const uploadsExperienceName = 'UploadsPageExperience-test.js'
 		const transfersName = 'Transfers-test.js'
 
 		const vendorContent = Array.from({ length: 120 }, (_, index) => `export const vendor_${index} = "vendor-${index}";`).join('\n')
 		const entryContent = Array.from({ length: 80 }, (_, index) => `export const entry_${index} = "entry-${index}";`).join('\n')
+		const profilesContent = Array.from({ length: 130 }, (_, index) => `export const profile_${index} = "profile-${index}";`).join('\n')
 		const objectsContent = Array.from({ length: 220 }, (_, index) => `export const object_${index} = "object-${index}";`).join('\n')
 		const uploadsContent = Array.from({ length: 140 }, (_, index) => `export const upload_${index} = "upload-${index}";`).join('\n')
-		const uploadsExperienceContent = Array.from({ length: 150 }, (_, index) => `export const uploadExperience_${index} = "upload-experience-${index}";`).join('\n')
 		const transfersContent = Array.from({ length: 160 }, (_, index) => `export const transfer_${index} = "transfer-${index}";`).join('\n')
 
 		writeFile(path.join(assetsDir, vendorName), vendorContent)
 		writeFile(path.join(assetsDir, entryName), entryContent)
+		writeFile(path.join(assetsDir, profilesName), profilesContent)
 		writeFile(path.join(assetsDir, objectsName), objectsContent)
 		writeFile(path.join(assetsDir, uploadsName), uploadsContent)
-		writeFile(path.join(assetsDir, uploadsExperienceName), uploadsExperienceContent)
 		writeFile(path.join(assetsDir, transfersName), transfersContent)
 
 		writeFile(
@@ -74,13 +74,19 @@ test('bundle report emits action hints for tight route review candidates', () =>
 					tree: {
 						children: [
 							{ name: `assets/${vendorName}` },
+							{ name: `assets/${profilesName}` },
 							{ name: `assets/${objectsName}` },
 							{ name: `assets/${uploadsName}` },
-							{ name: `assets/${uploadsExperienceName}` },
 							{ name: `assets/${transfersName}` },
 						],
 					},
 					nodeMetas: {
+						profilesModule: {
+							id: '/src/pages/ProfilesPage.tsx',
+							moduleParts: {
+								[`assets/${profilesName}`]: 'profilesModulePart',
+							},
+						},
 						objectModule: {
 							id: '/src/pages/objects/heavy-object-module.ts',
 							moduleParts: {
@@ -93,12 +99,6 @@ test('bundle report emits action hints for tight route review candidates', () =>
 								[`assets/${uploadsName}`]: 'uploadsModulePart',
 							},
 						},
-						uploadsExperienceModule: {
-							id: '/src/pages/uploads/UploadsPageExperience.tsx',
-							moduleParts: {
-								[`assets/${uploadsExperienceName}`]: 'uploadsExperienceModulePart',
-							},
-						},
 						transfersModule: {
 							id: '/src/components/transfers/useTransfersUploadRuntime.ts',
 							moduleParts: {
@@ -107,6 +107,10 @@ test('bundle report emits action hints for tight route review candidates', () =>
 						},
 					},
 					nodeParts: {
+						profilesModulePart: {
+							gzipLength: 1536,
+							renderedLength: 6144,
+						},
 						objectModulePart: {
 							gzipLength: 2048,
 							renderedLength: 8192,
@@ -114,10 +118,6 @@ test('bundle report emits action hints for tight route review candidates', () =>
 						uploadsModulePart: {
 							gzipLength: 1024,
 							renderedLength: 4096,
-						},
-						uploadsExperienceModulePart: {
-							gzipLength: 1536,
-							renderedLength: 6144,
 						},
 						transfersModulePart: {
 							gzipLength: 3072,
@@ -132,9 +132,9 @@ test('bundle report emits action hints for tight route review candidates', () =>
 
 		const vendorGzip = gzipBytes(vendorContent)
 		const entryGzip = gzipBytes(entryContent)
+		const profilesGzip = gzipBytes(profilesContent)
 		const objectsGzip = gzipBytes(objectsContent)
 		const uploadsGzip = gzipBytes(uploadsContent)
-		const uploadsExperienceGzip = gzipBytes(uploadsExperienceContent)
 		const transfersGzip = gzipBytes(transfersContent)
 
 		generateBundleReport({
@@ -144,9 +144,9 @@ test('bundle report emits action hints for tight route review candidates', () =>
 				...process.env,
 				BUNDLE_BUDGET_VENDOR_UI_GZIP_KB: kbForHeadroom(vendorGzip, 4096),
 				BUNDLE_BUDGET_INITIAL_JS_GZIP_KB: kbForHeadroom(vendorGzip + entryGzip, 4096),
+				BUNDLE_BUDGET_PROFILES_PAGE_GZIP_KB: kbForHeadroom(profilesGzip, 4096),
 				BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB: kbForHeadroom(objectsGzip, 64),
 				BUNDLE_BUDGET_UPLOADS_PAGE_GZIP_KB: kbForHeadroom(uploadsGzip, 64),
-				BUNDLE_BUDGET_UPLOADS_EXPERIENCE_GZIP_KB: kbForHeadroom(uploadsExperienceGzip, 4096),
 				BUNDLE_BUDGET_TRANSFERS_GZIP_KB: kbForHeadroom(transfersGzip, 4096),
 			},
 		})
@@ -156,14 +156,14 @@ test('bundle report emits action hints for tight route review candidates', () =>
 		assert.match(report, /Budget review candidates:/)
 		assert.match(report, /ObjectsPage gzip budget: only .* review whether this budget is too tight or the chunk should shrink\./)
 		assert.match(report, /UploadsPage gzip budget: only .* review whether this budget is too tight or the chunk should shrink\./)
-		assert.match(report, /Budget action hints:\n- ObjectsPage gzip budget: rebaseline if stable\n- UploadsPage gzip budget: shrink first\n/)
+		assert.match(report, /Budget action hints:\n- ObjectsPage gzip budget: shrink first\n- UploadsPage gzip budget: shrink first\n/)
+		assert.match(report, /ProfilesPage: `assets\/ProfilesPage-test\.js`/)
+		assert.match(report, /### Top Modules in ProfilesPage \(module gzip, approx\)/)
+		assert.match(report, /\/src\/pages\/ProfilesPage\.tsx/)
 		assert.match(report, /### Top Modules in ObjectsPage \(module gzip, approx\)/)
 		assert.match(report, /\/src\/pages\/objects\/heavy-object-module\.ts/)
 		assert.match(report, /### Top Modules in UploadsPage \(module gzip, approx\)/)
 		assert.match(report, /\/src\/pages\/uploads\/UploadsPageShell\.tsx/)
-		assert.match(report, /UploadsPageExperience: `assets\/UploadsPageExperience-test\.js`/)
-		assert.match(report, /### Top Modules in UploadsPageExperience \(module gzip, approx\)/)
-		assert.match(report, /\/src\/pages\/uploads\/UploadsPageExperience\.tsx/)
 		assert.match(report, /### Top Modules in Transfers \(module gzip, approx\)/)
 		assert.match(report, /\/src\/components\/transfers\/useTransfersUploadRuntime\.ts/)
 		assert.match(report, /No budget warnings\./)
@@ -230,9 +230,10 @@ test('bundle report warns and fails when budgeted chunks disappear', () => {
 		assert.equal(process.exitCode, 1)
 		assert.match(report, /Budget warnings:/)
 		assert.match(report, /vendor-ui chunk not found for vendor-ui gzip budget/)
+		assert.match(report, /ProfilesPage chunk not found for ProfilesPage gzip budget/)
 		assert.match(report, /ObjectsPage chunk not found for ObjectsPage gzip budget/)
-		assert.match(report, /UploadsPageExperience chunk not found for UploadsPageExperience gzip budget/)
 		assert.match(report, /Transfers chunk not found for Transfers gzip budget/)
+		assert.match(report, /ProfilesPage gzip budget: budget .* \| actual n\/a/)
 		assert.match(report, /ObjectsPage gzip budget: budget .* \| actual n\/a/)
 		assert.ok(result.warnings.some((warning) => warning.includes('lazy boundary was renamed, merged, or accidentally removed')))
 	} finally {

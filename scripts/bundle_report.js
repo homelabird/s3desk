@@ -249,12 +249,12 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 
 	const vendorUi = findChunk(stats, 'vendor-ui-')
 	const vendorUiName = vendorUi ? vendorUi.name : null
+	const profilesPage = findChunk(stats, 'ProfilesPage-')
+	const profilesPageName = profilesPage ? profilesPage.name : null
 	const objectsPage = findChunk(stats, 'ObjectsPage-')
 	const objectsPageName = objectsPage ? objectsPage.name : null
 	const uploadsPage = findChunk(stats, 'UploadsPage-')
 	const uploadsPageName = uploadsPage ? uploadsPage.name : null
-	const uploadsExperience = findChunk(stats, 'UploadsPageExperience-')
-	const uploadsExperienceName = uploadsExperience ? uploadsExperience.name : null
 	const transfers = findChunk(stats, 'Transfers-')
 	const transfersName = transfers ? transfers.name : null
 
@@ -266,9 +266,9 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 	const initialTotalGzip = initialSizes.reduce((acc, f) => acc + f.gzip, 0)
 
 	const vendorUiSizes = vendorUiName ? readAssetBytes(distDir, vendorUiName) : null
+	const profilesPageSizes = profilesPageName ? readAssetBytes(distDir, profilesPageName) : null
 	const objectsPageSizes = objectsPageName ? readAssetBytes(distDir, objectsPageName) : null
 	const uploadsPageSizes = uploadsPageName ? readAssetBytes(distDir, uploadsPageName) : null
-	const uploadsExperienceSizes = uploadsExperienceName ? readAssetBytes(distDir, uploadsExperienceName) : null
 	const transfersSizes = transfersName ? readAssetBytes(distDir, transfersName) : null
 
 	const warnings = []
@@ -281,6 +281,12 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 	if (initialTotalGzip > budgets.initialJsGzip.bytes) {
 		warnings.push(`initial JS gzip ${formatKB(initialTotalGzip)} > budget ${formatKB(budgets.initialJsGzip.bytes)}`)
 	}
+	if (!profilesPageSizes) {
+		warnMissingBudgetChunk(warnings, 'ProfilesPage', budgets.profilesPageGzip)
+	}
+	if (profilesPageSizes && profilesPageSizes.gzip > budgets.profilesPageGzip.bytes) {
+		warnings.push(`ProfilesPage gzip ${formatKB(profilesPageSizes.gzip)} > budget ${formatKB(budgets.profilesPageGzip.bytes)}`)
+	}
 	if (!objectsPageSizes) {
 		warnMissingBudgetChunk(warnings, 'ObjectsPage', budgets.objectsPageGzip)
 	}
@@ -292,12 +298,6 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 	}
 	if (uploadsPageSizes && uploadsPageSizes.gzip > budgets.uploadsPageGzip.bytes) {
 		warnings.push(`UploadsPage gzip ${formatKB(uploadsPageSizes.gzip)} > budget ${formatKB(budgets.uploadsPageGzip.bytes)}`)
-	}
-	if (!uploadsExperienceSizes && budgets.uploadsExperienceGzip) {
-		warnMissingBudgetChunk(warnings, 'UploadsPageExperience', budgets.uploadsExperienceGzip)
-	}
-	if (uploadsExperienceSizes && budgets.uploadsExperienceGzip && uploadsExperienceSizes.gzip > budgets.uploadsExperienceGzip.bytes) {
-		warnings.push(`UploadsPageExperience gzip ${formatKB(uploadsExperienceSizes.gzip)} > budget ${formatKB(budgets.uploadsExperienceGzip.bytes)}`)
 	}
 	if (!transfersSizes) {
 		warnMissingBudgetChunk(warnings, 'Transfers', budgets.transfersGzip)
@@ -312,16 +312,16 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 
 	const topInitialPackages = topPackagesForChunks(stats, initialChunks, 20)
 	const topVendorUiModules = vendorUiName ? topModulesForChunk(stats, vendorUiName, 25) : []
+	const topProfilesPageModules = profilesPageName ? topModulesForChunk(stats, profilesPageName, 15) : []
 	const topObjectsPageModules = objectsPageName ? topModulesForChunk(stats, objectsPageName, 25) : []
 	const topUploadsPageModules = uploadsPageName ? topModulesForChunk(stats, uploadsPageName, 15) : []
-	const topUploadsExperienceModules = uploadsExperienceName ? topModulesForChunk(stats, uploadsExperienceName, 15) : []
 	const topTransfersModules = transfersName ? topModulesForChunk(stats, transfersName, 15) : []
 	const measuredGzipBytes = {
 		vendorUiGzip: vendorUiSizes?.gzip,
 		initialJsGzip: initialTotalGzip,
+		profilesPageGzip: profilesPageSizes?.gzip,
 		objectsPageGzip: objectsPageSizes?.gzip,
 		uploadsPageGzip: uploadsPageSizes?.gzip,
-		uploadsExperienceGzip: uploadsExperienceSizes?.gzip,
 		transfersGzip: transfersSizes?.gzip,
 	}
 	const { measurements: budgetMeasurements, reviewCandidates, actionHints } = buildBudgetMeasurements(budgets, measuredGzipBytes)
@@ -336,6 +336,11 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 	} else {
 		md += `- vendor-ui: (not found)\n`
 	}
+	if (profilesPageName && profilesPageSizes) {
+		md += `- ProfilesPage: \`${profilesPageName}\` (${formatKB(profilesPageSizes.raw)} raw, ${formatKB(profilesPageSizes.gzip)} gzip)\n`
+	} else {
+		md += `- ProfilesPage: (not found)\n`
+	}
 	if (objectsPageName && objectsPageSizes) {
 		md += `- ObjectsPage: \`${objectsPageName}\` (${formatKB(objectsPageSizes.raw)} raw, ${formatKB(objectsPageSizes.gzip)} gzip)\n`
 	} else {
@@ -345,9 +350,6 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 		md += `- UploadsPage: \`${uploadsPageName}\` (${formatKB(uploadsPageSizes.raw)} raw, ${formatKB(uploadsPageSizes.gzip)} gzip)\n`
 	} else {
 		md += `- UploadsPage: (not found)\n`
-	}
-	if (uploadsExperienceName && uploadsExperienceSizes) {
-		md += `- UploadsPageExperience: \`${uploadsExperienceName}\` (${formatKB(uploadsExperienceSizes.raw)} raw, ${formatKB(uploadsExperienceSizes.gzip)} gzip)\n`
 	}
 	if (transfersName && transfersSizes) {
 		md += `- Transfers: \`${transfersName}\` (${formatKB(transfersSizes.raw)} raw, ${formatKB(transfersSizes.gzip)} gzip)\n`
@@ -381,6 +383,17 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 		md += `\n`
 	}
 
+	md += `### Top Modules in ProfilesPage (module gzip, approx)\n\n`
+	if (!profilesPageName) {
+		md += `ProfilesPage chunk not found in stats tree.\n\n`
+	} else {
+		md += `| gzip | rendered | module |\n|---:|---:|---|\n`
+		for (const row of topProfilesPageModules) {
+			md += `| ${formatKB(row.gzip)} | ${formatKB(row.rendered)} | \`${row.id}\` |\n`
+		}
+		md += `\n`
+	}
+
 	md += `### Top Modules in ObjectsPage (module gzip, approx)\n\n`
 	if (!objectsPageName) {
 		md += `ObjectsPage chunk not found in stats tree.\n\n`
@@ -398,17 +411,6 @@ function generateBundleReport({ statsPath, outPath, fail = false, env = process.
 	} else {
 		md += `| gzip | rendered | module |\n|---:|---:|---|\n`
 		for (const row of topUploadsPageModules) {
-			md += `| ${formatKB(row.gzip)} | ${formatKB(row.rendered)} | \`${row.id}\` |\n`
-		}
-		md += `\n`
-	}
-
-	md += `### Top Modules in UploadsPageExperience (module gzip, approx)\n\n`
-	if (!uploadsExperienceName) {
-		md += `UploadsPageExperience chunk not found in stats tree.\n\n`
-	} else {
-		md += `| gzip | rendered | module |\n|---:|---:|---|\n`
-		for (const row of topUploadsExperienceModules) {
 			md += `| ${formatKB(row.gzip)} | ${formatKB(row.rendered)} | \`${row.id}\` |\n`
 		}
 		md += `\n`
