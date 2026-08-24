@@ -1,5 +1,44 @@
 # 남은 구조 부채 우선순위
 
+## 2026-08-25 최적화 goal 종료 인계
+
+이번 goal에서는 Jobs 조회 batch, 요청 취소, 전송 상태 저장 coalescing, 큰 payload 렌더·검색 및 즐겨찾기 정렬 비용까지 구현하고 로컬 전체 게이트로 마감한다. 아래 항목은 이번 범위에서 더 구현하지 않고 후속 작업으로 남긴다.
+
+### 후속 P1. 재개 업로드의 파일별 chunk-status 요청 batch화
+
+- `frontend/src/components/transfers/uploadRuntimeResume.ts`는 재개 대상 파일마다 `getUploadChunks`를 직렬 호출한다. 폴더 선택 상한은 5,000개라서 최악에는 재개 한 번에 5,000 HTTP 요청이 발생한다.
+- 각 요청은 backend profile/session 조회를 다시 거치고 direct/presigned mode에서는 multipart metadata와 provider part 목록도 파일별로 다시 읽는다.
+- 후속 구현은 기존 단일-file API 호환성을 유지하면서 bounded batch 계약을 추가하고, profile/session 조회와 취소 신호를 batch 단위로 공유한다. 새 cache나 worker는 추가하지 않는다.
+- 완료 증거는 다중 파일 fixture에서 요청 수가 파일 수가 아니라 batch 수에 비례하고, staging·multipart 결과와 404 fallback 및 사용자 취소가 기존 동작을 보존하는 backend/frontend 회귀 테스트다.
+
+대상:
+
+- `frontend/src/components/transfers/uploadRuntimeResume.ts`
+- `frontend/src/api/domains/uploads.ts`
+- `backend/internal/api/handlers_uploads_multipart_http.go`
+- `openapi.yml`
+
+### 후속 P1. profile benchmark 중단과 원격 임시 객체 정리 보장
+
+- `BenchmarkConnectivity`는 upload 성공 뒤 download가 실패하거나 요청 context가 취소되면 `deletefile` 구간 전에 반환할 수 있어 `.s3desk-benchmark-*` 객체를 남길 수 있다.
+- frontend의 profile test/benchmark 요청도 현재 scope 변경이나 대체 요청 시 실제 HTTP/provider 작업을 중단하지 않는다.
+- 후속 구현 순서는 backend가 upload 성공 직후 bounded cleanup을 예약해 request 취소와 무관하게 삭제를 시도하도록 한 뒤, frontend에 `AbortSignal`을 연결하는 것이다. 별도 background queue는 필요하지 않다.
+- 완료 증거는 download 실패·request 취소 뒤에도 live cleanup context로 `deletefile`이 호출되는 jobs 테스트와, token 변경·대체 요청에서 이전 signal이 abort되는 frontend 테스트다.
+
+대상:
+
+- `backend/internal/jobs/manager_connectivity.go`
+- `frontend/src/pages/profiles/useProfilesPageMutations.ts`
+- `frontend/src/api/domains/profiles.ts`
+
+### 외부 증거로만 닫을 항목
+
+- provider별 실제 업로드 재개와 benchmark cleanup
+- reverse proxy·protected deployment·portable backup candidate evidence
+- 실제 대규모 목록의 RUM/p95, 물리 기기 및 보조기술 검증
+
+로컬 fixture, MSW, emulator, Chromium 결과는 위 항목의 완료 증거로 승격하지 않는다. 실제 cardinality나 SLO가 기준을 넘기 전에는 FTS/`pg_trgm`, 장기 cache, HA worker, 새 디자인 시스템을 추가하지 않는다.
+
 ## P1
 
 ### 1. 남은 page-level orchestration 축소
@@ -91,5 +130,6 @@
 ## 결론
 
 - 현재 목록의 P1 구조 정리와 대부분의 P2/P3 경계 작업은 owner-local 기준으로 마무리됐습니다.
-- 남은 로컬 작업은 새 public/download surface가 생길 때 동일한 security matrix를 추가하는 정도이며, 현재 release 판단의 주된 미충족 항목은 provider·reverse-proxy·portable-backup의 candidate-bound evidence입니다.
+- 현재 확인된 후속 로컬 최적화는 재개 chunk-status batch와 benchmark cleanup/cancellation 두 건이며, 구현 조건과 완료 증거는 위 종료 인계에 고정했습니다.
+- 현재 release 판단의 주된 미충족 항목은 provider·reverse-proxy·portable-backup의 candidate-bound evidence입니다.
 - local unit/integration/browser fixture green은 실제 provider, protected deployment, reverse-proxy, backup 운영 증거를 대체하지 않습니다.
