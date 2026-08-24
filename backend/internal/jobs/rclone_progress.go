@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"time"
 
 	"s3desk/internal/models"
 	"s3desk/internal/redact"
@@ -19,10 +18,11 @@ import (
 const logReadBufferSize = 64 * 1024
 
 type runRcloneOptions struct {
-	TrackProgress bool
-	DryRun        bool
-	ProgressMode  rcloneProgressMode
-	ExtraFiles    []*os.File
+	TrackProgress   bool
+	DryRun          bool
+	ProgressMode    rcloneProgressMode
+	InitialProgress *models.JobProgress
+	ExtraFiles      []*os.File
 }
 
 type rcloneStatsUpdate struct {
@@ -41,27 +41,19 @@ const (
 	rcloneProgressDeletes
 )
 
-func (m *Manager) trackRcloneProgress(ctx context.Context, jobID string, progress <-chan rcloneStatsUpdate) {
+func (m *Manager) trackRcloneProgress(ctx context.Context, jobID string, initial *models.JobProgress, progress <-chan rcloneStatsUpdate) {
 	var (
 		objectsTotal *int64
 		bytesTotal   *int64
 	)
-
-	loadTotals := func() {
-		updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, job, ok, err := m.store.GetJobByID(updateCtx, jobID)
-		cancel()
-		if err != nil || !ok || job.Progress == nil {
-			return
+	if initial != nil {
+		if initial.ObjectsTotal != nil {
+			objectsTotal = initial.ObjectsTotal
 		}
-		if job.Progress.ObjectsTotal != nil {
-			objectsTotal = job.Progress.ObjectsTotal
-		}
-		if job.Progress.BytesTotal != nil {
-			bytesTotal = job.Progress.BytesTotal
+		if initial.BytesTotal != nil {
+			bytesTotal = initial.BytesTotal
 		}
 	}
-	loadTotals()
 
 	for {
 		select {
@@ -81,9 +73,6 @@ func (m *Manager) trackRcloneProgress(ctx context.Context, jobID string, progres
 
 			od := update.ObjectsDone
 			bd := update.BytesDone
-			if objectsTotal == nil || bytesTotal == nil {
-				loadTotals()
-			}
 
 			jp := &models.JobProgress{
 				ObjectsDone:  &od,

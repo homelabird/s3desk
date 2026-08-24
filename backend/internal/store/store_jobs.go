@@ -77,6 +77,7 @@ type JobFilter struct {
 	Status    *models.JobStatus
 	Type      *string
 	ErrorCode *string
+	IDs       []string
 	Limit     int
 	Cursor    *string
 }
@@ -103,6 +104,9 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 	query := s.db.WithContext(ctx).
 		Model(&jobRow{}).
 		Where("profile_id = ?", profileID)
+	if len(f.IDs) > 0 {
+		query = query.Where("id IN ?", f.IDs)
+	}
 	if f.Status != nil {
 		query = query.Where("status = ?", string(*f.Status))
 	}
@@ -246,11 +250,11 @@ func (s *Store) ListActiveJobIDsByProfile(ctx context.Context, profileID string)
 	return queued, running, nil
 }
 
-func (s *Store) JobExists(ctx context.Context, jobID string) (bool, error) {
+func (s *Store) JobExists(ctx context.Context, profileID, jobID string) (bool, error) {
 	var count int64
 	if err := s.db.WithContext(ctx).
 		Model(&jobRow{}).
-		Where("id = ?", jobID).
+		Where("profile_id = ? AND id = ?", profileID, jobID).
 		Count(&count).Error; err != nil {
 		return false, err
 	}

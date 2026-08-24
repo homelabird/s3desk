@@ -94,6 +94,65 @@ func TestSummarizeObjectIndexReturnsNotFoundForUnindexedBucket(t *testing.T) {
 	}
 }
 
+func TestSummarizeObjectIndexUsesAggregateFirstQueries(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	indexedAt := "2026-03-07T12:00:00Z"
+	if err := st.UpsertObjectIndexBatch(ctx, profile.ID, "bucket-a", []ObjectIndexEntry{
+		{Key: "existing/b.txt", Size: 7},
+		{Key: "existing/a.txt", Size: 5},
+	}, indexedAt); err != nil {
+		t.Fatalf("seed object index: %v", err)
+	}
+
+	queries := 0
+	countQuery := func(*gorm.DB) { queries++ }
+	const queryCallback = "test_summarize_object_index_query_count"
+	if err := st.db.Callback().Query().Before("gorm:query").Register(queryCallback, countQuery); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	const rowCallback = "test_summarize_object_index_row_count"
+	if err := st.db.Callback().Row().Before("gorm:row").Register(rowCallback, countQuery); err != nil {
+		t.Fatalf("register row callback: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = st.db.Callback().Query().Remove(queryCallback)
+		_ = st.db.Callback().Row().Remove(rowCallback)
+	})
+
+	summary, err := st.SummarizeObjectIndex(ctx, profile.ID, SummarizeObjectIndexInput{
+		Bucket:      "bucket-a",
+		Prefix:      "existing/",
+		SampleLimit: 1,
+	})
+	if err != nil {
+		t.Fatalf("summarize matching prefix: %v", err)
+	}
+	if queries != 1 {
+		t.Fatalf("matching summary queries=%d, want 1", queries)
+	}
+	if summary.ObjectCount != 2 || summary.TotalBytes != 12 || fmt.Sprint(summary.SampleKeys) != "[existing/a.txt]" {
+		t.Fatalf("matching summary=%+v, want count=2 total=12 first sample existing/a.txt", summary)
+	}
+
+	queries = 0
+	summary, err = st.SummarizeObjectIndex(ctx, profile.ID, SummarizeObjectIndexInput{
+		Bucket:      "bucket-a",
+		Prefix:      "missing/",
+		SampleLimit: 1,
+	})
+	if err != nil {
+		t.Fatalf("summarize missing prefix: %v", err)
+	}
+	if queries != 2 {
+		t.Fatalf("missing-prefix summary queries=%d, want aggregate plus bucket summary", queries)
+	}
+	if summary.ObjectCount != 0 || summary.TotalBytes != 0 || len(summary.SampleKeys) != 0 || summary.IndexedAt == nil || *summary.IndexedAt != indexedAt {
+		t.Fatalf("missing-prefix summary=%+v, want empty summary at %s", summary, indexedAt)
+	}
+}
+
 func TestFinalizeObjectIndexReplacementIsAtomicForReaders(t *testing.T) {
 	sqlitePath := filepath.Join(t.TempDir(), "s3desk.db")
 	writer := newTestStoreAt(t, sqlitePath)

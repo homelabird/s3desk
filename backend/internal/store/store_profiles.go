@@ -340,17 +340,38 @@ func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profil
 	return p, true, nil
 }
 
-func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models.ProfileSecrets, bool, error) {
-	var row profileRow
+func (s *Store) ProfileExists(ctx context.Context, profileID string) (bool, error) {
+	var count int64
 	if err := s.db.WithContext(ctx).
-		Select("id", "name", "provider", "config_json", "secrets_json", "endpoint", "public_endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "access_key_id", "secret_access_key", "session_token").
+		Model(&profileRow{}).
 		Where("id = ?", profileID).
-		Take(&row).Error; err != nil {
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+type profileSecretsJoinedRow struct {
+	Profile          profileRow `gorm:"embedded"`
+	TLSSchemaVersion *int       `gorm:"column:tls_schema_version"`
+	TLSOptionsEnc    *string    `gorm:"column:tls_options_enc"`
+	TLSUpdatedAt     *string    `gorm:"column:tls_updated_at"`
+}
+
+func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models.ProfileSecrets, bool, error) {
+	var joined profileSecretsJoinedRow
+	if err := s.db.WithContext(ctx).
+		Table("profiles").
+		Select("profiles.*, profile_connection_options.schema_version AS tls_schema_version, profile_connection_options.options_enc AS tls_options_enc, profile_connection_options.updated_at AS tls_updated_at").
+		Joins("LEFT JOIN profile_connection_options ON profile_connection_options.profile_id = profiles.id").
+		Where("profiles.id = ?", profileID).
+		Take(&joined).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.ProfileSecrets{}, false, nil
 		}
 		return models.ProfileSecrets{}, false, err
 	}
+	row := joined.Profile
 
 	provider := normalizeProfileProvider(models.ProfileProvider(row.Provider))
 	profile := models.ProfileSecrets{
@@ -481,13 +502,21 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 		return models.ProfileSecrets{}, false, errors.New("unsupported provider")
 	}
 
-	tlsCfg, updatedAt, found, err := s.GetProfileTLSConfig(ctx, profileID)
-	if err != nil {
-		return models.ProfileSecrets{}, false, err
-	}
-	if found {
+	if joined.TLSSchemaVersion != nil || joined.TLSOptionsEnc != nil || joined.TLSUpdatedAt != nil {
+		if joined.TLSSchemaVersion == nil || joined.TLSOptionsEnc == nil || joined.TLSUpdatedAt == nil {
+			return models.ProfileSecrets{}, false, errors.New("invalid tls options row")
+		}
+		tlsCfg, err := s.decodeProfileTLSConfig(profileConnectionOptionsRow{
+			ProfileID:     profileID,
+			SchemaVersion: *joined.TLSSchemaVersion,
+			OptionsEnc:    *joined.TLSOptionsEnc,
+			UpdatedAt:     *joined.TLSUpdatedAt,
+		})
+		if err != nil {
+			return models.ProfileSecrets{}, false, err
+		}
 		profile.TLSConfig = &tlsCfg
-		profile.TLSConfigUpdatedAt = updatedAt
+		profile.TLSConfigUpdatedAt = *joined.TLSUpdatedAt
 	}
 	return profile, true, nil
 }

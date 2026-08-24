@@ -106,6 +106,48 @@ func TestListJobsFiltersAndCursor(t *testing.T) {
 	}
 }
 
+func TestListJobsFiltersRequestedIDsWithinProfile(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	otherProfile := createTestProfile(t, st)
+	ctx := context.Background()
+
+	requested, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{"key": "requested"}})
+	if err != nil {
+		t.Fatalf("create requested job: %v", err)
+	}
+	unrequested, err := st.CreateJob(ctx, profile.ID, CreateJobInput{Type: "test", Payload: map[string]any{"key": "unrequested"}})
+	if err != nil {
+		t.Fatalf("create unrequested job: %v", err)
+	}
+	other, err := st.CreateJob(ctx, otherProfile.ID, CreateJobInput{Type: "test", Payload: map[string]any{"key": "other"}})
+	if err != nil {
+		t.Fatalf("create other-profile job: %v", err)
+	}
+
+	listed, err := st.ListJobs(ctx, profile.ID, JobFilter{
+		IDs:   []string{requested.ID, other.ID},
+		Limit: 2,
+	})
+	if err != nil {
+		t.Fatalf("list requested jobs: %v", err)
+	}
+	if len(listed.Items) != 1 || listed.Items[0].ID != requested.ID {
+		t.Fatalf("listed IDs=%v, want only %q (not %q or %q)", jobIDs(listed.Items), requested.ID, unrequested.ID, other.ID)
+	}
+	if listed.NextCursor != nil {
+		t.Fatalf("NextCursor=%v, want nil", listed.NextCursor)
+	}
+}
+
+func jobIDs(jobs []models.Job) []string {
+	ids := make([]string, 0, len(jobs))
+	for _, job := range jobs {
+		ids = append(ids, job.ID)
+	}
+	return ids
+}
+
 func TestCreateJobPersistsInitialCompletionState(t *testing.T) {
 	st := newTestStore(t)
 	profile := createTestProfile(t, st)
@@ -154,8 +196,8 @@ func TestListJobsFailsOnCorruptedPayload(t *testing.T) {
 
 	ctx := context.Background()
 	if err := st.db.Exec(
-		"INSERT INTO jobs (id, profile_id, type, status, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		"CORRUPT01", profile.ID, "test", "queued", "not-valid-json", time.Now().UTC().Format(time.RFC3339Nano),
+		"INSERT INTO jobs (id, profile_id, type, status, payload_json, progress_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"CORRUPT01", profile.ID, "test", "queued", "not-valid-json", "also-not-valid-json", time.Now().UTC().Format(time.RFC3339Nano),
 	).Error; err != nil {
 		t.Fatalf("insert corrupted row: %v", err)
 	}
@@ -163,6 +205,33 @@ func TestListJobsFailsOnCorruptedPayload(t *testing.T) {
 	_, err := st.ListJobs(ctx, profile.ID, JobFilter{Limit: 10})
 	if err == nil || !strings.Contains(err.Error(), `decode job "CORRUPT01"`) {
 		t.Fatalf("expected contextual decode error, got %v", err)
+	}
+}
+
+func TestJobExistsScopesProfileWithoutDecodingPayload(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	otherProfile := createTestProfile(t, st)
+	ctx := context.Background()
+
+	if err := st.db.Exec(
+		"INSERT INTO jobs (id, profile_id, type, status, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"CORRUPT01", profile.ID, "test", "queued", "not-valid-json", time.Now().UTC().Format(time.RFC3339Nano),
+	).Error; err != nil {
+		t.Fatalf("insert corrupted row: %v", err)
+	}
+
+	exists, err := st.JobExists(ctx, profile.ID, "CORRUPT01")
+	if err != nil || !exists {
+		t.Fatalf("own profile JobExists() = (%v, %v), want (true, nil)", exists, err)
+	}
+	exists, err = st.JobExists(ctx, otherProfile.ID, "CORRUPT01")
+	if err != nil || exists {
+		t.Fatalf("other profile JobExists() = (%v, %v), want (false, nil)", exists, err)
+	}
+	exists, err = st.JobExists(ctx, profile.ID, "missing")
+	if err != nil || exists {
+		t.Fatalf("missing JobExists() = (%v, %v), want (false, nil)", exists, err)
 	}
 }
 

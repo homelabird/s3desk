@@ -64,7 +64,7 @@ func (m *Manager) runTransferSyncStagingToS3(ctx context.Context, profileID, job
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	if totals, err := computeLocalTotals(preflightCtx, src, nil, stagingUploadCommitExcludes); err == nil {
-		m.trySetJobTotals(jobID, totals.Objects, totals.Bytes)
+		opts.InitialProgress = m.trySetJobTotals(jobID, totals.Objects, totals.Bytes)
 	}
 	cancel()
 	err = m.runRcloneSyncWithOptions(ctx, profileID, jobID, src, dst, false, nil, stagingUploadCommitExcludes, opts)
@@ -122,12 +122,13 @@ func (m *Manager) runTransferSyncLocalToS3(ctx context.Context, profileID, jobID
 		return err
 	}
 
+	var initialProgress *models.JobProgress
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	if totals, err := computeLocalTotals(preflightCtx, src, include, exclude); err == nil {
-		m.trySetJobTotals(jobID, totals.Objects, totals.Bytes)
+		initialProgress = m.trySetJobTotals(jobID, totals.Objects, totals.Bytes)
 	}
 	cancel()
-	opts := runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers}
+	opts := runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers, InitialProgress: initialProgress}
 	pinnedSrc, err := m.pinLocalRcloneDir(src)
 	if err != nil {
 		return err
@@ -188,7 +189,7 @@ func (m *Manager) runTransferSyncS3ToLocal(ctx context.Context, profileID, jobID
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude, preserveLeadingSlash)
+	opts.InitialProgress = m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
 	src := rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)
@@ -240,7 +241,7 @@ func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID 
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobObjectsTotalFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude, preserveLeadingSlash)
+	initialProgress := m.trySetJobObjectsTotalFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
 	cmd := "delete"
@@ -267,7 +268,7 @@ func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID 
 	}
 	args = append(args, target)
 
-	if err := m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressDeletes}); err != nil {
+	if err := m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressDeletes, InitialProgress: initialProgress}); err != nil {
 		return err
 	}
 
@@ -306,10 +307,10 @@ func (m *Manager) runTransferCopyObject(ctx context.Context, profileID, jobID st
 		return errors.New("source and destination must be different")
 	}
 
-	m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey, preserveLeadingSlash)
+	initialProgress := m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey, preserveLeadingSlash)
 
 	args := []string{"copyto", rcloneRemoteObject(srcBucket, srcKey, preserveLeadingSlash), rcloneRemoteObject(dstBucket, dstKey, preserveLeadingSlash)}
-	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers, InitialProgress: initialProgress})
 }
 
 func (m *Manager) runTransferMoveObject(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
@@ -338,10 +339,10 @@ func (m *Manager) runTransferMoveObject(ctx context.Context, profileID, jobID st
 		return errors.New("source and destination must be different")
 	}
 
-	m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey, preserveLeadingSlash)
+	initialProgress := m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey, preserveLeadingSlash)
 
 	args := []string{"moveto", rcloneRemoteObject(srcBucket, srcKey, preserveLeadingSlash), rcloneRemoteObject(dstBucket, dstKey, preserveLeadingSlash)}
-	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers, InitialProgress: initialProgress})
 }
 
 func (m *Manager) runTransferCopyBatch(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
@@ -431,6 +432,8 @@ func (m *Manager) runTransferMoveBatch(ctx context.Context, profileID, jobID str
 }
 
 func (m *Manager) runTransferBatch(ctx context.Context, profileID, jobID, srcBucket, dstBucket string, pairs []s3KeyPair, op string, dryRun bool, preserveLeadingSlash bool) error {
+	objectsTotal := int64(len(pairs))
+	var objectsDone int64
 	for _, pair := range pairs {
 		if pair.SrcKey == "" || pair.DstKey == "" {
 			continue
@@ -443,7 +446,13 @@ func (m *Manager) runTransferBatch(ctx context.Context, profileID, jobID, srcBuc
 		if err := m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: false, DryRun: dryRun, ProgressMode: rcloneProgressTransfers}); err != nil {
 			return err
 		}
-		m.incrementJobObjectsDone(jobID, 1)
+		objectsDone++
+		if err := m.persistAndPublishRunningProgress(jobID, &models.JobProgress{
+			ObjectsDone:  int64Ptr(objectsDone),
+			ObjectsTotal: int64Ptr(objectsTotal),
+		}); err != nil {
+			m.logProgressPersistenceError(jobID, err)
+		}
 	}
 	return nil
 }
@@ -495,7 +504,7 @@ func (m *Manager) runTransferCopyPrefix(ctx context.Context, profileID, jobID st
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude, preserveLeadingSlash)
+	initialProgress := m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
 	src := rcloneRemoteDir(srcBucket, srcPrefix, preserveLeadingSlash)
@@ -516,7 +525,7 @@ func (m *Manager) runTransferCopyPrefix(ctx context.Context, profileID, jobID st
 	}
 	args = append(args, src, dst)
 
-	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers, InitialProgress: initialProgress})
 }
 
 func (m *Manager) runTransferMovePrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
@@ -566,7 +575,7 @@ func (m *Manager) runTransferMovePrefix(ctx context.Context, profileID, jobID st
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude, preserveLeadingSlash)
+	initialProgress := m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
 	src := rcloneRemoteDir(srcBucket, srcPrefix, preserveLeadingSlash)
@@ -587,7 +596,7 @@ func (m *Manager) runTransferMovePrefix(ctx context.Context, profileID, jobID st
 	}
 	args = append(args, src, dst)
 
-	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers, InitialProgress: initialProgress})
 }
 
 func (m *Manager) runRcloneSyncWithOptions(ctx context.Context, profileID, jobID, src, dst string, deleteExtraneous bool, include, exclude []string, opts runRcloneOptions) error {

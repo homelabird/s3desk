@@ -9,12 +9,14 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"gorm.io/gorm"
+
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
 
 func TestRunTransferDeletePrefixDeletesMarkerWhenPrefixIsEmpty(t *testing.T) {
-	manager, st, _, _, _, _ := newManagerConsistencyFixture(t)
+	manager, st, _, gormDB, _, _ := newManagerConsistencyFixture(t)
 
 	var (
 		listCalls   atomic.Int32
@@ -69,9 +71,22 @@ func TestRunTransferDeletePrefixDeletesMarkerWhenPrefixIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create job: %v", err)
 	}
+	jobQueries := 0
+	const queryCallback = "test_run_delete_prefix_job_query_count"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(queryCallback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "jobs" {
+			jobQueries++
+		}
+	}); err != nil {
+		t.Fatalf("register job query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = gormDB.Callback().Query().Remove(queryCallback) })
 
 	if err := manager.runJob(context.Background(), job.ID); err != nil {
 		t.Fatalf("run job: %v", err)
+	}
+	if jobQueries != 2 {
+		t.Fatalf("job queries=%d, want 2 for load and finalization", jobQueries)
 	}
 
 	if listCalls.Load() == 0 {

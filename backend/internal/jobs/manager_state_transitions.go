@@ -26,7 +26,8 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 		for _, stored := range runningJobs {
 			profileID, job, id := stored.ProfileID, stored.Job, stored.Job.ID
 			finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
-			if err := m.finalizeJob(id, models.JobStatusFailed, &finishedAt, &msg, &code); err != nil {
+			jp, err := m.finalizeJob(id, models.JobStatusFailed, &finishedAt, &msg, &code)
+			if err != nil {
 				if errors.Is(err, ErrJobStatusConflict) {
 					continue
 				}
@@ -34,7 +35,7 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 			}
 
 			payload := map[string]any{"status": models.JobStatusFailed, "error": msg, "errorCode": code}
-			if jp := m.loadJobProgress(id); jp != nil {
+			if jp != nil {
 				payload["progress"] = jp
 			}
 			m.hub.Publish(ws.Event{Type: "job.completed", JobID: id, Payload: payload})

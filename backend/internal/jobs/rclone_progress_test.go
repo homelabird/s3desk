@@ -2,10 +2,75 @@ package jobs
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"gorm.io/gorm"
+
+	"s3desk/internal/models"
+	"s3desk/internal/store"
 )
+
+func TestTrackRcloneProgressUsesProvidedTotalsWithoutJobQueries(t *testing.T) {
+	manager, st, _, gormDB, profile, _ := newManagerConsistencyFixture(t)
+
+	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	initialDone := int64(0)
+	initialTotal := int64(3)
+	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
+		Type:      JobTypeS3DeleteObjects,
+		Status:    models.JobStatusRunning,
+		StartedAt: &startedAt,
+		Payload:   map[string]any{"bucket": "test-bucket", "keys": []string{"a", "b", "c"}},
+		Progress: &models.JobProgress{
+			ObjectsDone:  &initialDone,
+			ObjectsTotal: &initialTotal,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	jobQueries := 0
+	const callbackName = "test_rclone_progress_job_query_count"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "jobs" {
+			jobQueries++
+		}
+	}); err != nil {
+		t.Fatalf("register job query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = gormDB.Callback().Query().Remove(callbackName) })
+
+	progress := make(chan rcloneStatsUpdate, 3)
+	progress <- rcloneStatsUpdate{ObjectsDone: 1}
+	progress <- rcloneStatsUpdate{ObjectsDone: 2}
+	progress <- rcloneStatsUpdate{ObjectsDone: 3}
+	close(progress)
+
+	manager.trackRcloneProgress(context.Background(), job.ID, &models.JobProgress{ObjectsTotal: &initialTotal}, progress)
+
+	if jobQueries != 0 {
+		t.Fatalf("job queries=%d, want no progress totals lookup", jobQueries)
+	}
+
+	updated, ok, err := st.GetJob(context.Background(), profile.ID, job.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !ok || updated.Progress == nil {
+		t.Fatalf("expected persisted job progress")
+	}
+	if updated.Progress.ObjectsDone == nil || *updated.Progress.ObjectsDone != 3 {
+		t.Fatalf("objects done=%v, want 3", updated.Progress.ObjectsDone)
+	}
+	if updated.Progress.ObjectsTotal == nil || *updated.Progress.ObjectsTotal != initialTotal {
+		t.Fatalf("objects total=%v, want %d", updated.Progress.ObjectsTotal, initialTotal)
+	}
+}
 
 func TestReadLogLineTruncatesOverlongLine(t *testing.T) {
 	reader := bufio.NewReader(strings.NewReader("hello world\n"))

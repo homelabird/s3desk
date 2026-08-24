@@ -27,25 +27,33 @@ func (s *Store) GetProfileTLSConfig(ctx context.Context, profileID string) (mode
 		}
 		return models.ProfileTLSConfig{}, "", false, err
 	}
+	cfg, err := s.decodeProfileTLSConfig(row)
+	if err != nil {
+		return models.ProfileTLSConfig{}, "", false, err
+	}
+	return cfg, row.UpdatedAt, true, nil
+}
+
+func (s *Store) decodeProfileTLSConfig(row profileConnectionOptionsRow) (models.ProfileTLSConfig, error) {
 	if row.SchemaVersion != profileTLSConfigSchemaVersion {
-		return models.ProfileTLSConfig{}, "", false, fmt.Errorf("unsupported tls options schema version: %d", row.SchemaVersion)
+		return models.ProfileTLSConfig{}, fmt.Errorf("unsupported tls options schema version: %d", row.SchemaVersion)
 	}
 	if s.crypto == nil {
-		return models.ProfileTLSConfig{}, "", false, ErrEncryptionKeyRequired
+		return models.ProfileTLSConfig{}, ErrEncryptionKeyRequired
 	}
 	raw, err := s.crypto.decryptString(row.OptionsEnc)
 	if err != nil {
-		return models.ProfileTLSConfig{}, "", false, err
+		return models.ProfileTLSConfig{}, err
 	}
 
 	var cfg models.ProfileTLSConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return models.ProfileTLSConfig{}, "", false, err
+		return models.ProfileTLSConfig{}, err
 	}
 	if strings.TrimSpace(string(cfg.Mode)) == "" {
 		cfg.Mode = models.ProfileTLSModeDisabled
 	}
-	return cfg, row.UpdatedAt, true, nil
+	return cfg, nil
 }
 
 func (s *Store) UpsertProfileTLSConfig(ctx context.Context, profileID string, cfg models.ProfileTLSConfig) (models.ProfileTLSConfig, string, error) {

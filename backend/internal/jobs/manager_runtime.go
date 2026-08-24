@@ -75,7 +75,8 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	duration := time.Since(start)
 	if errors.Is(ctx.Err(), context.Canceled) {
 		code := ErrorCodeCanceled
-		if err := m.finalizeJob(jobID, models.JobStatusCanceled, &finishedAt, nil, &code); err != nil {
+		jp, err := m.finalizeJob(jobID, models.JobStatusCanceled, &finishedAt, nil, &code)
+		if err != nil {
 			if errors.Is(err, ErrJobStatusConflict) {
 				logging.InfoFields("skipped canceled job finalization after status change", map[string]any{
 					"event":      "job.finalize_skipped",
@@ -99,7 +100,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		}
 
 		payload := map[string]any{"status": models.JobStatusCanceled, "errorCode": code}
-		if jp := m.loadJobProgress(jobID); jp != nil {
+		if jp != nil {
 			payload["progress"] = jp
 			if m.metrics != nil {
 				if dir := transferDirectionForJobType(job.Type); dir != "" && jp.BytesDone != nil && *jp.BytesDone > 0 {
@@ -144,7 +145,8 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 				}
 			}
 		}
-		if err := m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg, &code); err != nil {
+		jp, err := m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg, &code)
+		if err != nil {
 			if errors.Is(err, ErrJobStatusConflict) {
 				logging.InfoFields("skipped failed job finalization after status change", map[string]any{
 					"event":      "job.finalize_skipped",
@@ -167,7 +169,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 			return errors.Join(runErr, err)
 		}
 		payload := map[string]any{"status": models.JobStatusFailed, "error": msg, "errorCode": code}
-		if jp := m.loadJobProgress(jobID); jp != nil {
+		if jp != nil {
 			payload["progress"] = jp
 			if m.metrics != nil {
 				if dir := transferDirectionForJobType(job.Type); dir != "" && jp.BytesDone != nil && *jp.BytesDone > 0 {
@@ -196,7 +198,8 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return runErr
 	}
 
-	if err := m.finalizeJob(jobID, models.JobStatusSucceeded, &finishedAt, nil, nil); err != nil {
+	jp, err := m.finalizeJob(jobID, models.JobStatusSucceeded, &finishedAt, nil, nil)
+	if err != nil {
 		if errors.Is(err, ErrJobStatusConflict) {
 			logging.InfoFields("skipped succeeded job finalization after status change", map[string]any{
 				"event":      "job.finalize_skipped",
@@ -218,7 +221,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return err
 	}
 	payload := map[string]any{"status": models.JobStatusSucceeded}
-	if jp := m.loadJobProgress(jobID); jp != nil {
+	if jp != nil {
 		payload["progress"] = jp
 		if m.metrics != nil {
 			if dir := transferDirectionForJobType(job.Type); dir != "" && jp.BytesDone != nil && *jp.BytesDone > 0 {
@@ -242,23 +245,19 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	return nil
 }
 
-func (m *Manager) loadJobProgress(jobID string) *models.JobProgress {
+func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt *string, errMsg *string, errorCode *string) (*models.JobProgress, error) {
 	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, job, ok, err := m.store.GetJobByID(updateCtx, jobID)
 	cancel()
-	if err != nil || !ok {
-		return nil
+	if err != nil {
+		return nil, err
 	}
-	return job.Progress
-}
-
-func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt *string, errMsg *string, errorCode *string) error {
-	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_, job, ok, err := m.store.GetJobByID(updateCtx, jobID)
-	cancel()
+	if !ok {
+		return nil, ErrJobStatusConflict
+	}
 
 	var jp *models.JobProgress
-	if err == nil && ok && job.Progress != nil {
+	if job.Progress != nil {
 		copied := *job.Progress
 		copied.ObjectsPerSecond = nil
 		copied.SpeedBps = nil
@@ -270,12 +269,12 @@ func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt 
 	updated, err := m.store.UpdateJobStatusIfCurrent(updateCtx, jobID, []models.JobStatus{models.JobStatusRunning}, status, nil, finishedAt, jp, errMsg, errorCode)
 	cancel()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !updated {
-		return ErrJobStatusConflict
+		return nil, ErrJobStatusConflict
 	}
-	return nil
+	return jp, nil
 }
 
 func (m *Manager) persistAndPublishRunningProgress(jobID string, jp *models.JobProgress) error {

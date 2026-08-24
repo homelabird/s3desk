@@ -75,7 +75,7 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 		progressDone = make(chan struct{})
 		go func() {
 			defer close(progressDone)
-			m.trackRcloneProgress(ctx, jobID, progressCh)
+			m.trackRcloneProgress(ctx, jobID, opts.InitialProgress, progressCh)
 		}()
 	}
 

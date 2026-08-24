@@ -303,40 +303,57 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 		base = base.Where(`object_key LIKE ? ESCAPE '\'`, escapeLike(in.Prefix)+"%")
 	}
 
-	var probe objectIndexRow
-	if err := bucketBase.
-		Select("object_key").
-		Limit(1).
-		Take(&probe).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.ObjectIndexSummaryResponse{}, ErrObjectIndexNotFound
-		}
-		return models.ObjectIndexSummaryResponse{}, err
-	}
-
 	var summary struct {
 		Count     int64   `gorm:"column:count"`
 		Total     int64   `gorm:"column:total_bytes"`
 		IndexedAt *string `gorm:"column:indexed_at"`
+		FirstKey  *string `gorm:"column:first_key"`
 	}
 	if err := base.
-		Select("COUNT(*) AS count, COALESCE(SUM(size), 0) AS total_bytes, MAX(indexed_at) AS indexed_at").
+		Select("COUNT(*) AS count, COALESCE(SUM(size), 0) AS total_bytes, MAX(indexed_at) AS indexed_at, MIN(object_key) AS first_key").
 		Scan(&summary).Error; err != nil {
 		return models.ObjectIndexSummaryResponse{}, err
 	}
 
-	var sampleRows []objectIndexRow
-	if err := base.
-		Select("object_key").
-		Order("object_key ASC").
-		Limit(sampleLimit).
-		Find(&sampleRows).Error; err != nil {
-		return models.ObjectIndexSummaryResponse{}, err
+	indexedAt := summary.IndexedAt
+	if summary.Count == 0 || (in.Prefix != "" && (indexedAt == nil || strings.TrimSpace(*indexedAt) == "")) {
+		var bucketSummary struct {
+			Count     int64   `gorm:"column:count"`
+			IndexedAt *string `gorm:"column:indexed_at"`
+		}
+		if err := bucketBase.
+			Select("COUNT(*) AS count, MAX(indexed_at) AS indexed_at").
+			Scan(&bucketSummary).Error; err != nil {
+			return models.ObjectIndexSummaryResponse{}, err
+		}
+		if bucketSummary.Count == 0 {
+			return models.ObjectIndexSummaryResponse{}, ErrObjectIndexNotFound
+		}
+		if indexedAt == nil || strings.TrimSpace(*indexedAt) == "" {
+			indexedAt = bucketSummary.IndexedAt
+		}
 	}
-	sample := make([]string, 0, len(sampleRows))
-	for _, row := range sampleRows {
-		if row.ObjectKey != "" {
-			sample = append(sample, row.ObjectKey)
+
+	sample := make([]string, 0, sampleLimit)
+	if summary.Count > 0 {
+		if sampleLimit == 1 {
+			if summary.FirstKey != nil && *summary.FirstKey != "" {
+				sample = append(sample, *summary.FirstKey)
+			}
+		} else {
+			var sampleRows []objectIndexRow
+			if err := base.
+				Select("object_key").
+				Order("object_key ASC").
+				Limit(sampleLimit).
+				Find(&sampleRows).Error; err != nil {
+				return models.ObjectIndexSummaryResponse{}, err
+			}
+			for _, row := range sampleRows {
+				if row.ObjectKey != "" {
+					sample = append(sample, row.ObjectKey)
+				}
+			}
 		}
 	}
 
@@ -344,24 +361,11 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 		Bucket:      in.Bucket,
 		Prefix:      in.Prefix,
 		ObjectCount: summary.Count,
-		TotalBytes:  0,
+		TotalBytes:  summary.Total,
 		SampleKeys:  sample,
 	}
-	resp.TotalBytes = summary.Total
-	if summary.IndexedAt != nil && strings.TrimSpace(*summary.IndexedAt) != "" {
-		resp.IndexedAt = summary.IndexedAt
-	} else if in.Prefix != "" {
-		var bucketSummary struct {
-			IndexedAt *string `gorm:"column:indexed_at"`
-		}
-		if err := bucketBase.
-			Select("MAX(indexed_at) AS indexed_at").
-			Scan(&bucketSummary).Error; err != nil {
-			return models.ObjectIndexSummaryResponse{}, err
-		}
-		if bucketSummary.IndexedAt != nil && strings.TrimSpace(*bucketSummary.IndexedAt) != "" {
-			resp.IndexedAt = bucketSummary.IndexedAt
-		}
+	if indexedAt != nil && strings.TrimSpace(*indexedAt) != "" {
+		resp.IndexedAt = indexedAt
 	}
 	return resp, nil
 }

@@ -229,6 +229,73 @@ func TestRunJobReturnsErrorWhenFinalizeFailedAfterSuccess(t *testing.T) {
 	assertNoHubEventType(t, client, "job.completed")
 }
 
+func TestRunTransferCopyBatchProgressDoesNotReloadJobPerObject(t *testing.T) {
+	manager, st, _, gormDB, profile, _ := newManagerConsistencyFixture(t)
+
+	items := []any{
+		map[string]any{"srcKey": "a.txt", "dstKey": "copied/a.txt"},
+		map[string]any{"srcKey": "b.txt", "dstKey": "copied/b.txt"},
+		map[string]any{"srcKey": "c.txt", "dstKey": "copied/c.txt"},
+	}
+	payload := map[string]any{
+		"srcBucket": "source-bucket",
+		"dstBucket": "destination-bucket",
+		"items":     items,
+	}
+	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
+		Type:    JobTypeTransferCopyBatch,
+		Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := st.UpdateJobStatus(context.Background(), job.ID, models.JobStatusRunning, &startedAt, nil, nil, nil, nil); err != nil {
+		t.Fatalf("set job running: %v", err)
+	}
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("get profile secrets: ok=%v err=%v", ok, err)
+	}
+
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ TestRunRcloneAttemptOptions, _ func(level string, message string)) (string, error) {
+		if len(args) == 0 {
+			return "", unexpectedJobsProcessArgs(args)
+		}
+		return "", nil
+	})
+
+	jobQueries := 0
+	const queryCallback = "test_transfer_batch_progress_query_count"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(queryCallback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "jobs" {
+			jobQueries++
+		}
+	}); err != nil {
+		t.Fatalf("register job query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = gormDB.Callback().Query().Remove(queryCallback) })
+
+	ctx := withProfileSecrets(context.Background(), secrets)
+	if err := manager.runTransferCopyBatch(ctx, profile.ID, job.ID, payload, false); err != nil {
+		t.Fatalf("run transfer copy batch: %v", err)
+	}
+	if jobQueries != 0 {
+		t.Fatalf("job progress queries=%d, want 0", jobQueries)
+	}
+
+	updated, ok, err := st.GetJob(context.Background(), profile.ID, job.ID)
+	if err != nil || !ok {
+		t.Fatalf("get updated job: ok=%v err=%v", ok, err)
+	}
+	if updated.Progress == nil || updated.Progress.ObjectsDone == nil || *updated.Progress.ObjectsDone != int64(len(items)) {
+		t.Fatalf("objects done=%v, want %d", updated.Progress, len(items))
+	}
+	if updated.Progress.ObjectsTotal == nil || *updated.Progress.ObjectsTotal != int64(len(items)) {
+		t.Fatalf("objects total=%v, want %d", updated.Progress.ObjectsTotal, len(items))
+	}
+}
+
 func newManagerConsistencyFixture(t *testing.T) (*Manager, *store.Store, *ws.Hub, *gorm.DB, models.Profile, string) {
 	t.Helper()
 

@@ -2,9 +2,13 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 
 	"s3desk/internal/db"
 	"s3desk/internal/models"
@@ -92,9 +96,24 @@ func TestFinalizeJobStripsTransientProgressFields(t *testing.T) {
 		t.Fatalf("update job: %v", err)
 	}
 
+	jobQueries := 0
+	const queryCallback = "test_finalize_job_query_count"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(queryCallback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "jobs" {
+			jobQueries++
+		}
+	}); err != nil {
+		t.Fatalf("register job query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = gormDB.Callback().Query().Remove(queryCallback) })
+
 	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := manager.finalizeJob(job.ID, models.JobStatusSucceeded, &finishedAt, nil, nil); err != nil {
+	finalProgress, err := manager.finalizeJob(job.ID, models.JobStatusSucceeded, &finishedAt, nil, nil)
+	if err != nil {
 		t.Fatalf("finalize job: %v", err)
+	}
+	if jobQueries != 1 {
+		t.Fatalf("job queries=%d, want 1 per finalization", jobQueries)
 	}
 
 	updated, ok, err := st.GetJob(ctx, profile.ID, job.ID)
@@ -109,6 +128,9 @@ func TestFinalizeJobStripsTransientProgressFields(t *testing.T) {
 	}
 	if updated.Progress == nil {
 		t.Fatalf("expected progress")
+	}
+	if !reflect.DeepEqual(finalProgress, updated.Progress) {
+		t.Fatalf("returned progress=%+v, stored progress=%+v", finalProgress, updated.Progress)
 	}
 	if updated.Progress.SpeedBps != nil {
 		t.Fatalf("expected SpeedBps cleared, got %v", *updated.Progress.SpeedBps)
@@ -130,5 +152,41 @@ func TestFinalizeJobStripsTransientProgressFields(t *testing.T) {
 	}
 	if updated.Progress.BytesTotal == nil || *updated.Progress.BytesTotal != bytesTotal {
 		t.Fatalf("expected BytesTotal %d, got %v", bytesTotal, updated.Progress.BytesTotal)
+	}
+
+	readFailureJob, err := st.CreateJob(ctx, profile.ID, store.CreateJobInput{
+		Type:    JobTypeS3DeleteObjects,
+		Payload: map[string]any{"bucket": "test", "keys": []string{"b"}},
+	})
+	if err != nil {
+		t.Fatalf("create read-failure job: %v", err)
+	}
+	if err := st.UpdateJobStatus(ctx, readFailureJob.ID, models.JobStatusRunning, &startedAt, nil, progress, nil, nil); err != nil {
+		t.Fatalf("update read-failure job: %v", err)
+	}
+
+	injectedErr := errors.New("injected final progress read failure")
+	const readFailureCallback = "test_finalize_job_read_failure"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(readFailureCallback, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "jobs" {
+			_ = tx.AddError(injectedErr)
+		}
+	}); err != nil {
+		t.Fatalf("register read failure callback: %v", err)
+	}
+	_, err = manager.finalizeJob(readFailureJob.ID, models.JobStatusSucceeded, &finishedAt, nil, nil)
+	if removeErr := gormDB.Callback().Query().Remove(readFailureCallback); removeErr != nil {
+		t.Fatalf("remove read failure callback: %v", removeErr)
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Fatalf("finalize read error=%v, want %v", err, injectedErr)
+	}
+
+	unchanged, ok, err := st.GetJob(ctx, profile.ID, readFailureJob.ID)
+	if err != nil {
+		t.Fatalf("get read-failure job: %v", err)
+	}
+	if !ok || unchanged.Status != models.JobStatusRunning {
+		t.Fatalf("read-failure job status=%s, want %s", unchanged.Status, models.JobStatusRunning)
 	}
 }

@@ -112,6 +112,142 @@ func TestGetProfileSecretsFailsOnCorruptedSecretsJSON(t *testing.T) {
 	}
 }
 
+func TestProfileExistsDoesNotDecodeProfile(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	profile := createAzureProfile(t, st)
+
+	if err := st.db.WithContext(context.Background()).
+		Model(&profileRow{}).
+		Where("id = ?", profile.ID).
+		Updates(map[string]any{
+			"config_json":  "{broken-json",
+			"secrets_json": "{broken-json",
+		}).Error; err != nil {
+		t.Fatalf("corrupt profile payloads: %v", err)
+	}
+
+	queries := 0
+	const callback = "test:profile_exists_query_count"
+	if err := st.db.Callback().Query().Before("gorm:query").Register(callback, func(*gorm.DB) {
+		queries++
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = st.db.Callback().Query().Remove(callback) })
+
+	exists, err := st.ProfileExists(context.Background(), profile.ID)
+	if err != nil || !exists {
+		t.Fatalf("ProfileExists() existing = (%v, %v), want (true, nil)", exists, err)
+	}
+	if queries != 1 {
+		t.Fatalf("queries=%d, want 1 for existing profile", queries)
+	}
+
+	queries = 0
+	exists, err = st.ProfileExists(context.Background(), "missing-profile")
+	if err != nil || exists {
+		t.Fatalf("ProfileExists() missing = (%v, %v), want (false, nil)", exists, err)
+	}
+	if queries != 1 {
+		t.Fatalf("queries=%d, want 1 for missing profile", queries)
+	}
+}
+
+func TestGetProfileSecretsLoadsProfileAndTLSWithOneQuery(t *testing.T) {
+	st := newProfileTestStore(t, Options{EncryptionKey: testStoreEncryptionKey()})
+	profile := createAzureProfile(t, st)
+	tlsConfig := models.ProfileTLSConfig{
+		Mode:          models.ProfileTLSModeMTLS,
+		ClientCertPEM: "client-cert",
+		ClientKeyPEM:  "client-key",
+		CACertPEM:     "ca-cert",
+	}
+	_, tlsUpdatedAt, err := st.UpsertProfileTLSConfig(context.Background(), profile.ID, tlsConfig)
+	if err != nil {
+		t.Fatalf("upsert tls config: %v", err)
+	}
+
+	queries := 0
+	const callback = "test:get_profile_secrets_query_count"
+	if err := st.db.Callback().Query().Before("gorm:query").Register(callback, func(*gorm.DB) {
+		queries++
+	}); err != nil {
+		t.Fatalf("register query callback: %v", err)
+	}
+	t.Cleanup(func() { _ = st.db.Callback().Query().Remove(callback) })
+
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("GetProfileSecrets() ok=%v err=%v", ok, err)
+	}
+	if queries != 1 {
+		t.Fatalf("queries=%d, want 1 with TLS config", queries)
+	}
+	if secrets.AzureAccountKey != "Eby8vdM02xNo=" {
+		t.Fatalf("AzureAccountKey=%q, want decrypted key", secrets.AzureAccountKey)
+	}
+	if secrets.TLSConfig == nil || *secrets.TLSConfig != tlsConfig || secrets.TLSConfigUpdatedAt != tlsUpdatedAt {
+		t.Fatalf("TLS config=%+v updatedAt=%q, want %+v updatedAt=%q", secrets.TLSConfig, secrets.TLSConfigUpdatedAt, tlsConfig, tlsUpdatedAt)
+	}
+
+	if _, err := st.DeleteProfileTLSConfig(context.Background(), profile.ID); err != nil {
+		t.Fatalf("delete tls config: %v", err)
+	}
+	queries = 0
+	secrets, ok, err = st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil || !ok || secrets.TLSConfig != nil {
+		t.Fatalf("GetProfileSecrets() without TLS = (%+v, %v, %v)", secrets.TLSConfig, ok, err)
+	}
+	if queries != 1 {
+		t.Fatalf("queries=%d, want 1 without TLS config", queries)
+	}
+
+	queries = 0
+	_, ok, err = st.GetProfileSecrets(context.Background(), "missing-profile")
+	if err != nil || ok {
+		t.Fatalf("GetProfileSecrets() missing ok=%v err=%v", ok, err)
+	}
+	if queries != 1 {
+		t.Fatalf("queries=%d, want 1 for missing profile", queries)
+	}
+
+	if _, _, err := st.UpsertProfileTLSConfig(context.Background(), profile.ID, tlsConfig); err != nil {
+		t.Fatalf("restore tls config: %v", err)
+	}
+	if err := st.db.Model(&profileConnectionOptionsRow{}).
+		Where("profile_id = ?", profile.ID).
+		Update("schema_version", profileTLSConfigSchemaVersion+1).Error; err != nil {
+		t.Fatalf("set unsupported tls schema: %v", err)
+	}
+	queries = 0
+	if _, _, err := st.GetProfileSecrets(context.Background(), profile.ID); err == nil || !strings.Contains(err.Error(), "unsupported tls options schema version") {
+		t.Fatalf("unsupported TLS schema error=%v", err)
+	}
+	if queries != 1 {
+		t.Fatalf("queries=%d, want 1 for unsupported TLS schema", queries)
+	}
+
+	brokenOptions, err := st.crypto.encryptString("{broken-json")
+	if err != nil {
+		t.Fatalf("encrypt broken tls config: %v", err)
+	}
+	if err := st.db.Model(&profileConnectionOptionsRow{}).
+		Where("profile_id = ?", profile.ID).
+		Updates(map[string]any{
+			"schema_version": profileTLSConfigSchemaVersion,
+			"options_enc":    brokenOptions,
+		}).Error; err != nil {
+		t.Fatalf("set broken tls config: %v", err)
+	}
+	queries = 0
+	if _, _, err := st.GetProfileSecrets(context.Background(), profile.ID); err == nil {
+		t.Fatal("expected malformed TLS config error")
+	}
+	if queries != 1 {
+		t.Fatalf("queries=%d, want 1 for malformed TLS config", queries)
+	}
+}
+
 func TestDeleteProfileRejectsActiveJobs(t *testing.T) {
 	st := newProfileTestStore(t, Options{})
 	profile := createAzureProfile(t, st)
