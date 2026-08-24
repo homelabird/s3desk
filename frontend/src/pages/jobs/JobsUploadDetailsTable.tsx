@@ -88,7 +88,7 @@ export function JobsUploadDetailsTable({
 								<td className={styles.uploadTableCell}>
 									{jobStatus !== 'succeeded' ? (
 										<Typography.Text type="secondary">Pending</Typography.Text>
-									) : uploadHashesLoading ? (
+									) : item.etag === undefined && uploadHashesLoading ? (
 										<Typography.Text type="secondary">Loading…</Typography.Text>
 									) : item.etag ? (
 										<Typography.Text code>{item.etag}</Typography.Text>

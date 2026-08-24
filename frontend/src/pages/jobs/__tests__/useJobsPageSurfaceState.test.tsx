@@ -29,6 +29,43 @@ describe('useJobsPageSurfaceState', () => {
     })
   })
 
+  it('applies a routed delete prefill without closing it when route state clears', () => {
+    const { result, rerender } = renderHook(
+      ({ initialDeletePrefill }) =>
+        useJobsPageSurfaceState({
+          apiToken: 'token-a',
+          profileId: 'profile-1',
+          initialDeletePrefill,
+        }),
+      { initialProps: { initialDeletePrefill: null as null | { bucket: string; prefix: string; deleteAll: boolean } } },
+    )
+
+    let staleDeleteToken = 0
+    act(() => {
+      staleDeleteToken = result.current.beginDeleteRequest()
+    })
+    rerender({
+      initialDeletePrefill: {
+        bucket: 'bucket-b',
+        prefix: 'archive/',
+        deleteAll: false,
+      },
+    })
+
+    expect(result.current.createDeleteOpen).toBe(true)
+    expect(result.current.deleteJobPrefill).toEqual({
+      bucket: 'bucket-b',
+      prefix: 'archive/',
+      deleteAll: false,
+    })
+    expect(result.current.isCurrentDeleteRequest(staleDeleteToken)).toBe(false)
+
+    rerender({ initialDeletePrefill: null })
+
+    expect(result.current.createDeleteOpen).toBe(true)
+    expect(result.current.deleteJobPrefill?.bucket).toBe('bucket-b')
+  })
+
   it('closes transient overlays and invalidates the delete request when the scope changes', () => {
     const { result, rerender } = renderHook(
       (props: { apiToken: string; profileId: string | null }) =>

@@ -213,6 +213,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 	const logPollDelayRef = useRef<number>(1500)
 	const logPollFailuresRef = useRef<number>(0)
 	const logRequestTokenRef = useRef(0)
+	const logAbortControllerRef = useRef<AbortController | null>(null)
 	const visibleLogSearchCacheRef = useRef<JobsLogSearchCache | null>(null)
 	const [logPollFailures, setLogPollFailures] = useState(0)
 	const [logPollPaused, setLogPollPaused] = useState(false)
@@ -225,6 +226,8 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 	const logPollPauseAfter = 3
 	const invalidateLogRequests = useCallback(() => {
 		logRequestTokenRef.current += 1
+		logAbortControllerRef.current?.abort()
+		logAbortControllerRef.current = null
 	}, [])
 
 	const resetLogPolling = useCallback(() => {
@@ -240,9 +243,10 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 	}, [resetLogPolling])
 
 	const logsMutation = useMutation({
-		mutationFn: ({ jobId }: { jobId: string; requestToken: number }) => {
+		mutationFn: ({ jobId, controller }: { jobId: string; requestToken: number; controller: AbortController }) => {
 			if (!profileId) throw new Error('profile is required')
-			return api.jobs.getJobLogsTail(profileId, jobId, 256 * 1024)
+			controller.signal.throwIfAborted()
+			return api.jobs.getJobLogsTail(profileId, jobId, 256 * 1024, { signal: controller.signal })
 		},
 		onSuccess: ({ text, nextOffset }, { jobId, requestToken }) => {
 			if (requestToken !== logRequestTokenRef.current) return
@@ -253,41 +257,49 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 			logNextLineNumberRef.current[jobId] = getNextLineNumberAfterText(text)
 			setIsLogsLoading(false)
 		},
-		onError: (err, { requestToken }) => {
+		onError: (err, { requestToken, controller }) => {
 			if (requestToken !== logRequestTokenRef.current) return
+			if (controller.signal.aborted) return
 			setIsLogsLoading(false)
 			jobsFeedback.error(err)
 		},
+		onSettled: (_data, _error, { controller }) => {
+			if (logAbortControllerRef.current === controller) logAbortControllerRef.current = null
+		},
 	})
 
-	const refreshLogsForJob = useCallback(
+	const startLogsRequest = useCallback(
 		(jobId: string) => {
+			logAbortControllerRef.current?.abort()
+			const controller = new AbortController()
+			logAbortControllerRef.current = controller
 			const requestToken = logRequestTokenRef.current + 1
 			logRequestTokenRef.current = requestToken
 			setIsLogsLoading(true)
-			logsMutation.mutate({ jobId, requestToken })
+			logsMutation.mutate({ jobId, requestToken, controller })
 		},
 		[logsMutation],
 	)
 
+	const refreshLogsForJob = useCallback(
+		(jobId: string) => {
+			startLogsRequest(jobId)
+		},
+		[startLogsRequest],
+	)
+
 	const refreshActiveLogs = useCallback(() => {
 		if (!activeLogJobId) return
-		const requestToken = logRequestTokenRef.current + 1
-		logRequestTokenRef.current = requestToken
-		setIsLogsLoading(true)
-		logsMutation.mutate({ jobId: activeLogJobId, requestToken })
-	}, [activeLogJobId, logsMutation])
+		startLogsRequest(activeLogJobId)
+	}, [activeLogJobId, startLogsRequest])
 
 	const openLogsForJob = useCallback(
 		(jobId: string) => {
 			setActiveLogJobId(jobId)
 			setLogsOpen(true)
-			const requestToken = logRequestTokenRef.current + 1
-			logRequestTokenRef.current = requestToken
-			setIsLogsLoading(true)
-			logsMutation.mutate({ jobId, requestToken })
+			startLogsRequest(jobId)
 		},
-		[logsMutation],
+		[startLogsRequest],
 	)
 
 	const closeLogs = useCallback(() => {
@@ -330,6 +342,10 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 	)
 
 	useEffect(() => {
+		return () => invalidateLogRequests()
+	}, [invalidateLogRequests])
+
+	useEffect(() => {
 		if (lastScopeKeyRef.current === currentScopeKey) return
 		lastScopeKeyRef.current = currentScopeKey
 		invalidateLogRequests()
@@ -354,11 +370,13 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 	useEffect(() => {
 		if (!profileId) return
 		if (!logsOpen || !followLogs || !activeLogJobId) return
+		if (isLogsLoading) return
 		if (logOffsetsRef.current[activeLogJobId] === undefined) return
 		if (logPollPaused) return
 
 		const jobId = activeLogJobId
 		let stopped = false
+		const controller = new AbortController()
 		let timer: number | null = null
 
 		const scheduleNext = () => {
@@ -390,7 +408,9 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		const tick = async () => {
 			const offset = logOffsetsRef.current[jobId] ?? 0
 			try {
-				const { text, nextOffset } = await api.jobs.getJobLogsAfterOffset(profileId, jobId, offset, 128 * 1024)
+				const { text, nextOffset } = await api.jobs.getJobLogsAfterOffset(profileId, jobId, offset, 128 * 1024, {
+					signal: controller.signal,
+				})
 				if (stopped) return
 				const offsetReset = nextOffset < offset
 				if (nextOffset < offset) {
@@ -416,6 +436,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 					return next
 				})
 			} catch {
+				if (stopped || controller.signal.aborted) return
 				recordFailure()
 			} finally {
 				if (!stopped && !logPollPaused && logPollFailuresRef.current < logPollPauseAfter) {
@@ -427,6 +448,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		tick().catch(() => {})
 		return () => {
 			stopped = true
+			controller.abort()
 			if (timer) window.clearTimeout(timer)
 		}
 	}, [

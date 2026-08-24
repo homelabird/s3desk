@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { QueryClient } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
 
 import { queryKeys } from '../../../api/queryKeys'
 import { useJobsRealtimeEvents } from '../useJobsRealtimeEvents'
@@ -175,6 +175,7 @@ describe('useJobsRealtimeEvents', () => {
 
 		const detailCall = setQueryData.mock.calls[0]
 		expect(detailCall).toBeTruthy()
+		expect(detailCall?.[2]).toEqual({ updatedAt: 0 })
 		const [filters, updater] = detailCall as [
 			unknown[],
 			(old: {
@@ -202,6 +203,147 @@ describe('useJobsRealtimeEvents', () => {
 			errorCode: 'old_code',
 		})
 
+		unmount()
+	})
+
+	it('marks partial realtime list updates stale without clearing prior invalidation', async () => {
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+		const jobsQueryKey = queryKeys.jobs.list('profile-1', 'token', 'all', '', '')
+		const dataUpdatedAt = Date.now()
+		queryClient.setQueryData(
+			jobsQueryKey,
+			{
+				pages: [{ items: [{
+					id: 'job-1',
+					type: 'transfer_direct_upload',
+					status: 'running',
+					payload: { bucket: 'bucket-a' },
+					createdAt: '2026-08-24T00:00:00Z',
+				}] }],
+				pageParams: [undefined],
+			},
+			{ updatedAt: dataUpdatedAt },
+		)
+
+		const { unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitOpen()
+			ws.emitMessage(JSON.stringify({
+				type: 'job.progress',
+				seq: 1,
+				jobId: 'job-1',
+				payload: { status: 'running', progress: { bytesDone: 1, bytesTotal: 2 } },
+			}))
+		})
+
+		expect(queryClient.getQueryState(jobsQueryKey)?.dataUpdatedAt).toBe(0)
+		await queryClient.invalidateQueries({ queryKey: jobsQueryKey, exact: true, refetchType: 'none' })
+		act(() => {
+			ws.emitMessage(JSON.stringify({
+				type: 'job.progress',
+				seq: 2,
+				jobId: 'job-1',
+				payload: { status: 'running', progress: { bytesDone: 2, bytesTotal: 2 } },
+			}))
+		})
+		expect(queryClient.getQueryState(jobsQueryKey)?.isInvalidated).toBe(true)
+		unmount()
+	})
+
+	it.each(['failed', 'canceled'] as const)('reports %s terminal events to the completion owner', async (status) => {
+		const cachedJob = {
+			id: 'job-delete',
+			type: 's3_delete_objects',
+			status: 'running',
+			payload: { bucket: 'bucket-a', keys: ['logs/app.log'] },
+			createdAt: '2026-08-24T00:00:00Z',
+		}
+		const onJobCompleted = vi.fn()
+		const queryClient = {
+			getQueryData: vi.fn().mockReturnValue(cachedJob),
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+				onJobCompleted,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitOpen()
+			ws.emitMessage(JSON.stringify({
+				type: 'job.completed',
+				seq: 1,
+				jobId: cachedJob.id,
+				payload: { status, error: `${status} detail` },
+			}))
+		})
+
+		expect(onJobCompleted).toHaveBeenCalledWith(
+			{
+				job: { ...cachedJob, status, error: `${status} detail` },
+				jobId: cachedJob.id,
+				status,
+				error: `${status} detail`,
+				errorCode: undefined,
+			},
+		)
+		unmount()
+	})
+
+	it('reports terminal status and error when the completed job is not cached', async () => {
+		const onJobCompleted = vi.fn()
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+				onJobCompleted,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitOpen()
+			ws.emitMessage(JSON.stringify({
+				type: 'job.completed',
+				seq: 1,
+				jobId: 'job-cache-miss',
+				payload: { status: 'failed', error: 'failed detail', errorCode: 'provider_error' },
+			}))
+		})
+
+		expect(onJobCompleted).toHaveBeenCalledWith({
+			job: null,
+			jobId: 'job-cache-miss',
+			status: 'failed',
+			error: 'failed detail',
+			errorCode: 'provider_error',
+		})
 		unmount()
 	})
 
@@ -354,7 +496,7 @@ describe('useJobsRealtimeEvents', () => {
 		unmount()
 	})
 
-	it('invalidates jobs when sse reconnects after an error', async () => {
+	it('retries websocket and refreshes after an sse error', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const queryClient = {
 			invalidateQueries,
@@ -362,7 +504,7 @@ describe('useJobsRealtimeEvents', () => {
 			setQueryData: vi.fn(),
 		} as unknown as QueryClient
 
-		const { unmount } = renderHook(() =>
+		const { result, unmount } = renderHook(() =>
 			useJobsRealtimeEvents({
 				apiToken: 'token',
 				profileId: 'profile-1',
@@ -385,68 +527,69 @@ describe('useJobsRealtimeEvents', () => {
 
 		await act(async () => {
 			es.emitError()
+			es.emitOpen()
 			vi.runOnlyPendingTimers()
 			await Promise.resolve()
 			await Promise.resolve()
 		})
 
 		await flushRealtimeSetup()
-		const reconnectEs = MockEventSource.instances[1]
-		expect(reconnectEs?.url).toContain('/events')
-		expect(reconnectEs?.url).toContain('realtimeTicket=sse-ticket')
+		expect(result.current.eventsConnected).toBe(false)
+		const reconnectWs = MockWebSocket.instances[1]
+		expect(reconnectWs?.url).toContain('/ws')
+		expect(reconnectWs?.url).toContain('realtimeTicket=ws-ticket')
 
 		act(() => {
-			reconnectEs.emitOpen()
+			reconnectWs.emitOpen()
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
 		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false })
+		unmount()
+	})
+
+	it('keeps a healthy sse stream without periodic websocket probes', async () => {
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitClose()
+		})
+
+		await flushRealtimeSetup()
+		const es = MockEventSource.instances[0]
+		act(() => {
+			es.emitOpen()
+		})
+		const ticketRequests = fetchMock.mock.calls.length
+
+		await act(async () => {
+			vi.advanceTimersByTime(60_000)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
 		expect(MockWebSocket.instances).toHaveLength(1)
-
-		unmount()
-	})
-
-	it('does not start a duplicate sse reconnect after the stream reopens', async () => {
-		const queryClient = {
-			invalidateQueries: vi.fn().mockResolvedValue(undefined),
-			setQueriesData: vi.fn(),
-			setQueryData: vi.fn(),
-		} as unknown as QueryClient
-
-		const { unmount } = renderHook(() =>
-			useJobsRealtimeEvents({
-				apiToken: 'token',
-				profileId: 'profile-1',
-				queryClient,
-			}),
-		)
-
-		await flushRealtimeSetup()
-		const ws = MockWebSocket.instances[0]
-		act(() => {
-			ws.emitClose()
-		})
-
-		await flushRealtimeSetup()
-		const es = MockEventSource.instances[0]
-		act(() => {
-			es.emitOpen()
-		})
-
-		await act(async () => {
-			es.emitError()
-			es.emitOpen()
-			vi.advanceTimersByTime(1000)
-			await Promise.resolve()
-			await Promise.resolve()
-		})
-
 		expect(MockEventSource.instances).toHaveLength(1)
+		expect(fetchMock).toHaveBeenCalledTimes(ticketRequests)
 
 		unmount()
 	})
 
-	it('automatically reprobes websocket after falling back to sse', async () => {
+	it('retries websocket when sse setup fails', async () => {
 		const queryClient = {
 			invalidateQueries: vi.fn().mockResolvedValue(undefined),
 			setQueriesData: vi.fn(),
@@ -454,33 +597,60 @@ describe('useJobsRealtimeEvents', () => {
 		} as unknown as QueryClient
 
 		const { unmount } = renderHook(() =>
-			useJobsRealtimeEvents({
-				apiToken: 'token',
-				profileId: 'profile-1',
-				queryClient,
-			}),
+			useJobsRealtimeEvents({ apiToken: 'token', profileId: 'profile-1', queryClient }),
 		)
 
 		await flushRealtimeSetup()
-		const ws = MockWebSocket.instances[0]
-		act(() => {
-			ws.emitClose()
-		})
-
+		fetchMock.mockRejectedValueOnce(new Error('sse unavailable'))
+		act(() => MockWebSocket.instances[0].emitClose())
 		await flushRealtimeSetup()
-		const es = MockEventSource.instances[0]
-		act(() => {
-			es.emitOpen()
-		})
 
 		await act(async () => {
-			vi.advanceTimersByTime(15_000)
+			vi.advanceTimersByTime(1_000)
 			await Promise.resolve()
 			await Promise.resolve()
 		})
-
 		await flushRealtimeSetup()
 		expect(MockWebSocket.instances).toHaveLength(2)
+		expect(MockEventSource.instances).toHaveLength(0)
+
+		unmount()
+	})
+
+	it('ignores stale sse callbacks after websocket takeover', async () => {
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+		const { result, unmount } = renderHook(() =>
+			useJobsRealtimeEvents({ apiToken: 'token', profileId: 'profile-1', queryClient }),
+		)
+
+		await flushRealtimeSetup()
+		act(() => {
+			MockWebSocket.instances[0].emitOpen()
+			MockWebSocket.instances[0].emitClose()
+		})
+		await flushRealtimeSetup()
+		const staleEs = MockEventSource.instances[0]
+
+		await act(async () => {
+			vi.advanceTimersByTime(1_000)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		await flushRealtimeSetup()
+		act(() => MockWebSocket.instances[1].emitOpen())
+		const ticketRequests = fetchMock.mock.calls.length
+
+		act(() => {
+			staleEs.emitOpen()
+			staleEs.emitError()
+		})
+		expect(result.current.eventsConnected).toBe(true)
+		expect(result.current.eventsTransport).toBe('ws')
+		expect(fetchMock).toHaveBeenCalledTimes(ticketRequests)
 
 		unmount()
 	})

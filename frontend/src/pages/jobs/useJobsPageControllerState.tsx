@@ -136,6 +136,7 @@ export function useJobsPageControllerState(props: Props) {
         errorCodeFilterNormalized: filters.errorCodeFilterNormalized,
       },
       eventsConnected,
+      bucketsEnabled: createDeleteOpen,
     })
   const bucketLookupErrorDescription = bucketsQuery.isError ? formatErr(bucketsQuery.error) : null
 

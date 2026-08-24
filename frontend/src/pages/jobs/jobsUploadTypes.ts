@@ -2,6 +2,7 @@ export type JobsUploadDetailItem = {
 	path: string
 	key: string
 	size?: number
+	etag?: string
 }
 
 export type JobsUploadDetails = {
@@ -21,5 +22,5 @@ export type JobsUploadTableRow = {
 	key: string
 	path: string
 	size?: number
-	etag: string | null
+	etag?: string | null
 }

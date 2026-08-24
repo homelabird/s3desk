@@ -64,6 +64,13 @@ export function useJobsPageSurfaceState({
     setLogDrawerRequest((prev) => ({ jobId: null, nonce: prev.nonce }))
     setLogClearRequest((prev) => ({ jobIds: [], nonce: prev.nonce + 1 }))
   }, [currentScopeKey])
+
+  useEffect(() => {
+    if (!initialDeletePrefill) return
+    createDeleteRequestTokenRef.current += 1
+    setDeleteJobPrefill(initialDeletePrefill)
+    setCreateDeleteOpen(true)
+  }, [initialDeletePrefill])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const beginDeleteRequest = useCallback(() => {

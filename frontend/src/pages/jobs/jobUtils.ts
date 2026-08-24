@@ -1,6 +1,29 @@
-import type { InfiniteData } from '@tanstack/react-query'
+import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 
 import type { Job, JobsListResponse, JobStatus } from '../../api/types'
+
+export function findCachedListJob(
+	queryClient: QueryClient,
+	jobsQueryKey: readonly unknown[],
+	jobId: string,
+): { job: Job; dataUpdatedAt: number } | null {
+	if (typeof queryClient.getQueriesData !== 'function') return null
+
+	let match: { job: Job; dataUpdatedAt: number } | null = null
+	const cached = queryClient.getQueriesData<InfiniteData<JobsListResponse, string | undefined>>({
+		queryKey: jobsQueryKey,
+		exact: false,
+	})
+	for (const [queryKey, data] of cached) {
+		if (!data) continue
+		const job = data.pages.flatMap((page) => page.items).find((item) => item.id === jobId)
+		if (!job) continue
+		const state = queryClient.getQueryState(queryKey)
+		const dataUpdatedAt = data.pages.length > 1 || state?.isInvalidated ? 0 : (state?.dataUpdatedAt ?? 0)
+		if (!match || dataUpdatedAt > match.dataUpdatedAt) match = { job, dataUpdatedAt }
+	}
+	return match
+}
 
 export function statusColor(s: JobStatus): string {
 	switch (s) {

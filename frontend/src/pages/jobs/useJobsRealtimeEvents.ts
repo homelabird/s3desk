@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildApiHttpUrl, buildApiWsUrl } from '../../api/baseUrl'
 import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../../api/types'
-import { jobMatchesQueryKey, removeJob, updateJob } from './jobUtils'
+import { findCachedListJob, jobMatchesQueryKey, removeJob, updateJob } from './jobUtils'
 
 const eventsRetryThreshold = 3
 
@@ -13,7 +13,15 @@ type UseJobsRealtimeEventsArgs = {
 	profileId: string | null
 	queryClient: QueryClient
 	onJobsDeleted?: (jobIds: string[]) => void
-	onJobCompleted?: (job: Job | null, jobId: string) => void
+	onJobCompleted?: (completion: JobsRealtimeCompletion) => void
+}
+
+export type JobsRealtimeCompletion = {
+	job: Job | null
+	jobId: string
+	status: 'succeeded' | 'failed' | 'canceled'
+	error?: string | null
+	errorCode?: string | null
 }
 
 type EventsTransport = 'ws' | 'sse' | null
@@ -69,9 +77,7 @@ export function useJobsRealtimeEvents({
 		let stopped = false
 		let hadConnected = false
 		let shouldRefreshOnOpen = false
-		let currentTransport: EventsTransport = null
 		let reconnectTimer: number | null = null
-		let wsProbeTimer: number | null = null
 		let reconnectAttempt = 0
 		let connectNonce = 0
 		let wsUnavailable = false
@@ -87,11 +93,6 @@ export function useJobsRealtimeEvents({
 			}
 		}
 
-		const setTransport = (next: EventsTransport) => {
-			currentTransport = next
-			setEventsTransport(next)
-		}
-
 		const clearReconnectTimer = () => {
 			if (reconnectTimer) {
 				window.clearTimeout(reconnectTimer)
@@ -99,15 +100,11 @@ export function useJobsRealtimeEvents({
 			}
 		}
 
-		const clearWsProbeTimer = () => {
-			if (wsProbeTimer) {
-				window.clearTimeout(wsProbeTimer)
-				wsProbeTimer = null
-			}
-		}
-
 		const closeEventSource = () => {
 			if (!es) return
+			es.onopen = null
+			es.onerror = null
+			es.onmessage = null
 			try {
 				es.close()
 			} catch {
@@ -133,17 +130,8 @@ export function useJobsRealtimeEvents({
 			}, delay)
 		}
 
-		const scheduleWSProbe = () => {
-			if (stopped || wsProbeTimer) return
-			wsProbeTimer = window.setTimeout(() => {
-				wsProbeTimer = null
-				if (stopped) return
-				if (currentTransport !== 'ws') void connectWS()
-			}, 15_000)
-		}
-
 		const handleTransportOpen = (transport: Exclude<EventsTransport, null>) => {
-			setTransport(transport)
+			setEventsTransport(transport)
 			setEventsConnected(true)
 			setEventsRetryCount(0)
 			reconnectAttempt = 0
@@ -189,7 +177,12 @@ export function useJobsRealtimeEvents({
 					typeof msg.payload === 'object' &&
 					msg.payload !== null
 				) {
-					const payload = msg.payload as { status?: JobStatus; progress?: JobProgress; error?: string; errorCode?: string }
+					const payload = msg.payload as {
+						status?: JobStatus
+						progress?: JobProgress
+						error?: string | null
+						errorCode?: string | null
+					}
 					const applyJobPatch = (job: Job): Job => ({
 						...job,
 						status: payload.status ?? job.status,
@@ -202,11 +195,21 @@ export function useJobsRealtimeEvents({
 					queryClient.setQueryData(
 						queryKeys.jobs.detail(profileId, msg.jobId, apiToken),
 						(old: Job | undefined) => (old ? applyJobPatch(old) : old),
+						{ updatedAt: 0 },
 					)
 					if (msg.type === 'job.completed') {
 						queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(profileId, msg.jobId, apiToken), exact: true }).catch(() => {})
 						const completedJob = cachedJob ? applyJobPatch(cachedJob) : null
-						if (completedJob?.status === 'succeeded') onJobCompleted?.(completedJob, msg.jobId)
+						const status = completedJob?.status ?? payload.status
+						if (isTerminalJobStatus(status)) {
+							onJobCompleted?.({
+								job: completedJob,
+								jobId: msg.jobId,
+								status,
+								error: completedJob?.error ?? payload.error,
+								errorCode: completedJob?.errorCode ?? payload.errorCode,
+							})
+						}
 					}
 				}
 			} catch {
@@ -242,18 +245,18 @@ export function useJobsRealtimeEvents({
 				if (stopped || nonce !== connectNonce) return
 				es = new EventSource(buildSSEURL(ticket, lastSeqRef.current))
 			} catch {
+				wsUnavailable = false
 				scheduleReconnect()
 				return
 			}
 			es.onopen = () => {
 				handleTransportOpen('sse')
-				scheduleWSProbe()
 			}
 			es.onerror = () => {
 				markRefreshOnReconnect()
-				clearWsProbeTimer()
 				closeEventSource()
-				setTransport('sse')
+				wsUnavailable = false
+				setEventsTransport('sse')
 				setEventsConnected(false)
 				scheduleReconnect()
 			}
@@ -264,7 +267,6 @@ export function useJobsRealtimeEvents({
 			if (stopped) return
 			const nonce = ++connectNonce
 			clearReconnectTimer()
-			clearWsProbeTimer()
 			if (ws) {
 				try {
 					ws.close()
@@ -298,16 +300,8 @@ export function useJobsRealtimeEvents({
 				opened = true
 				window.clearTimeout(fallbackTimer)
 				handleTransportOpen('ws')
-				clearWsProbeTimer()
 				clearReconnectTimer()
-				if (es) {
-					try {
-						es.close()
-					} catch {
-						// ignore
-					}
-					es = null
-				}
+				closeEventSource()
 			}
 
 			const onDisconnect = () => {
@@ -318,7 +312,7 @@ export function useJobsRealtimeEvents({
 				const failedBeforeOpen = !opened
 				if (failedBeforeOpen) wsUnavailable = true
 				markRefreshOnReconnect()
-				setTransport(null)
+				setEventsTransport(null)
 				setEventsConnected(false)
 				void connectSSE()
 				if (!failedBeforeOpen) scheduleReconnect()
@@ -332,7 +326,6 @@ export function useJobsRealtimeEvents({
 		connectWS()
 			return () => {
 			stopped = true
-			clearWsProbeTimer()
 			clearReconnectTimer()
 			try {
 				ws?.close()
@@ -352,6 +345,10 @@ export function useJobsRealtimeEvents({
 	}
 }
 
+function isTerminalJobStatus(status: JobStatus | undefined): status is JobsRealtimeCompletion['status'] {
+	return status === 'succeeded' || status === 'failed' || status === 'canceled'
+}
+
 function findCachedJob(
 	queryClient: QueryClient,
 	jobsQueryKey: readonly unknown[],
@@ -363,18 +360,7 @@ function findCachedJob(
 		const detail = queryClient.getQueryData<Job>(queryKeys.jobs.detail(profileId, jobId, apiToken))
 		if (detail?.id === jobId) return detail
 	}
-	if (typeof queryClient.getQueriesData !== 'function') return null
-	const cached = queryClient.getQueriesData<InfiniteData<JobsListResponse, string | undefined>>({
-		queryKey: jobsQueryKey,
-		exact: false,
-	})
-	for (const [, data] of cached) {
-		for (const page of data?.pages ?? []) {
-			const job = page.items.find((item) => item.id === jobId)
-			if (job) return job
-		}
-	}
-	return null
+	return findCachedListJob(queryClient, jobsQueryKey, jobId)?.job ?? null
 }
 
 function patchJobListQueries(queryClient: QueryClient, jobsQueryKey: readonly unknown[], jobId: string, patch: (job: Job) => Job) {
@@ -391,12 +377,16 @@ function patchJobListQueries(queryClient: QueryClient, jobsQueryKey: readonly un
 		exact: false,
 	})
 	for (const [queryKey, data] of cached) {
-		queryClient.setQueryData(queryKey, (old: InfiniteData<JobsListResponse, string | undefined> | undefined) => {
-			const existing = data?.pages.flatMap((page) => page.items).find((job) => job.id === jobId)
-			if (!existing) return old
-			const next = patch(existing)
-			return jobMatchesQueryKey(next, queryKey) ? updateJob(old, jobId, () => next) : removeJob(old, jobId)
-		})
+		const existing = data?.pages.flatMap((page) => page.items).find((job) => job.id === jobId)
+		if (!existing || queryClient.getQueryState(queryKey)?.isInvalidated) continue
+		const next = patch(existing)
+		queryClient.setQueryData(
+			queryKey,
+			(old: InfiniteData<JobsListResponse, string | undefined> | undefined) => {
+				return jobMatchesQueryKey(next, queryKey) ? updateJob(old, jobId, () => next) : removeJob(old, jobId)
+			},
+			{ updatedAt: 0 },
+		)
 	}
 }
 

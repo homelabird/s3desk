@@ -25,6 +25,7 @@ const {
 }))
 
 const useJobsPageSurfaceStateMock = vi.fn()
+const useJobsPageQueriesMock = vi.fn()
 
 vi.mock('../useJobsPageSurfaceState', () => ({
   useJobsPageSurfaceState: (...args: unknown[]) => useJobsPageSurfaceStateMock(...args),
@@ -43,7 +44,10 @@ vi.mock('../useJobsPageEventActions', () => ({
 }))
 
 vi.mock('../useJobsPageQueries', () => ({
-  useJobsPageQueries: () => queriesRef.current,
+  useJobsPageQueries: (...args: unknown[]) => {
+    useJobsPageQueriesMock(...args)
+    return queriesRef.current
+  },
 }))
 
 vi.mock('../useJobsPageCreateFlows', () => ({
@@ -188,7 +192,7 @@ describe('useJobsPageControllerState', () => {
     }
     useJobsPageSurfaceStateMock.mockReturnValue(surfaceState)
 
-    const { result } = renderHook(() =>
+    const { rerender, result } = renderHook(() =>
       useJobsPageControllerState({
         api: {
           jobs: { createJob: vi.fn() },
@@ -228,6 +232,14 @@ describe('useJobsPageControllerState', () => {
       }),
     )
     expect(result.current.presentation.table.isCompact).toBe(true)
+    expect(useJobsPageQueriesMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ bucketsEnabled: false }),
+    )
+    surfaceState.createDeleteOpen = true
+    rerender()
+    expect(useJobsPageQueriesMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ bucketsEnabled: true }),
+    )
     result.current.onOpenDeleteJob()
     expect(surfaceState.openDeleteJobModal).toHaveBeenCalledTimes(1)
   })

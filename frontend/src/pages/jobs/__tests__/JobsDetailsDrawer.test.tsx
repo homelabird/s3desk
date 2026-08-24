@@ -242,4 +242,65 @@ describe('JobsDetailsDrawer', () => {
 		expect(screen.getByText('Mode')).toBeInTheDocument()
 		expect(screen.getAllByText(deleteSelectedObjectsLabel()).length).toBeGreaterThan(0)
 	})
+
+	it('defers payload serialization and reuses it for progress-only updates', () => {
+		let payloadReads = 0
+		const payload: Record<string, unknown> = { bucket: 'media' }
+		Object.defineProperty(payload, 'largeSelection', {
+			enumerable: true,
+			get: () => {
+				payloadReads += 1
+				return ['a.txt', 'b.txt']
+			},
+		})
+		const job: Job = { ...directUploadJob, payload }
+		const drawerProps = {
+			open: true,
+			onClose: vi.fn(),
+			drawerWidth: 720,
+			isOffline: false,
+			detailsJobId: job.id,
+			job,
+			isFetching: false,
+			isError: false,
+			error: null,
+			onRefresh: vi.fn(),
+			onDeleteJob: vi.fn(async () => {}),
+			deleteLoading: false,
+			onOpenLogs: vi.fn(),
+			uploadDetails: null,
+			uploadRootLabel: null,
+			uploadTablePageItems: [],
+			uploadTableDataLength: 0,
+			uploadTablePageSize: 20,
+			uploadTablePageSafe: 1,
+			uploadTableTotalPages: 1,
+			onUploadTablePrevPage: vi.fn(),
+			onUploadTableNextPage: vi.fn(),
+			uploadHashesLoading: false,
+			uploadHashFailures: 0,
+			borderColor: '#ddd',
+			backgroundColor: '#fff',
+			borderRadius: 12,
+		}
+		const view = render(<JobsDetailsDrawer {...drawerProps} />)
+
+		expect(payloadReads).toBe(0)
+
+		fireEvent.click(screen.getByText('Payload (JSON)'))
+
+		expect(payloadReads).toBe(1)
+
+		view.rerender(
+			<JobsDetailsDrawer
+				{...drawerProps}
+				job={{
+					...job,
+					progress: { ...job.progress, objectsDone: (job.progress?.objectsDone ?? 0) + 1 },
+				}}
+			/>,
+		)
+
+		expect(payloadReads).toBe(1)
+	})
 })

@@ -1,6 +1,6 @@
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Collapse, Descriptions, Space, Spin, Tag, Tooltip, Typography } from 'antd'
-import { useId, useLayoutEffect } from 'react'
+import { useId, useLayoutEffect, useMemo } from 'react'
 
 import type { Job } from '../../api/types'
 import { OverlaySheet } from '../../components/OverlaySheet'
@@ -206,6 +206,12 @@ function renderFieldValue(field: DetailField) {
 	if (field.tone === 'danger') return <Typography.Text type="danger" className={sharedStyles.detailValue}>{field.value}</Typography.Text>
 	if (field.tone === 'secondary') return <Typography.Text type="secondary" className={sharedStyles.detailValue}>{field.value}</Typography.Text>
 	return <Typography.Text className={sharedStyles.detailValue}>{field.value}</Typography.Text>
+}
+
+function JobPayloadJson({ payload }: { payload: Job['payload'] }) {
+	const serializedPayload = useMemo(() => JSON.stringify(payload, null, 2), [payload])
+
+	return <pre className={sharedStyles.payloadBlock}>{serializedPayload}</pre>
 }
 
 type Props = {
@@ -478,11 +484,7 @@ export function JobsDetailsDrawer(props: Props) {
 								{
 									key: 'payload',
 									label: 'Payload (JSON)',
-									children: (
-										<pre className={sharedStyles.payloadBlock}>
-											{JSON.stringify(props.job.payload, null, 2)}
-										</pre>
-									),
+									children: <JobPayloadJson payload={props.job.payload} />,
 								},
 							]}
 						/>

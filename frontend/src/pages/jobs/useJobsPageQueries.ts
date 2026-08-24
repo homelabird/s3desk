@@ -21,6 +21,7 @@ type UseJobsPageQueriesArgs = {
 	profileId: string | null
 	filters: JobsPageQueryFilters
 	eventsConnected: boolean
+	bucketsEnabled: boolean
 }
 
 export function useJobsPageQueries(props: UseJobsPageQueriesArgs) {
@@ -48,10 +49,12 @@ export function useJobsPageQueries(props: UseJobsPageQueriesArgs) {
 	const { selectedProfile, bucketCrudSupported, uploadSupported, uploadDisabledReason } = profileCapabilityContext
 	const bucketCapabilityResolved = !props.profileId || (profilesQuery.isSuccess && metaQuery.isSuccess)
 
+	const bucketsQueryEnabled = props.bucketsEnabled && !!props.profileId && bucketCapabilityResolved && bucketCrudSupported
+	const bucketsQueryKey = queryKeys.buckets.list(props.profileId, props.apiToken)
 	const bucketsQuery = useQuery({
-		queryKey: queryKeys.buckets.list(props.profileId, props.apiToken),
-		queryFn: () => props.api.buckets.listBuckets(props.profileId!),
-		enabled: !!props.profileId && bucketCapabilityResolved && bucketCrudSupported,
+		queryKey: bucketsQueryEnabled ? bucketsQueryKey : [...bucketsQueryKey, 'disabled'],
+		queryFn: ({ signal }) => props.api.buckets.listBuckets(props.profileId!, signal),
+		enabled: bucketsQueryEnabled,
 		retry: false,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
@@ -76,16 +79,19 @@ export function useJobsPageQueries(props: UseJobsPageQueriesArgs) {
 		),
 		enabled: !!props.profileId,
 		initialPageParam: undefined as string | undefined,
-		queryFn: ({ pageParam }) =>
+		queryFn: ({ pageParam, signal }) =>
 			props.api.jobs.listJobs(props.profileId!, {
 				limit: 50,
 				status: apiStatusFilter,
 				type: props.filters.typeFilterNormalized || undefined,
 				errorCode: props.filters.errorCodeFilterNormalized || undefined,
 				cursor: pageParam,
+				signal,
 			}),
 		getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-		refetchInterval: props.eventsConnected ? false : 5000,
+		// ponytail: slow multi-page polling; reconnect or manual refresh remains immediate.
+		refetchInterval: (query) =>
+			props.eventsConnected ? false : (query.state.data?.pages.length ?? 0) > 1 ? 30_000 : 5000,
 	})
 
 	const jobs = useMemo(

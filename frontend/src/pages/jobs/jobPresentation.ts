@@ -3,6 +3,9 @@ import { jobTypeLabel } from '../../lib/jobTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
 import { formatS3Destination, getBool, getNumber, getString, parentPrefixFromKey } from './jobUtils'
 
+// ponytail: API job payloads are immutable; replace payload objects if editing is introduced.
+const normalizedPayloadSearchText = new WeakMap<object, string>()
+
 export const compareText = (left?: string | null, right?: string | null) => (left ?? '').localeCompare(right ?? '')
 
 export const compareNumber = (left?: number | null, right?: number | null) => (left ?? 0) - (right ?? 0)
@@ -177,12 +180,16 @@ export function jobMatchesSearch(job: Job, query: string): boolean {
 		job.errorCode ?? '',
 		job.error ?? '',
 		jobSummary(job) ?? '',
-		JSON.stringify(job.payload ?? {}),
 	]
 		.join('\n')
 		.toLowerCase()
+	let payloadText = normalizedPayloadSearchText.get(job.payload)
+	if (payloadText === undefined) {
+		payloadText = (JSON.stringify(job.payload ?? {}) ?? '').toLowerCase()
+		normalizedPayloadSearchText.set(job.payload, payloadText)
+	}
 
-	return haystack.includes(normalizedQuery)
+	return haystack.includes(normalizedQuery) || payloadText.includes(normalizedQuery)
 }
 
 export function formatProgress(p?: JobProgress | null): string {

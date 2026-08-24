@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
-import { getBool, getNumber, getString, joinKeyWithPrefix } from './jobUtils'
+import { findCachedListJob, getBool, getNumber, getString, joinKeyWithPrefix } from './jobUtils'
 import type { JobsUploadDetailItem, JobsUploadDetails, JobsUploadTableRow } from './jobsUploadTypes'
 
 type UseJobsUploadDetailsArgs = {
@@ -32,10 +32,20 @@ export function useJobsUploadDetails({
 	detailsOpen,
 	uploadTablePageSize = 20,
 }: UseJobsUploadDetailsArgs) {
+	const queryClient = useQueryClient()
+	const cachedListJob = useMemo(
+		() =>
+			detailsOpen && profileId && detailsJobId
+				? findCachedListJob(queryClient, queryKeys.jobs.scope(profileId, apiToken), detailsJobId)
+				: null,
+		[apiToken, detailsJobId, detailsOpen, profileId, queryClient],
+	)
 	const jobDetailsQuery = useQuery({
 		queryKey: queryKeys.jobs.detail(profileId, detailsJobId, apiToken),
 		queryFn: () => api.jobs.getJob(profileId!, detailsJobId!),
 		enabled: !!profileId && !!detailsJobId && detailsOpen,
+		initialData: cachedListJob?.job,
+		initialDataUpdatedAt: cachedListJob?.dataUpdatedAt,
 	})
 
 	const uploadDetails = useMemo<JobsUploadDetails | null>(() => {
@@ -59,6 +69,7 @@ export function useJobsUploadDetails({
 			if (!path && !key) continue
 
 			const size = getNumber(item, 'size')
+			const etag = typeof item['etag'] === 'string' ? item['etag'].trim() : undefined
 			const resolvedKey = key ?? (path ? joinKeyWithPrefix(prefix, path) : '')
 			const resolvedPath = path ?? resolvedKey
 			if (!resolvedKey || !resolvedPath) continue
@@ -67,6 +78,7 @@ export function useJobsUploadDetails({
 				path: resolvedPath,
 				key: resolvedKey,
 				size: size ?? undefined,
+				etag,
 			})
 		}
 
@@ -87,29 +99,48 @@ export function useJobsUploadDetails({
 		}
 	}, [jobDetailsQuery.data])
 
-	const uploadItemsKey = useMemo(() => {
-		if (!uploadDetails || uploadDetails.items.length === 0) return ''
-		return uploadDetails.items.map((item) => item.key).join('|')
-	}, [uploadDetails])
+	const uploadTableScopeKey = useMemo(
+		() =>
+			JSON.stringify([
+				detailsOpen ? detailsJobId : null,
+				uploadDetails?.bucket ?? null,
+				uploadDetails?.items.map((item) => item.key) ?? [],
+			]),
+		[detailsJobId, detailsOpen, uploadDetails],
+	)
+	const [uploadTablePageState, setUploadTablePageState] = useState({ scopeKey: uploadTableScopeKey, page: 1 })
+	const uploadTablePage = uploadTablePageState.scopeKey === uploadTableScopeKey ? uploadTablePageState.page : 1
+	useEffect(() => {
+		if (uploadTablePageState.scopeKey === uploadTableScopeKey) return
+		setUploadTablePageState({ scopeKey: uploadTableScopeKey, page: 1 })
+	}, [uploadTablePageState.scopeKey, uploadTableScopeKey])
+
+	const uploadTableDataLength = uploadDetails?.items.length ?? 0
+	const uploadTableTotalPages = Math.max(1, Math.ceil(uploadTableDataLength / uploadTablePageSize))
+	const uploadTablePageSafe = Math.min(uploadTablePage, uploadTableTotalPages)
+	const uploadTablePageStart = (uploadTablePageSafe - 1) * uploadTablePageSize
+	const uploadTablePageEntries = uploadDetails?.items.slice(uploadTablePageStart, uploadTablePageStart + uploadTablePageSize) ?? []
+	const uploadTablePageFetchEntries = uploadTablePageEntries.filter((item) => item.etag === undefined)
+	const uploadTablePageKey = JSON.stringify([detailsOpen ? detailsJobId : null, uploadTablePageEntries.map((item) => [item.key, item.etag ?? null])])
 
 	const uploadEtagsQuery = useQuery({
-		queryKey: queryKeys.jobs.uploadEtags(profileId, uploadDetails?.bucket ?? '', uploadItemsKey, apiToken),
+		queryKey: queryKeys.jobs.uploadEtags(profileId, uploadDetails?.bucket ?? '', uploadTablePageKey, apiToken),
 		enabled:
 			!!profileId &&
 			!!uploadDetails?.bucket &&
-			uploadDetails.items.length > 0 &&
+			uploadTablePageFetchEntries.length > 0 &&
 			detailsOpen &&
 			jobDetailsQuery.data?.status === 'succeeded',
-		queryFn: async (): Promise<UploadEtagsQueryData> => {
+		queryFn: async ({ signal }): Promise<UploadEtagsQueryData> => {
 			if (!profileId || !uploadDetails?.bucket) return { etags: {}, failures: 0 }
 
-			const entries = uploadDetails.items
 			const results = await Promise.allSettled(
-				entries.map((item) =>
+				uploadTablePageFetchEntries.map((item) =>
 					api.objects.getObjectMeta({
 						profileId,
 						bucket: uploadDetails.bucket!,
 						key: item.key,
+						signal,
 					}),
 				),
 			)
@@ -118,7 +149,7 @@ export function useJobsUploadDetails({
 			let failures = 0
 
 			results.forEach((result, index) => {
-				const key = entries[index]?.key
+				const key = uploadTablePageFetchEntries[index]?.key
 				if (!key) return
 				if (result.status === 'fulfilled') {
 					etags[key] = result.value.etag ?? null
@@ -132,28 +163,15 @@ export function useJobsUploadDetails({
 		},
 	})
 
-	const uploadTableData = useMemo<JobsUploadTableRow[]>(() => {
-		if (!uploadDetails) return []
-		const etags = uploadEtagsQuery.data?.etags ?? {}
-		const rootPrefix =
-			uploadDetails.rootKind === 'folder' && uploadDetails.rootName ? `${uploadDetails.rootName}/` : null
-		return uploadDetails.items.map((item) => ({
-			key: item.key,
-			path: rootPrefix && item.path.startsWith(rootPrefix) ? item.path.slice(rootPrefix.length) : item.path,
-			size: item.size,
-			etag: etags[item.key] ?? null,
-		}))
-	}, [uploadDetails, uploadEtagsQuery.data])
-
-	const [uploadTablePage, setUploadTablePage] = useState(1)
-	useEffect(() => {
-		setUploadTablePage(1)
-	}, [uploadItemsKey])
-
-	const uploadTableTotalPages = Math.max(1, Math.ceil(uploadTableData.length / uploadTablePageSize))
-	const uploadTablePageSafe = Math.min(uploadTablePage, uploadTableTotalPages)
-	const uploadTablePageStart = (uploadTablePageSafe - 1) * uploadTablePageSize
-	const uploadTablePageItems = uploadTableData.slice(uploadTablePageStart, uploadTablePageStart + uploadTablePageSize)
+	const uploadEtags = uploadEtagsQuery.data?.etags ?? {}
+	const uploadRootPrefix =
+		uploadDetails?.rootKind === 'folder' && uploadDetails.rootName ? `${uploadDetails.rootName}/` : null
+	const uploadTablePageItems: JobsUploadTableRow[] = uploadTablePageEntries.map((item) => ({
+		key: item.key,
+		path: uploadRootPrefix && item.path.startsWith(uploadRootPrefix) ? item.path.slice(uploadRootPrefix.length) : item.path,
+		size: item.size,
+		etag: item.etag !== undefined ? item.etag : uploadEtags[item.key],
+	}))
 
 	const uploadRootLabel = useMemo(() => {
 		if (!uploadDetails) return null
@@ -164,19 +182,25 @@ export function useJobsUploadDetails({
 	}, [uploadDetails])
 
 	const goToPrevUploadTablePage = useCallback(() => {
-		setUploadTablePage((prev) => Math.max(1, prev - 1))
-	}, [])
+		setUploadTablePageState((prev) => ({
+			scopeKey: uploadTableScopeKey,
+			page: Math.max(1, (prev.scopeKey === uploadTableScopeKey ? prev.page : 1) - 1),
+		}))
+	}, [uploadTableScopeKey])
 
 	const goToNextUploadTablePage = useCallback(() => {
-		setUploadTablePage((prev) => Math.min(uploadTableTotalPages, prev + 1))
-	}, [uploadTableTotalPages])
+		setUploadTablePageState((prev) => ({
+			scopeKey: uploadTableScopeKey,
+			page: Math.min(uploadTableTotalPages, (prev.scopeKey === uploadTableScopeKey ? prev.page : 1) + 1),
+		}))
+	}, [uploadTableScopeKey, uploadTableTotalPages])
 
 	return {
 		jobDetailsQuery,
 		uploadDetails,
 		uploadRootLabel,
 		uploadTablePageItems,
-		uploadTableDataLength: uploadTableData.length,
+		uploadTableDataLength,
 		uploadTablePageSize,
 		uploadTablePageSafe,
 		uploadTableTotalPages,

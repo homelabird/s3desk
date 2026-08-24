@@ -76,7 +76,12 @@ describe('useJobsLogsState', () => {
 		})
 
 		await waitFor(() => {
-			expect(getJobLogsTail).toHaveBeenCalledWith('profile-1', 'job-1', 256 * 1024)
+			expect(getJobLogsTail).toHaveBeenCalledWith(
+				'profile-1',
+				'job-1',
+				256 * 1024,
+				expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			)
 		})
 		expect(result.current.logsOpen).toBe(true)
 		expect(result.current.activeLogJobId).toBe('job-1')
@@ -106,7 +111,44 @@ describe('useJobsLogsState', () => {
 		expect(getJobLogsAfterOffset).not.toHaveBeenCalled()
 		await act(async () => initial.resolve({ text: 'one line\n', nextOffset: 9 }))
 		await waitFor(() => expect(result.current.isLogsLoading).toBe(false))
-		await waitFor(() => expect(getJobLogsAfterOffset).toHaveBeenCalledWith('profile-1', 'job-1', 9, 128 * 1024))
+		await waitFor(() =>
+			expect(getJobLogsAfterOffset).toHaveBeenCalledWith(
+				'profile-1',
+				'job-1',
+				9,
+				128 * 1024,
+				expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			),
+		)
+		expect(result.current.visibleLogEntries).toEqual(['one line'])
+	})
+
+	it('aborts active offset polling when the log drawer closes', async () => {
+		window.localStorage.setItem('jobsFollowLogs', JSON.stringify(true))
+		const offsetRequest = deferred<{ text: string; nextOffset: number }>()
+		let offsetSignal: AbortSignal | undefined
+		const getJobLogsAfterOffset = vi.fn(
+			(_profileId: string, _jobId: string, _offset: number, _maxBytes: number, options?: { signal?: AbortSignal }) => {
+				offsetSignal = options?.signal
+				return offsetRequest.promise
+			},
+		)
+		const api = createMockApiClient({
+			jobs: {
+				getJobLogsTail: vi.fn().mockResolvedValue({ text: 'one line\n', nextOffset: 9 }),
+				getJobLogsAfterOffset,
+			},
+		})
+		const { result } = renderHook(() => useJobsLogsState({ api, apiToken: 'token-a', profileId: 'profile-1' }), {
+			wrapper: createWrapper(),
+		})
+
+		act(() => result.current.openLogsForJob('job-1'))
+		await waitFor(() => expect(getJobLogsAfterOffset).toHaveBeenCalledOnce())
+		act(() => result.current.closeLogs())
+
+		expect(offsetSignal?.aborted).toBe(true)
+		await act(async () => offsetRequest.resolve({ text: 'stale line\n', nextOffset: 20 }))
 		expect(result.current.visibleLogEntries).toEqual(['one line'])
 	})
 
@@ -290,9 +332,15 @@ describe('useJobsLogsState', () => {
 	it('ignores stale initial log tail responses after the profile changes', async () => {
 		const firstTail = deferred<{ text: string; nextOffset: number }>()
 		const secondTail = deferred<{ text: string; nextOffset: number }>()
+		let firstSignal: AbortSignal | undefined
 		const getJobLogsTail = vi
 			.fn()
-			.mockImplementationOnce(() => firstTail.promise)
+			.mockImplementationOnce(
+				(_profileId: string, _jobId: string, _tailBytes: number, options?: { signal?: AbortSignal }) => {
+					firstSignal = options?.signal
+					return firstTail.promise
+				},
+			)
 			.mockImplementationOnce(() => secondTail.promise)
 		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 0 })
 		const api = createMockApiClient({
@@ -315,10 +363,16 @@ describe('useJobsLogsState', () => {
 		})
 
 		await waitFor(() => {
-			expect(getJobLogsTail).toHaveBeenCalledWith('profile-1', 'job-1', 256 * 1024)
+			expect(getJobLogsTail).toHaveBeenCalledWith(
+				'profile-1',
+				'job-1',
+				256 * 1024,
+				expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			)
 		})
 
 		rerender({ apiToken: 'token-a', profileId: 'profile-2' })
+		expect(firstSignal?.aborted).toBe(true)
 
 		await act(async () => {
 			firstTail.resolve({ text: 'stale line\n', nextOffset: 11 })
@@ -331,7 +385,12 @@ describe('useJobsLogsState', () => {
 
 		expect(result.current.visibleLogEntries).toEqual([])
 		await waitFor(() => {
-			expect(getJobLogsTail).toHaveBeenLastCalledWith('profile-2', 'job-1', 256 * 1024)
+			expect(getJobLogsTail).toHaveBeenLastCalledWith(
+				'profile-2',
+				'job-1',
+				256 * 1024,
+				expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			)
 		})
 
 		await act(async () => {
@@ -372,7 +431,12 @@ describe('useJobsLogsState', () => {
 		})
 
 		await waitFor(() => {
-			expect(getJobLogsTail).toHaveBeenCalledWith('profile-1', 'job-1', 256 * 1024)
+			expect(getJobLogsTail).toHaveBeenCalledWith(
+				'profile-1',
+				'job-1',
+				256 * 1024,
+				expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			)
 		})
 
 		rerender({ apiToken: 'token-b' })
@@ -388,7 +452,12 @@ describe('useJobsLogsState', () => {
 
 		expect(result.current.visibleLogEntries).toEqual([])
 		await waitFor(() => {
-			expect(getJobLogsTail).toHaveBeenLastCalledWith('profile-1', 'job-1', 256 * 1024)
+			expect(getJobLogsTail).toHaveBeenLastCalledWith(
+				'profile-1',
+				'job-1',
+				256 * 1024,
+				expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			)
 		})
 
 		await act(async () => {
