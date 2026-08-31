@@ -245,7 +245,32 @@ describe('SidebarBackupAction', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Export backup' }))
 		fireEvent.click(screen.getByRole('button', { name: 'Remote storage' }))
 		expect(await screen.findByText('Primary profile')).toBeInTheDocument()
-		expect(listProfiles).toHaveBeenCalledTimes(expectedCalls)
+		 expect(listProfiles).toHaveBeenCalledTimes(expectedCalls)
+	})
+
+	it('labels required remote fields and rejects an incomplete location before the request', async () => {
+		const transferServerBackup = vi.fn()
+		const api = createMockApiClient({
+			profiles: { listProfiles: vi.fn().mockResolvedValue(remoteProfiles) },
+			server: {
+				listServerRestores: vi.fn().mockResolvedValue({ items: [] }),
+				transferServerBackup,
+			},
+		})
+		const queryClient = new QueryClient()
+
+		renderRemoteBackupAction(api, queryClient)
+		await openRemoteBackupStorage()
+
+		expect(screen.getByRole('combobox', { name: 'Object storage profile' })).toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: 'Bucket or container' })).toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: 'Backup path or object key' })).toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('radio', { name: 'Fetch and stage restore' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Fetch and stage restore' }))
+
+		expect(await screen.findByText('Enter a bucket or container.')).toBeInTheDocument()
+		expect(transferServerBackup).not.toHaveBeenCalled()
 	})
 
 	it('updates the trigger subtitle as backup capabilities change', () => {

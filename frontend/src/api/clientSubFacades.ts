@@ -53,6 +53,8 @@ import type {
 	ServerRestoreTransferRequest,
 	ServerStagedRestoreListResponse,
 	UploadChunkState,
+	UploadChunkStatusBatchRequest,
+	UploadChunkStatusBatchResponse,
 	UploadCreateRequest,
 	UploadCreateResponse,
 	UploadMultipartAbortRequest,
@@ -142,11 +144,11 @@ export function createProfilesSubFacade(deps: SubFacadeDeps) {
 		deleteProfile(profileId: string): Promise<void> {
 			return profilesDomain.deleteProfile(deps.requestFn, profileId)
 		},
-		testProfile(profileId: string): Promise<ProfileTestResponse> {
-			return profilesDomain.testProfile(deps.requestFn, profileId)
+		testProfile(profileId: string, signal?: AbortSignal): Promise<ProfileTestResponse> {
+			return profilesDomain.testProfile(deps.requestFn, profileId, signal)
 		},
-		benchmarkProfile(profileId: string): Promise<ProfileBenchmarkResponse> {
-			return profilesDomain.benchmarkProfile(deps.requestFn, profileId)
+		benchmarkProfile(profileId: string, signal?: AbortSignal): Promise<ProfileBenchmarkResponse> {
+			return profilesDomain.benchmarkProfile(deps.requestFn, profileId, signal)
 		},
 		getProfileTLS(profileId: string): Promise<ProfileTLSStatus> {
 			return profilesDomain.getProfileTLS(deps.requestFn, profileId)
@@ -312,8 +314,8 @@ export function createObjectsSubFacade(deps: SubFacadeDeps) {
 
 export function createUploadsSubFacade(deps: SubFacadeDeps) {
 	return {
-		createUpload(profileId: string, req: UploadCreateRequest): Promise<UploadCreateResponse> {
-			return uploadsDomain.createUpload(deps.requestFn, profileId, req)
+		createUpload(profileId: string, req: UploadCreateRequest, signal?: AbortSignal): Promise<UploadCreateResponse> {
+			return uploadsDomain.createUpload(deps.requestFn, profileId, req, signal)
 		},
 		presignUpload(profileId: string, uploadId: string, req: UploadPresignRequest): Promise<UploadPresignResponse> {
 			return uploadsDomain.presignUpload(deps.requestFn, profileId, uploadId, req)
@@ -358,8 +360,17 @@ export function createUploadsSubFacade(deps: SubFacadeDeps) {
 			profileId: string,
 			uploadId: string,
 			args: { path: string; total: number; chunkSize: number; fileSize: number },
+			signal?: AbortSignal,
 		): Promise<UploadChunkState> {
-			return uploadsDomain.getUploadChunks(deps.requestFn, profileId, uploadId, args)
+			return uploadsDomain.getUploadChunks(deps.requestFn, profileId, uploadId, args, signal)
+		},
+		getUploadChunksBatch(
+			profileId: string,
+			uploadId: string,
+			req: UploadChunkStatusBatchRequest,
+			signal?: AbortSignal,
+		): Promise<UploadChunkStatusBatchResponse> {
+			return uploadsDomain.getUploadChunksBatch(deps.requestFn, profileId, uploadId, req, signal)
 		},
 	}
 }

@@ -104,6 +104,12 @@ export type UploadPresignRequest =
 export type UploadPresignResponse =
   components["schemas"]["UploadPresignResponse"];
 export type UploadChunkState = components["schemas"]["UploadChunkState"];
+export type UploadChunkStatusRequest =
+  components["schemas"]["UploadChunkStatusRequest"];
+export type UploadChunkStatusBatchRequest =
+  components["schemas"]["UploadChunkStatusBatchRequest"];
+export type UploadChunkStatusBatchResponse =
+  components["schemas"]["UploadChunkStatusBatchResponse"];
 export type UploadMultipartCompleteRequest =
   components["schemas"]["UploadMultipartCompleteRequest"];
 export type UploadMultipartAbortRequest =

@@ -481,6 +481,7 @@ describe('FullAppInner route remounts', () => {
 	it.each([
 		['/buckets', 'buckets-route-seeded-scope'],
 		['/objects', 'objects-route-seeded-scope'],
+		['/uploads', 'uploads-route-seeded-scope'],
 		['/jobs', 'jobs-route-seeded-token'],
 	])('keeps %s open when no profile is connected', async (pathname, testId) => {
 		mockViewportWidth(1280)

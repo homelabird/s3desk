@@ -24,12 +24,13 @@ export async function createUploadSession(args: {
 	bucket: string
 	prefix: string
 	mode: UploadRuntimeMode
+	signal?: AbortSignal
 }): Promise<UploadRuntimeSession> {
 	return args.api.uploads.createUpload(args.profileId, {
 		bucket: args.bucket,
 		prefix: args.prefix,
 		mode: args.mode,
-	})
+	}, args.signal)
 }
 
 export async function createUploadSessionWithFallback(args: {
@@ -38,6 +39,7 @@ export async function createUploadSessionWithFallback(args: {
 	preferredMode: UploadRuntimeMode
 	fallbackMode: UploadFallbackMode
 	canUsePresigned: boolean
+	signal?: AbortSignal
 	onFallback?: (fallback: UploadSessionFallback) => void
 }): Promise<UploadRuntimeSession> {
 	try {
@@ -47,6 +49,7 @@ export async function createUploadSessionWithFallback(args: {
 			bucket: args.task.bucket,
 			prefix: args.task.prefix ?? '',
 			mode: args.preferredMode,
+			signal: args.signal,
 		})
 	} catch (error) {
 		if (args.canUsePresigned && args.preferredMode === 'presigned' && isUnsupportedUploadSessionError(error)) {
@@ -56,6 +59,7 @@ export async function createUploadSessionWithFallback(args: {
 				bucket: args.task.bucket,
 				prefix: args.task.prefix ?? '',
 				mode: args.fallbackMode,
+				signal: args.signal,
 			})
 			args.onFallback?.({ from: 'presigned', to: args.fallbackMode, reason: 'provider_unsupported' })
 			return session
@@ -68,6 +72,7 @@ export async function createUploadSessionWithFallback(args: {
 				bucket: args.task.bucket,
 				prefix: args.task.prefix ?? '',
 				mode: 'staging',
+				signal: args.signal,
 			})
 			args.onFallback?.({ from: 'direct', to: 'staging', reason: 'provider_unsupported' })
 			return session

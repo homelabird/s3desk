@@ -222,4 +222,58 @@ describe('useProfilesPageMutations', () => {
 		expect(successSpy).not.toHaveBeenCalledWith('Profile deleted')
 		expect(result.current.deletingProfileId).toBe('profile-2')
 	})
+
+	it('aborts replaced profile tests and connectivity requests from an old scope', async () => {
+		const testSignals: AbortSignal[] = []
+		const benchmarkSignals: AbortSignal[] = []
+		const pendingRequest = (signals: AbortSignal[]) => (_id: string, signal?: AbortSignal) => {
+			expect(signal).toBeInstanceOf(AbortSignal)
+			signals.push(signal!)
+			return new Promise<never>((_resolve, reject) => {
+				signal!.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+			})
+		}
+		const testProfile = vi.fn(pendingRequest(testSignals))
+		const benchmarkProfile = vi.fn(pendingRequest(benchmarkSignals))
+		const serverScopeVersionRef = { current: 1 }
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				mutations: { retry: false },
+			},
+		})
+		const initialArgs = buildBaseArgs({
+			api: createMockApiClient({
+				profiles: { testProfile, benchmarkProfile },
+			}),
+			serverScopeVersionRef,
+		})
+
+		const { result, rerender } = renderHook((args) => useProfilesPageMutations(args), {
+			initialProps: initialArgs,
+			wrapper: createWrapper(queryClient),
+		})
+
+		act(() => result.current.testMutation.mutate('profile-1'))
+		await waitFor(() => expect(testSignals).toHaveLength(1))
+
+		act(() => result.current.testMutation.mutate('profile-1'))
+		await waitFor(() => expect(testSignals).toHaveLength(2))
+		expect(testSignals[0]?.aborted).toBe(true)
+		expect(testSignals[1]?.aborted).toBe(false)
+		await waitFor(() => expect(result.current.testingProfileId).toBe('profile-1'))
+
+		act(() => result.current.benchmarkMutation.mutate('profile-1'))
+		await waitFor(() => expect(benchmarkSignals).toHaveLength(1))
+		expect(benchmarkSignals[0]?.aborted).toBe(false)
+
+		serverScopeVersionRef.current = 2
+		rerender({
+			...initialArgs,
+			apiToken: 'token-b',
+			currentScopeKey: 'token-b::profiles',
+		})
+
+		await waitFor(() => expect(testSignals[1]?.aborted).toBe(true))
+		expect(benchmarkSignals[0]?.aborted).toBe(true)
+	})
 })

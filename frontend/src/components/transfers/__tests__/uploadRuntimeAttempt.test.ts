@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { UploadFileItem } from '../../../api/client'
+import { RequestAbortedError, type UploadFileItem } from '../../../api/client'
 import { TransferEstimator } from '../../../lib/transfer'
 import type { UploadTask } from '../transferTypes'
 import { executeUploadAttempt } from '../uploadRuntimeAttempt'
@@ -59,7 +59,7 @@ describe('executeUploadAttempt', () => {
 			promise: uploadResult.promise,
 		})
 		const updateUploadTask = vi.fn()
-		const uploadAbortByTaskIdRef = { current: {} as Record<string, () => void> }
+		const controller = new AbortController()
 
 		const attempt = executeUploadAttempt({
 			api: {
@@ -83,7 +83,7 @@ describe('executeUploadAttempt', () => {
 			directMultipartUpload: true,
 			existingChunksByPath: { 'folder/report.bin': [0] },
 			uploadChunkFileConcurrency: 4,
-			uploadAbortByTaskIdRef,
+			signal: controller.signal,
 			uploadEstimatorByTaskIdRef: {
 				current: {
 					'upload-1': new TransferEstimator({ totalBytes: item.file.size, startedAtMs: Date.now() - 1_000 }),
@@ -92,7 +92,6 @@ describe('executeUploadAttempt', () => {
 			updateUploadTask,
 		})
 
-		expect(uploadAbortByTaskIdRef.current['upload-1']).toBe(abort)
 		expect(uploadFilesWithProgress).toHaveBeenCalledWith('profile-1', 'session-1', [item], {
 			onProgress: expect.any(Function),
 			concurrency: 3,
@@ -126,7 +125,6 @@ describe('executeUploadAttempt', () => {
 
 		uploadResult.resolve({ skipped: 0 })
 		await expect(attempt).resolves.toEqual({ skipped: 0 })
-		expect(uploadAbortByTaskIdRef.current['upload-1']).toBeUndefined()
 	})
 
 	it('routes presigned uploads through the presigned uploader without resume metadata', async () => {
@@ -158,7 +156,7 @@ describe('executeUploadAttempt', () => {
 			allowPerFileChunkSize: false,
 			directMultipartUpload: true,
 			uploadChunkFileConcurrency: 4,
-			uploadAbortByTaskIdRef: { current: {} },
+			signal: new AbortController().signal,
 			uploadEstimatorByTaskIdRef: { current: {} },
 			updateUploadTask,
 		})
@@ -211,7 +209,7 @@ describe('executeUploadAttempt', () => {
 			allowPerFileChunkSize: false,
 			directMultipartUpload: false,
 			uploadChunkFileConcurrency: 4,
-			uploadAbortByTaskIdRef: { current: {} },
+			signal: new AbortController().signal,
 			uploadEstimatorByTaskIdRef: { current: {} },
 			updateUploadTask,
 		})
@@ -227,5 +225,43 @@ describe('executeUploadAttempt', () => {
 		)
 		const initialTask = updateUploadTask.mock.calls[0][1](uploadTask())
 		expect(initialTask.resumeFiles).toEqual([])
+	})
+
+	it('stops a presigned attempt canceled during lazy module handoff', async () => {
+		const controller = new AbortController()
+		const abort = vi.fn()
+		uploadPresignedFilesWithProgressMock.mockClear()
+		uploadPresignedFilesWithProgressMock.mockReturnValue({
+			abort,
+			promise: Promise.resolve({ skipped: 0 }),
+		})
+
+		const attempt = executeUploadAttempt({
+			api: { uploads: { uploadFilesWithProgress: vi.fn() } } as never,
+			taskId: 'upload-1',
+			task: uploadTask(),
+			uploadId: 'session-1',
+			mode: 'presigned',
+			items: [uploadItem()],
+			tuning: {
+				batchConcurrency: 1,
+				batchBytes: 1024,
+				chunkSizeBytes: 64,
+				chunkConcurrency: 1,
+				chunkThresholdBytes: 128,
+			},
+			resumeFilesByPath: new Map(),
+			resumeChunkSizeBytes: 0,
+			allowPerFileChunkSize: false,
+			directMultipartUpload: true,
+			uploadChunkFileConcurrency: 1,
+			signal: controller.signal,
+			uploadEstimatorByTaskIdRef: { current: {} },
+			updateUploadTask: vi.fn(),
+		})
+		controller.abort()
+
+		await expect(attempt).rejects.toBeInstanceOf(RequestAbortedError)
+		expect(uploadPresignedFilesWithProgressMock).not.toHaveBeenCalled()
 	})
 })

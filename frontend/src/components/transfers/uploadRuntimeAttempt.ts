@@ -1,4 +1,4 @@
-import type { APIClientShape, UploadFileItem, UploadFilesResult } from '../../api/client'
+import { RequestAbortedError, type APIClientShape, type UploadFileItem, type UploadFilesResult } from '../../api/client'
 import type { TransferEstimator } from '../../lib/transfer'
 import type { UploadTask } from './transferTypes'
 import {
@@ -29,7 +29,7 @@ type ExecuteUploadAttemptArgs = {
 	directMultipartUpload: boolean
 	existingChunksByPath?: Record<string, number[]>
 	uploadChunkFileConcurrency: number
-	uploadAbortByTaskIdRef: { current: Record<string, () => void> }
+	signal: AbortSignal
 	uploadEstimatorByTaskIdRef: { current: Record<string, TransferEstimator> }
 	updateUploadTask: (taskId: string, updater: (task: UploadTask) => UploadTask) => void
 }
@@ -71,38 +71,53 @@ export async function executeUploadAttempt(args: ExecuteUploadAttemptArgs): Prom
 		}))
 	}
 
-	const handle =
-		args.mode === 'presigned'
-			? (await import('./presignedUpload')).uploadPresignedFilesWithProgress({
-					api: args.api,
-					profileId: args.task.profileId,
-					uploadId: args.uploadId,
-					items: args.items,
-					onProgress: handleProgress,
-					singleConcurrency: args.tuning.batchConcurrency,
-					multipartFileConcurrency: args.uploadChunkFileConcurrency,
-					partConcurrency: args.tuning.chunkConcurrency,
-					chunkThresholdBytes,
-					chunkSizeBytes,
-				})
-			: args.api.uploads.uploadFilesWithProgress(args.task.profileId, args.uploadId, args.items, {
-					onProgress: handleProgress,
-					concurrency: args.tuning.batchConcurrency,
-					maxBatchBytes: args.tuning.batchBytes,
-					maxBatchItems: 50,
-					chunkSizeBytes,
-					chunkConcurrency: args.tuning.chunkConcurrency,
-					chunkThresholdBytes,
-					existingChunksByPath: args.existingChunksByPath,
-					chunkSizeBytesByPath: args.allowPerFileChunkSize ? chunkSizeByPath : undefined,
-					chunkFileConcurrency: args.uploadChunkFileConcurrency,
-					forceMultipartForm,
-				})
+	let handle: { promise: Promise<UploadFilesResult>; abort: () => void }
+	if (args.mode === 'presigned') {
+		const presignedUpload = await import('./presignedUpload')
+		if (args.signal.aborted) throw new RequestAbortedError()
+		handle = presignedUpload.uploadPresignedFilesWithProgress({
+			api: args.api,
+			profileId: args.task.profileId,
+			uploadId: args.uploadId,
+			items: args.items,
+			onProgress: handleProgress,
+			singleConcurrency: args.tuning.batchConcurrency,
+			multipartFileConcurrency: args.uploadChunkFileConcurrency,
+			partConcurrency: args.tuning.chunkConcurrency,
+			chunkThresholdBytes,
+			chunkSizeBytes,
+		})
+	} else {
+		if (args.signal.aborted) throw new RequestAbortedError()
+		handle = args.api.uploads.uploadFilesWithProgress(args.task.profileId, args.uploadId, args.items, {
+			onProgress: handleProgress,
+			concurrency: args.tuning.batchConcurrency,
+			maxBatchBytes: args.tuning.batchBytes,
+			maxBatchItems: 50,
+			chunkSizeBytes,
+			chunkConcurrency: args.tuning.chunkConcurrency,
+			chunkThresholdBytes,
+			existingChunksByPath: args.existingChunksByPath,
+			chunkSizeBytesByPath: args.allowPerFileChunkSize ? chunkSizeByPath : undefined,
+			chunkFileConcurrency: args.uploadChunkFileConcurrency,
+			forceMultipartForm,
+		})
+	}
 
-	args.uploadAbortByTaskIdRef.current[args.taskId] = handle.abort
+	const abort = () => handle.abort()
+	args.signal.addEventListener('abort', abort, { once: true })
 	try {
-		return await handle.promise
+		if (args.signal.aborted) {
+			handle.abort()
+			throw new RequestAbortedError()
+		}
+		const result = await handle.promise
+		if (args.signal.aborted) throw new RequestAbortedError()
+		return result
+	} catch (error) {
+		if (args.signal.aborted) throw new RequestAbortedError()
+		throw error
 	} finally {
-		delete args.uploadAbortByTaskIdRef.current[args.taskId]
+		args.signal.removeEventListener('abort', abort)
 	}
 }

@@ -116,6 +116,7 @@ export function JobsOverlaysHost(props: JobsOverlaysHostProps) {
 		closeLogs,
 		refreshActiveLogs,
 		isLogsLoading,
+		logsError,
 		clearLogsForJobs,
 	} = useJobsLogsState({
 		api,
@@ -152,6 +153,10 @@ export function JobsOverlaysHost(props: JobsOverlaysHostProps) {
 		handledLogRequestNonceRef.current = logRequestNonce
 		openLogsForJob(logRequestJobId)
 	}, [logRequestJobId, logRequestNonce, openLogsForJob])
+
+	useEffect(() => () => {
+		handledLogRequestNonceRef.current = -1
+	}, [])
 
 	useEffect(() => {
 		if (logRequestJobId || !logsOpen) return
@@ -233,6 +238,7 @@ export function JobsOverlaysHost(props: JobsOverlaysHostProps) {
 					drawerWidth={drawerWidth}
 					activeLogJobId={activeLogJobId}
 					isLogsLoading={isLogsLoading}
+					logsError={logsError}
 					onRefresh={refreshActiveLogs}
 					followLogs={followLogs}
 					onFollowLogsChange={setFollowLogs}

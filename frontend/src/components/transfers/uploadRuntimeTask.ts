@@ -52,8 +52,11 @@ type RunUploadTaskArgs = {
 
 export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 	const { task, taskId, items } = args
-  const estimator = new TransferEstimator({ totalBytes: task.totalBytes })
+	const estimator = new TransferEstimator({ totalBytes: task.totalBytes })
+	const taskController = new AbortController()
+	const abortTask = () => taskController.abort()
 	args.uploadEstimatorByTaskIdRef.current[taskId] = estimator
+	args.uploadAbortByTaskIdRef.current[taskId] = abortTask
 	args.updateUploadTask(taskId, (current) => ({
 		...current,
 		status: 'staging',
@@ -104,15 +107,17 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			return
 		}
 		const { resumeChunkSizeBytes, allowPerFileChunkSize } = resumeChunkSettings
-
 		if (allowResume && task.uploadId && resumeFilesByPath.size > 0) {
+			const resumeUploadId = task.uploadId
 			const resumeChunks = await resolveExistingResumeChunks({
 				api: args.api,
 				profileId: task.profileId,
-				uploadId: task.uploadId,
+				uploadId: resumeUploadId,
 				items,
 				resumeFilesByPath,
+				signal: taskController.signal,
 			})
+			if (taskController.signal.aborted) throw new RequestAbortedError()
 			if (!resumeChunks.ok) {
 				failBeforeUpload(resumeChunks.error)
 				return
@@ -131,6 +136,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				preferredMode,
 				fallbackMode,
 				canUsePresigned,
+				signal: taskController.signal,
 				onFallback: ({ from, to, reason }) => {
 					args.updateUploadTask(taskId, (current) => ({
 						...current,
@@ -144,10 +150,12 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			})
 			uploadId = session.uploadId
 			sessionMode = session.mode
+			if (taskController.signal.aborted) throw new RequestAbortedError()
 			if (session.maxBytes && task.totalBytes > session.maxBytes) {
 				throw new Error(`selected files exceed maxBytes (${task.totalBytes} > ${session.maxBytes})`)
 			}
 		}
+		if (taskController.signal.aborted) throw new RequestAbortedError()
 
 		const runUploadAttempt = (
 			attemptMode: UploadRuntimeMode,
@@ -168,7 +176,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				directMultipartUpload: canUseDirectMultipart,
 				existingChunksByPath: attemptExistingChunksByPath,
 				uploadChunkFileConcurrency: args.uploadChunkFileConcurrency,
-				uploadAbortByTaskIdRef: args.uploadAbortByTaskIdRef,
+				signal: taskController.signal,
 				uploadEstimatorByTaskIdRef: args.uploadEstimatorByTaskIdRef,
 				updateUploadTask: args.updateUploadTask,
 			})
@@ -203,6 +211,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			},
 		})
 	} catch (error) {
+		if (args.uploadAbortByTaskIdRef.current[taskId] !== abortTask) return
 		if (error instanceof RequestAbortedError) {
 			args.updateUploadTask(taskId, (current) => ({
 				...current,
@@ -224,8 +233,12 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		}))
 		args.notifications.error(message)
 	} finally {
-		delete args.uploadAbortByTaskIdRef.current[taskId]
-		delete args.uploadEstimatorByTaskIdRef.current[taskId]
+		if (args.uploadAbortByTaskIdRef.current[taskId] === abortTask) {
+			delete args.uploadAbortByTaskIdRef.current[taskId]
+		}
+		if (args.uploadEstimatorByTaskIdRef.current[taskId] === estimator) {
+			delete args.uploadEstimatorByTaskIdRef.current[taskId]
+		}
 		if (!committed && uploadId) {
 			await args.api.uploads.deleteUpload(task.profileId, uploadId).catch(() => {})
 		}

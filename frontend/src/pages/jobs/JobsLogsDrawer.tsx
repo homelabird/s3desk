@@ -5,6 +5,7 @@ import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 
 import { OverlaySheet } from '../../components/OverlaySheet'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
+import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { parseJobLogLine, type ParsedJobLogLine } from './jobLogParsing'
 import styles from './JobsLogsDrawer.module.css'
 import type { JobsLogSeveritySummary } from './useJobsLogsState'
@@ -67,6 +68,7 @@ type Props = {
 	drawerWidth: number | string
 	activeLogJobId: string | null
 	isLogsLoading: boolean
+	logsError: unknown | null
 	onRefresh: () => void
 	followLogs: boolean
 	onFollowLogsChange: (next: boolean) => void
@@ -94,6 +96,7 @@ export function JobsLogsDrawer(props: Props) {
 		drawerWidth,
 		activeLogJobId,
 		isLogsLoading,
+		logsError,
 		onRefresh,
 		followLogs,
 		onFollowLogsChange,
@@ -223,6 +226,15 @@ export function JobsLogsDrawer(props: Props) {
 							style={{ marginBottom: 12 }}
 						/>
 					) : null}
+					{logsError ? (
+						<Alert
+							type="error"
+							showIcon
+							title="Failed to load job logs"
+							description={formatErr(logsError)}
+							style={{ marginBottom: 12 }}
+						/>
+					) : null}
 					{activeLogLines > 0 ? (
 						<div className={styles.toolbar}>
 							<Input
@@ -250,7 +262,7 @@ export function JobsLogsDrawer(props: Props) {
 						{visibleLogSeveritySummary.error ? ` · Errors: ${visibleLogSeveritySummary.error.toLocaleString()}` : ''}
 						{visibleLogSeveritySummary.warn ? ` · Warnings: ${visibleLogSeveritySummary.warn.toLocaleString()}` : ''}
 					</Typography.Text>
-					{!isLogsLoading && activeLogLines === 0 ? (
+					{!isLogsLoading && !logsError && activeLogLines === 0 ? (
 						<div className={styles.emptyLogs}>
 							<Empty description="No log output was recorded for this job. Open Details to review its result and metadata." />
 						</div>

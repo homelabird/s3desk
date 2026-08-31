@@ -249,8 +249,8 @@ describe('ProfilesPage', () => {
 			</QueryClientProvider>,
 		)
 
-		expect(screen.getByText('Getting started')).toBeInTheDocument()
 		await screen.findByText('Primary Profile', undefined, { timeout: 5_000 })
+		expect(screen.getByText('Getting started')).toBeInTheDocument()
 		await act(async () => {
 			fireEvent.click(screen.getByRole('button', { name: 'Hide guide' }))
 		})
@@ -346,7 +346,7 @@ describe('ProfilesPage', () => {
 		)
 
 		await openPrimaryProfileAction('Test')
-		await waitFor(() => expect(testProfileSpy).toHaveBeenCalledWith('profile-1'))
+		await waitFor(() => expect(testProfileSpy).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal)))
 
 		await waitFor(() => {
 			expect(warningSpy).toHaveBeenCalledWith(
@@ -385,7 +385,7 @@ describe('ProfilesPage', () => {
 		)
 
 		await openPrimaryProfileAction('Test')
-		await waitFor(() => expect(testProfileSpy).toHaveBeenCalledWith('profile-1'))
+		await waitFor(() => expect(testProfileSpy).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal)))
 
 		await waitFor(() => {
 			expect(errorSpy).toHaveBeenCalledWith(
@@ -693,7 +693,7 @@ describe('ProfilesPage', () => {
 		)
 
 		await openPrimaryProfileAction('Benchmark')
-		await waitFor(() => expect(benchmarkProfileSpy).toHaveBeenCalledWith('profile-1'))
+		await waitFor(() => expect(benchmarkProfileSpy).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal)))
 
 		await waitFor(() => {
 			expect(warningSpy).toHaveBeenCalledWith(
@@ -731,7 +731,7 @@ describe('ProfilesPage', () => {
 		)
 
 		await openPrimaryProfileAction('Benchmark')
-		await waitFor(() => expect(benchmarkProfileSpy).toHaveBeenCalledWith('profile-1'))
+		await waitFor(() => expect(benchmarkProfileSpy).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal)))
 
 		await waitFor(() => {
 			expect(errorSpy).toHaveBeenCalledWith(
@@ -769,7 +769,7 @@ describe('ProfilesPage', () => {
 		)
 
 		await openPrimaryProfileAction('Benchmark')
-		await waitFor(() => expect(benchmarkProfileSpy).toHaveBeenCalledWith('profile-1'))
+		await waitFor(() => expect(benchmarkProfileSpy).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal)))
 
 		await waitFor(() => {
 			expect(successSpy).toHaveBeenCalledWith('Benchmark OK: ↑ 1.0 Mbps · ↓ 2.0 Mbps · upload 150ms · download 80ms', 8)
@@ -808,7 +808,7 @@ describe('ProfilesPage', () => {
 		)
 
 		await openPrimaryProfileAction('Benchmark')
-		await waitFor(() => expect(profilesApi.benchmarkProfile).toHaveBeenCalledWith('profile-1'))
+		await waitFor(() => expect(profilesApi.benchmarkProfile).toHaveBeenCalledWith('profile-1', expect.any(AbortSignal)))
 
 		view.rerender(
 			<QueryClientProvider client={client}>

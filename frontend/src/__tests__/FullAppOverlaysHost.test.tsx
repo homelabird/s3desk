@@ -26,7 +26,7 @@ vi.mock('../components/SettingsDrawer', () => ({
 }))
 
 describe('FullAppOverlaysHost', () => {
-	it('renders settings and wires its close handler', async () => {
+	it('renders an accessible fallback before settings and wires close', async () => {
 		const closeSettings = vi.fn()
 
 		render(
@@ -44,11 +44,16 @@ describe('FullAppOverlaysHost', () => {
 			/>,
 		)
 
+		expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+		expect(screen.getByRole('status', { name: 'Loading settings' })).toHaveTextContent('Loading settings…')
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+		expect(closeSettings).toHaveBeenCalledTimes(1)
+
 		expect(await screen.findByTestId('overlays-host-settings')).toHaveTextContent('token-a')
 		expect(screen.getByTestId('overlays-host-settings')).toHaveTextContent('profile-1')
 		expect(screen.getByTestId('overlays-host-settings')).toHaveTextContent('Profile One')
 		fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))
 
-		expect(closeSettings).toHaveBeenCalledTimes(1)
+		expect(closeSettings).toHaveBeenCalledTimes(2)
 	})
 })

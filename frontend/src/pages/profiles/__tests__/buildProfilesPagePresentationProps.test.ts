@@ -11,6 +11,25 @@ vi.mock('../../../lib/confirmDangerAction', () => ({
 }))
 
 describe('buildProfilesPagePresentationProps', () => {
+	it.each([
+		['failed initial query', [], new Error('profiles unavailable'), false, false],
+		['unresolved initial query', [], null, true, false],
+		['failed refetch with cached data', [{}], new Error('profiles unavailable'), false, true],
+	] as const)('does not confuse a %s with an empty workspace', (_name, profiles, profilesError, profilesQueryIsFetching, onboardingVisible) => {
+		const props = buildProfilesPagePresentationProps({
+			profiles,
+			profilesError,
+			profilesQueryIsFetching,
+			onboardingVisible: true,
+			testMutation: { mutate: vi.fn(), isPending: false },
+			benchmarkMutation: { mutate: vi.fn(), isPending: false },
+			deleteMutation: { mutateAsync: vi.fn(), isPending: false },
+		} as never)
+
+		expect(props.status.showProfilesEmpty).toBe(false)
+		expect(props.onboarding.visible).toBe(onboardingVisible)
+	})
+
 	it('maps presentation props and wires delete confirmation into the delete mutation', async () => {
 		const onOpenImportModal = vi.fn()
 		const onOpenCreateModal = vi.fn()

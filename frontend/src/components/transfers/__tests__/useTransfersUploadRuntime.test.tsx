@@ -336,7 +336,7 @@ describe('useTransfersUploadRuntime', () => {
 			bucket: 'bucket-a',
 			prefix: 'docs/',
 			mode: 'staging',
-		}))
+		}, expect.any(AbortSignal)))
 		await waitFor(() => expect(uploadFilesWithProgress).toHaveBeenCalledTimes(1))
 		await waitFor(() => expect(commitUpload).toHaveBeenCalledTimes(1))
 		await waitFor(() => expect(handleUploadJobUpdate).toHaveBeenCalledWith('upload-commit', {

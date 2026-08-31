@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy } from 'react'
 
 import type { BucketOption, DeleteJobModalPrefill } from './jobsPageTypes'
 
@@ -35,20 +35,18 @@ export function JobsCreateModals(props: Props) {
 	if (!props.createDeleteOpen) return null
 
 	return (
-		<Suspense fallback={null}>
-			<DeletePrefixJobModal
-					key={`delete:${props.apiToken}:${props.profileId}:${props.deleteBucket}:${props.deletePrefill?.prefix ?? ''}:${props.deletePrefill?.deleteAll ? 'all' : 'prefix'}`}
-					open={props.createDeleteOpen}
-					onCancel={props.onCloseDelete}
-					onSubmit={props.onSubmitDelete}
-					loading={props.deleteLoading}
-					isOffline={props.isOffline}
-					bucketLookupErrorDescription={props.bucketLookupErrorDescription}
-					bucket={props.deleteBucket}
-					setBucket={props.onBucketChange}
-					bucketOptions={props.bucketOptions}
-					prefill={props.deletePrefill}
-				/>
-		</Suspense>
+		<DeletePrefixJobModal
+			key={`delete:${props.apiToken}:${props.profileId}:${props.deleteBucket}:${props.deletePrefill?.prefix ?? ''}:${props.deletePrefill?.deleteAll ? 'all' : 'prefix'}`}
+			open={props.createDeleteOpen}
+			onCancel={props.onCloseDelete}
+			onSubmit={props.onSubmitDelete}
+			loading={props.deleteLoading}
+			isOffline={props.isOffline}
+			bucketLookupErrorDescription={props.bucketLookupErrorDescription}
+			bucket={props.deleteBucket}
+			setBucket={props.onBucketChange}
+			bucketOptions={props.bucketOptions}
+			prefill={props.deletePrefill}
+		/>
 	)
 }

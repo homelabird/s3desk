@@ -123,6 +123,41 @@ describe('useJobsLogsState', () => {
 		expect(result.current.visibleLogEntries).toEqual(['one line'])
 	})
 
+	it('keeps prior logs visible when refresh fails and clears the error on retry', async () => {
+		const getJobLogsTail = vi
+			.fn()
+			.mockResolvedValueOnce({ text: 'existing line\n', nextOffset: 14 })
+			.mockRejectedValueOnce(new Error('log endpoint unavailable'))
+			.mockResolvedValueOnce({ text: 'recovered line\n', nextOffset: 15 })
+			.mockRejectedValueOnce(new Error('log endpoint unavailable again'))
+		const api = createMockApiClient({
+			jobs: {
+				getJobLogsTail,
+				getJobLogsAfterOffset: vi.fn().mockResolvedValue({ text: '', nextOffset: 15 }),
+			},
+		})
+		const { result } = renderHook(
+			() => useJobsLogsState({ api, apiToken: 'token-a', profileId: 'profile-1' }),
+			{ wrapper: createWrapper() },
+		)
+
+		act(() => result.current.openLogsForJob('job-1'))
+		await waitFor(() => expect(result.current.visibleLogEntries).toEqual(['existing line']))
+
+		act(() => result.current.refreshActiveLogs())
+		await waitFor(() => expect(result.current.logsError).toEqual(new Error('log endpoint unavailable')))
+		expect(result.current.visibleLogEntries).toEqual(['existing line'])
+
+		act(() => result.current.refreshActiveLogs())
+		expect(result.current.logsError).toBeNull()
+		await waitFor(() => expect(result.current.visibleLogEntries).toEqual(['recovered line']))
+
+		act(() => result.current.refreshActiveLogs())
+		await waitFor(() => expect(result.current.logsError).toEqual(new Error('log endpoint unavailable again')))
+		act(() => result.current.closeLogs())
+		expect(result.current.logsError).toBeNull()
+	})
+
 	it('aborts active offset polling when the log drawer closes', async () => {
 		window.localStorage.setItem('jobsFollowLogs', JSON.stringify(true))
 		const offsetRequest = deferred<{ text: string; nextOffset: number }>()

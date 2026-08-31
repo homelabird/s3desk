@@ -188,6 +188,7 @@ export type JobsLogsState = {
 	refreshLogsForJob: (jobId: string) => void
 	refreshActiveLogs: () => void
 	isLogsLoading: boolean
+	logsError: unknown | null
 	clearLogsForJobs: (jobIds: string[]) => void
 	clearLogsForJob: (jobId: string) => void
 }
@@ -219,6 +220,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 	const [logPollPaused, setLogPollPaused] = useState(false)
 	const [logPollRetryToken, setLogPollRetryToken] = useState(0)
 	const [isLogsLoading, setIsLogsLoading] = useState(false)
+	const [logsError, setLogsError] = useState<unknown | null>(null)
 	const lastScopeKeyRef = useRef(currentScopeKey)
 
 	const logPollBaseMs = 1500
@@ -255,11 +257,13 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 			logOffsetsRef.current[jobId] = nextOffset
 			logRemaindersRef.current[jobId] = ''
 			logNextLineNumberRef.current[jobId] = getNextLineNumberAfterText(text)
+			setLogsError(null)
 			setIsLogsLoading(false)
 		},
 		onError: (err, { requestToken, controller }) => {
 			if (requestToken !== logRequestTokenRef.current) return
 			if (controller.signal.aborted) return
+			setLogsError(err)
 			setIsLogsLoading(false)
 			jobsFeedback.error(err)
 		},
@@ -275,6 +279,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 			logAbortControllerRef.current = controller
 			const requestToken = logRequestTokenRef.current + 1
 			logRequestTokenRef.current = requestToken
+			setLogsError(null)
 			setIsLogsLoading(true)
 			logsMutation.mutate({ jobId, requestToken, controller })
 		},
@@ -304,6 +309,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 
 	const closeLogs = useCallback(() => {
 		invalidateLogRequests()
+		setLogsError(null)
 		setIsLogsLoading(false)
 		setLogsOpen(false)
 		setLogSearchQuery('')
@@ -312,6 +318,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 
 	const clearLogsForJobs = useCallback((jobIds: string[]) => {
 		if (jobIds.length === 0) return
+		if (activeLogJobId && jobIds.includes(activeLogJobId)) setLogsError(null)
 
 		setLogByJobId((prev) => {
 			const next = { ...prev }
@@ -332,7 +339,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 			visibleLogSearchCacheRef.current = null
 			return null
 		})
-	}, [invalidateLogRequests])
+	}, [activeLogJobId, invalidateLogRequests])
 
 	const clearLogsForJob = useCallback(
 		(jobId: string) => {
@@ -358,6 +365,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		logRemaindersRef.current = {}
 		logNextLineNumberRef.current = {}
 		resetLogPolling()
+		setLogsError(null)
 		setIsLogsLoading(false)
 	}, [currentScopeKey, invalidateLogRequests, resetLogPolling])
 
@@ -534,6 +542,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		refreshLogsForJob,
 		refreshActiveLogs,
 		isLogsLoading,
+		logsError,
 		clearLogsForJobs,
 		clearLogsForJob,
 	}

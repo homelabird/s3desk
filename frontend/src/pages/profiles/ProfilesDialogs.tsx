@@ -1,6 +1,9 @@
+import { Grid, Space, Spin, Typography } from 'antd'
 import { Suspense } from 'react'
 
 import type { Profile, ProfileTLSStatus } from '../../api/types'
+import { DialogModal } from '../../components/DialogModal'
+import { OverlaySheet } from '../../components/OverlaySheet'
 import { ProfilesModals } from './profilesLazy'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
 
@@ -45,9 +48,56 @@ type Props = {
 	onImportErrorClear: () => void
 }
 
+function ProfilesDialogsFallback(props: Props) {
+	const screens = Grid.useBreakpoint()
+	const activeDialog = props.createOpen
+		? { title: 'Create Profile', onClose: props.closeCreateModal, profileForm: true }
+		: props.editProfile
+			? { title: 'Edit Profile', onClose: props.closeEditModal, profileForm: true }
+			: props.yamlOpen
+				? { title: 'Profile YAML', onClose: props.closeYamlModal, profileForm: false }
+				: props.importOpen
+					? { title: 'Import Profile YAML', onClose: props.closeImportModal, profileForm: false }
+					: null
+	if (!activeDialog) return null
+
+	const loadingLabel = `Loading ${activeDialog.title.toLowerCase()}`
+	const content = (
+		<Space role="status" aria-live="polite" aria-label={loadingLabel}>
+			<Spin size="small" />
+			<Typography.Text type="secondary">{loadingLabel}…</Typography.Text>
+		</Space>
+	)
+
+	if (activeDialog.profileForm && !screens.md) {
+		return (
+			<OverlaySheet
+				open
+				onClose={activeDialog.onClose}
+				title={activeDialog.title}
+				placement="bottom"
+				height="calc(100dvh - env(safe-area-inset-top))"
+			>
+				{content}
+			</OverlaySheet>
+		)
+	}
+
+	return (
+		<DialogModal
+			open
+			onClose={activeDialog.onClose}
+			title={activeDialog.title}
+			width={activeDialog.profileForm ? 'min(92vw, 820px)' : 720}
+		>
+			{content}
+		</DialogModal>
+	)
+}
+
 export function ProfilesDialogs(props: Props) {
 	return (
-		<Suspense fallback={null}>
+		<Suspense fallback={<ProfilesDialogsFallback {...props} />}>
 			<ProfilesModals
 				createOpen={props.createOpen}
 				closeCreateModal={props.closeCreateModal}

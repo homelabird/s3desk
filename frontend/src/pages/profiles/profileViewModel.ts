@@ -22,7 +22,6 @@ export type ProfileFlagViewModel = {
 	title?: string
 }
 
-type ProfileWithPublicEndpoint = Profile & { publicEndpoint?: string }
 type ProfileWithAzureArm = Profile & {
 	subscriptionId?: string
 	resourceGroup?: string
@@ -31,7 +30,7 @@ type ProfileWithAzureArm = Profile & {
 }
 
 function getPublicEndpoint(profile: Profile | null | undefined): string {
-	return (profile as ProfileWithPublicEndpoint | null | undefined)?.publicEndpoint ?? ''
+	return profile && 'publicEndpoint' in profile ? profile.publicEndpoint ?? '' : ''
 }
 
 const PROFILE_PROVIDER_LABELS: Record<string, string> = {

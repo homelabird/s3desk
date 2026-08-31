@@ -1,5 +1,5 @@
 import { Alert, Button, Input, Space, Spin, Typography } from 'antd'
-import { lazy, Suspense } from 'react'
+import { lazy } from 'react'
 
 import type { Profile, ProfileTLSStatus } from '../../api/types'
 import { DialogModal } from '../../components/DialogModal'
@@ -61,38 +61,36 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 
 	return (
 		<>
-			<Suspense fallback={null}>
-				{props.createOpen ? (
-					<ProfileModal
-						open
-						title="Create Profile"
-						okText="Create"
-						onCancel={props.closeCreateModal}
-						onSubmit={props.onCreateSubmit}
-						loading={props.createLoading}
-						tlsCapability={props.tlsCapability}
-					/>
-				) : null}
+			{props.createOpen ? (
+				<ProfileModal
+					open
+					title="Create Profile"
+					okText="Create"
+					onCancel={props.closeCreateModal}
+					onSubmit={props.onCreateSubmit}
+					loading={props.createLoading}
+					tlsCapability={props.tlsCapability}
+				/>
+			) : null}
 
-				{props.editProfile ? (
-					<ProfileModal
-						open
-						title="Edit Profile"
-						okText="Save"
-						onCancel={props.closeEditModal}
-						onSubmit={(values) => {
-							props.onEditSubmit(props.editProfile!.id, values)
-						}}
-						loading={props.editLoading}
-						initialValues={props.editInitialValues}
-						editMode
-						tlsCapability={props.tlsCapability}
-						tlsStatus={props.tlsStatus}
-						tlsStatusLoading={props.tlsStatusLoading}
-						tlsStatusError={props.tlsStatusError}
-					/>
-				) : null}
-			</Suspense>
+			{props.editProfile ? (
+				<ProfileModal
+					open
+					title="Edit Profile"
+					okText="Save"
+					onCancel={props.closeEditModal}
+					onSubmit={(values) => {
+						props.onEditSubmit(props.editProfile!.id, values)
+					}}
+					loading={props.editLoading}
+					initialValues={props.editInitialValues}
+					editMode
+					tlsCapability={props.tlsCapability}
+					tlsStatus={props.tlsStatus}
+					tlsStatusLoading={props.tlsStatusLoading}
+					tlsStatusError={props.tlsStatusError}
+				/>
+			) : null}
 
 			<DialogModal
 				open={props.yamlOpen}

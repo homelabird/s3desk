@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { useRef, useState, type MutableRefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
 
 import type { APIClientShape } from '../../api/client'
 import type { ProfileFormValues } from './profileTypes'
@@ -56,6 +56,15 @@ export function useProfilesPageMutations(args: {
 	const deleteRequestTokenRef = useRef(0)
 	const testRequestTokenRef = useRef(0)
 	const benchmarkRequestTokenRef = useRef(0)
+	const testAbortControllerRef = useRef<AbortController | null>(null)
+	const benchmarkAbortControllerRef = useRef<AbortController | null>(null)
+
+	useLayoutEffect(() => () => {
+		testAbortControllerRef.current?.abort()
+		testAbortControllerRef.current = null
+		benchmarkAbortControllerRef.current?.abort()
+		benchmarkAbortControllerRef.current = null
+	}, [currentScopeKey])
 
 	const createMutation = useMutation({
 		mutationFn: (values: ProfileFormValues) => api.profiles.createProfile(toCreateRequest(values)),
@@ -234,7 +243,12 @@ export function useProfilesPageMutations(args: {
 	})
 
 	const testMutation = useMutation({
-		mutationFn: (id: string) => api.profiles.testProfile(id),
+		mutationFn: (id: string) => {
+			testAbortControllerRef.current?.abort()
+			const controller = new AbortController()
+			testAbortControllerRef.current = controller
+			return api.profiles.testProfile(id, controller.signal)
+		},
 		onMutate: (id) => {
 			testRequestTokenRef.current += 1
 			const context = {
@@ -258,8 +272,11 @@ export function useProfilesPageMutations(args: {
 			}
 			profilesFeedback.profileTestResult(resp)
 		},
-		onSettled: (_, __, id, context) =>
-			setTestingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),
+		onSettled: (_, __, id, context) => {
+			if (context?.requestToken !== testRequestTokenRef.current) return
+			testAbortControllerRef.current = null
+			setTestingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey))
+		},
 		onError: (err, _id, context) => {
 			if (!matchesCurrentMutationRequest({
 				context,
@@ -275,7 +292,12 @@ export function useProfilesPageMutations(args: {
 	})
 
 	const benchmarkMutation = useMutation({
-		mutationFn: (id: string) => api.profiles.benchmarkProfile(id),
+		mutationFn: (id: string) => {
+			benchmarkAbortControllerRef.current?.abort()
+			const controller = new AbortController()
+			benchmarkAbortControllerRef.current = controller
+			return api.profiles.benchmarkProfile(id, controller.signal)
+		},
 		onMutate: (id) => {
 			benchmarkRequestTokenRef.current += 1
 			const context = {
@@ -299,8 +321,11 @@ export function useProfilesPageMutations(args: {
 			}
 			profilesFeedback.benchmarkResult(resp)
 		},
-		onSettled: (_, __, id, context) =>
-			setBenchmarkingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),
+		onSettled: (_, __, id, context) => {
+			if (context?.requestToken !== benchmarkRequestTokenRef.current) return
+			benchmarkAbortControllerRef.current = null
+			setBenchmarkingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey))
+		},
 		onError: (err, _id, context) => {
 			if (!matchesCurrentMutationRequest({
 				context,

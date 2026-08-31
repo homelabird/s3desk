@@ -1,16 +1,14 @@
 import type { ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../../api/types'
 import type { ProfileFormValues } from './profileTypes'
 
-type ProfileCreateRequestWithPublicEndpoint = ProfileCreateRequest & { publicEndpoint?: string }
-type ProfileUpdateRequestWithPublicEndpoint = ProfileUpdateRequest & { publicEndpoint?: string }
-type ProfileCreateRequestWithAzureArm = ProfileCreateRequestWithPublicEndpoint & {
+type ProfileCreateRequestWithAzureArm = ProfileCreateRequest & {
 	subscriptionId?: string
 	resourceGroup?: string
 	tenantId?: string
 	clientId?: string
 	clientSecret?: string
 }
-type ProfileUpdateRequestWithAzureArm = ProfileUpdateRequestWithPublicEndpoint & {
+type ProfileUpdateRequestWithAzureArm = ProfileUpdateRequest & {
 	subscriptionId?: string
 	resourceGroup?: string
 	tenantId?: string
@@ -99,7 +97,7 @@ export function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest
 		...(values.clearSessionToken ? { sessionToken: '' } : values.sessionToken ? { sessionToken: values.sessionToken } : {}),
 	}
 	if (provider === 'aws_s3') {
-		const req: ProfileUpdateRequestWithPublicEndpoint = {
+		const req: ProfileUpdateRequest = {
 			provider,
 			...base,
 			endpoint: values.endpoint,
@@ -108,7 +106,7 @@ export function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest
 		return req
 	}
 	if (provider === 's3_compatible') {
-		const req: ProfileUpdateRequestWithPublicEndpoint = {
+		const req: ProfileUpdateRequest = {
 			provider,
 			...base,
 			endpoint: values.endpoint,
@@ -116,7 +114,7 @@ export function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest
 		}
 		return req
 	}
-	const req: ProfileUpdateRequestWithPublicEndpoint = {
+	const req: ProfileUpdateRequest = {
 		provider: 's3_compatible',
 		...base,
 		endpoint: values.endpoint,
@@ -187,7 +185,7 @@ export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest
 		tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
 	}
 	if (provider === 'aws_s3') {
-		const req: ProfileCreateRequestWithPublicEndpoint = {
+		const req: ProfileCreateRequest = {
 			provider,
 			...base,
 			...(values.endpoint ? { endpoint: values.endpoint } : {}),
@@ -196,7 +194,7 @@ export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest
 		return req
 	}
 	if (provider === 's3_compatible') {
-		const req: ProfileCreateRequestWithPublicEndpoint = {
+		const req: ProfileCreateRequest = {
 			provider,
 			...base,
 			endpoint: values.endpoint,
@@ -204,7 +202,7 @@ export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest
 		}
 		return req
 	}
-	const req: ProfileCreateRequestWithPublicEndpoint = {
+	const req: ProfileCreateRequest = {
 		provider: 's3_compatible',
 		...base,
 		endpoint: values.endpoint,

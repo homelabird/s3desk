@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { uploadFilesWithProgress } from '../domains/uploads'
+import { createUpload, getUploadChunks, getUploadChunksBatch, uploadFilesWithProgress } from '../domains/uploads'
 import type { UploadFileItem } from '../uploads'
 
 type RecordedRequest = {
@@ -70,6 +70,42 @@ function buildItem(contents: string, name: string, relPath?: string): UploadFile
 	}
 }
 
+it('bounds and forwards cancellation for upload session creation', async () => {
+	const request = vi.fn().mockResolvedValue({ uploadId: 'upload-1', mode: 'staging' })
+	const controller = new AbortController()
+	const payload = { bucket: 'bucket-a', prefix: 'docs/', mode: 'staging' as const }
+
+	await createUpload(request, 'profile-1', payload, controller.signal)
+
+	expect(request).toHaveBeenCalledWith('/uploads', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(payload),
+		signal: controller.signal,
+	}, { profileId: 'profile-1', timeoutMs: 30_000 })
+})
+
+it('forwards AbortSignal through batch and compatibility chunk-status requests', async () => {
+	const request = vi.fn()
+		.mockResolvedValueOnce({ items: [{ path: 'file.bin', present: [0] }] })
+		.mockResolvedValueOnce({ present: [0] })
+	const controller = new AbortController()
+	const item = { path: 'file.bin', total: 2, chunkSize: 5, fileSize: 10 }
+
+	await getUploadChunksBatch(request, 'profile-1', 'upload-1', { items: [item] }, controller.signal)
+	await getUploadChunks(request, 'profile-1', 'upload-1', item, controller.signal)
+
+	expect(request).toHaveBeenNthCalledWith(1, '/uploads/upload-1/chunks/batch', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ items: [item] }),
+		signal: controller.signal,
+	}, { profileId: 'profile-1', timeoutMs: 30_000 })
+	expect(request).toHaveBeenNthCalledWith(2, expect.stringContaining('/uploads/upload-1/chunks?'), {
+		method: 'GET', signal: controller.signal,
+	}, { profileId: 'profile-1' })
+})
+
 describe('uploadFilesWithProgress', () => {
 	const originalXMLHttpRequest = globalThis.XMLHttpRequest
 
@@ -106,6 +142,10 @@ describe('uploadFilesWithProgress', () => {
 			'dir-a/alpha.txt',
 			'dir-b/nested/beta.txt',
 		])
+		expect(FakeXMLHttpRequest.requests.map((request) => request.headers['x-upload-chunk-index'])).toEqual(['0', '0'])
+		expect(FakeXMLHttpRequest.requests.map((request) => request.headers['x-upload-chunk-total'])).toEqual(['1', '1'])
+		expect(FakeXMLHttpRequest.requests.map((request) => request.headers['x-upload-chunk-size'])).toEqual(['1024', '1024'])
+		expect(FakeXMLHttpRequest.requests.map((request) => request.headers['x-upload-file-size'])).toEqual(['5', '4'])
 		expect(FakeXMLHttpRequest.requests.every((request) => request.body instanceof Blob)).toBe(true)
 	})
 

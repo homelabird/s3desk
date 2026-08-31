@@ -18,6 +18,7 @@ describe('JobsLogsDrawer', () => {
 				drawerWidth={720}
 				activeLogJobId="job-1"
 				isLogsLoading={false}
+				logsError={null}
 				onRefresh={vi.fn()}
 				followLogs
 				onFollowLogsChange={vi.fn()}
@@ -62,6 +63,7 @@ describe('JobsLogsDrawer', () => {
 				drawerWidth={720}
 				activeLogJobId="job-1"
 				isLogsLoading={false}
+				logsError={null}
 				onRefresh={vi.fn()}
 				followLogs
 				onFollowLogsChange={vi.fn()}
@@ -97,7 +99,7 @@ describe('JobsLogsDrawer', () => {
 	it('parses legacy backend lines and explains empty logs', () => {
 		const { rerender } = render(
 			<JobsLogsDrawer
-				open onClose={vi.fn()} drawerWidth={720} activeLogJobId="job-1" isLogsLoading={false} onRefresh={vi.fn()}
+				open onClose={vi.fn()} drawerWidth={720} activeLogJobId="job-1" isLogsLoading={false} logsError={null} onRefresh={vi.fn()}
 				followLogs onFollowLogsChange={vi.fn()} logPollPaused={false} logPollFailures={0} onResumeLogPolling={vi.fn()}
 				logSearchQuery="" onLogSearchQueryChange={vi.fn()} onCopyVisibleLogs={vi.fn(async () => {})} normalizedLogSearchQuery=""
 				visibleLogEntries={['[info] uploaded file']} visibleLogSeveritySummary={{ error: 0, warn: 0 }} latestErrorIndex={-1}
@@ -110,7 +112,7 @@ describe('JobsLogsDrawer', () => {
 
 		rerender(
 			<JobsLogsDrawer
-				open onClose={vi.fn()} drawerWidth={720} activeLogJobId="job-1" isLogsLoading={false} onRefresh={vi.fn()}
+				open onClose={vi.fn()} drawerWidth={720} activeLogJobId="job-1" isLogsLoading={false} logsError={null} onRefresh={vi.fn()}
 				followLogs onFollowLogsChange={vi.fn()} logPollPaused={false} logPollFailures={0} onResumeLogPolling={vi.fn()}
 				logSearchQuery="" onLogSearchQueryChange={vi.fn()} onCopyVisibleLogs={vi.fn(async () => {})} normalizedLogSearchQuery=""
 				visibleLogEntries={[]} visibleLogSeveritySummary={{ error: 0, warn: 0 }} latestErrorIndex={-1}
@@ -121,6 +123,26 @@ describe('JobsLogsDrawer', () => {
 		expect(screen.getByText(/No log output was recorded/)).toBeInTheDocument()
 		expect(screen.queryByRole('textbox', { name: 'Search logs' })).not.toBeInTheDocument()
 		expect(screen.queryByText('Follow')).not.toBeInTheDocument()
+	})
+
+	it('shows log load failures instead of the empty-log state', () => {
+		const onRefresh = vi.fn()
+		render(
+			<JobsLogsDrawer
+				open onClose={vi.fn()} drawerWidth={720} activeLogJobId="job-1" isLogsLoading={false}
+				logsError={new Error('log endpoint unavailable')} onRefresh={onRefresh}
+				followLogs onFollowLogsChange={vi.fn()} logPollPaused={false} logPollFailures={0} onResumeLogPolling={vi.fn()}
+				logSearchQuery="" onLogSearchQueryChange={vi.fn()} onCopyVisibleLogs={vi.fn(async () => {})} normalizedLogSearchQuery=""
+				visibleLogEntries={[]} visibleLogSeveritySummary={{ error: 0, warn: 0 }} latestErrorIndex={-1}
+				activeLogLines={0} onLogsContainerRef={vi.fn()} visibleLogText="" searchInputWidth={320}
+			/>,
+		)
+
+		expect(screen.getByText('Failed to load job logs')).toBeInTheDocument()
+		expect(screen.getByText('log endpoint unavailable')).toBeInTheDocument()
+		expect(screen.queryByText(/No log output was recorded/)).not.toBeInTheDocument()
+		screen.getByRole('button', { name: 'Refresh job logs' }).click()
+		expect(onRefresh).toHaveBeenCalledOnce()
 	})
 
 	it('virtualizes very large logs without truncating visible log metadata', () => {
@@ -142,6 +164,7 @@ describe('JobsLogsDrawer', () => {
 					drawerWidth={720}
 					activeLogJobId="job-1"
 					isLogsLoading={false}
+					logsError={null}
 					onRefresh={vi.fn()}
 					followLogs
 					onFollowLogsChange={vi.fn()}

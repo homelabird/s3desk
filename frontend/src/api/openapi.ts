@@ -2620,7 +2620,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload files to staging (multipart/form-data) */
+        /**
+         * Upload files or one file chunk
+         * @description Without `X-Upload-Chunk-Index`, accepts `multipart/form-data` files.
+         *     When `X-Upload-Chunk-Index` is present, the other `X-Upload-*` headers
+         *     below are required and the request body is one raw chunk. For positive
+         *     files, `total` must equal the ceiling of `fileSize` divided by
+         *     `chunkSize`; the body length must match the declared chunk. Staging mode
+         *     also accepts a zero-byte file as one empty chunk with `total=1`; direct
+         *     multipart mode requires a positive file size.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -2628,6 +2637,16 @@ export interface paths {
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
+                    /** @description Zero-based chunk index. Its presence selects raw chunk upload mode. */
+                    "X-Upload-Chunk-Index"?: number;
+                    /** @description Required in raw chunk mode; must equal the expected chunk count. */
+                    "X-Upload-Chunk-Total"?: number;
+                    /** @description Required in raw chunk mode; nominal size of each chunk in bytes. */
+                    "X-Upload-Chunk-Size"?: number;
+                    /** @description Required in raw chunk mode; total file size in bytes. */
+                    "X-Upload-File-Size"?: number;
+                    /** @description Required in raw chunk mode; relative file path within the upload session. */
+                    "X-Upload-Relative-Path"?: string;
                 };
                 path: {
                     uploadId: components["parameters"]["UploadId"];
@@ -2639,6 +2658,7 @@ export interface paths {
                     "multipart/form-data": {
                         files?: string[];
                     };
+                    "application/octet-stream": string;
                 };
             };
             responses: {
@@ -2759,6 +2779,58 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/uploads/{uploadId}/chunks/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get upload chunk statuses in a bounded batch
+         * @description Returns chunk status for up to 100 files and 10,000 aggregate chunks while sharing upload-session and profile resolution across the batch. Works for both staging and multipart upload modes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    uploadId: components["parameters"]["UploadId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UploadChunkStatusBatchRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadChunkStatusBatchResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                502: components["responses"]["ErrorResponse"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -3387,6 +3459,8 @@ export interface components {
             provider: "aws_s3";
             /** @description Optional. If omitted, uses AWS default endpoint resolution. */
             endpoint?: string;
+            /** @description Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment. */
+            publicEndpoint?: string;
             region: string;
             forcePathStyle: boolean;
         } & {
@@ -3400,6 +3474,8 @@ export interface components {
             /** @enum {string} */
             provider: "s3_compatible";
             endpoint: string;
+            /** @description Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment. */
+            publicEndpoint?: string;
             region: string;
             forcePathStyle: boolean;
         } & {
@@ -3476,6 +3552,8 @@ export interface components {
             name: string;
             /** @description Optional. If omitted, uses AWS default endpoint resolution. */
             endpoint?: string;
+            /** @description Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; omit or send an empty string to leave unset. */
+            publicEndpoint?: string;
             region: string;
             accessKeyId: string;
             secretAccessKey: string;
@@ -3495,6 +3573,8 @@ export interface components {
             provider: "s3_compatible";
             name: string;
             endpoint: string;
+            /** @description Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; omit or send an empty string to leave unset. */
+            publicEndpoint?: string;
             region: string;
             accessKeyId: string;
             secretAccessKey: string;
@@ -3582,6 +3662,8 @@ export interface components {
             provider: "aws_s3";
             name?: string;
             endpoint?: string;
+            /** @description Browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; send an empty string to clear, or omit to keep unchanged. */
+            publicEndpoint?: string;
             region?: string;
             accessKeyId?: string;
             secretAccessKey?: string;
@@ -3599,6 +3681,8 @@ export interface components {
             provider: "s3_compatible";
             name?: string;
             endpoint?: string;
+            /** @description Browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; send an empty string to clear, or omit to keep unchanged. */
+            publicEndpoint?: string;
             region?: string;
             accessKeyId?: string;
             secretAccessKey?: string;
@@ -4174,6 +4258,25 @@ export interface components {
         UploadChunkState: {
             /** @description Zero-based indices of chunks that have been successfully uploaded */
             present: number[];
+        };
+        UploadChunkStatusRequest: {
+            path: string;
+            /** @description Must equal the ceiling of fileSize divided by chunkSize. */
+            total: number;
+            /** Format: int64 */
+            chunkSize: number;
+            /** Format: int64 */
+            fileSize: number;
+        };
+        UploadChunkStatusBatchRequest: {
+            items: components["schemas"]["UploadChunkStatusRequest"][];
+        };
+        UploadChunkStatusBatchItem: {
+            path: string;
+            present: number[];
+        };
+        UploadChunkStatusBatchResponse: {
+            items: components["schemas"]["UploadChunkStatusBatchItem"][];
         };
         UploadMultipartCompleteRequest: {
             path: string;

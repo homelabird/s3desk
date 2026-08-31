@@ -7,6 +7,7 @@ import { queryKeys } from '../api/queryKeys'
 import type { ServerRestoreResponse } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { formatErrorWithHint } from '../lib/errors'
+import { FormField } from './FormField'
 import styles from './SidebarBackupAction.module.css'
 
 type Protocol = ServerBackupTransferLocation['protocol']
@@ -58,6 +59,21 @@ export function SidebarBackupRemoteSection(props: Props) {
 			setError(props.exportBlockedReason)
 			return
 		}
+		const requiredFieldError = !path.trim()
+			? 'Enter a backup path.'
+			: protocol === 'object_storage' && !selectedProfileId
+				? 'Select an object storage profile.'
+				: protocol === 'object_storage' && !bucket.trim()
+					? 'Enter a bucket or container.'
+					: protocol === 'ftp' && !host.trim()
+						? 'Enter an FTP host.'
+						: protocol === 'ftp' && !username.trim()
+							? 'Enter an FTP username.'
+							: null
+		if (requiredFieldError) {
+			setError(requiredFieldError)
+			return
+		}
 		setLoading(true)
 		setError(null)
 		setResult(null)
@@ -102,32 +118,49 @@ export function SidebarBackupRemoteSection(props: Props) {
 			</Radio.Group>
 			{protocol === 'object_storage' ? (
 				<>
-					<Select
-						aria-label="Object storage profile"
-						placeholder="Object storage profile"
-						value={selectedProfileId || undefined}
-						onChange={setProfileId}
-						options={profiles.map((profile) => ({ value: profile.id, label: profile.name }))}
-					/>
-					<Input placeholder="Bucket or container" value={bucket} onChange={(event) => setBucket(event.target.value)} />
+					<FormField label="Object storage profile" required htmlFor="remote-backup-profile">
+						<Select
+							id="remote-backup-profile"
+							placeholder="Object storage profile"
+							value={selectedProfileId || undefined}
+							onChange={setProfileId}
+							options={profiles.map((profile) => ({ value: profile.id, label: profile.name }))}
+						/>
+					</FormField>
+					<FormField label="Bucket or container" required htmlFor="remote-backup-bucket">
+						<Input id="remote-backup-bucket" value={bucket} onChange={(event) => setBucket(event.target.value)} />
+					</FormField>
 				</>
 			) : null}
 			{protocol === 'ftp' ? (
 				<>
-					<Input placeholder="FTP host" value={host} onChange={(event) => setHost(event.target.value)} />
-					<InputNumber aria-label="FTP port" min={1} max={65535} value={port} onChange={(value) => setPort(value ?? 21)} />
-					<Input placeholder="FTP username" value={username} onChange={(event) => setUsername(event.target.value)} />
-					<Input.Password placeholder="FTP password" value={ftpPassword} onChange={(event) => setFTPPassword(event.target.value)} />
+					<FormField label="FTP host" required htmlFor="remote-backup-ftp-host">
+						<Input id="remote-backup-ftp-host" value={host} onChange={(event) => setHost(event.target.value)} />
+					</FormField>
+					<FormField label="FTP port" required htmlFor="remote-backup-ftp-port">
+						<InputNumber id="remote-backup-ftp-port" min={1} max={65535} value={port} onChange={(value) => setPort(value ?? 21)} />
+					</FormField>
+					<FormField label="FTP username" required htmlFor="remote-backup-ftp-username">
+						<Input id="remote-backup-ftp-username" value={username} onChange={(event) => setUsername(event.target.value)} />
+					</FormField>
+					<FormField label="FTP password" htmlFor="remote-backup-ftp-password">
+						<Input.Password id="remote-backup-ftp-password" value={ftpPassword} onChange={(event) => setFTPPassword(event.target.value)} />
+					</FormField>
 					<Alert type="warning" showIcon title="Plain FTP" description="FTP credentials and traffic are not transport-encrypted. Protect the backup payload or use a trusted private network." />
 				</>
 			) : null}
-			<Input
-				placeholder={protocol === 'nfs' ? '/mounted/backups/' : 'backups/'}
-				value={path}
-				onChange={(event) => setPath(event.target.value)}
-			/>
+			<FormField label={protocol === 'nfs' ? 'Mounted backup path' : 'Backup path or object key'} required htmlFor="remote-backup-path">
+				<Input
+					id="remote-backup-path"
+					placeholder={protocol === 'nfs' ? '/mounted/backups/' : 'backups/'}
+					value={path}
+					onChange={(event) => setPath(event.target.value)}
+				/>
+			</FormField>
 			{operation === 'restore' ? (
-				<Input.Password placeholder="Backup password (optional)" value={restorePassword} onChange={(event) => setRestorePassword(event.target.value)} />
+				<FormField label="Backup password (optional)" htmlFor="remote-backup-restore-password">
+					<Input.Password id="remote-backup-restore-password" value={restorePassword} onChange={(event) => setRestorePassword(event.target.value)} />
+				</FormField>
 			) : null}
 			<Typography.Text type="secondary">
 				{operation === 'export' ? 'A trailing slash appends the generated backup filename.' : 'Enter the exact backup file path or object key.'}

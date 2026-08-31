@@ -41,7 +41,7 @@ type BuildProfilesPagePresentationPropsArgs = {
 export function buildProfilesPagePresentationProps(
 	args: BuildProfilesPagePresentationPropsArgs,
 ): ProfilesPageShellProps {
-	const showProfilesEmpty = !args.profilesQueryIsFetching && args.profiles.length === 0
+	const showProfilesEmpty = !args.profilesQueryIsFetching && !args.profilesError && args.profiles.length === 0
 
 	const handleDeleteProfile = (profile: Profile) => {
 		confirmDangerAction({
@@ -59,7 +59,7 @@ export function buildProfilesPagePresentationProps(
 		onOpenImportModal: args.onOpenImportModal,
 		onOpenCreateModal: args.onOpenCreateModal,
 		onboarding: {
-			visible: args.onboardingVisible,
+			visible: args.onboardingVisible && (args.profiles.length > 0 || showProfilesEmpty),
 			backendConnected: args.backendConnected,
 			transferEngine: args.transferEngine,
 			apiTokenEnabled: args.apiTokenEnabled,

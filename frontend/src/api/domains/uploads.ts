@@ -1,4 +1,5 @@
 import { clearNetworkStatus, publishNetworkStatus } from '../../lib/networkStatus'
+import { DEFAULT_TIMEOUT_MS } from '../config'
 import { parseAPIError, RequestAbortedError } from '../errors'
 import { setSafeXHRHeader } from '../headers'
 import { rejectedTransferHandle, type RequestOptions } from '../retryTransport'
@@ -12,6 +13,8 @@ import {
 import type {
 	JobCreatedResponse,
 	UploadChunkState,
+	UploadChunkStatusBatchRequest,
+	UploadChunkStatusBatchResponse,
 	UploadCreateRequest,
 	UploadCreateResponse,
 	UploadMultipartAbortRequest,
@@ -23,12 +26,18 @@ import type {
 type RequestFn = <T>(path: string, init: RequestInit, options?: RequestOptions) => Promise<T>
 type XhrConfig = { baseUrl: string; apiToken: string }
 
-export function createUpload(request: RequestFn, profileId: string, req: UploadCreateRequest): Promise<UploadCreateResponse> {
+export function createUpload(
+	request: RequestFn,
+	profileId: string,
+	req: UploadCreateRequest,
+	signal?: AbortSignal,
+): Promise<UploadCreateResponse> {
 	return request('/uploads', {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(req),
-	}, { profileId })
+		signal,
+	}, { profileId, timeoutMs: DEFAULT_TIMEOUT_MS })
 }
 
 export function presignUpload(request: RequestFn, profileId: string, uploadId: string, req: UploadPresignRequest): Promise<UploadPresignResponse> {
@@ -83,13 +92,29 @@ export function getUploadChunks(
 	profileId: string,
 	uploadId: string,
 	args: { path: string; total: number; chunkSize: number; fileSize: number },
+	signal?: AbortSignal,
 ): Promise<UploadChunkState> {
 	const params = new URLSearchParams()
 	params.set('path', args.path)
 	params.set('total', String(args.total))
 	params.set('chunkSize', String(args.chunkSize))
 	params.set('fileSize', String(args.fileSize))
-	return request(`/uploads/${encodeURIComponent(uploadId)}/chunks?${params.toString()}`, { method: 'GET' }, { profileId })
+	return request(`/uploads/${encodeURIComponent(uploadId)}/chunks?${params.toString()}`, { method: 'GET', signal }, { profileId })
+}
+
+export function getUploadChunksBatch(
+	request: RequestFn,
+	profileId: string,
+	uploadId: string,
+	req: UploadChunkStatusBatchRequest,
+	signal?: AbortSignal,
+): Promise<UploadChunkStatusBatchResponse> {
+	return request(`/uploads/${encodeURIComponent(uploadId)}/chunks/batch`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(req),
+		signal,
+	}, { profileId, timeoutMs: DEFAULT_TIMEOUT_MS })
 }
 
 export function uploadFilesWithProgress(

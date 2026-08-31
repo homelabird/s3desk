@@ -261,6 +261,126 @@ describe('runUploadTask', () => {
 		expect(args.api.uploads.deleteUpload).not.toHaveBeenCalled()
 	})
 
+	it('lets user cancellation abort an in-flight resumable chunk lookup', async () => {
+		const task = createUploadTask({
+			uploadId: 'resume-session-1',
+			resumeFiles: [{ path: 'clip.mp4', size: 128, chunkSizeBytes: 32 }],
+		})
+		let lookupSignal: AbortSignal | undefined
+		let notifyLookupStarted = () => {}
+		const lookupStarted = new Promise<void>((resolve) => {
+			notifyLookupStarted = resolve
+		})
+		resolveExistingResumeChunksMock.mockImplementation((lookupArgs: { signal: AbortSignal }) => {
+			lookupSignal = lookupArgs.signal
+			notifyLookupStarted()
+			return new Promise((_resolve, reject) => {
+				lookupArgs.signal.addEventListener('abort', () => reject(new RequestAbortedError()), { once: true })
+			})
+		})
+		const args = createRunArgs({ task })
+
+		const pending = runUploadTask(args)
+		await lookupStarted
+		args.uploadAbortByTaskIdRef.current[task.id]?.()
+		await pending
+
+		expect(lookupSignal?.aborted).toBe(true)
+		const canceledUpdate = (args.updateUploadTask as UpdateUploadTaskMock).mock.calls
+			.map(([, updater]) => updater(args.task))
+			.find((next) => next.status === 'canceled')
+		expect(canceledUpdate).toMatchObject({ status: 'canceled', retryFileHandleState: 'remembered' })
+		expect(args.notifications.info).toHaveBeenCalledWith('Upload canceled')
+		expect(executeUploadAttemptMock).not.toHaveBeenCalled()
+		expect(args.uploadAbortByTaskIdRef.current[task.id]).toBeUndefined()
+	})
+
+	it('keeps cancellation active while an unavailable resume creates a replacement session', async () => {
+		const task = createUploadTask({
+			uploadId: 'resume-session-1',
+			resumeFiles: [{ path: 'clip.mp4', size: 128, chunkSizeBytes: 32 }],
+		})
+		let resolveSession!: (value: { uploadId: string; mode: string; maxBytes: null }) => void
+		let notifySessionStarted = () => {}
+		const sessionStarted = new Promise<void>((resolve) => {
+			notifySessionStarted = resolve
+		})
+		createUploadSessionWithFallbackMock.mockImplementation(() => {
+			notifySessionStarted()
+			return new Promise((resolve) => {
+				resolveSession = resolve
+			})
+		})
+		const args = createRunArgs({ task })
+
+		const pending = runUploadTask(args)
+		await sessionStarted
+		args.uploadAbortByTaskIdRef.current[task.id]?.()
+		resolveSession({ uploadId: 'replacement-session-1', mode: 'staging', maxBytes: null })
+		await pending
+
+		expect(executeUploadAttemptMock).not.toHaveBeenCalled()
+		expect(commitUploadAndTrackJobMock).not.toHaveBeenCalled()
+		expect(args.api.uploads.deleteUpload).toHaveBeenCalledWith('profile-1', 'replacement-session-1')
+		const canceledUpdate = (args.updateUploadTask as UpdateUploadTaskMock).mock.calls
+			.map(([, updater]) => updater(args.task))
+			.find((next) => next.status === 'canceled')
+		expect(canceledUpdate).toMatchObject({ status: 'canceled', retryFileHandleState: 'remembered' })
+		expect(args.uploadAbortByTaskIdRef.current[task.id]).toBeUndefined()
+	})
+
+	it('does not let a canceled run clean up a newer retry with the same task id', async () => {
+		const task = createUploadTask({
+			uploadId: 'resume-session-1',
+			resumeFiles: [{ path: 'clip.mp4', size: 128, chunkSizeBytes: 32 }],
+		})
+		let resolveOldSession!: (value: { uploadId: string; mode: string; maxBytes: null }) => void
+		let notifyOldSessionStarted = () => {}
+		const oldSessionStarted = new Promise<void>((resolve) => {
+			notifyOldSessionStarted = resolve
+		})
+		createUploadSessionWithFallbackMock
+			.mockImplementationOnce(() => {
+				notifyOldSessionStarted()
+				return new Promise((resolve) => {
+					resolveOldSession = resolve
+				})
+			})
+			.mockResolvedValueOnce({ uploadId: 'retry-session-1', mode: 'staging', maxBytes: null })
+		let resolveRetryAttempt!: (value: { skipped: number }) => void
+		let notifyRetryAttemptStarted = () => {}
+		const retryAttemptStarted = new Promise<void>((resolve) => {
+			notifyRetryAttemptStarted = resolve
+		})
+		executeUploadAttemptMock.mockImplementationOnce(() => {
+			notifyRetryAttemptStarted()
+			return new Promise((resolve) => {
+				resolveRetryAttempt = resolve
+			})
+		})
+		const args = createRunArgs({ task })
+
+		const oldRun = runUploadTask(args)
+		await oldSessionStarted
+		args.uploadAbortByTaskIdRef.current[task.id]?.()
+		const retryRun = runUploadTask(args)
+		await retryAttemptStarted
+		const retryAbort = args.uploadAbortByTaskIdRef.current[task.id]
+		const retryEstimator = args.uploadEstimatorByTaskIdRef.current[task.id]
+		resolveOldSession({ uploadId: 'canceled-session-1', mode: 'staging', maxBytes: null })
+		await oldRun
+
+		expect(args.uploadAbortByTaskIdRef.current[task.id]).toBe(retryAbort)
+		expect(args.uploadEstimatorByTaskIdRef.current[task.id]).toBe(retryEstimator)
+		expect(args.notifications.info).not.toHaveBeenCalledWith('Upload canceled')
+		expect(args.api.uploads.deleteUpload).toHaveBeenCalledWith('profile-1', 'canceled-session-1')
+
+		resolveRetryAttempt({ skipped: 0 })
+		await retryRun
+		expect(args.uploadAbortByTaskIdRef.current[task.id]).toBeUndefined()
+		expect(args.uploadEstimatorByTaskIdRef.current[task.id]).toBeUndefined()
+	})
+
 	it('stops before session creation when resumable chunk lookup fails validation', async () => {
 		const task = createUploadTask({
 			uploadId: 'resume-session-1',

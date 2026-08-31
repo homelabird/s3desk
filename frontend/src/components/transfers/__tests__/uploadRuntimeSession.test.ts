@@ -37,6 +37,7 @@ describe('createUploadSessionWithFallback', () => {
 			.mockRejectedValueOnce(unsupportedError())
 			.mockResolvedValueOnce({ uploadId: 'fallback-upload', mode: 'direct', maxBytes: null })
 		const onFallback = vi.fn()
+		const controller = new AbortController()
 
 		const session = await createUploadSessionWithFallback({
 			api: { uploads: { createUpload } } as never,
@@ -44,6 +45,7 @@ describe('createUploadSessionWithFallback', () => {
 			preferredMode: 'presigned',
 			fallbackMode: 'direct',
 			canUsePresigned: true,
+			signal: controller.signal,
 			onFallback,
 		})
 
@@ -52,12 +54,12 @@ describe('createUploadSessionWithFallback', () => {
 			bucket: 'bucket-a',
 			prefix: 'docs/',
 			mode: 'presigned',
-		})
+		}, controller.signal)
 		expect(createUpload).toHaveBeenNthCalledWith(2, 'profile-1', {
 			bucket: 'bucket-a',
 			prefix: 'docs/',
 			mode: 'direct',
-		})
+		}, controller.signal)
 		expect(onFallback).toHaveBeenCalledWith({
 			from: 'presigned',
 			to: 'direct',
@@ -87,7 +89,7 @@ describe('createUploadSessionWithFallback', () => {
 			bucket: 'bucket-a',
 			prefix: 'docs/',
 			mode: 'staging',
-		})
+		}, undefined)
 		expect(onFallback).toHaveBeenCalledWith({
 			from: 'direct',
 			to: 'staging',

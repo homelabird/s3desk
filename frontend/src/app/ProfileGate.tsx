@@ -12,6 +12,7 @@ export function renderProfileGate(args: {
     pathname.startsWith("/profiles") ||
     pathname.startsWith("/buckets") ||
     pathname.startsWith("/objects") ||
+    pathname.startsWith("/uploads") ||
     pathname.startsWith("/jobs")
   ) {
     return null;

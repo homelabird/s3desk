@@ -36,12 +36,12 @@ export function deleteProfile(request: RequestFn, profileId: string): Promise<vo
 	return request(`/profiles/${encodeURIComponent(profileId)}`, { method: 'DELETE' })
 }
 
-export function testProfile(request: RequestFn, profileId: string): Promise<ProfileTestResponse> {
-	return request(`/profiles/${encodeURIComponent(profileId)}/test`, { method: 'POST' }, { timeoutMs: DEFAULT_TIMEOUT_MS })
+export function testProfile(request: RequestFn, profileId: string, signal?: AbortSignal): Promise<ProfileTestResponse> {
+	return request(`/profiles/${encodeURIComponent(profileId)}/test`, { method: 'POST', signal }, { timeoutMs: DEFAULT_TIMEOUT_MS })
 }
 
-export function benchmarkProfile(request: RequestFn, profileId: string): Promise<ProfileBenchmarkResponse> {
-	return request(`/profiles/${encodeURIComponent(profileId)}/benchmark`, { method: 'POST' }, { timeoutMs: 120_000 })
+export function benchmarkProfile(request: RequestFn, profileId: string, signal?: AbortSignal): Promise<ProfileBenchmarkResponse> {
+	return request(`/profiles/${encodeURIComponent(profileId)}/benchmark`, { method: 'POST', signal }, { timeoutMs: 120_000 })
 }
 
 export function getProfileTLS(request: RequestFn, profileId: string): Promise<ProfileTLSStatus> {
