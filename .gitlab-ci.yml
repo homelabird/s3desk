@@ -11,6 +11,10 @@ workflow:
     - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
       when: never
     - changes:
+        - README.md
+        - docs/**/*
+      when: always
+    - changes:
         - .gitlab-ci.yml
         - ansible/**/*
         - .gitleaks.toml
@@ -26,20 +30,11 @@ workflow:
         - e2e/**/*
         - frontend/**/*
         - k8s/**/*
-        - docs/RELEASE_GATE.md
-        - docs/TESTING.md
-        - docs/release/**/*
         - scripts/**/*
         - THIRD_PARTY_NOTICES.md
         - third_party/licenses-manual/**/*
         - third_party/licenses/**/*
       when: always
-    - changes:
-        - README.md
-        - LICENSE*
-        - docs/**/*
-        - docs/wiki/**/*
-      when: never
     - when: never
 
 default:
@@ -441,6 +436,8 @@ gitleaks_scan:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: on_success
     - changes:
+        - README.md
+        - docs/**/*
         - .gitlab-ci.yml
         - .gitleaks.toml
         - Containerfile
@@ -694,6 +691,41 @@ go_test:
     paths:
       - artifacts/ci/backend/
       - backend/coverage.out
+    expire_in: 7 days
+
+go_postgres:
+  stage: test
+  image: "harbor.k8s.homelabird.com/library/golang:1.25.13"
+  services:
+    - name: "docker.io/library/postgres:15-alpine"
+      alias: postgres
+      variables:
+        HEALTHCHECK_TCP_PORT: "5432"
+  interruptible: true
+  <<: *go_cache
+  needs: []
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - backend/**/*
+    - when: never
+  variables:
+    POSTGRES_DB: "s3desk_test"
+    POSTGRES_USER: "s3desk"
+    POSTGRES_PASSWORD: "s3desk-${CI_JOB_ID}"
+    S3DESK_TEST_POSTGRES_URL: "postgres://s3desk:s3desk-${CI_JOB_ID}@postgres:5432/s3desk_test?sslmode=disable"
+    KUBERNETES_MEMORY_REQUEST: "2Gi"
+    KUBERNETES_MEMORY_LIMIT: "4Gi"
+  script:
+    - |
+      set -o pipefail
+      mkdir -p artifacts/ci/backend
+      cd backend
+      go test -race ./internal/store -run '^(TestPostgresTransactionReliability|TestPostgresObjectIndexSearchIsCaseInsensitive)$' -count=1 2>&1 | tee ../artifacts/ci/backend/go-postgres.log
+  artifacts:
+    when: always
+    paths:
+      - artifacts/ci/backend/go-postgres.log
     expire_in: 7 days
 
 go_race:
@@ -1509,6 +1541,7 @@ license_audit_runtime:
     - if: '$RUN_DEV_AUDIT == "1"'
       when: on_success
     - changes:
+        - backend/**/*.go
         - backend/go.mod
         - backend/go.sum
         - frontend/package.json
@@ -1594,6 +1627,7 @@ publish_dockerhub:
     - release_readiness_preflight
     - release_postgres_smoke
     - release_sqlite_smoke
+    - go_postgres
     - helm_lint
     - helm_template
     - helm_template_negative

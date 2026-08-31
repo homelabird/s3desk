@@ -47,6 +47,7 @@ GitLab adds required quality gates around that minimal backend command:
 
 - `shellcheck` runs `shellcheck -x` for `scripts/**/*.sh` and stores logs in `artifacts/ci/shellcheck/`.
 - `go_test` runs `go vet`, writes `backend/coverage.out`, enforces `GO_COVERAGE_MIN_TOTAL`, and stores backend logs in `artifacts/ci/backend/`.
+- `go_postgres` runs the store transaction and case-insensitive object-search contracts with `-race` against a disposable PostgreSQL 15 service; the service derives an ephemeral password from the GitLab job ID and uses PostgreSQL's default SCRAM host authentication.
 - `go_race` runs the targeted race smoke `go test -race ./internal/api ./internal/jobs` and stores `artifacts/ci/backend/go-race.log`.
 - `golangci_lint` uses `GOLANGCI_LINT_CONFIG` and fails if the checked-in `.golangci.yml` is missing.
 - Independent Helm, OpenAPI, shell, Go, frontend source validation, and frontend smoke jobs start immediately instead of waiting for unrelated stages. The focused Vitest smoke is tag-only, while merge-request E2E runs only for frontend or OpenAPI changes.

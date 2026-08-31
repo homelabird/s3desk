@@ -1,15 +1,15 @@
 # 남은 구조 부채 우선순위
 
-## 2026-08-25 최적화 goal 종료 인계
+## 2026-08-31 품질 개선 갱신
 
-이번 goal에서는 Jobs 조회 batch, 요청 취소, 전송 상태 저장 coalescing, 큰 payload 렌더·검색 및 즐겨찾기 정렬 비용까지 구현하고 로컬 전체 게이트로 마감한다. 아래 항목은 이번 범위에서 더 구현하지 않고 후속 작업으로 남긴다.
+Jobs 조회 batch, 요청 취소, 전송 상태 저장 coalescing, 큰 payload 렌더·검색 및 즐겨찾기 정렬 비용은 로컬 전체 게이트로 마감했다. 이번 갱신에서는 profile benchmark cleanup/cancellation, backup archive 방어, remote backup 입력 검증, `/uploads` profile gate, 문서 변경 gitleaks 경계, 재개 upload chunk-status batch, PostgreSQL 검색/CI, Settings lazy fallback까지 보강해 문서화된 owner-local 후속 항목을 닫았다.
 
-### 후속 P1. 재개 업로드의 파일별 chunk-status 요청 batch화
+### 완료. 재개 업로드의 파일별 chunk-status 요청 batch화
 
-- `frontend/src/components/transfers/uploadRuntimeResume.ts`는 재개 대상 파일마다 `getUploadChunks`를 직렬 호출한다. 폴더 선택 상한은 5,000개라서 최악에는 재개 한 번에 5,000 HTTP 요청이 발생한다.
-- 각 요청은 backend profile/session 조회를 다시 거치고 direct/presigned mode에서는 multipart metadata와 provider part 목록도 파일별로 다시 읽는다.
-- 후속 구현은 기존 단일-file API 호환성을 유지하면서 bounded batch 계약을 추가하고, profile/session 조회와 취소 신호를 batch 단위로 공유한다. 새 cache나 worker는 추가하지 않는다.
-- 완료 증거는 다중 파일 fixture에서 요청 수가 파일 수가 아니라 batch 수에 비례하고, staging·multipart 결과와 404 fallback 및 사용자 취소가 기존 동작을 보존하는 backend/frontend 회귀 테스트다.
+- `POST /uploads/{uploadId}/chunks/batch`는 최대 100개 파일과 합계 10,000개 chunk로 작업량을 제한하고, batch마다 profile/session과 multipart metadata 조회를 공유한다.
+- frontend는 파일 수와 합계 chunk 수를 함께 기준으로 batch를 나누며, 구버전 서버의 route 404에서는 기존 단일-file GET으로 되돌아간다.
+- 응답은 서버 정규화 경로로 엄격하게 대조하고, 취소 신호는 재개 조회가 unavailable인 뒤 대체 session을 만드는 구간까지 유지해 취소 후 업로드가 다시 시작되지 않게 했다.
+- staging/direct multipart, item/chunk 상한, 응답 순서·경로 정규화, 404 호환 fallback, 조회 및 session handoff 취소를 backend/frontend 회귀 테스트로 고정했다.
 
 대상:
 
@@ -18,18 +18,28 @@
 - `backend/internal/api/handlers_uploads_multipart_http.go`
 - `openapi.yml`
 
-### 후속 P1. profile benchmark 중단과 원격 임시 객체 정리 보장
+### 완료. profile benchmark 중단과 원격 임시 객체 정리
 
-- `BenchmarkConnectivity`는 upload 성공 뒤 download가 실패하거나 요청 context가 취소되면 `deletefile` 구간 전에 반환할 수 있어 `.s3desk-benchmark-*` 객체를 남길 수 있다.
-- frontend의 profile test/benchmark 요청도 현재 scope 변경이나 대체 요청 시 실제 HTTP/provider 작업을 중단하지 않는다.
-- 후속 구현 순서는 backend가 upload 성공 직후 bounded cleanup을 예약해 request 취소와 무관하게 삭제를 시도하도록 한 뒤, frontend에 `AbortSignal`을 연결하는 것이다. 별도 background queue는 필요하지 않다.
-- 완료 증거는 download 실패·request 취소 뒤에도 live cleanup context로 `deletefile`이 호출되는 jobs 테스트와, token 변경·대체 요청에서 이전 signal이 abort되는 frontend 테스트다.
+- backend는 upload process 시작 직후 request 취소와 무관한 bounded `deletefile` cleanup을 예약하고, 실패·취소·timeout 회귀 테스트로 고정했다.
+- frontend는 scope 변경과 대체 요청에서 이전 profile test/benchmark `AbortSignal`을 중단한다.
+- 이는 owner-local 정리 보장이다. provider별 실제 원격 삭제 성공은 아래 외부 증거로만 닫는다.
 
 대상:
 
 - `backend/internal/jobs/manager_connectivity.go`
 - `frontend/src/pages/profiles/useProfilesPageMutations.ts`
 - `frontend/src/api/domains/profiles.ts`
+
+### 완료. PostgreSQL 검색 및 transaction CI 증거
+
+- PostgreSQL object 검색은 prefix/query/extension 조건에 `ILIKE`를 사용해 SQLite의 ASCII 대소문자 동작과 맞췄고, 같은 계약을 두 dialect에서 실행한다.
+- GitLab `go_postgres` lane은 disposable PostgreSQL 15에서 transaction invariant와 object 검색 계약을 `-race`로 실행한다.
+- protected tag의 Docker Hub publish도 `go_postgres`를 명시적 `needs`로 기다리며, DAG 테스트가 이 순서를 고정한다.
+
+### 완료. Settings lazy fallback
+
+- `frontend/src/FullAppOverlaysHost.tsx`의 Settings lazy boundary는 기존 overlay shell 안에서 접근 가능한 loading 상태와 즉시 동작하는 close action을 제공한다.
+- lazy chunk가 준비되면 같은 drawer 계약으로 교체되는 동작을 component test로 고정했다.
 
 ### 외부 증거로만 닫을 항목
 
@@ -130,6 +140,6 @@
 ## 결론
 
 - 현재 목록의 P1 구조 정리와 대부분의 P2/P3 경계 작업은 owner-local 기준으로 마무리됐습니다.
-- 현재 확인된 후속 로컬 최적화는 재개 chunk-status batch와 benchmark cleanup/cancellation 두 건이며, 구현 조건과 완료 증거는 위 종료 인계에 고정했습니다.
+- 현재 문서에 기록된 구체적 owner-local 후속 작업은 마무리됐고, 새 로컬 최적화는 측정된 병목이나 회귀가 생길 때 추가합니다.
 - 현재 release 판단의 주된 미충족 항목은 provider·reverse-proxy·portable-backup의 candidate-bound evidence입니다.
 - local unit/integration/browser fixture green은 실제 provider, protected deployment, reverse-proxy, backup 운영 증거를 대체하지 않습니다.

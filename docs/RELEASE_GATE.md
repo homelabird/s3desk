@@ -71,6 +71,7 @@ The repository keeps automated enforcement for release readiness inside the stan
 - GitLab additive quality gates:
   - `shellcheck` runs `shellcheck -x` for repository shell scripts and publishes logs under `artifacts/ci/shellcheck/`
   - `go_test` runs `go vet`, backend tests with `coverage.out`, enforces `GO_COVERAGE_MIN_TOTAL`, and publishes logs under `artifacts/ci/backend/`
+  - `go_postgres` runs store transaction and case-insensitive object-search contracts with `-race` against a disposable PostgreSQL 15 service using a job-scoped derived password and SCRAM host authentication
   - `go_race` runs targeted `go test -race ./internal/api ./internal/jobs` and publishes `artifacts/ci/backend/go-race.log`
   - `golangci_lint` must use the checked-in `.golangci.yml` named by `GOLANGCI_LINT_CONFIG`; a missing config is a hard failure
 - CI workflow: `Frontend E2E` runs repo-local `actionlint` in the `Workflow Lint` prerequisite when workflow wiring changes; unchanged workflows use the fast no-op path

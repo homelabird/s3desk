@@ -55,6 +55,18 @@ deploy_release_helm:
 
 
 class CheckGitlabPublishDagTests(unittest.TestCase):
+    def test_documentation_changes_run_gitleaks(self):
+        blocks = MODULE.top_level_blocks(MODULE.GITLAB_CI.read_text(encoding="utf-8"))
+
+        self.assertIn(
+            "    - changes:\n        - README.md\n        - docs/**/*\n      when: always",
+            blocks["workflow"],
+        )
+        self.assertIn(
+            "    - changes:\n        - README.md\n        - docs/**/*\n        - .gitlab-ci.yml",
+            blocks["gitleaks_scan"],
+        )
+
     def test_validation_fast_paths_avoid_redundant_stage_barriers(self):
         jobs = MODULE.top_level_blocks(MODULE.GITLAB_CI.read_text(encoding="utf-8"))
 
@@ -74,6 +86,7 @@ class CheckGitlabPublishDagTests(unittest.TestCase):
             "shellcheck",
             "gofmt",
             "go_test",
+            "go_postgres",
             "go_race",
             "golangci_lint",
             "govulncheck",
@@ -90,6 +103,30 @@ class CheckGitlabPublishDagTests(unittest.TestCase):
       when: on_success""",
             jobs["e2e_smoke"],
         )
+
+    def test_postgres_store_lane_uses_disposable_job_scoped_auth(self):
+        jobs = MODULE.top_level_blocks(MODULE.GITLAB_CI.read_text(encoding="utf-8"))
+        job = jobs["go_postgres"]
+
+        self.assertIn('    - name: "docker.io/library/postgres:15-alpine"', job)
+        self.assertIn('        HEALTHCHECK_TCP_PORT: "5432"', job)
+        self.assertNotIn("POSTGRES_HOST_AUTH_METHOD", job)
+        self.assertIn('    POSTGRES_PASSWORD: "s3desk-${CI_JOB_ID}"', job)
+        self.assertIn(
+            '    S3DESK_TEST_POSTGRES_URL: "postgres://s3desk:s3desk-${CI_JOB_ID}@postgres:5432/s3desk_test?sslmode=disable"',
+            job,
+        )
+        self.assertIn("    - changes:\n        - .gitlab-ci.yml\n        - backend/**/*", job)
+        self.assertIn(
+            "go test -race ./internal/store -run '^(TestPostgresTransactionReliability|TestPostgresObjectIndexSearchIsCaseInsensitive)$' -count=1",
+            job,
+        )
+        self.assertIn("    - go_postgres", jobs["publish_dockerhub"])
+
+    def test_runtime_license_audit_tracks_go_source_reachability(self):
+        jobs = MODULE.top_level_blocks(MODULE.GITLAB_CI.read_text(encoding="utf-8"))
+
+        self.assertIn("        - backend/**/*.go", jobs["license_audit_runtime"])
 
     def test_valid_publish_dag_passes(self):
         self.assertEqual(MODULE.validate_publish_dag(VALID_GITLAB_CI), [])
