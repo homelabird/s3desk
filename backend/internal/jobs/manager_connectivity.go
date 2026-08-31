@@ -56,6 +56,20 @@ func benchmarkFailureResponse(profile models.ProfileSecrets, message string, err
 	}
 }
 
+var benchmarkCleanupTimeout = 15 * time.Second
+
+func (m *Manager) cleanupBenchmarkObject(ctx context.Context, profile models.ProfileSecrets, profileID, remoteObj string) bool {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), benchmarkCleanupTimeout)
+	defer cancel()
+	configID := fmt.Sprintf("profile-bench-rm-%s-%d", profileID, time.Now().UnixNano())
+	proc, err := m.startRcloneCommand(cleanupCtx, profile, configID, []string{"deletefile", remoteObj})
+	if err != nil {
+		return false
+	}
+	_, _ = io.Copy(io.Discard, proc.stdout)
+	return proc.wait() == nil && cleanupCtx.Err() == nil
+}
+
 func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
 	profileSecrets, found, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
@@ -197,6 +211,12 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 		}
 		return benchmarkFailureResponse(profileSecrets, "upload failed: "+err.Error(), err, ""), nil
 	}
+	cleanupPending := true
+	defer func() {
+		if cleanupPending {
+			_ = m.cleanupBenchmarkObject(ctx, profileSecrets, profileID, remoteObj)
+		}
+	}()
 	_, _ = io.Copy(io.Discard, upProc.stdout)
 	if err := upProc.wait(); err != nil {
 		msg := strings.TrimSpace(upProc.stderr.String())
@@ -231,6 +251,9 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 		}
 		return benchmarkFailureResponse(profileSecrets, "download failed: "+msg, err, dlProc.stderr.String()), nil
 	}
+	if dlBytes != benchFileSize {
+		return benchmarkFailureResponse(profileSecrets, fmt.Sprintf("download size mismatch: received %d of %d bytes", dlBytes, benchFileSize), nil, ""), nil
+	}
 	downloadMs := time.Since(dlStart).Milliseconds()
 	var downloadBps int64
 	if downloadMs > 0 {
@@ -238,17 +261,8 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 	}
 
 	// --- cleanup ---
-	cleanCtx, cleanCancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cleanCancel()
-	cleanConfigID := fmt.Sprintf("profile-bench-rm-%s-%d", profileID, time.Now().UnixNano())
-	cleanProc, err := m.startRcloneCommand(cleanCtx, profileSecrets, cleanConfigID, []string{"deletefile", remoteObj})
-	cleanedUp := false
-	if err == nil {
-		_, _ = io.Copy(io.Discard, cleanProc.stdout)
-		if err := cleanProc.wait(); err == nil {
-			cleanedUp = true
-		}
-	}
+	cleanupPending = false
+	cleanedUp := m.cleanupBenchmarkObject(ctx, profileSecrets, profileID, remoteObj)
 
 	fileSize := int64(benchFileSize)
 	return models.ProfileBenchmarkResponse{

@@ -1628,11 +1628,44 @@ paths:
   /uploads/{uploadId}/files:
     post:
       tags: [Uploads]
-      summary: Upload files to staging (multipart/form-data)
+      summary: Upload files or one file chunk
+      description: |
+        Without `X-Upload-Chunk-Index`, accepts `multipart/form-data` files.
+        When `X-Upload-Chunk-Index` is present, the other `X-Upload-*` headers
+        below are required and the request body is one raw chunk. For positive
+        files, `total` must equal the ceiling of `fileSize` divided by
+        `chunkSize`; the body length must match the declared chunk. Staging mode
+        also accepts a zero-byte file as one empty chunk with `total=1`; direct
+        multipart mode requires a positive file size.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
         - $ref: "#/components/parameters/UploadId"
+        - name: X-Upload-Chunk-Index
+          in: header
+          required: false
+          schema: { type: integer, minimum: 0 }
+          description: Zero-based chunk index. Its presence selects raw chunk upload mode.
+        - name: X-Upload-Chunk-Total
+          in: header
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 10000 }
+          description: Required in raw chunk mode; must equal the expected chunk count.
+        - name: X-Upload-Chunk-Size
+          in: header
+          required: false
+          schema: { type: integer, format: int64, minimum: 1 }
+          description: Required in raw chunk mode; nominal size of each chunk in bytes.
+        - name: X-Upload-File-Size
+          in: header
+          required: false
+          schema: { type: integer, format: int64, minimum: 0 }
+          description: Required in raw chunk mode; total file size in bytes.
+        - name: X-Upload-Relative-Path
+          in: header
+          required: false
+          schema: { type: string, minLength: 1 }
+          description: Required in raw chunk mode; relative file path within the upload session.
       requestBody:
         required: true
         content:
@@ -1645,6 +1678,10 @@ paths:
                   items:
                     type: string
                     format: binary
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
       responses:
         "204":
           description: No Content
@@ -1716,6 +1753,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UploadChunkState"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "502":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads/{uploadId}/chunks/batch:
+    post:
+      tags: [Uploads]
+      summary: Get upload chunk statuses in a bounded batch
+      description: Returns chunk status for up to 100 files and 10,000 aggregate chunks while sharing upload-session and profile resolution across the batch. Works for both staging and multipart upload modes.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadChunkStatusBatchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadChunkStatusBatchResponse"
         "400":
           $ref: "#/components/responses/ErrorResponse"
         "404":
@@ -2167,6 +2233,9 @@ components:
             endpoint:
               type: string
               description: Optional. If omitted, uses AWS default endpoint resolution.
+            publicEndpoint:
+              type: string
+              description: Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment.
             region: { type: string }
             forcePathStyle: { type: boolean }
 
@@ -2178,6 +2247,9 @@ components:
           properties:
             provider: { type: string, enum: [s3_compatible] }
             endpoint: { type: string }
+            publicEndpoint:
+              type: string
+              description: Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment.
             region: { type: string }
             forcePathStyle: { type: boolean }
 
@@ -2266,6 +2338,9 @@ components:
         endpoint:
           type: string
           description: Optional. If omitted, uses AWS default endpoint resolution.
+        publicEndpoint:
+          type: string
+          description: Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; omit or send an empty string to leave unset.
         region: { type: string }
         accessKeyId: { type: string }
         secretAccessKey: { type: string }
@@ -2282,6 +2357,9 @@ components:
         provider: { type: string, enum: [s3_compatible] }
         name: { type: string }
         endpoint: { type: string }
+        publicEndpoint:
+          type: string
+          description: Optional browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; omit or send an empty string to leave unset.
         region: { type: string }
         accessKeyId: { type: string }
         secretAccessKey: { type: string }
@@ -2386,6 +2464,9 @@ components:
         provider: { type: string, enum: [aws_s3] }
         name: { type: string }
         endpoint: { type: string }
+        publicEndpoint:
+          type: string
+          description: Browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; send an empty string to clear, or omit to keep unchanged.
         region: { type: string }
         accessKeyId: { type: string }
         secretAccessKey: { type: string }
@@ -2405,6 +2486,9 @@ components:
         provider: { type: string, enum: [s3_compatible] }
         name: { type: string }
         endpoint: { type: string }
+        publicEndpoint:
+          type: string
+          description: Browser-facing HTTP(S) endpoint override for S3 requests. Must be an absolute URL without credentials, query, or fragment; send an empty string to clear, or omit to keep unchanged.
         region: { type: string }
         accessKeyId: { type: string }
         secretAccessKey: { type: string }
@@ -3343,6 +3427,47 @@ components:
           type: array
           items: { type: integer }
           description: Zero-based indices of chunks that have been successfully uploaded
+
+    UploadChunkStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [path, total, chunkSize, fileSize]
+      properties:
+        path: { type: string, minLength: 1 }
+        total:
+          type: integer
+          minimum: 1
+          description: Must equal the ceiling of fileSize divided by chunkSize.
+        chunkSize: { type: integer, format: int64, minimum: 1 }
+        fileSize: { type: integer, format: int64, minimum: 1 }
+
+    UploadChunkStatusBatchRequest:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/UploadChunkStatusRequest" }
+
+    UploadChunkStatusBatchItem:
+      type: object
+      required: [path, present]
+      properties:
+        path: { type: string }
+        present:
+          type: array
+          items: { type: integer }
+
+    UploadChunkStatusBatchResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UploadChunkStatusBatchItem" }
 
     UploadMultipartCompleteRequest:
       type: object

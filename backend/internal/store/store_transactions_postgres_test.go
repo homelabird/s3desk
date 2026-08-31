@@ -9,6 +9,26 @@ import (
 )
 
 func TestPostgresTransactionReliability(t *testing.T) {
+	st := newPostgresTestStore(t)
+
+	tests := []struct {
+		name string
+		run  func(*testing.T, *Store)
+	}{
+		{"upload object byte limit", testUpsertUploadObjectWithByteLimitConcurrentSessionLimit},
+		{"upload session byte limit", testAddUploadSessionBytesWithinLimitRejectsConcurrentOverage},
+		{"upload metadata rollback", testDeleteUploadSessionRollsBackAllMetadataOnFailure},
+		{"profile rollback", testUpdateProfileRollsBackWhenReloadFails},
+		{"profile concurrent updates", testUpdateProfileSerializesProviderConfigChanges},
+		{"job batch rollback", testCancelQueuedJobsByIDsRollsBackFailedBatch},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) { test.run(t, st) })
+	}
+}
+
+func newPostgresTestStore(t *testing.T) *Store {
+	t.Helper()
 	databaseURL := strings.TrimSpace(os.Getenv("S3DESK_TEST_POSTGRES_URL"))
 	if databaseURL == "" {
 		t.Skip("set S3DESK_TEST_POSTGRES_URL to a disposable PostgreSQL database")
@@ -28,19 +48,5 @@ func TestPostgresTransactionReliability(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-
-	tests := []struct {
-		name string
-		run  func(*testing.T, *Store)
-	}{
-		{"upload object byte limit", testUpsertUploadObjectWithByteLimitConcurrentSessionLimit},
-		{"upload session byte limit", testAddUploadSessionBytesWithinLimitRejectsConcurrentOverage},
-		{"upload metadata rollback", testDeleteUploadSessionRollsBackAllMetadataOnFailure},
-		{"profile rollback", testUpdateProfileRollsBackWhenReloadFails},
-		{"profile concurrent updates", testUpdateProfileSerializesProviderConfigChanges},
-		{"job batch rollback", testCancelQueuedJobsByIDsRollsBackFailedBatch},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) { test.run(t, st) })
-	}
+	return st
 }

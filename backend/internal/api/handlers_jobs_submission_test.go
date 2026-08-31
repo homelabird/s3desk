@@ -84,6 +84,138 @@ func TestValidateRunnableJobRequestReportsIncompatibleRclone(t *testing.T) {
 	}
 }
 
+func TestJobCreateRejectsUnsafeTransferBatchPlansBeforePersistence(t *testing.T) {
+	lockTestEnv(t)
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.66.0", nil
+	})
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	tests := []struct {
+		name        string
+		jobType     string
+		srcBucket   string
+		dstBucket   string
+		items       []any
+		wantMessage string
+	}{
+		{
+			name:      "copy duplicate destination",
+			jobType:   jobs.JobTypeTransferCopyBatch,
+			srcBucket: "source",
+			dstBucket: "destination",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": " /target.txt "},
+				map[string]any{"srcKey": "b.txt", "dstKey": "target.txt"},
+			},
+			wantMessage: "dstKey duplicates",
+		},
+		{
+			name:      "copy duplicate destination after repeated leading slash normalization",
+			jobType:   jobs.JobTypeTransferCopyBatch,
+			srcBucket: "source",
+			dstBucket: "destination",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": " ///target.txt "},
+				map[string]any{"srcKey": "b.txt", "dstKey": "target.txt"},
+			},
+			wantMessage: "dstKey duplicates",
+		},
+		{
+			name:      "move duplicate destination",
+			jobType:   jobs.JobTypeTransferMoveBatch,
+			srcBucket: "source",
+			dstBucket: "destination",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": "target.txt"},
+				map[string]any{"srcKey": "b.txt", "dstKey": " /target.txt "},
+			},
+			wantMessage: "dstKey duplicates",
+		},
+		{
+			name:      "move duplicate source",
+			jobType:   jobs.JobTypeTransferMoveBatch,
+			srcBucket: "source",
+			dstBucket: "destination",
+			items: []any{
+				map[string]any{"srcKey": " /a.txt ", "dstKey": "first.txt"},
+				map[string]any{"srcKey": "a.txt", "dstKey": "second.txt"},
+			},
+			wantMessage: "srcKey duplicates",
+		},
+		{
+			name:      "copy same bucket destination source overlap",
+			jobType:   jobs.JobTypeTransferCopyBatch,
+			srcBucket: "bucket",
+			dstBucket: "bucket",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": " /b.txt "},
+				map[string]any{"srcKey": "b.txt", "dstKey": "c.txt"},
+			},
+			wantMessage: "dstKey matches",
+		},
+		{
+			name:      "move same bucket destination source overlap",
+			jobType:   jobs.JobTypeTransferMoveBatch,
+			srcBucket: "bucket",
+			dstBucket: "bucket",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": "b.txt"},
+				map[string]any{"srcKey": " /b.txt ", "dstKey": "c.txt"},
+			},
+			wantMessage: "dstKey matches",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs", profile.ID, models.JobCreateRequest{
+				Type: tc.jobType,
+				Payload: map[string]any{
+					"srcBucket": tc.srcBucket,
+					"dstBucket": tc.dstBucket,
+					"items":     tc.items,
+				},
+			})
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+			}
+			var errResp models.ErrorResponse
+			decodeJSONResponse(t, res, &errResp)
+			if errResp.Error.Code != "invalid_request" || !strings.Contains(errResp.Error.Message, tc.wantMessage) {
+				t.Fatalf("error=%+v, want invalid_request containing %q", errResp.Error, tc.wantMessage)
+			}
+
+			listed, err := st.ListJobs(context.Background(), profile.ID, store.JobFilter{Limit: 10})
+			if err != nil {
+				t.Fatalf("list jobs: %v", err)
+			}
+			if len(listed.Items) != 0 {
+				t.Fatalf("persisted jobs=%d, want 0", len(listed.Items))
+			}
+		})
+	}
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs", profile.ID, models.JobCreateRequest{
+		Type: jobs.JobTypeTransferCopyBatch,
+		Payload: map[string]any{
+			"srcBucket": "source",
+			"dstBucket": "destination",
+			"items": []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": "b.txt"},
+				map[string]any{"srcKey": "b.txt", "dstKey": "c.txt"},
+				map[string]any{"srcKey": "a.txt", "dstKey": "d.txt"},
+			},
+		},
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("safe cross-bucket copy status=%d, want %d", res.StatusCode, http.StatusCreated)
+	}
+}
+
 func TestBuildRetryJobSubmission_NormalizesNilPayloadForRetryableStatus(t *testing.T) {
 	t.Parallel()
 

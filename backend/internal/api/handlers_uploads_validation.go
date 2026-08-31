@@ -110,14 +110,14 @@ func uniqueFilePath(dir, filename string) string {
 }
 
 func parseUploadChunkHeaders(headers http.Header, chunkIndexRaw string, enforceMaxParts bool) (uploadChunkHeaderValues, *uploadHTTPError) {
-	return parseUploadChunkHeadersWithSizes(headers, chunkIndexRaw, enforceMaxParts, true)
+	return parseUploadChunkHeadersWithMinimumFileSize(headers, chunkIndexRaw, enforceMaxParts, 1)
 }
 
-func parseUploadChunkHeadersWithoutSizes(headers http.Header, chunkIndexRaw string, enforceMaxParts bool) (uploadChunkHeaderValues, *uploadHTTPError) {
-	return parseUploadChunkHeadersWithSizes(headers, chunkIndexRaw, enforceMaxParts, false)
+func parseStagingUploadChunkHeaders(headers http.Header, chunkIndexRaw string, enforceMaxParts bool) (uploadChunkHeaderValues, *uploadHTTPError) {
+	return parseUploadChunkHeadersWithMinimumFileSize(headers, chunkIndexRaw, enforceMaxParts, 0)
 }
 
-func parseUploadChunkHeadersWithSizes(headers http.Header, chunkIndexRaw string, enforceMaxParts, requireSizes bool) (uploadChunkHeaderValues, *uploadHTTPError) {
+func parseUploadChunkHeadersWithMinimumFileSize(headers http.Header, chunkIndexRaw string, enforceMaxParts bool, minimumFileSize int64) (uploadChunkHeaderValues, *uploadHTTPError) {
 	chunkTotalRaw := strings.TrimSpace(headers.Get("X-Upload-Chunk-Total"))
 	relPath := sanitizeUploadPath(headers.Get("X-Upload-Relative-Path"))
 	if chunkTotalRaw == "" || relPath == "" {
@@ -170,20 +170,6 @@ func parseUploadChunkHeadersWithSizes(headers http.Header, chunkIndexRaw string,
 		total:   chunkTotal,
 		index:   chunkIndex,
 	}
-	if !requireSizes {
-		if chunkSizeRaw := strings.TrimSpace(headers.Get("X-Upload-Chunk-Size")); chunkSizeRaw != "" {
-			if chunkSize, err := strconv.ParseInt(chunkSizeRaw, 10, 64); err == nil && chunkSize > 0 {
-				values.chunkSize = chunkSize
-			}
-		}
-		if fileSizeRaw := strings.TrimSpace(headers.Get("X-Upload-File-Size")); fileSizeRaw != "" {
-			if fileSize, err := strconv.ParseInt(fileSizeRaw, 10, 64); err == nil && fileSize > 0 {
-				values.fileSize = fileSize
-			}
-		}
-		return values, nil
-	}
-
 	chunkSizeRaw := strings.TrimSpace(headers.Get("X-Upload-Chunk-Size"))
 	chunkSize, err := strconv.ParseInt(chunkSizeRaw, 10, 64)
 	if err != nil || chunkSize <= 0 {
@@ -197,7 +183,7 @@ func parseUploadChunkHeadersWithSizes(headers http.Header, chunkIndexRaw string,
 
 	fileSizeRaw := strings.TrimSpace(headers.Get("X-Upload-File-Size"))
 	fileSize, err := strconv.ParseInt(fileSizeRaw, 10, 64)
-	if err != nil || fileSize <= 0 {
+	if err != nil || fileSize < minimumFileSize {
 		return uploadChunkHeaderValues{}, &uploadHTTPError{
 			status:  http.StatusBadRequest,
 			code:    "invalid_request",
@@ -208,6 +194,19 @@ func parseUploadChunkHeadersWithSizes(headers http.Header, chunkIndexRaw string,
 
 	values.chunkSize = chunkSize
 	values.fileSize = fileSize
+	expectedTotal := 1
+	if fileSize > 0 {
+		expectedTotal, err = expectedMultipartPartCount(fileSize, chunkSize)
+		if err != nil {
+			return uploadChunkHeaderValues{}, newUploadBadRequestError(err.Error(), nil)
+		}
+	}
+	if chunkTotal != expectedTotal {
+		return uploadChunkHeaderValues{}, newUploadBadRequestError("chunk total mismatch", map[string]any{
+			"expectedTotal": expectedTotal,
+			"total":         chunkTotal,
+		})
+	}
 	return values, nil
 }
 

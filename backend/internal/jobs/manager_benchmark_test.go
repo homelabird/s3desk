@@ -58,7 +58,7 @@ func TestBenchmarkConnectivityUsesBucketNameFallback(t *testing.T) {
 		case "lsjson":
 			return newTestRcloneProcess(`[{"Name":"bucket-from-name","IsDir":true}]`, "", nil), nil
 		case "cat":
-			return newTestRcloneProcess("benchmark-bytes", "", nil), nil
+			return newTestRcloneProcess(strings.Repeat("x", 1<<20), "", nil), nil
 		case "copyto", "deletefile":
 			return newTestRcloneProcess("", "", nil), nil
 		default:
@@ -80,6 +80,164 @@ func TestBenchmarkConnectivityUsesBucketNameFallback(t *testing.T) {
 	}
 	if !resp.CleanedUp {
 		t.Fatalf("expected cleanup success, got %+v", resp)
+	}
+}
+
+func TestBenchmarkConnectivityRejectsTruncatedDownload(t *testing.T) {
+	cleanupCalled := false
+	installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, _ string, args []string) (*rcloneProcess, error) {
+		if len(args) == 0 {
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+		switch args[0] {
+		case "lsjson":
+			return newTestRcloneProcess(`[{"Name":"bucket-a","IsDir":true}]`, "", nil), nil
+		case "copyto":
+			return newTestRcloneProcess("", "", nil), nil
+		case "cat":
+			return newTestRcloneProcess("truncated", "", nil), nil
+		case "deletefile":
+			cleanupCalled = true
+			return newTestRcloneProcess("", "", nil), nil
+		default:
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+	})
+
+	manager, profileID := newBenchmarkManagerFixture(t)
+	resp, err := manager.BenchmarkConnectivity(context.Background(), profileID)
+	if err != nil {
+		t.Fatalf("BenchmarkConnectivity: %v", err)
+	}
+	if resp.OK || !strings.Contains(resp.Message, "download size mismatch") {
+		t.Fatalf("response=%+v, want download size mismatch", resp)
+	}
+	if !cleanupCalled {
+		t.Fatal("expected truncated benchmark object cleanup")
+	}
+}
+
+func TestBenchmarkConnectivityCleansUpAfterDownloadFailure(t *testing.T) {
+	cleanupCalled := false
+	installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, _ string, args []string) (*rcloneProcess, error) {
+		if len(args) == 0 {
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+		switch args[0] {
+		case "lsjson":
+			return newTestRcloneProcess(`[{"Name":"bucket-a","IsDir":true}]`, "", nil), nil
+		case "copyto":
+			return newTestRcloneProcess("", "", nil), nil
+		case "cat":
+			return newTestRcloneProcess("", "download failed", errors.New("exit status 1")), nil
+		case "deletefile":
+			cleanupCalled = true
+			return newTestRcloneProcess("", "", nil), nil
+		default:
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+	})
+
+	manager, profileID := newBenchmarkManagerFixture(t)
+	resp, err := manager.BenchmarkConnectivity(context.Background(), profileID)
+	if err != nil {
+		t.Fatalf("BenchmarkConnectivity: %v", err)
+	}
+	if resp.OK {
+		t.Fatalf("expected download failure, got %+v", resp)
+	}
+	if !cleanupCalled {
+		t.Fatal("expected uploaded benchmark object cleanup after download failure")
+	}
+}
+
+func TestBenchmarkConnectivityCleansUpAfterUploadFailure(t *testing.T) {
+	cleanupCalled := false
+	installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, _ string, args []string) (*rcloneProcess, error) {
+		if len(args) == 0 {
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+		switch args[0] {
+		case "lsjson":
+			return newTestRcloneProcess(`[{"Name":"bucket-a","IsDir":true}]`, "", nil), nil
+		case "copyto":
+			return newTestRcloneProcess("", "upload failed", errors.New("exit status 1")), nil
+		case "deletefile":
+			cleanupCalled = true
+			return newTestRcloneProcess("", "", nil), nil
+		default:
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+	})
+
+	manager, profileID := newBenchmarkManagerFixture(t)
+	resp, err := manager.BenchmarkConnectivity(context.Background(), profileID)
+	if err != nil {
+		t.Fatalf("BenchmarkConnectivity: %v", err)
+	}
+	if resp.OK {
+		t.Fatalf("expected upload failure, got %+v", resp)
+	}
+	if !cleanupCalled {
+		t.Fatal("expected benchmark object cleanup after upload failure")
+	}
+}
+
+func TestBenchmarkConnectivityCleanupIgnoresRequestCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cleanupCalled := false
+	installJobsStartRcloneHook(t, func(callCtx context.Context, _ models.ProfileSecrets, _ string, args []string) (*rcloneProcess, error) {
+		if len(args) == 0 {
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+		switch args[0] {
+		case "lsjson":
+			return newTestRcloneProcess(`[{"Name":"bucket-a","IsDir":true}]`, "", nil), nil
+		case "copyto":
+			cancel()
+			return newTestRcloneProcess("", "", nil), nil
+		case "cat":
+			return nil, callCtx.Err()
+		case "deletefile":
+			if err := callCtx.Err(); err != nil {
+				t.Fatalf("cleanup context err=%v, want live bounded context", err)
+			}
+			cleanupCalled = true
+			return newTestRcloneProcess("", "", nil), nil
+		default:
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+	})
+
+	manager, profileID := newBenchmarkManagerFixture(t)
+	resp, err := manager.BenchmarkConnectivity(ctx, profileID)
+	if err != nil {
+		t.Fatalf("BenchmarkConnectivity: %v", err)
+	}
+	if resp.OK {
+		t.Fatalf("expected canceled benchmark failure, got %+v", resp)
+	}
+	if !cleanupCalled {
+		t.Fatal("expected uploaded benchmark object cleanup after request cancellation")
+	}
+}
+
+func TestCleanupBenchmarkObjectDoesNotReportTimedOutProcessAsSuccess(t *testing.T) {
+	installJobsStartRcloneHook(t, func(callCtx context.Context, _ models.ProfileSecrets, _ string, args []string) (*rcloneProcess, error) {
+		if len(args) == 0 || args[0] != "deletefile" {
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+		<-callCtx.Done()
+		return newTestRcloneProcess("", "", nil), nil
+	})
+	originalTimeout := benchmarkCleanupTimeout
+	benchmarkCleanupTimeout = time.Millisecond
+	t.Cleanup(func() { benchmarkCleanupTimeout = originalTimeout })
+
+	manager := &Manager{}
+	if manager.cleanupBenchmarkObject(context.Background(), models.ProfileSecrets{}, "profile-a", "remote:bucket/object") {
+		t.Fatal("timed-out cleanup reported success")
 	}
 }
 

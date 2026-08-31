@@ -10,14 +10,14 @@ const RemoteName = "remote"
 
 // NormalizePathInput normalizes a user-provided key/prefix.
 //
-// When preserveLeadingSlash is false (default), a leading "/" is removed to avoid creating
-// an empty path component in rclone ("bucket//key").
+// When preserveLeadingSlash is false (default), leading "/" characters are removed to avoid
+// creating empty path components in rclone ("bucket//key").
 func NormalizePathInput(value string, preserveLeadingSlash bool) string {
 	value = strings.TrimSpace(value)
 	if preserveLeadingSlash {
 		return value
 	}
-	return strings.TrimPrefix(value, "/")
+	return strings.TrimLeft(value, "/")
 }
 
 // NormalizePrefix normalizes a prefix that is intended to be used as a directory.

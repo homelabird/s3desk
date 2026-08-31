@@ -47,6 +47,39 @@ func createUploadObjectTestSession(t *testing.T, st *Store) (models.Profile, Upl
 	return profile, session
 }
 
+func TestListMultipartUploadsByPathsExcludesUnrequestedSessionRows(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	profile, session := createUploadObjectTestSession(t, st)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	rows := make([]uploadMultipartRow, 0, 202)
+	for i := 0; i < 200; i++ {
+		path := fmt.Sprintf("unrelated/%03d.bin", i)
+		rows = append(rows, uploadMultipartRow{
+			UploadID: session.ID, ProfileID: profile.ID, Path: path,
+			Bucket: session.Bucket, ObjectKey: "incoming/" + path, S3UploadID: fmt.Sprintf("multipart-%03d", i),
+			ChunkSize: 1, FileSize: 1, CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	for _, path := range []string{"target-b.bin", "target-a.bin"} {
+		rows = append(rows, uploadMultipartRow{
+			UploadID: session.ID, ProfileID: profile.ID, Path: path,
+			Bucket: session.Bucket, ObjectKey: "incoming/" + path, S3UploadID: "multipart-" + path,
+			ChunkSize: 1, FileSize: 1, CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	if err := st.db.CreateInBatches(&rows, 50).Error; err != nil {
+		t.Fatalf("seed multipart uploads: %v", err)
+	}
+
+	got, err := st.ListMultipartUploadsByPaths(context.Background(), profile.ID, session.ID, []string{"target-b.bin", "target-a.bin"})
+	if err != nil {
+		t.Fatalf("list requested multipart uploads: %v", err)
+	}
+	if len(got) != 2 || got[0].Path != "target-a.bin" || got[1].Path != "target-b.bin" {
+		t.Fatalf("multipart uploads=%#v, want only requested paths", got)
+	}
+}
+
 func TestUpsertUploadObjectWithByteLimitTracksReplacementDelta(t *testing.T) {
 	st := newProfileTestStore(t, Options{})
 	profile, session := createUploadObjectTestSession(t, st)
@@ -228,7 +261,7 @@ func testDeleteUploadSessionRollsBackAllMetadataOnFailure(t *testing.T, st *Stor
 	const callback = "test:fail_upload_session_delete"
 	if err := st.db.Callback().Delete().Before("gorm:delete").Register(callback, func(tx *gorm.DB) {
 		if tx.Statement != nil && tx.Statement.Table == "upload_sessions" {
-			tx.AddError(injectedErr)
+			_ = tx.AddError(injectedErr)
 		}
 	}); err != nil {
 		t.Fatalf("register delete callback: %v", err)

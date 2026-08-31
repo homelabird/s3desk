@@ -178,6 +178,26 @@ func (s *Store) ListMultipartUploads(ctx context.Context, profileID, uploadID st
 	return out, nil
 }
 
+func (s *Store) ListMultipartUploadsByPaths(ctx context.Context, profileID, uploadID string, paths []string) ([]MultipartUpload, error) {
+	if len(paths) == 0 {
+		return []MultipartUpload{}, nil
+	}
+	var rows []uploadMultipartRow
+	if err := s.db.WithContext(ctx).
+		Where("profile_id = ? AND upload_id = ?", profileID, uploadID).
+		Where("path IN ?", paths).
+		Order("path ASC").
+		Limit(len(paths)).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]MultipartUpload, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, MultipartUpload(row))
+	}
+	return out, nil
+}
+
 func (s *Store) DeleteMultipartUpload(ctx context.Context, profileID, uploadID, path string) error {
 	return s.db.WithContext(ctx).
 		Where("profile_id = ? AND upload_id = ? AND path = ?", profileID, uploadID, path).

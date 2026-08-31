@@ -2,7 +2,9 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -13,6 +15,8 @@ import (
 	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
+
+const uploadChunkStatusBatchMaxItems = 100
 
 type uploadMultipartSessionPreparedRequest struct {
 	profileID string
@@ -95,6 +99,21 @@ func uploadMultipartSessionExpired(us store.UploadSession) bool {
 		return false
 	}
 	return time.Now().UTC().After(expiresAt)
+}
+
+func (svc uploadMultipartHTTPService) prepareChunkSession(r *http.Request) uploadMultipartSessionPreparedRequest {
+	session := svc.prepareSession(r)
+	if session.err != nil {
+		return session
+	}
+	if uploadMultipartSessionExpired(session.us) {
+		session.err = &uploadHTTPError{status: http.StatusBadRequest, code: "expired", message: "upload session expired"}
+		return session
+	}
+	if session.mode == "" {
+		session.mode = uploadModeStaging
+	}
+	return session
 }
 
 func (svc uploadMultipartHTTPService) prepareComplete(r *http.Request) uploadMultipartCompletePreparedRequest {
@@ -235,17 +254,10 @@ func (svc uploadMultipartHTTPService) executeAbort(r *http.Request, prepared upl
 }
 
 func (svc uploadMultipartHTTPService) prepareChunks(r *http.Request) uploadMultipartChunksPreparedRequest {
-	session := svc.prepareSession(r)
+	session := svc.prepareChunkSession(r)
 	prepared := uploadMultipartChunksPreparedRequest{session: session, err: session.err}
 	if prepared.err != nil {
 		return prepared
-	}
-	if uploadMultipartSessionExpired(session.us) {
-		prepared.err = &uploadHTTPError{status: http.StatusBadRequest, code: "expired", message: "upload session expired"}
-		return prepared
-	}
-	if prepared.session.mode == "" {
-		prepared.session.mode = uploadModeStaging
 	}
 	if prepared.session.mode != uploadModeStaging {
 		query, uploadErr := parseUploadChunkQuery(r.URL.Query(), false)
@@ -326,6 +338,101 @@ func (svc uploadMultipartHTTPService) executeGetUploadChunks(r *http.Request) (*
 	return svc.executeChunks(r, svc.prepareChunks(r))
 }
 
+func uploadChunkStatusBatchQueries(items []models.UploadChunkStatusRequest) ([]uploadChunkQuery, *uploadHTTPError) {
+	queries := make([]uploadChunkQuery, 0, len(items))
+	totalParts := 0
+	for _, item := range items {
+		values := url.Values{
+			"path":      []string{item.Path},
+			"total":     []string{strconv.Itoa(item.Total)},
+			"chunkSize": []string{strconv.FormatInt(item.ChunkSize, 10)},
+			"fileSize":  []string{strconv.FormatInt(item.FileSize, 10)},
+		}
+		query, uploadErr := parseUploadChunkQuery(values, true)
+		if uploadErr != nil {
+			return nil, uploadErr
+		}
+		totalParts += query.total
+		if uploadErr := uploadRejectIfChunkLimitExceeded(totalParts); uploadErr != nil {
+			return nil, uploadErr
+		}
+		queries = append(queries, query)
+	}
+	return queries, nil
+}
+
+func (svc uploadMultipartHTTPService) executeGetUploadChunksBatch(r *http.Request) (*models.UploadChunkStatusBatchResponse, *uploadHTTPError, error) {
+	var req models.UploadChunkStatusBatchRequest
+	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{maxBytes: uploadMultipartJSONRequestBodyMaxBytes}); err != nil {
+		return nil, nil, err
+	}
+	if len(req.Items) == 0 {
+		return nil, newUploadBadRequestError("items must not be empty", nil), nil
+	}
+	if len(req.Items) > uploadChunkStatusBatchMaxItems {
+		return nil, newUploadBadRequestError("too many items", map[string]any{"count": len(req.Items), "maxItems": uploadChunkStatusBatchMaxItems}), nil
+	}
+
+	queries, uploadErr := uploadChunkStatusBatchQueries(req.Items)
+	if uploadErr != nil {
+		return nil, uploadErr, nil
+	}
+	session := svc.prepareChunkSession(r)
+	if session.err != nil {
+		return nil, session.err, nil
+	}
+	resp := &models.UploadChunkStatusBatchResponse{Items: make([]models.UploadChunkStatusBatchItem, 0, len(queries))}
+
+	if session.mode == uploadModeStaging {
+		if session.us.StagingDir == "" {
+			return nil, &uploadHTTPError{status: http.StatusInternalServerError, code: "internal_error", message: "upload session is missing staging directory"}, nil
+		}
+		stagingDir, err := store.ResolveUploadStagingDir(svc.server.cfg.DataDir, session.us.ID)
+		if err != nil {
+			return nil, &uploadHTTPError{status: http.StatusInternalServerError, code: "internal_error", message: "upload session has invalid staging directory", details: map[string]any{"error": err.Error()}}, nil
+		}
+		for _, query := range queries {
+			chunkDir := filepath.Join(stagingDir, ".chunks", filepath.FromSlash(query.path))
+			if !isUnderDir(stagingDir, chunkDir) {
+				return nil, uploadMultipartInvalidFieldError("invalid upload path", map[string]any{"path": query.path}), nil
+			}
+			state := buildStagingMultipartChunkState(chunkDir, query.total, query.chunkSize, query.fileSize)
+			resp.Items = append(resp.Items, models.UploadChunkStatusBatchItem{Path: query.path, Present: state.Present})
+		}
+		return resp, nil, nil
+	}
+
+	client, uploadErr := svc.server.multipartClientFromContext(r.Context(), "multipart status requires an S3-compatible provider")
+	if uploadErr != nil {
+		return nil, uploadErr, nil
+	}
+	paths := make([]string, 0, len(queries))
+	for _, query := range queries {
+		paths = append(paths, query.path)
+	}
+	metadata, err := svc.server.store.ListMultipartUploadsByPaths(r.Context(), session.profileID, session.uploadID, paths)
+	if err != nil {
+		return nil, newUploadInternalError("failed to load multipart uploads", nil), nil
+	}
+	metadataByPath := make(map[string]store.MultipartUpload, len(metadata))
+	for _, meta := range metadata {
+		metadataByPath[meta.Path] = meta
+	}
+	for _, query := range queries {
+		meta, ok := metadataByPath[query.path]
+		if !ok || meta.FileSize != query.fileSize || meta.ChunkSize != query.chunkSize {
+			return nil, &uploadHTTPError{status: http.StatusNotFound, code: "not_found", message: "multipart upload not found"}, nil
+		}
+		parts, err := svc.server.listMultipartParts(r.Context(), client, meta)
+		if err != nil {
+			return nil, newUploadProviderError("failed to list multipart parts", err, nil), nil
+		}
+		state := buildRemoteMultipartChunkState(parts, meta)
+		resp.Items = append(resp.Items, models.UploadChunkStatusBatchItem{Path: query.path, Present: state.Present})
+	}
+	return resp, nil, nil
+}
+
 func (svc uploadMultipartHTTPService) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	status, uploadErr, decodeErr := svc.executeCompleteMultipartUpload(r)
 	if uploadErr != nil {
@@ -356,6 +463,19 @@ func (svc uploadMultipartHTTPService) handleGetUploadChunks(w http.ResponseWrite
 	resp, uploadErr := svc.executeGetUploadChunks(r)
 	if uploadErr != nil {
 		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (svc uploadMultipartHTTPService) handleGetUploadChunksBatch(w http.ResponseWriter, r *http.Request) {
+	resp, uploadErr, decodeErr := svc.executeGetUploadChunksBatch(r)
+	if uploadErr != nil {
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
+		return
+	}
+	if decodeErr != nil {
+		writeJSONDecodeError(w, decodeErr, uploadMultipartJSONRequestBodyMaxBytes)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)

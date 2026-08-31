@@ -6,8 +6,16 @@ func TestNormalizePathInput(t *testing.T) {
 	if got := NormalizePathInput(" /a/b ", false); got != "a/b" {
 		t.Fatalf("expected 'a/b', got %q", got)
 	}
+	if got := NormalizePathInput(" ///a/b ", false); got != "a/b" {
+		t.Fatalf("expected repeated leading slashes to normalize to 'a/b', got %q", got)
+	} else if normalizedAgain := NormalizePathInput(got, false); normalizedAgain != got {
+		t.Fatalf("expected normalization to be idempotent, got %q after %q", normalizedAgain, got)
+	}
 	if got := NormalizePathInput("/a/b", true); got != "/a/b" {
 		t.Fatalf("expected '/a/b', got %q", got)
+	}
+	if got := NormalizePathInput("///a/b", true); got != "///a/b" {
+		t.Fatalf("expected repeated leading slashes to be preserved, got %q", got)
 	}
 }
 

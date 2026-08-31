@@ -371,6 +371,108 @@ func TestUploadDirectHTTPService_FormUploadRollsBackReservationWhenPromotionFail
 	assertUploadObjectCount(t, st, profile.ID, upload.ID, 0)
 }
 
+func TestUploadDirectHTTPService_FormUploadRollbackDoesNotRemoveConcurrentObjectWriter(t *testing.T) {
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeDirect, "", expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	firstPromotionStarted := make(chan struct{})
+	releaseFirstPromotion := make(chan struct{})
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) == 0 || args[0] != "moveto" {
+			return "", "", nil
+		}
+		close(firstPromotionStarted)
+		<-releaseFirstPromotion
+		return "", "move failed", errors.New("first promotion failed")
+	})
+	installAPIRcloneStdinHook(t, func(_ models.ProfileSecrets, _ []string, stdin io.Reader) (string, error) {
+		_, err := io.ReadAll(stdin)
+		return "", err
+	})
+
+	newRequest := func(payload string) *http.Request {
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		part, err := writer.CreateFormFile("files", "file.bin")
+		if err != nil {
+			t.Fatalf("create form file: %v", err)
+		}
+		if _, err := part.Write([]byte(payload)); err != nil {
+			t.Fatalf("write form file: %v", err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatalf("close writer: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files", &body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		req.Header.Set("X-Upload-Relative-Path", "file.bin")
+		return withProfileSecrets(req, models.ProfileSecrets{ID: profile.ID, Provider: models.ProfileProviderS3Compatible})
+	}
+
+	srv := &server{cfg: config.Config{DataDir: dataDir, UploadMaxBytes: 100}, store: st}
+	svc := newUploadDirectHTTPService(srv)
+	firstRequest := newRequest("first")
+	formResult := make(chan *uploadHTTPError, 1)
+	go func() {
+		_, _, uploadErr := svc.executeDirectMultipartFormUpload(firstRequest, profile.ID, upload.ID, upload)
+		formResult <- uploadErr
+	}()
+	select {
+	case <-firstPromotionStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first promotion did not start")
+	}
+	writerResult := make(chan *uploadHTTPError, 1)
+	go func() {
+		size := int64(7)
+		writerResult <- srv.upsertUploadObjectWithByteReservation(context.Background(), store.UploadObject{
+			UploadID:     upload.ID,
+			ProfileID:    profile.ID,
+			Path:         "file.bin",
+			Bucket:       upload.Bucket,
+			ObjectKey:    "incoming/file.bin",
+			ExpectedSize: &size,
+		})
+	}()
+
+	select {
+	case uploadErr := <-writerResult:
+		writerResult <- uploadErr
+	case <-time.After(250 * time.Millisecond):
+	}
+	close(releaseFirstPromotion)
+
+	select {
+	case uploadErr := <-formResult:
+		if uploadErr == nil {
+			t.Fatal("expected form promotion failure")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("form upload did not finish")
+	}
+	select {
+	case uploadErr := <-writerResult:
+		if uploadErr != nil {
+			t.Fatalf("concurrent object writer: %v", uploadErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("concurrent object writer did not finish")
+	}
+	assertUploadSessionBytesForAPI(t, st, profile.ID, upload.ID, 7)
+	objects, err := st.ListUploadObjects(context.Background(), profile.ID, upload.ID)
+	if err != nil {
+		t.Fatalf("list upload objects: %v", err)
+	}
+	if len(objects) != 1 || objects[0].ExpectedSize == nil || *objects[0].ExpectedSize != 7 {
+		t.Fatalf("objects=%#v, want one 7-byte replacement", objects)
+	}
+}
+
 func TestUploadDirectHTTPService_FormUploadRedactsRcloneStreamFailure(t *testing.T) {
 	installAPIRcloneStdinHook(t, func(_ models.ProfileSecrets, _ []string, _ io.Reader) (string, error) {
 		return "failed secret_access_key=stderr-secret https://s3.example/object?X-Amz-Signature=stderr-signature", errors.New("exit status 1 api_token=error-secret")

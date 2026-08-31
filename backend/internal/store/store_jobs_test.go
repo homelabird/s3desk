@@ -405,7 +405,7 @@ func testCancelQueuedJobsByIDsRollsBackFailedBatch(t *testing.T, st *Store) {
 		if tx.Statement != nil && tx.Statement.Table == "jobs" {
 			updates++
 			if updates == 2 {
-				tx.AddError(injectedErr)
+				_ = tx.AddError(injectedErr)
 			}
 		}
 	}); err != nil {

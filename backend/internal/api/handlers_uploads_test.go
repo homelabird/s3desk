@@ -450,6 +450,8 @@ func TestUploadChunkAndCommitLifecycle(t *testing.T) {
 		req.Header.Set("X-Profile-Id", profile.ID)
 		req.Header.Set("X-Upload-Chunk-Index", strconv.Itoa(index))
 		req.Header.Set("X-Upload-Chunk-Total", "2")
+		req.Header.Set("X-Upload-Chunk-Size", strconv.Itoa(chunkSize))
+		req.Header.Set("X-Upload-File-Size", strconv.Itoa(fileSize))
 		req.Header.Set("X-Upload-Relative-Path", uploadPath)
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {

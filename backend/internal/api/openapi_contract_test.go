@@ -149,6 +149,53 @@ func TestOpenAPIMetaAndMigrationSchemasCoverFrontendContract(t *testing.T) {
 	assertOpenAPIMultipartFieldDescriptionContains(t, doc, "/server/import-portable", http.MethodPost, "password", "destination server encryption key")
 }
 
+func TestOpenAPIProfileS3SchemasExposeOptionalPublicEndpoint(t *testing.T) {
+	t.Parallel()
+
+	doc := loadOpenAPIDoc(t)
+	for _, tt := range []struct {
+		name           string
+		emptySemantics string
+	}{
+		{name: "ProfileAwsS3"},
+		{name: "ProfileS3Compatible"},
+		{name: "ProfileCreateRequestAwsS3", emptySemantics: "empty string to leave unset"},
+		{name: "ProfileCreateRequestS3Compatible", emptySemantics: "empty string to leave unset"},
+		{name: "ProfileUpdateRequestAwsS3", emptySemantics: "empty string to clear"},
+		{name: "ProfileUpdateRequestS3Compatible", emptySemantics: "empty string to clear"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			schema := requireOpenAPISchema(t, doc, tt.name)
+			containers := append([]*openapi3.Schema{schema}, openAPIAllOfSchemas(schema)...)
+			for _, container := range containers {
+				propertyRef, ok := container.Properties["publicEndpoint"]
+				if !ok {
+					continue
+				}
+				if propertyRef == nil || propertyRef.Value == nil {
+					t.Fatalf("%s.publicEndpoint schema missing from OpenAPI", tt.name)
+				}
+				if containsString(container.Required, "publicEndpoint") {
+					t.Fatalf("%s.publicEndpoint must be optional in OpenAPI", tt.name)
+				}
+				property := propertyRef.Value
+				if property.Type == nil || !property.Type.Is("string") {
+					t.Fatalf("%s.publicEndpoint type=%v, want string", tt.name, property.Type)
+				}
+				if property.Nullable {
+					t.Fatalf("%s.publicEndpoint must be optional, not nullable", tt.name)
+				}
+				description := strings.ToLower(property.Description)
+				if !strings.Contains(description, "browser") || !strings.Contains(description, "http(s)") || !strings.Contains(description, tt.emptySemantics) {
+					t.Fatalf("%s.publicEndpoint description=%q, want browser-facing http(s) and %q semantics", tt.name, property.Description, tt.emptySemantics)
+				}
+				return
+			}
+			t.Fatalf("%s.publicEndpoint missing from OpenAPI", tt.name)
+		})
+	}
+}
+
 func TestOpenAPIBucketGovernanceSchemasCoverFrontendContract(t *testing.T) {
 	t.Parallel()
 
@@ -334,6 +381,16 @@ func requireOpenAPISchema(t *testing.T, doc *openapi3.T, name string) *openapi3.
 		t.Fatalf("%s schema missing from OpenAPI", name)
 	}
 	return ref.Value
+}
+
+func openAPIAllOfSchemas(schema *openapi3.Schema) []*openapi3.Schema {
+	allOf := make([]*openapi3.Schema, 0, len(schema.AllOf))
+	for _, ref := range schema.AllOf {
+		if ref != nil && ref.Value != nil {
+			allOf = append(allOf, ref.Value)
+		}
+	}
+	return allOf
 }
 
 func assertOpenAPIOperationResponseSchema(t *testing.T, doc *openapi3.T, path, method, wantRef string) {

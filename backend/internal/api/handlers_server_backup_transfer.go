@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -63,6 +64,16 @@ func (s *server) handleTransferServerBackup(w http.ResponseWriter, r *http.Reque
 		writeServerBackupTransferError(w, http.StatusBadRequest, "invalid_request", "invalid backup transfer request", err)
 		return
 	}
+	if _, _, err := validateServerBackupTransferLocation(req.Location); err != nil {
+		writeServerBackupTransferError(w, http.StatusBadRequest, "invalid_request", "invalid backup transfer location", err)
+		return
+	}
+	_, _, _, preflightCleanup, err := s.prepareServerBackupTransfer(r.Context(), req.Location, true, "")
+	if err != nil {
+		writeServerBackupTransferError(w, http.StatusBadGateway, "backup_transfer_failed", "failed to prepare backup destination", err)
+		return
+	}
+	preflightCleanup()
 	query := r.URL.Query()
 	query.Set("scope", strings.TrimSpace(req.Scope))
 	query.Set("confidentiality", strings.TrimSpace(req.Confidentiality))
@@ -168,6 +179,7 @@ func (s *server) readServerBackupTransfer(ctx context.Context, location serverBa
 	if err != nil {
 		return "", func() {}, err
 	}
+	maxBytes := s.cfg.ServerRestoreMaxBytes
 	if profile == nil && configPath == "" {
 		if err := validateLocalPathForRead(target, s.cfg.AllowedLocalDirs); err != nil {
 			return "", func() {}, err
@@ -176,10 +188,10 @@ func (s *server) readServerBackupTransfer(ctx context.Context, location serverBa
 		if err != nil {
 			return "", func() {}, err
 		}
-		if info.IsDir() || info.Size() > s.cfg.ServerRestoreMaxBytes {
+		if info.IsDir() || (maxBytes > 0 && info.Size() > maxBytes) {
 			return "", func() {}, errors.New("backup bundle is not a file or exceeds restore limit")
 		}
-		tmpPath, err := copyServerRestoreLocalFile(target, s.cfg.ServerRestoreMaxBytes)
+		tmpPath, err := copyServerRestoreLocalFile(target, maxBytes)
 		if err != nil {
 			return "", func() {}, err
 		}
@@ -193,34 +205,73 @@ func (s *server) readServerBackupTransfer(ctx context.Context, location serverBa
 	tmpPath := tmp.Name()
 	_ = tmp.Close()
 	cleanup := func() { _ = os.Remove(tmpPath) }
+	args := []string{"copyto"}
+	if maxBytes > 0 {
+		args = append(args, "--max-transfer", strconv.FormatInt(maxBytes, 10))
+	}
+	args = append(args, target, tmpPath)
 	if profile != nil {
-		_, stderr, runErr := s.runRcloneCapture(ctx, *profile, []string{"copyto", "--max-transfer", strconv.FormatInt(s.cfg.ServerRestoreMaxBytes, 10), target, tmpPath}, "server-restore-transfer")
+		_, stderr, runErr := s.runRcloneCapture(ctx, *profile, args, "server-restore-transfer")
 		if runErr != nil {
 			cleanup()
 			return "", func() {}, fmt.Errorf("rclone copy failed: %s", redact.Diagnostic(strings.TrimSpace(stderr)))
 		}
-	} else if err := runServerBackupRclone(ctx, configPath, "copyto", "--max-transfer", strconv.FormatInt(s.cfg.ServerRestoreMaxBytes, 10), target, tmpPath); err != nil {
+	} else if err := runServerBackupRclone(ctx, configPath, args...); err != nil {
 		cleanup()
 		return "", func() {}, err
 	}
 	info, err := os.Stat(tmpPath)
-	if err != nil || info.Size() > s.cfg.ServerRestoreMaxBytes {
+	if err != nil || (maxBytes > 0 && info.Size() > maxBytes) {
 		cleanup()
 		return "", func() {}, errors.New("backup bundle exceeds restore limit")
 	}
 	return tmpPath, cleanup, nil
 }
 
-func (s *server) prepareServerBackupTransfer(ctx context.Context, location serverBackupTransferLocation, exporting bool, filename string) (string, *models.ProfileSecrets, string, func(), error) {
+func validateServerBackupTransferLocation(location serverBackupTransferLocation) (string, string, error) {
 	protocol := strings.TrimSpace(location.Protocol)
 	remotePath := strings.TrimSpace(location.Path)
 	if remotePath == "" {
-		return "", nil, "", func() {}, errors.New("location.path is required")
+		return "", "", errors.New("location.path is required")
 	}
 	if len(remotePath) > 8192 {
-		return "", nil, "", func() {}, errors.New("location.path is too long")
+		return "", "", errors.New("location.path is too long")
 	}
 	if err := rcloneconfig.ValidateSingleLineValue("location.path", remotePath); err != nil {
+		return "", "", err
+	}
+	switch protocol {
+	case serverBackupProtocolObjectStorage:
+		if strings.TrimSpace(location.ProfileID) == "" || strings.TrimSpace(location.Bucket) == "" {
+			return "", "", errors.New("location.profileId and location.bucket are required")
+		}
+	case serverBackupProtocolFTP:
+		if len(location.Host) > 253 || len(location.Username) > 1024 || len(location.Password) > serverBackupPasswordMaxBytes {
+			return "", "", errors.New("FTP connection field is too long")
+		}
+		if err := rcloneconfig.ValidateSingleLineValue("location.username", location.Username); err != nil {
+			return "", "", err
+		}
+		if err := rcloneconfig.ValidateSingleLineValue("location.password", location.Password); err != nil {
+			return "", "", err
+		}
+		port := location.Port
+		if port == 0 {
+			port = 21
+		}
+		if port < 1 || port > 65535 || strings.TrimSpace(location.Host) == "" || strings.TrimSpace(location.Username) == "" {
+			return "", "", errors.New("location.host and location.username are required and location.port must be valid")
+		}
+	case serverBackupProtocolNFS:
+	default:
+		return "", "", fmt.Errorf("unsupported location.protocol %q", protocol)
+	}
+	return protocol, remotePath, nil
+}
+
+func (s *server) prepareServerBackupTransfer(ctx context.Context, location serverBackupTransferLocation, exporting bool, filename string) (string, *models.ProfileSecrets, string, func(), error) {
+	protocol, remotePath, err := validateServerBackupTransferLocation(location)
+	if err != nil {
 		return "", nil, "", func() {}, err
 	}
 	if exporting && strings.HasSuffix(remotePath, "/") {
@@ -228,9 +279,6 @@ func (s *server) prepareServerBackupTransfer(ctx context.Context, location serve
 	}
 	switch protocol {
 	case serverBackupProtocolObjectStorage:
-		if strings.TrimSpace(location.ProfileID) == "" || strings.TrimSpace(location.Bucket) == "" {
-			return "", nil, "", func() {}, errors.New("location.profileId and location.bucket are required")
-		}
 		profile, ok, err := s.store.GetProfileSecrets(ctx, strings.TrimSpace(location.ProfileID))
 		if err != nil {
 			return "", nil, "", func() {}, err
@@ -241,15 +289,6 @@ func (s *server) prepareServerBackupTransfer(ctx context.Context, location serve
 		target := rcloneRemoteObject(strings.TrimSpace(location.Bucket), remotePath, profile.PreserveLeadingSlash)
 		return target, &profile, "", func() {}, nil
 	case serverBackupProtocolFTP:
-		if len(location.Host) > 253 || len(location.Username) > 1024 || len(location.Password) > serverBackupPasswordMaxBytes {
-			return "", nil, "", func() {}, errors.New("FTP connection field is too long")
-		}
-		if err := rcloneconfig.ValidateSingleLineValue("location.username", location.Username); err != nil {
-			return "", nil, "", func() {}, err
-		}
-		if err := rcloneconfig.ValidateSingleLineValue("location.password", location.Password); err != nil {
-			return "", nil, "", func() {}, err
-		}
 		host, err := profileendpoint.ResolveHost("location.host", location.Host, s.cfg.AllowRemote)
 		if err != nil {
 			return "", nil, "", func() {}, err
@@ -257,9 +296,6 @@ func (s *server) prepareServerBackupTransfer(ctx context.Context, location serve
 		port := location.Port
 		if port == 0 {
 			port = 21
-		}
-		if port < 1 || port > 65535 || strings.TrimSpace(location.Username) == "" {
-			return "", nil, "", func() {}, errors.New("location.port is invalid or location.username is required")
 		}
 		configPath, cleanup, err := writeServerBackupFTPConfig(ctx, s.cfg.DataDir, host, port, location.Username, location.Password)
 		if err != nil {
@@ -387,11 +423,15 @@ func copyServerRestoreLocalFile(sourcePath string, maxBytes int64) (string, erro
 	}
 	tmpPath := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpPath) }
-	written, err := io.Copy(tmp, io.LimitReader(source, maxBytes+1))
+	reader := io.Reader(source)
+	if maxBytes > 0 && maxBytes < math.MaxInt64 {
+		reader = io.LimitReader(source, maxBytes+1)
+	}
+	written, err := io.Copy(tmp, reader)
 	if closeErr := tmp.Close(); err == nil {
 		err = closeErr
 	}
-	if err != nil || written > maxBytes {
+	if err != nil || (maxBytes > 0 && written > maxBytes) {
 		cleanup()
 		if err != nil {
 			return "", err

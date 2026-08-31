@@ -40,6 +40,7 @@ const (
 	serverBackupConfidentialityEncrypted  = "encrypted"
 	serverBackupPasswordHeader            = "X-S3Desk-Backup-Password" // #nosec G101 -- HTTP header name, not a credential value.
 	serverBackupPasswordMaxBytes          = 4096
+	serverBackupManifestMaxBytes          = 1 << 20
 	serverRestoreMultipartFormMaxMemory   = 32 << 20
 	serverBackupPayloadEncryptionV2       = "v2"
 	serverBackupPayloadCipherV2           = "aes-256-gcm-chunked"
@@ -445,7 +446,17 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 		case entryName == "data":
 			continue
 		case entryName == "manifest.json":
-			data, err := io.ReadAll(io.LimitReader(tarReader, 1<<20))
+			if manifestSeen {
+				return models.ServerRestoreResponse{}, errors.New("backup manifest appears more than once")
+			}
+			if header.Size > serverBackupManifestMaxBytes {
+				return models.ServerRestoreResponse{}, serverRestoreExtractLimitError{
+					Path:          entryName,
+					RequiredBytes: header.Size,
+					MaxBytes:      serverBackupManifestMaxBytes,
+				}
+			}
+			data, err := io.ReadAll(io.LimitReader(tarReader, serverBackupManifestMaxBytes))
 			if err != nil {
 				return models.ServerRestoreResponse{}, err
 			}
@@ -527,6 +538,7 @@ func openServerRestoreBundle(r *http.Request) (multipartFile io.ReadCloser, bund
 	if err := preflightServerRestoreMultipart(r); err != nil {
 		return nil, "", nil, err
 	}
+	// #nosec G120 -- openServerRestoreBundleRequest caps the body with MaxBytesReader; zero explicitly configures no upload limit.
 	if err := r.ParseMultipartForm(serverRestoreMultipartFormMaxMemory); err != nil {
 		return nil, "", nil, fmt.Errorf("invalid multipart form: %w", err)
 	}

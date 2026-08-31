@@ -22,7 +22,9 @@ func TestWriteJobLogRedactsStoredAndRealtimeMessages(t *testing.T) {
 
 	var buf bytes.Buffer
 	m := &Manager{hub: hub}
-	m.writeJobLog(&buf, "job-redact", "error", "rclone failed secret_access_key=stored-secret request id req-1")
+	if err := m.writeJobLog(&buf, "job-redact", "error", "rclone failed secret_access_key=stored-secret request id req-1"); err != nil {
+		t.Fatalf("write job log: %v", err)
+	}
 
 	stored := buf.String()
 	if _, err := time.Parse(time.RFC3339Nano, strings.Fields(stored)[0]); err != nil {

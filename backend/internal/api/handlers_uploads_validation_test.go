@@ -36,7 +36,6 @@ func TestParseUploadChunkHeaders(t *testing.T) {
 		name           string
 		headers        http.Header
 		chunkIndexRaw  string
-		withoutSizes   bool
 		wantErrMessage string
 		wantRelPath    string
 		wantTotal      int
@@ -53,15 +52,6 @@ func TestParseUploadChunkHeaders(t *testing.T) {
 			wantIndex:     1,
 			wantChunkSize: 5,
 			wantFileSize:  10,
-		},
-		{
-			name:          "valid without sizes",
-			headers:       http.Header{"X-Upload-Chunk-Total": {"3"}, "X-Upload-Relative-Path": {"chunked/file.txt"}},
-			chunkIndexRaw: "2",
-			withoutSizes:  true,
-			wantRelPath:   "chunked/file.txt",
-			wantTotal:     3,
-			wantIndex:     2,
 		},
 		{
 			name:           "missing required headers",
@@ -99,19 +89,17 @@ func TestParseUploadChunkHeaders(t *testing.T) {
 			chunkIndexRaw:  "1",
 			wantErrMessage: "invalid X-Upload-File-Size",
 		},
+		{
+			name:           "chunk total mismatch",
+			headers:        http.Header{"X-Upload-Chunk-Total": {"3"}, "X-Upload-Relative-Path": {"file.txt"}, "X-Upload-Chunk-Size": {"5"}, "X-Upload-File-Size": {"10"}},
+			chunkIndexRaw:  "1",
+			wantErrMessage: "chunk total mismatch",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var (
-				got       uploadChunkHeaderValues
-				uploadErr *uploadHTTPError
-			)
-			if tc.withoutSizes {
-				got, uploadErr = parseUploadChunkHeadersWithoutSizes(tc.headers, tc.chunkIndexRaw, true)
-			} else {
-				got, uploadErr = parseUploadChunkHeaders(tc.headers, tc.chunkIndexRaw, true)
-			}
+			got, uploadErr := parseUploadChunkHeaders(tc.headers, tc.chunkIndexRaw, true)
 
 			if tc.wantErrMessage != "" {
 				if uploadErr == nil {

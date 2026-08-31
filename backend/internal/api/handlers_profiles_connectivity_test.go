@@ -169,7 +169,7 @@ case "$cmd" in
     fi
     ;;
   cat)
-    printf 'benchmark-bytes'
+    dd if=/dev/zero bs=1024 count=1024 2>/dev/null
     exit 0
     ;;
   copyto|deletefile)

@@ -28,6 +28,8 @@ type server struct {
 	realtimeMax     int
 	bucketGov       *bucketgov.Service
 	restoreMu       sync.RWMutex
+	// ponytail: global process-local object transition fence; use per-object durable claims if HA or promotion throughput matters.
+	uploadObjectStateMu sync.Mutex
 	// ponytail: process-local create lock; replace with a durable claim if HA is supported.
 	multipartStateMu sync.Mutex
 }

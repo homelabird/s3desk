@@ -186,17 +186,21 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 	query := s.db.WithContext(ctx).
 		Model(&objectIndexRow{}).
 		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket)
+	objectKeyLike := `object_key LIKE ? ESCAPE '\'`
+	if s.db.Dialector.Name() == "postgres" {
+		objectKeyLike = `object_key ILIKE ? ESCAPE '\'`
+	}
 	if in.Prefix != "" {
-		query = query.Where(`object_key LIKE ? ESCAPE '\'`, escapeLike(in.Prefix)+"%")
+		query = query.Where(objectKeyLike, escapeLike(in.Prefix)+"%")
 	}
 	for _, tok := range tokens {
 		if tok == "" {
 			continue
 		}
-		query = query.Where(`object_key LIKE ? ESCAPE '\'`, "%"+escapeLike(tok)+"%")
+		query = query.Where(objectKeyLike, "%"+escapeLike(tok)+"%")
 	}
 	if in.Extension != "" {
-		query = query.Where(`object_key LIKE ? ESCAPE '\'`, "%."+escapeLike(in.Extension))
+		query = query.Where(objectKeyLike, "%."+escapeLike(in.Extension))
 	}
 	if in.MinSize != nil {
 		query = query.Where("size >= ?", *in.MinSize)

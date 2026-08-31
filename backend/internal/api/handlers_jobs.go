@@ -481,7 +481,7 @@ func validateTransferCopyMoveObjectPayload(payload map[string]any) error {
 	return nil
 }
 
-func validateTransferCopyMoveBatchPayload(payload map[string]any) error {
+func validateTransferCopyMoveBatchPayload(payload map[string]any, move bool) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
 
@@ -501,6 +501,7 @@ func validateTransferCopyMoveBatchPayload(payload map[string]any) error {
 	}
 
 	sanitized := make([]any, 0, len(rawItems))
+	planItems := make([]jobs.TransferBatchPlanItem, 0, len(rawItems))
 	for i, item := range rawItems {
 		mm, ok := item.(map[string]any)
 		if !ok {
@@ -516,10 +517,18 @@ func validateTransferCopyMoveBatchPayload(payload map[string]any) error {
 		if strings.Contains(srcKey, "*") || strings.Contains(dstKey, "*") {
 			return fmt.Errorf("wildcards are not allowed in keys (items[%d])", i)
 		}
-		if srcBucket == dstBucket && srcKey == dstKey {
+		planItem := jobs.TransferBatchPlanItem{
+			SrcKey: rcloneconfig.NormalizePathInput(srcKey, false),
+			DstKey: rcloneconfig.NormalizePathInput(dstKey, false),
+		}
+		if srcBucket == dstBucket && planItem.SrcKey == planItem.DstKey {
 			return fmt.Errorf("source and destination must be different (items[%d])", i)
 		}
 		sanitized = append(sanitized, map[string]any{"srcKey": srcKey, "dstKey": dstKey})
+		planItems = append(planItems, planItem)
+	}
+	if err := jobs.ValidateTransferBatchAliases(srcBucket, dstBucket, planItems, move); err != nil {
+		return err
 	}
 
 	payload["srcBucket"] = srcBucket

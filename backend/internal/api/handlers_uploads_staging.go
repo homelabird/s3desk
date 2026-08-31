@@ -39,6 +39,14 @@ func (s *server) stagingChunkWrite(
 		}
 		return newUploadInternalError("failed to store chunk", map[string]any{"error": err.Error()})
 	}
+	expectedSize := expectedUploadChunkSize(chunkValues.index, chunkValues.total, chunkValues.chunkSize, chunkValues.fileSize)
+	if n != expectedSize {
+		_ = os.Remove(tmpPath)
+		return newUploadBadRequestError("chunk size mismatch", map[string]any{
+			"actualSize":   n,
+			"expectedSize": expectedSize,
+		})
+	}
 
 	delta := n - prevSize
 	if delta != 0 {

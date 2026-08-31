@@ -699,6 +699,26 @@ type UploadChunkState struct {
 	Present []int `json:"present"`
 }
 
+type UploadChunkStatusRequest struct {
+	Path      string `json:"path"`
+	Total     int    `json:"total"`
+	ChunkSize int64  `json:"chunkSize"`
+	FileSize  int64  `json:"fileSize"`
+}
+
+type UploadChunkStatusBatchRequest struct {
+	Items []UploadChunkStatusRequest `json:"items"`
+}
+
+type UploadChunkStatusBatchItem struct {
+	Path    string `json:"path"`
+	Present []int  `json:"present"`
+}
+
+type UploadChunkStatusBatchResponse struct {
+	Items []UploadChunkStatusBatchItem `json:"items"`
+}
+
 type UploadPresignRequest struct {
 	Path           string                     `json:"path"`
 	ContentType    string                     `json:"contentType,omitempty"`

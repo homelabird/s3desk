@@ -146,18 +146,26 @@ func (s *server) directMultipartFormPart(
 		appendCleanupError(uploadErr)
 		return 0, 0, uploadErr
 	}
-	reservation, uploadErr := s.directMultipartFormPersistPart(r, profileID, uploadID, relPath, key, us.Bucket, size)
-	if uploadErr != nil {
-		appendCleanupError(uploadErr)
-		return 0, 0, uploadErr
-	}
-	if uploadErr := s.directMultipartFormPromoteTempPart(r, secrets, us, tempKey, key, relPath); uploadErr != nil {
-		if rollbackErr := s.rollbackUploadObjectByteReservation(r.Context(), reservation); rollbackErr != nil {
-			if uploadErr.details == nil {
-				uploadErr.details = map[string]any{}
-			}
-			uploadErr.details["rollbackError"] = rollbackErr.message
+	uploadErr = func() *uploadHTTPError {
+		s.uploadObjectStateMu.Lock()
+		defer s.uploadObjectStateMu.Unlock()
+
+		reservation, uploadErr := s.directMultipartFormPersistPart(r, profileID, uploadID, relPath, key, us.Bucket, size)
+		if uploadErr != nil {
+			return uploadErr
 		}
+		if uploadErr := s.directMultipartFormPromoteTempPart(r, secrets, us, tempKey, key, relPath); uploadErr != nil {
+			if rollbackErr := s.rollbackUploadObjectByteReservation(r.Context(), reservation); rollbackErr != nil {
+				if uploadErr.details == nil {
+					uploadErr.details = map[string]any{}
+				}
+				uploadErr.details["rollbackError"] = rollbackErr.message
+			}
+			return uploadErr
+		}
+		return nil
+	}()
+	if uploadErr != nil {
 		appendCleanupError(uploadErr)
 		return 0, 0, uploadErr
 	}

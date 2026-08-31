@@ -16,6 +16,9 @@ func (s *server) addUploadSessionBytesWithReservation(ctx context.Context, profi
 }
 
 func (s *server) upsertUploadObjectWithByteReservation(ctx context.Context, obj store.UploadObject) *uploadHTTPError {
+	s.uploadObjectStateMu.Lock()
+	defer s.uploadObjectStateMu.Unlock()
+
 	if err := s.store.UpsertUploadObjectWithByteLimit(ctx, obj, s.cfg.UploadMaxBytes); err != nil {
 		return uploadReservationError(err, obj.UploadID, s.cfg.UploadMaxBytes, "failed to persist upload object")
 	}

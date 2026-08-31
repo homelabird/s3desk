@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -361,6 +362,38 @@ func TestHandleRestoreServerBackup_RejectsOversizedBundle(t *testing.T) {
 	}
 }
 
+func TestRestoreServerBackupArchiveRejectsOversizedManifestHeader(t *testing.T) {
+	t.Parallel()
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	archive := buildTarGzWithDeclaredEntrySize(t, "manifest.json", serverBackupManifestMaxBytes+1)
+
+	_, err := srv.restoreServerBackupArchive(t.Context(), bytes.NewReader(archive), "", "")
+	var limitErr serverRestoreExtractLimitError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("expected serverRestoreExtractLimitError, got %v", err)
+	}
+	if limitErr.Path != "manifest.json" || limitErr.RequiredBytes != serverBackupManifestMaxBytes+1 || limitErr.MaxBytes != serverBackupManifestMaxBytes {
+		t.Fatalf("limitErr=%+v, want manifest header limit %d", limitErr, serverBackupManifestMaxBytes)
+	}
+}
+
+func TestRestoreServerBackupArchiveRejectsDuplicateManifest(t *testing.T) {
+	t.Parallel()
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	manifest := mustJSON(t, serverBackupArchiveManifest{ServerMigrationManifest: models.ServerMigrationManifest{
+		Format:     serverBackupBundleFormat,
+		BundleKind: serverBackupScopeFull,
+	}})
+	archive := buildTarGzWithDuplicateEntry(t, "manifest.json", manifest)
+
+	_, err := srv.restoreServerBackupArchive(t.Context(), bytes.NewReader(archive), "", "")
+	if err == nil || !strings.Contains(err.Error(), "backup manifest appears more than once") {
+		t.Fatalf("error=%v, want duplicate backup manifest rejection", err)
+	}
+}
+
 func TestHandleRestoreServerBackup_RejectsMultipartTempPreflightOverflow(t *testing.T) {
 	tempDir := os.TempDir()
 	freeBytes, err := availableDiskBytes(tempDir)
@@ -605,6 +638,50 @@ func buildTarGzForRestore(t *testing.T, files map[string][]byte) []byte {
 		}
 		if _, err := tarWriter.Write(data); err != nil {
 			t.Fatalf("write data %s: %v", name, err)
+		}
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("close gzip writer: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func buildTarGzWithDeclaredEntrySize(t *testing.T, name string, size int64) []byte {
+	t.Helper()
+
+	buf := &bytes.Buffer{}
+	gzipWriter := gzip.NewWriter(buf)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := tarWriter.WriteHeader(&tar.Header{
+		Name:     name,
+		Mode:     0o600,
+		Size:     size,
+		Typeflag: tar.TypeReg,
+	}); err != nil {
+		t.Fatalf("write declared-size header: %v", err)
+	}
+	// Leave the declared body absent: the manifest guard must reject from the header alone.
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("close gzip writer: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func buildTarGzWithDuplicateEntry(t *testing.T, name string, data []byte) []byte {
+	t.Helper()
+
+	buf := &bytes.Buffer{}
+	gzipWriter := gzip.NewWriter(buf)
+	tarWriter := tar.NewWriter(gzipWriter)
+	for range 2 {
+		if err := tarWriter.WriteHeader(&tar.Header{Name: name, Mode: 0o600, Size: int64(len(data)), Typeflag: tar.TypeReg}); err != nil {
+			t.Fatalf("write duplicate entry header: %v", err)
+		}
+		if _, err := tarWriter.Write(data); err != nil {
+			t.Fatalf("write duplicate entry: %v", err)
 		}
 	}
 	if err := tarWriter.Close(); err != nil {

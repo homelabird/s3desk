@@ -7,6 +7,12 @@ type transferBatchItemPayload struct {
 	DstKey string
 }
 
+// TransferBatchPlanItem is one normalized source and destination pair.
+type TransferBatchPlanItem struct {
+	SrcKey string
+	DstKey string
+}
+
 type transferBatchPayload struct {
 	SrcBucket string
 	DstBucket string
@@ -56,4 +62,34 @@ func parseTransferBatchPayload(payload map[string]any) (transferBatchPayload, er
 		Items:     items,
 		DryRun:    dryRun,
 	}, nil
+}
+
+// ValidateTransferBatchAliases rejects plans whose sequential execution would overwrite another item.
+func ValidateTransferBatchAliases(srcBucket, dstBucket string, items []TransferBatchPlanItem, move bool) error {
+	sources := make(map[string]int, len(items))
+	destinations := make(map[string]int, len(items))
+	for i, item := range items {
+		if previous, ok := destinations[item.DstKey]; ok {
+			return fmt.Errorf("payload.items[%d].dstKey duplicates payload.items[%d].dstKey", i, previous)
+		}
+		destinations[item.DstKey] = i
+
+		if previous, ok := sources[item.SrcKey]; ok {
+			if move {
+				return fmt.Errorf("payload.items[%d].srcKey duplicates payload.items[%d].srcKey", i, previous)
+			}
+			continue
+		}
+		sources[item.SrcKey] = i
+	}
+
+	if srcBucket != dstBucket {
+		return nil
+	}
+	for i, item := range items {
+		if sourceIndex, ok := sources[item.DstKey]; ok && sourceIndex != i {
+			return fmt.Errorf("payload.items[%d].dstKey matches payload.items[%d].srcKey in the same bucket", i, sourceIndex)
+		}
+	}
+	return nil
 }

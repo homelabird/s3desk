@@ -296,6 +296,124 @@ func TestRunTransferCopyBatchProgressDoesNotReloadJobPerObject(t *testing.T) {
 	}
 }
 
+func TestRunJobRejectsUnsafeTransferBatchPlansBeforeRclone(t *testing.T) {
+	manager, st, _, _, profile, _ := newManagerConsistencyFixture(t)
+	rcloneCalls := 0
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ TestRunRcloneAttemptOptions, _ func(level string, message string)) (string, error) {
+		rcloneCalls++
+		return "", unexpectedJobsProcessArgs(args)
+	})
+
+	tests := []struct {
+		name        string
+		jobType     string
+		srcBucket   string
+		dstBucket   string
+		items       []any
+		wantMessage string
+	}{
+		{
+			name:      "copy duplicate destination",
+			jobType:   JobTypeTransferCopyBatch,
+			srcBucket: "source",
+			dstBucket: "destination",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": " /target.txt "},
+				map[string]any{"srcKey": "b.txt", "dstKey": "target.txt"},
+			},
+			wantMessage: "dstKey duplicates",
+		},
+		{
+			name:      "move duplicate destination",
+			jobType:   JobTypeTransferMoveBatch,
+			srcBucket: "source",
+			dstBucket: "destination",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": "target.txt"},
+				map[string]any{"srcKey": "b.txt", "dstKey": " /target.txt "},
+			},
+			wantMessage: "dstKey duplicates",
+		},
+		{
+			name:      "move duplicate source",
+			jobType:   JobTypeTransferMoveBatch,
+			srcBucket: "source",
+			dstBucket: "destination",
+			items: []any{
+				map[string]any{"srcKey": " /a.txt ", "dstKey": "first.txt"},
+				map[string]any{"srcKey": "a.txt", "dstKey": "second.txt"},
+			},
+			wantMessage: "srcKey duplicates",
+		},
+		{
+			name:      "copy same bucket destination source overlap",
+			jobType:   JobTypeTransferCopyBatch,
+			srcBucket: "bucket",
+			dstBucket: "bucket",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": " /b.txt "},
+				map[string]any{"srcKey": "b.txt", "dstKey": "c.txt"},
+			},
+			wantMessage: "dstKey matches",
+		},
+		{
+			name:      "persisted copy same bucket overlap after repeated leading slash normalization",
+			jobType:   JobTypeTransferCopyBatch,
+			srcBucket: "bucket",
+			dstBucket: "bucket",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": " //b.txt "},
+				map[string]any{"srcKey": "b.txt", "dstKey": "c.txt"},
+			},
+			wantMessage: "dstKey matches",
+		},
+		{
+			name:      "move same bucket destination source overlap",
+			jobType:   JobTypeTransferMoveBatch,
+			srcBucket: "bucket",
+			dstBucket: "bucket",
+			items: []any{
+				map[string]any{"srcKey": "a.txt", "dstKey": "b.txt"},
+				map[string]any{"srcKey": " /b.txt ", "dstKey": "c.txt"},
+			},
+			wantMessage: "dstKey matches",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rcloneCalls = 0
+			job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
+				Type: tc.jobType,
+				Payload: map[string]any{
+					"srcBucket": tc.srcBucket,
+					"dstBucket": tc.dstBucket,
+					"items":     tc.items,
+				},
+			})
+			if err != nil {
+				t.Fatalf("create job: %v", err)
+			}
+
+			err = manager.runJob(context.Background(), job.ID)
+			if err == nil || !strings.Contains(err.Error(), tc.wantMessage) {
+				t.Fatalf("runJob error=%v, want message containing %q", err, tc.wantMessage)
+			}
+			if rcloneCalls != 0 {
+				t.Fatalf("rclone calls=%d, want 0", rcloneCalls)
+			}
+
+			updated, ok, getErr := st.GetJob(context.Background(), profile.ID, job.ID)
+			if getErr != nil || !ok {
+				t.Fatalf("get job: ok=%v err=%v", ok, getErr)
+			}
+			if updated.Status != models.JobStatusFailed {
+				t.Fatalf("status=%s, want %s", updated.Status, models.JobStatusFailed)
+			}
+		})
+	}
+}
+
 func newManagerConsistencyFixture(t *testing.T) (*Manager, *store.Store, *ws.Hub, *gorm.DB, models.Profile, string) {
 	t.Helper()
 

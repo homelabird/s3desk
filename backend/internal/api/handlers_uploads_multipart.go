@@ -132,6 +132,18 @@ func parseUploadChunkQuery(values url.Values, requireTotal bool) (uploadChunkQue
 		return uploadChunkQuery{}, uploadMultipartInvalidFileSizeError(fileSizeRaw)
 	}
 	query.fileSize = fileSize
+	if requireTotal {
+		expectedTotal, err := expectedMultipartPartCount(fileSize, chunkSize)
+		if err != nil {
+			return uploadChunkQuery{}, newUploadBadRequestError(err.Error(), nil)
+		}
+		if query.total != expectedTotal {
+			return uploadChunkQuery{}, newUploadBadRequestError("chunk total mismatch", map[string]any{
+				"expectedTotal": expectedTotal,
+				"total":         query.total,
+			})
+		}
+	}
 
 	return query, nil
 }
@@ -179,6 +191,9 @@ func buildStagingMultipartChunkState(chunkDir string, total int, chunkSize, file
 }
 
 func expectedUploadChunkSize(index, total int, chunkSize, fileSize int64) int64 {
+	if fileSize == 0 {
+		return 0
+	}
 	expected := chunkSize
 	if index == total-1 {
 		remaining := fileSize - (int64(total-1) * chunkSize)
@@ -199,6 +214,10 @@ func (s *server) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Reque
 
 func (s *server) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
 	newUploadMultipartHTTPService(s).handleGetUploadChunks(w, r)
+}
+
+func (s *server) handleGetUploadChunksBatch(w http.ResponseWriter, r *http.Request) {
+	newUploadMultipartHTTPService(s).handleGetUploadChunksBatch(w, r)
 }
 
 func (s *server) listMultipartParts(ctx context.Context, client *s3.Client, meta store.MultipartUpload) ([]types.Part, error) {

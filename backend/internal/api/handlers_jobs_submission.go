@@ -265,7 +265,7 @@ func (s *server) validateRunnableJobRequest(ctx context.Context, jobType string,
 			return newJobSubmissionValidationError(http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		}
 	case jobs.JobTypeTransferCopyBatch, jobs.JobTypeTransferMoveBatch:
-		if err := validateTransferCopyMoveBatchPayload(payload); err != nil {
+		if err := validateTransferCopyMoveBatchPayload(payload, jobType == jobs.JobTypeTransferMoveBatch); err != nil {
 			return newJobSubmissionValidationError(http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		}
 	case jobs.JobTypeTransferCopyPrefix, jobs.JobTypeTransferMovePrefix:

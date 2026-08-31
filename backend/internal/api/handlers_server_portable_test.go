@@ -969,6 +969,35 @@ func TestExtractPortablePayloadEntry_RejectsCumulativeExtractLimitBeforeWrite(t 
 	}
 }
 
+func TestExtractPortableArchiveRejectsOversizedManifestHeader(t *testing.T) {
+	t.Parallel()
+
+	archive := buildTarGzWithDeclaredEntrySize(t, "manifest.json", portablePreviewMaxManifestBytes+1)
+	_, _, _, _, _, err := extractPortableArchiveWithLimit(t.Context(), bytes.NewReader(archive), "", "", 0)
+	var limitErr serverRestoreExtractLimitError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("expected serverRestoreExtractLimitError, got %v", err)
+	}
+	if limitErr.Path != "manifest.json" || limitErr.RequiredBytes != portablePreviewMaxManifestBytes+1 || limitErr.MaxBytes != portablePreviewMaxManifestBytes {
+		t.Fatalf("limitErr=%+v, want manifest header limit %d", limitErr, portablePreviewMaxManifestBytes)
+	}
+}
+
+func TestExtractPortableArchiveRejectsDuplicateManifest(t *testing.T) {
+	t.Parallel()
+
+	manifest := mustJSON(t, serverBackupArchiveManifest{ServerMigrationManifest: models.ServerMigrationManifest{
+		Format:     serverBackupBundleFormat,
+		BundleKind: serverBackupScopePortable,
+	}})
+	archive := buildTarGzWithDuplicateEntry(t, "manifest.json", manifest)
+
+	_, _, _, _, _, err := extractPortableArchiveWithLimit(t.Context(), bytes.NewReader(archive), "", "", 0)
+	if err == nil || !strings.Contains(err.Error(), "portable manifest appears more than once") {
+		t.Fatalf("error=%v, want duplicate portable manifest rejection", err)
+	}
+}
+
 func downloadPortableArchiveBytes(t *testing.T, serverURL string, path string) []byte {
 	t.Helper()
 

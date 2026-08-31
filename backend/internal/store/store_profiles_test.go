@@ -485,7 +485,7 @@ func testUpdateProfileRollsBackWhenReloadFails(t *testing.T, st *Store) {
 		if tx.Statement != nil && tx.Statement.Table == "profiles" {
 			profileQueries++
 			if profileQueries == 2 {
-				tx.AddError(injectedErr)
+				_ = tx.AddError(injectedErr)
 			}
 		}
 	}); err != nil {

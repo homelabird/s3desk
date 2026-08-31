@@ -45,6 +45,36 @@ func TestSearchObjectIndexOnlyProbesIndexAfterEmptyResult(t *testing.T) {
 	}
 }
 
+func TestSearchObjectIndexIsCaseInsensitive(t *testing.T) {
+	testSearchObjectIndexIsCaseInsensitive(t, newTestStore(t))
+}
+
+func TestPostgresObjectIndexSearchIsCaseInsensitive(t *testing.T) {
+	testSearchObjectIndexIsCaseInsensitive(t, newPostgresTestStore(t))
+}
+
+func testSearchObjectIndexIsCaseInsensitive(t *testing.T, st *Store) {
+	t.Helper()
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	if err := st.UpsertObjectIndexBatch(ctx, profile.ID, "bucket-a", []ObjectIndexEntry{{Key: "Reports/Quarterly.CSV", Size: 12}}, "2026-08-15T00:00:00Z"); err != nil {
+		t.Fatalf("seed object index: %v", err)
+	}
+
+	result, err := st.SearchObjectIndex(ctx, profile.ID, SearchObjectIndexInput{
+		Bucket:    "bucket-a",
+		Prefix:    "reports/",
+		Query:     "quarterly",
+		Extension: "csv",
+	})
+	if err != nil {
+		t.Fatalf("search object index: %v", err)
+	}
+	if len(result.Items) != 1 || result.Items[0].Key != "Reports/Quarterly.CSV" {
+		t.Fatalf("search result = %+v, want case-insensitive match", result.Items)
+	}
+}
+
 func TestSummarizeObjectIndexReturnsZeroSummaryForMissingPrefixInIndexedBucket(t *testing.T) {
 	st := newTestStore(t)
 	profile := createTestProfile(t, st)

@@ -155,6 +155,8 @@ func TestUploadStagingHTTPService_ChunkUploadRemovesTempWhenReservationExceedsLi
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files?chunkIndex=0", bytes.NewBufferString("abc"))
 	req.Header.Set("X-Upload-Chunk-Total", "2")
+	req.Header.Set("X-Upload-Chunk-Size", "3")
+	req.Header.Set("X-Upload-File-Size", "6")
 	req.Header.Set("X-Upload-Relative-Path", "chunked/file.bin")
 	rr := httptest.NewRecorder()
 	srv := &server{cfg: config.Config{DataDir: dataDir, UploadMaxBytes: 10}, store: st}
@@ -173,6 +175,83 @@ func TestUploadStagingHTTPService_ChunkUploadRemovesTempWhenReservationExceedsLi
 	}
 	if _, err := os.Stat(chunkPath + ".tmp"); !os.IsNotExist(err) {
 		t.Fatalf("expected rejected chunk temp file to be absent, stat err=%v", err)
+	}
+}
+
+func TestUploadStagingHTTPService_ChunkUploadRejectsShortBody(t *testing.T) {
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	stagingDir := t.TempDir()
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeStaging, stagingDir, expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	relPath := "chunked/file.bin"
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files?chunkIndex=0", bytes.NewBufferString("x"))
+	req.Header.Set("X-Upload-Chunk-Total", "2")
+	req.Header.Set("X-Upload-Chunk-Size", "5")
+	req.Header.Set("X-Upload-File-Size", "10")
+	req.Header.Set("X-Upload-Relative-Path", relPath)
+	rr := httptest.NewRecorder()
+	srv := &server{cfg: config.Config{DataDir: dataDir, UploadMaxBytes: 10}, store: st}
+
+	newUploadStagingHTTPService(srv).handleStagingChunkUpload(rr, req, profile.ID, upload.ID, stagingDir, 0, "0")
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "invalid_request" || resp.Error.Message != "chunk size mismatch" {
+		t.Fatalf("error=%+v, want invalid_request chunk size mismatch", resp.Error)
+	}
+	assertUploadSessionBytesForAPI(t, st, profile.ID, upload.ID, 0)
+	chunkPath := filepath.Join(stagingDir, ".chunks", filepath.FromSlash(relPath), chunkPartName(0))
+	if _, err := os.Stat(chunkPath); !os.IsNotExist(err) {
+		t.Fatalf("expected rejected chunk file to be absent, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(stagingDir, filepath.FromSlash(relPath))); !os.IsNotExist(err) {
+		t.Fatalf("expected final file to be absent, stat err=%v", err)
+	}
+}
+
+func TestUploadStagingHTTPService_ChunkUploadAcceptsZeroByteFile(t *testing.T) {
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	stagingDir := t.TempDir()
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeStaging, stagingDir, expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	relPath := "nested/empty.bin"
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files?chunkIndex=0", http.NoBody)
+	req.Header.Set("X-Upload-Chunk-Total", "1")
+	req.Header.Set("X-Upload-Chunk-Size", "5")
+	req.Header.Set("X-Upload-File-Size", "0")
+	req.Header.Set("X-Upload-Relative-Path", relPath)
+	rr := httptest.NewRecorder()
+	srv := &server{cfg: config.Config{DataDir: dataDir, UploadMaxBytes: 10}, store: st}
+
+	newUploadStagingHTTPService(srv).handleStagingChunkUpload(rr, req, profile.ID, upload.ID, stagingDir, 0, "0")
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusNoContent)
+	}
+	assertUploadSessionBytesForAPI(t, st, profile.ID, upload.ID, 0)
+	info, err := os.Stat(filepath.Join(stagingDir, filepath.FromSlash(relPath)))
+	if err != nil {
+		t.Fatalf("stat empty staged file: %v", err)
+	}
+	if !info.Mode().IsRegular() || info.Size() != 0 {
+		t.Fatalf("staged file mode=%v size=%d, want regular zero-byte file", info.Mode(), info.Size())
 	}
 }
 

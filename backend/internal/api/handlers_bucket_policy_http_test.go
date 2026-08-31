@@ -11,7 +11,22 @@ import (
 
 	"s3desk/internal/config"
 	"s3desk/internal/models"
+	"s3desk/internal/responsebody"
 )
+
+func TestParseXMLErrorBoundsDeserialization(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`<Error><Code>NoSuchBucketPolicy</Code></Error>`)
+	if got := parseXMLError(body); got.Code != "NoSuchBucketPolicy" {
+		t.Fatalf("Code=%q, want NoSuchBucketPolicy", got.Code)
+	}
+
+	body = append(body, bytes.Repeat([]byte(" "), int(responsebody.ControlPlaneMaxBytes))...)
+	if got := parseXMLError(body); got.Code != "" {
+		t.Fatalf("oversized Code=%q, want empty", got.Code)
+	}
+}
 
 func TestBucketPolicyHTTPService_HandleGetBucketPolicy_ReturnsUnsupportedProvider(t *testing.T) {
 	t.Parallel()

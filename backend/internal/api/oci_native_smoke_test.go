@@ -399,7 +399,7 @@ case "$cmd" in
     exit 0
     ;;
   cat)
-    printf 'benchmark-bytes'
+    dd if=/dev/zero bs=1024 count=1024 2>/dev/null
     exit 0
     ;;
   deletefile)
@@ -524,7 +524,7 @@ func runOciNativeSmokeCommand(args []string, state *ociNativeSmokeState) (string
 		return "", "", nil
 	case "cat":
 		if strings.Contains(target, ".s3desk-benchmark-") {
-			return "benchmark-bytes", "", nil
+			return strings.Repeat("x", 1<<20), "", nil
 		}
 		if target == "remote:oci-native-bucket/report.txt" {
 			return "hello", "", nil

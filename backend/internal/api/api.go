@@ -177,6 +177,7 @@ func New(dep Dependencies) http.Handler {
 			r.Post("/{uploadId}/multipart/complete", api.handleCompleteMultipartUpload)
 			r.Post("/{uploadId}/multipart/abort", api.handleAbortMultipartUpload)
 			r.Get("/{uploadId}/chunks", api.handleGetUploadChunks)
+			r.Post("/{uploadId}/chunks/batch", api.handleGetUploadChunksBatch)
 			r.Post("/{uploadId}/commit", api.handleCommitUpload)
 			r.Delete("/{uploadId}", api.handleDeleteUploadSession)
 		})

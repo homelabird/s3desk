@@ -365,6 +365,7 @@ func (m *Manager) runTransferCopyBatch(ctx context.Context, profileID, jobID str
 	}
 
 	pairs := make([]s3KeyPair, 0, len(items))
+	planItems := make([]TransferBatchPlanItem, 0, len(items))
 	for i, item := range items {
 		srcKey := normalizeKeyInput(item.SrcKey, preserveLeadingSlash)
 		dstKey := normalizeKeyInput(item.DstKey, preserveLeadingSlash)
@@ -378,9 +379,13 @@ func (m *Manager) runTransferCopyBatch(ctx context.Context, profileID, jobID str
 			return fmt.Errorf("source and destination must be different (items[%d])", i)
 		}
 		pairs = append(pairs, s3KeyPair{SrcKey: srcKey, DstKey: dstKey})
+		planItems = append(planItems, TransferBatchPlanItem{SrcKey: srcKey, DstKey: dstKey})
 	}
 	if len(pairs) == 0 {
 		return errors.New("payload.items must contain at least one item")
+	}
+	if err := ValidateTransferBatchAliases(srcBucket, dstBucket, planItems, false); err != nil {
+		return err
 	}
 
 	m.trySetJobObjectsTotal(jobID, int64(len(pairs)))
@@ -408,6 +413,7 @@ func (m *Manager) runTransferMoveBatch(ctx context.Context, profileID, jobID str
 	}
 
 	pairs := make([]s3KeyPair, 0, len(items))
+	planItems := make([]TransferBatchPlanItem, 0, len(items))
 	for i, item := range items {
 		srcKey := normalizeKeyInput(item.SrcKey, preserveLeadingSlash)
 		dstKey := normalizeKeyInput(item.DstKey, preserveLeadingSlash)
@@ -421,9 +427,13 @@ func (m *Manager) runTransferMoveBatch(ctx context.Context, profileID, jobID str
 			return fmt.Errorf("source and destination must be different (items[%d])", i)
 		}
 		pairs = append(pairs, s3KeyPair{SrcKey: srcKey, DstKey: dstKey})
+		planItems = append(planItems, TransferBatchPlanItem{SrcKey: srcKey, DstKey: dstKey})
 	}
 	if len(pairs) == 0 {
 		return errors.New("payload.items must contain at least one item")
+	}
+	if err := ValidateTransferBatchAliases(srcBucket, dstBucket, planItems, true); err != nil {
+		return err
 	}
 
 	m.trySetJobObjectsTotal(jobID, int64(len(pairs)))

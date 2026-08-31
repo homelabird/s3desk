@@ -371,6 +371,16 @@ func extractPortableArchiveWithLimit(ctx context.Context, src io.Reader, backupP
 		case entryName == "":
 			continue
 		case entryName == "manifest.json":
+			if manifestSeen {
+				return "", models.ServerMigrationManifest{}, nil, "", nil, errors.New("portable manifest appears more than once")
+			}
+			if header.Size > portablePreviewMaxManifestBytes {
+				return "", models.ServerMigrationManifest{}, nil, "", nil, serverRestoreExtractLimitError{
+					Path:          entryName,
+					RequiredBytes: header.Size,
+					MaxBytes:      portablePreviewMaxManifestBytes,
+				}
+			}
 			data, err := io.ReadAll(io.LimitReader(tarReader, portablePreviewMaxManifestBytes))
 			if err != nil {
 				return "", models.ServerMigrationManifest{}, nil, "", nil, err

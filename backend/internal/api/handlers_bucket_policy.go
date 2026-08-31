@@ -1,14 +1,17 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
 	"s3desk/internal/bucketpolicy"
 	"s3desk/internal/rcloneerrors"
+	"s3desk/internal/responsebody"
 )
 
 type xmlErrorEnvelope struct {
@@ -31,8 +34,12 @@ func parseXMLError(body []byte) parsedUpstreamError {
 	if raw == "" {
 		return parsedUpstreamError{}
 	}
+	if int64(len(body)) > responsebody.ControlPlaneMaxBytes {
+		return parsedUpstreamError{Raw: raw}
+	}
 	var env xmlErrorEnvelope
-	if err := xml.Unmarshal(body, &env); err == nil {
+	decoder := xml.NewDecoder(io.LimitReader(bytes.NewReader(body), responsebody.ControlPlaneMaxBytes))
+	if err := decoder.Decode(&env); err == nil {
 		return parsedUpstreamError{
 			Code:      strings.TrimSpace(env.Code),
 			Message:   strings.TrimSpace(env.Message),
