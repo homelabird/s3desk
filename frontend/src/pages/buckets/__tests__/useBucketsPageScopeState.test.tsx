@@ -4,6 +4,21 @@ import { describe, expect, it } from 'vitest'
 import { useBucketsPageScopeState } from '../useBucketsPageScopeState'
 
 describe('useBucketsPageScopeState', () => {
+	it('clears name search on profile and authentication changes, including return navigation', () => {
+		const { result, rerender } = renderHook((props) => useBucketsPageScopeState(props), {
+			initialProps: { apiToken: 'token-a', profileId: 'profile-1' },
+		})
+		act(() => result.current.setBucketSearch('reports'))
+		expect(result.current.bucketSearch).toBe('reports')
+		rerender({ apiToken: 'token-a', profileId: 'profile-2' })
+		expect(result.current.bucketSearch).toBe('')
+		rerender({ apiToken: 'token-a', profileId: 'profile-1' })
+		expect(result.current.bucketSearch).toBe('')
+		act(() => result.current.setBucketSearch('private'))
+		rerender({ apiToken: 'token-b', profileId: 'profile-1' })
+		expect(result.current.bucketSearch).toBe('')
+	})
+
 	it('tracks scope changes and hides stale scoped view state', () => {
 		const { result, rerender } = renderHook(
 			(props: { apiToken: string; profileId: string | null }) =>

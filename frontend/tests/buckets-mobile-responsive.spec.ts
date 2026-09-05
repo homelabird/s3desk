@@ -72,6 +72,37 @@ function getBucketCard(page: Page, bucketName: string) {
 }
 
 test.describe('@mobile-responsive Buckets mobile workflows', () => {
+	test('finds a bucket beyond the virtual window and clears search on profile changes', async ({ page }) => {
+		const buckets = Array.from({ length: 50 }, (_, index) => ({ name: `audit-bucket-${String(index + 1).padStart(2, '0')}` }))
+		await installProfilesBucketsMobileResponsiveFixtures(page, { buckets })
+		await page.route('**/api/v1/buckets', (route) => route.fulfill({ json:
+			route.request().headers()['x-profile-id'] === 'profiles-buckets-mobile-secondary' ? [{ name: 'backup-only' }] : buckets,
+		}))
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		await gotoBucketsPage(page)
+		const search = page.getByRole('searchbox', { name: 'Search buckets' })
+		await expect(page.getByText('audit-bucket-50', { exact: true })).toHaveCount(0)
+		await search.fill(' BUCKET-50 ')
+		await expect(page.getByText('1 of 50 buckets', { exact: true })).toBeVisible()
+		await page.getByRole('button', { name: 'Manage bucket audit-bucket-50', exact: true }).click()
+		await expect(page.getByRole('menuitem', { name: /Policy editor$/ })).toBeVisible()
+		await page.keyboard.press('Escape')
+		await search.fill('missing')
+		await expect(page.getByText('No buckets match your search.')).toBeVisible()
+		await page.getByRole('button', { name: 'Clear search', exact: true }).click()
+		await expect(page.getByText('50 of 50 buckets', { exact: true })).toBeVisible()
+		await search.fill('bucket-50')
+		await page.getByRole('combobox', { name: 'Profile', exact: true }).selectOption('profiles-buckets-mobile-secondary')
+		await expect(search).toHaveValue('')
+		await expect(page.getByText('backup-only', { exact: true })).toBeVisible()
+		await expect(page.getByText('audit-bucket-50', { exact: true })).toHaveCount(0)
+		await page.getByRole('combobox', { name: 'Profile', exact: true }).selectOption('profiles-buckets-mobile-profile')
+		await expect(search).toHaveValue('')
+		await search.fill('bucket-50')
+		await page.getByRole('button', { name: 'Open objects for bucket audit-bucket-50', exact: true }).click()
+		await expect(page).toHaveURL(/\/objects/)
+	})
+
 	test('keeps short bucket actions on one row at the 320px mobile floor', async ({ page }) => {
 		await page.setViewportSize({ width: 320, height: 568 })
 		await setupBucketsPage(page)

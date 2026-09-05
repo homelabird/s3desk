@@ -71,10 +71,9 @@ test.describe('Design audit visual smoke @visual', () => {
 	test('Objects shell remains usable at the narrow mobile floor', async ({ page }) => {
 		await setupObjectsAuditPage(page, 'light', { width: 320, height: 568 })
 		await expect(page.getByLabel('Search current folder')).toBeVisible()
-		const firstObjectRow = objectsListRow(page, 'reports/')
+		const firstObjectRow = objectsListRow(page, 'alpha.txt')
 		await expect(firstObjectRow).toBeVisible()
-		const firstObjectBox = await firstObjectRow.boundingBox() // e2e-geometry-allow keeps actual data in the first narrow-mobile viewport
-		expect(firstObjectBox?.y).toBeLessThan(568) // e2e-geometry-allow asserts first-content visibility without scrolling
+		await expect(firstObjectRow).toBeInViewport({ ratio: 1 })
 		const compactButtons = page.getByTestId('objects-list-controls-compact-footer').getByRole('button')
 		await expect(compactButtons).toHaveCount(4)
 		const compactButtonBoxes = await Promise.all(

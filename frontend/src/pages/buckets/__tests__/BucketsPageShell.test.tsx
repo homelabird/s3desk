@@ -32,6 +32,8 @@ describe('BucketsPageShell', () => {
 				bucketCrudSupported
 				bucketCrudUnsupportedReason="Bucket operations are unavailable."
 				bucketsQueryError={null}
+				bucketsRetrying={false}
+				onRetryBuckets={vi.fn()}
 				bucketsLoading
 				buckets={[]}
 				showBucketsEmpty={false}
@@ -42,6 +44,8 @@ describe('BucketsPageShell', () => {
 				createLoading={false}
 				list={{
 					buckets: [],
+					search: '',
+					onSearchChange: vi.fn(),
 					useCompactList: false,
 					policySupported: false,
 					policyUnsupportedReason: 'unsupported',
@@ -82,6 +86,8 @@ describe('BucketsPageShell', () => {
 				bucketCrudSupported={false}
 				bucketCrudUnsupportedReason="Bucket operations are unavailable."
 				bucketsQueryError={null}
+				bucketsRetrying={false}
+				onRetryBuckets={vi.fn()}
 				bucketsLoading={false}
 				buckets={[]}
 				showBucketsEmpty={false}
@@ -92,6 +98,8 @@ describe('BucketsPageShell', () => {
 				createLoading={false}
 				list={{
 					buckets: [],
+					search: '',
+					onSearchChange: vi.fn(),
 					useCompactList: false,
 					policySupported: false,
 					policyUnsupportedReason: 'unsupported',
@@ -141,6 +149,8 @@ describe('BucketsPageShell', () => {
 				bucketCrudSupported
 				bucketCrudUnsupportedReason="Bucket operations are unavailable."
 				bucketsQueryError={null}
+				bucketsRetrying={false}
+				onRetryBuckets={vi.fn()}
 				bucketsLoading={false}
 				buckets={[{ name: 'primary-bucket', createdAt: '2026-04-08T00:00:00Z' }]}
 				showBucketsEmpty={false}
@@ -152,6 +162,8 @@ describe('BucketsPageShell', () => {
 				selectedProfileProvider="s3_compatible"
 				list={{
 					buckets: [{ name: 'primary-bucket', createdAt: '2026-04-08T00:00:00Z' }],
+					search: '',
+					onSearchChange: vi.fn(),
 					useCompactList: true,
 					policySupported: true,
 					policyUnsupportedReason: 'unsupported',
@@ -183,6 +195,8 @@ describe('BucketsPageShell', () => {
 		expect(screen.getByTestId('buckets-dialogs')).toBeInTheDocument()
 		expect(bucketsListMock).toHaveBeenCalledWith(
 			expect.objectContaining({
+				search: '',
+				onSearchChange: expect.any(Function),
 				useCompactList: true,
 				deletingBucket: 'primary-bucket',
 				buckets: [{ name: 'primary-bucket', createdAt: '2026-04-08T00:00:00Z' }],

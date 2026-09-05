@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildBucketsPageControllerState } from '../buildBucketsPageControllerState'
@@ -6,6 +8,8 @@ describe('buildBucketsPageControllerState', () => {
 	it('builds grouped controller state from scoped, query, and feature state', () => {
 		const api = { buckets: {} }
 		const scopeState = {
+			bucketSearch: 'primary',
+			setBucketSearch: vi.fn(),
 			currentScopeKey: 'token-a:profile-1',
 			openCreateModal: vi.fn(),
 			createOpen: true,
@@ -65,6 +69,8 @@ describe('buildBucketsPageControllerState', () => {
 			bucketCrudUnsupportedReason: '',
 			bucketsQueryError: null,
 			bucketsLoading: false,
+			bucketsRetrying: false,
+			onRetryBuckets: expect.any(Function),
 			buckets: queriesState.buckets,
 			showBucketsEmpty: false,
 			openCreateModal: scopeState.openCreateModal,
@@ -74,6 +80,8 @@ describe('buildBucketsPageControllerState', () => {
 			createLoading: true,
 			selectedProfileProvider: 'aws_s3',
 			list: {
+				search: 'primary',
+				onSearchChange: scopeState.setBucketSearch,
 				buckets: queriesState.buckets,
 				useCompactList: true,
 				policySupported: true,

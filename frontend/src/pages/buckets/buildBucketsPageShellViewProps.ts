@@ -26,6 +26,8 @@ export function buildBucketsPageShellViewProps({
 		bucketCrudUnsupportedReason: queriesState.bucketCrudUnsupportedReason,
 		bucketsQueryError: queriesState.bucketsQuery.isError ? queriesState.bucketsQuery.error : null,
 		bucketsLoading: isBucketsPageListLoading(queriesState),
+		bucketsRetrying: queriesState.bucketsQuery.isFetching,
+		onRetryBuckets: () => { void queriesState.bucketsQuery.refetch({ cancelRefetch: false }) },
 		buckets: queriesState.buckets,
 		showBucketsEmpty: queriesState.showBucketsEmpty,
 		openCreateModal: scopeState.openCreateModal,
@@ -63,6 +65,8 @@ function buildBucketsListProps({
 }: Omit<BuildBucketsPageShellViewPropsArgs, 'api'>): BucketsPageShellViewProps['list'] {
 	return {
 		buckets: queriesState.buckets,
+		search: scopeState.bucketSearch,
+		onSearchChange: scopeState.setBucketSearch,
 		useCompactList,
 		policySupported: featureState.policySupported,
 		policyUnsupportedReason: featureState.policyUnsupportedReason,

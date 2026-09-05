@@ -10,6 +10,20 @@
 	padding: 24px;
 }
 
+.searchBar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.searchBar .searchField {
+	flex: 1 1 180px;
+	min-width: 0;
+	margin-bottom: 0;
+}
+
 .dialogBody {
 	width: 100%;
 }

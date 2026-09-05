@@ -45,7 +45,19 @@ export function BucketsPageShell(props: BucketsPageShellProps) {
 					type="error"
 					showIcon
 					title={failedToLoadBucketsTitle()}
-					description={formatErr(props.bucketsQueryError)}
+					description={
+						<Space orientation="vertical">
+							<div>{formatErr(props.bucketsQueryError)}</div>
+							<Button
+								onClick={props.onRetryBuckets}
+								loading={props.bucketsRetrying}
+								disabled={props.bucketsRetrying}
+								aria-label="Retry loading buckets"
+							>
+								Retry
+							</Button>
+						</Space>
+					}
 				/>
 			) : null}
 
