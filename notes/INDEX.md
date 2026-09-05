@@ -3,7 +3,8 @@
 ## Current overview
 
 - Current whole-project expert analysis:
-  - [PROJECT_QUALITY_ANALYSIS_2026-05-18.md](PROJECT_QUALITY_ANALYSIS_2026-05-18.md)
+  - [PROJECT_QUALITY_ANALYSIS_2026-09-05.md](PROJECT_QUALITY_ANALYSIS_2026-09-05.md)
+  - Previous snapshot: [PROJECT_QUALITY_ANALYSIS_2026-05-18.md](PROJECT_QUALITY_ANALYSIS_2026-05-18.md)
 - One-page refactor and quality summary:
   - [CODEBASE_REFACTOR_QUALITY_SUMMARY_2026-03-20.md](CODEBASE_REFACTOR_QUALITY_SUMMARY_2026-03-20.md)
 - Current improvement backlog:
@@ -23,6 +24,11 @@
   - [MANAGER_TRANSFER_EXECUTION_GROWTH_GUARD_2026-03-20.md](MANAGER_TRANSFER_EXECUTION_GROWTH_GUARD_2026-03-20.md)
 
 ## Frontend plans
+
+- Mobile and desktop browser UX findings:
+  - Latest review and implementation: [UI_UX_MOBILE_DESKTOP_REVIEW_2026-09-06.md](UI_UX_MOBILE_DESKTOP_REVIEW_2026-09-06.md)
+  - Additional findings and follow-up: [UI_UX_ADDITIONAL_AUDIT_2026-09-06.md](UI_UX_ADDITIONAL_AUDIT_2026-09-06.md)
+  - [UI_UX_BROWSER_AUDIT_2026-09-05.md](UI_UX_BROWSER_AUDIT_2026-09-05.md)
 
 - Frontend design reports from the 2026-05-17 service review:
   - [FRONTEND_DESIGN_REPORT_COMMON_2026-05-17.md](FRONTEND_DESIGN_REPORT_COMMON_2026-05-17.md)

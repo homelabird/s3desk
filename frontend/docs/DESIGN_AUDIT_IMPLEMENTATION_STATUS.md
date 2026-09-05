@@ -1,11 +1,42 @@
 # Design Audit Implementation Status
 
 Originally audited: 2026-05-24
-Last updated: 2026-08-23
+Last updated: 2026-09-06
 
 ## Objective
 
 Track the implementation state for the project-wide UI/UX design audit focused on color, contrast, visual hierarchy, and discoverability issues.
+
+## 2026-09-06 Mobile and Desktop Review Follow-up
+
+- Reversed size/date ranges now show linked field errors and block automatic search and Refresh. Manual query refetch also rejects invalid ranges before reaching the API. Correcting the inputs resumes search without silently swapping boundaries.
+- Global search uses persistent visible filter labels. Latest-error navigation scrolls both the sheet and the virtual log list, then focuses log output.
+- Buckets supports case-insensitive name filtering across the loaded inventory, a result count, an empty-match state, and Clear search. Authentication and profile changes reset the filter.
+- Original findings and implementation details are in [the browser review](../../notes/UI_UX_MOBILE_DESKTOP_REVIEW_2026-09-06.md); final commands and evidence limits are in [the validation log](DESIGN_AUDIT_VALIDATION_LOG.md#2026-09-06-search-buckets-and-logs-follow-up).
+
+## 2026-09-06 Additional Findings Follow-up
+
+- Uploads labels the existing replacement behavior as Replace selection once files are selected. Canceling a replacement preserves the current draft.
+- Selected files and folder metadata survive same-profile route navigation in memory. Scope changes clear the upload draft without remounting unrelated pages.
+- Transfers closes before opening the linked job's details and selects the matching profile. Upload and job-artifact download rows share this behavior; a missing job can be closed to return to history.
+- Failed and unindexed searches omit the normal empty-result message; refetch errors retain existing matches and filters.
+- Original findings and completion evidence are in [the additional audit](../../notes/UI_UX_ADDITIONAL_AUDIT_2026-09-06.md) and [the validation log](DESIGN_AUDIT_VALIDATION_LOG.md#2026-09-06-additional-findings-follow-up).
+
+## 2026-09-06 Browser Audit Follow-up
+
+- Transfers now offers Clear finished for completed, failed, and canceled records across both queues. Active transfers stay visible; Remove is restricted to finished records, and Cancel remains a separate action.
+- Job Details keeps only the title and close control in its fixed header. Actions scroll with the body, and status/progress precede technical details. The 320×568 fixture header shrank from 249px to 81px.
+- Uploads places its queue action immediately after the destination controls and uses one selection summary line. Selected files, prefix, and empty/error recovery actions are preserved.
+- Retry notices follow individual requests through retry, completion, exhaustion, and abort. Finishing an unrelated request cannot clear another request's notice.
+- Objects uses less mobile header space while retaining its controls. The complete first file row is visible in the audited 320×568 fixture.
+- All five findings from [the browser audit](../../notes/UI_UX_BROWSER_AUDIT_2026-09-05.md) are implemented and locally verified. Commands, screenshots, baseline changes, and environment limits are in [the validation log](DESIGN_AUDIT_VALIDATION_LOG.md#2026-09-06-browser-audit-follow-up).
+
+## 2026-09-05 UX Recovery Review
+
+- Buckets and Uploads now expose an accessible Retry button when bucket listing fails. It reuses the scoped query and preserves the selected upload files and destination prefix.
+- Activity distinguishes a failed history request from a successful empty result. Offline guidance asks users to reconnect; it does not direct them to an unavailable realtime retry action.
+- The review sampled current light/dark desktop and narrow mobile screenshots across the main screens and added desktop/320px browser recovery coverage, including keyboard activation and axe scans of the bucket error states.
+- Findings, commands, results, and environment limits are recorded in [the validation log](DESIGN_AUDIT_VALIDATION_LOG.md#2026-09-05-uiux-review).
 
 ## Completed Implementation Areas
 
@@ -56,7 +87,7 @@ Track the implementation state for the project-wide UI/UX design audit focused o
 - `npm run test:e2e:design-audit`
 - `npm run validate:design-audit`
 
-## Current Verification (2026-08-23)
+## 2026-08-23 Verification
 
 - `npm run check:design`
 - `npm run check:css-tokens` through `npm run check:design`
@@ -101,6 +132,8 @@ The design audit work should not be marked complete until all of the following a
 - Any regressions discovered during validation are either fixed or explicitly logged as follow-up work.
 - Validation evidence is recorded in `frontend/docs/DESIGN_AUDIT_VALIDATION_LOG.md`.
 
-## Current Status
+## Earlier Audit Status
+
+The results below describe the earlier audit. Current follow-up evidence and limits are in the dated September entries above.
 
 The current worktree has 49 CSS files and 93 `--s3d-*` tokens after removing 57 lines of orphan or unused CSS. Static design checks, build, focused and full Chromium visual coverage, actual Chromium UI zoom, actual Firefox full-page and text-only zoom, representative zoom focus non-obscuration, native menu/tab navigation, and bidirectional Bucket Policy and Jobs filters sheet traversal with `Escape` trigger restoration, automated Firefox/WebKit reflow, lint, bundle budget, and whitespace checks pass. Manual browser visual review, exhaustive application-wide keyboard order, physical Safari/WKWebView, assistive technology, real-device, live-provider, and deployed-runtime QA remain separate evidence boundaries.

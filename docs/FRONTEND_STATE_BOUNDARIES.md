@@ -106,6 +106,25 @@ split:
 7. Presentational shell
    `*PageShell.tsx` renders props and should not reach back into providers.
 
+## Upload drafts across routes
+
+`FullAppRoutes` hosts `UploadsDraftProvider` so selected device files, folder labels,
+and directory-selection mode survive navigation away from Uploads. Its scope key
+clears only this draft when the authenticated/profile scope changes; other routes
+retain their own component lifecycle. Queueing or Clear selection releases the
+draft. Files stay in memory and are not restored after a browser reload.
+
+Destination storage and temporary picker state remain in
+`useUploadsPageScopedStorageState`. Jobs navigation from a transfer is resolved by
+`FullAppRoutes`, which selects the transfer's profile and passes the requested job
+to the existing Jobs details state.
+
+## Bucket name search
+
+`useBucketScopedViewState` owns the Buckets name query and clears it on authentication
+or profile changes. `BucketsList` filters the already-loaded inventory for display
+before applying the existing virtualizer. It does not change the bucket query cache.
+
 ## Placement Rules
 
 When adding new state, ask which scope it belongs to first.

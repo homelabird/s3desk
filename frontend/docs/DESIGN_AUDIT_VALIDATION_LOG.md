@@ -1,8 +1,150 @@
 # Design Audit Validation Log
 
-Date: 2026-08-23T08:44:29.184Z
+Latest review: 2026-09-06. Earlier entries below retain their original dates.
 
 Use this file to record the evidence required before the UI/UX design audit can be considered complete.
+
+## 2026-09-06 Search, Buckets, and Logs Follow-up
+
+All four findings from [the mobile/desktop review](../../notes/UI_UX_MOBILE_DESKTOP_REVIEW_2026-09-06.md) are implemented. Search rejects reversed size/date ranges without swapping displayed values, keeps visible filter labels, and resumes when corrected. Latest-error navigation scrolls the enclosing sheet and virtual log viewport and focuses log output. Buckets filters the loaded inventory by name and resets the query on authentication/profile changes.
+
+Commands ran from `frontend/` through RTK. Final browser acceptance used the production build served at `PLAYWRIGHT_BASE_URL=http://127.0.0.1:18136`, with separate `/tmp/s3desk-ux-four-*` output directories. This is local fixture evidence. Browser suites and command exit statuses below passed.
+
+| Command / lane | Final result | Log |
+| --- | --- | --- |
+| `npm run test:unit -- --maxWorkers=2` | 254 files, 1,107 tests passed | `/tmp/s3desk-ux-four-unit-final.log` |
+| Focused Objects search, Jobs overlays, and Buckets/search axe checks; exact selection below | 11 passed | `/tmp/s3desk-ux-four-core-preview.log` |
+| `./node_modules/.bin/playwright test --grep @mobile-responsive --project=mobile-iphone-13 --project=mobile-pixel-7 --workers=2` | 110 passed; full mobile lane | `/tmp/s3desk-ux-four-mobile-preview.log` |
+| `./node_modules/.bin/playwright test --grep @visual --project=chromium --workers=2` | 35 passed after inspecting and updating four intended baselines | `/tmp/s3desk-ux-four-visual-final.log` |
+| `npm run lint` | ESLint, CSS tokens, and import cycles passed | `/tmp/s3desk-ux-four-lint-final.log` |
+| `npm run bundle:budget` | Passed, including fresh TypeScript and production analysis build | `/tmp/s3desk-ux-four-bundle-final.log` |
+| `npm run check:e2e:geometry` | Passed after the final browser test edit | `/tmp/s3desk-ux-four-geometry-final.log` |
+| `git diff --check` | Passed after final documentation edits | Terminal output |
+
+The focused browser command was:
+
+```bash
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:18136 PLAYWRIGHT_OUTPUT_DIR=/tmp/s3desk-ux-four-core-preview ./node_modules/.bin/playwright test tests/objects-global-search.spec.ts tests/jobs-overlays.spec.ts tests/accessibility-overlays.spec.ts --project=chromium --workers=2 --grep "search range validation|search errors|global search and favorites|Jobs overlays|Objects global search|Buckets page has no"
+```
+
+The 156 final browser cases are distinct across the focused, full mobile, and visual lanes. Unit coverage verifies reversed and equal ranges, open size bounds, manual query refetch rejection, and authentication/profile resets. Browser coverage verifies linked errors and persistent labels; correction without sending reversed conditions; latest-error navigation through 3 and 650 log lines; filtered-log navigation and focus; and a 50-bucket search beyond the virtual window, empty matches, clearing, profile isolation, and Open/Manage actions. Range browser tests activate the field before editing and retain full input-visibility assertions at 320px.
+
+Four existing PNG baselines changed: Buckets desktop/mobile in `design-audit-visual.spec.ts-snapshots`, and Objects global search light/dark in `objects-visual-regression.spec.ts-snapshots` and `dark-theme-visual-regression.spec.ts-snapshots`. The rendered changes were inspected before accepting the updates. Other existing dirty baseline changes were preserved. Baseline update logs are `/tmp/s3desk-ux-four-baselines-final.log` and `/tmp/s3desk-ux-four-search-baselines.log`.
+
+An initial full unit run timed out in the existing Profiles import test. Its isolated recheck passed, followed by the complete 1,107-test run above with two workers. During browser iteration, icon-inclusive role names were corrected in new locators. Retained development-server search traces show `net::ERR_NETWORK_CHANGED` while fetching application modules; final acceptance therefore used the completed production build. The first dev-server mobile log reported 110 passing cases but its launcher returned 143, so the final preview run above, with exit status 0, is the accepted full-lane result. The initial visual run had 33 passing cases and two intended search-label baseline differences; the final comparison passed all 35.
+
+Final compiled-app screenshots were also inspected in `/tmp/s3desk-browser-ux-four-fixed/`: `search-valid-desktop.png`, `search-invalid-dates-mobile-320.png`, `buckets-search-desktop.png`, and `logs-jump-fixed-mobile-320.png`. In the 320×568 log fixture, the error text moved from y≈678 before the fix to y≈532 and is fully visible; focus is on log output. Original audit artifacts remain separately linked in the review.
+
+No backend/provider, deployment, physical-device, assistive-technology, Firefox, or WebKit gate was run. `./scripts/check.sh fast/full` and the entire desktop core suite were not run for this frontend follow-up. Local production-build rendering, mock API responses, touch emulation, and axe scans do not establish live-provider or deployed-runtime behavior. Bucket filter ownership is recorded in [Frontend State Boundaries](../../docs/FRONTEND_STATE_BOUNDARIES.md#bucket-name-search).
+
+## 2026-09-06 Additional Findings Follow-up
+
+All four findings from [the additional browser audit](../../notes/UI_UX_ADDITIONAL_AUDIT_2026-09-06.md) are implemented. Uploads now labels replacement explicitly and retains its in-memory draft across same-profile navigation. Scope changes clear only upload state. Transfers closes before selecting the linked job's profile and opening its details. Failed or unindexed searches no longer show a normal empty result, while failed refetches retain cached matches.
+
+The browser tests cover replacement cancellation, two-file selection across Profiles/Buckets/Activity navigation, subsequent replacement, profile isolation, upload and job-artifact links from another profile, repeated opening of the same job, missing-job recovery, and the four search result states. A focused provider test verifies that clearing an upload draft preserves an unrelated page's edit. Existing folder queue coverage verifies that queueing clears the draft.
+
+Commands ran from `frontend/` through RTK. Browser commands used `PLAYWRIGHT_BASE_URL=http://127.0.0.1:18128` and a `PLAYWRIGHT_OUTPUT_DIR` matching the corresponding log stem. Artifacts under `/tmp` are disposable local evidence.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `npm run test:unit -- --maxWorkers=4` | 254 files, 1,097 tests passed on the final implementation | `/tmp/s3desk-ux-followup-unit-final.log` |
+| `npx playwright test tests/uploads-more-menu.spec.ts tests/transfers-drawer-actions.spec.ts tests/objects-global-search.spec.ts tests/page-load-recovery.spec.ts tests/accessibility-overlays.spec.ts --project=chromium --workers=2` | 49 passed; 4 failed during resource loading, then passed in the focused run below | `/tmp/s3desk-ux-followup-final.log` |
+| `npx playwright test tests/accessibility-overlays.spec.ts:667 tests/accessibility-overlays.spec.ts:810 tests/page-load-recovery.spec.ts:67 tests/transfers-drawer-actions.spec.ts:190 --project=chromium --workers=1` | 7 passed, including all 4 failed cases and their parameterized siblings | `/tmp/s3desk-ux-followup-recheck.log` |
+| `npx playwright test tests/objects-mobile-responsive.spec.ts tests/uploads-mobile-responsive.spec.ts tests/jobs-mobile-responsive.spec.ts --project=mobile-iphone-13 --project=mobile-pixel-7 --workers=2` | 52 passed on the final implementation | `/tmp/s3desk-ux-followup-mobile-verified.log` |
+| `npx playwright test --grep "@visual\|preserves drafts across navigation" --project=chromium --workers=2` | 37 passed: 35 visual comparisons and 2 extended draft-navigation cases; no baseline updates | `/tmp/s3desk-ux-followup-visual-verified.log` |
+| `npm run lint` | Passed: ESLint, CSS tokens, import cycles | `/tmp/s3desk-ux-followup-lint-verified.log` |
+| `npm run bundle:budget` | Passed, including a fresh TypeScript and production analysis build | `/tmp/s3desk-ux-followup-bundle-final.log` |
+| `npm run check:e2e:geometry` | Passed after the final browser test edit | `/tmp/s3desk-ux-followup-geometry-final.log` |
+| `git diff --check` | Passed after documentation edits | Terminal output |
+
+The four loading failures had `net::ERR_NETWORK_CHANGED` for application JS/CSS in their Playwright traces, before the target workflows were reached. They are not recorded as initial passes. The single-worker recheck passed without a runtime change; together these runs cover all 53 distinct cases in that lane. An earlier search assertion ended while React Query was still retrying; its timeout was adjusted to wait for the terminal state. Obsolete replacement-label assertions and one TypeScript-only test option were corrected before the final unit/build results.
+
+Across these lanes, 140 distinct browser cases have passing evidence after rechecks. The 37-case final run repeats the two upload draft cases after extending their navigation through Profiles, Buckets, and Activity; these and the seven rechecked cases are not counted twice. Existing visual baseline changes from the earlier five-finding follow-up were preserved, and this follow-up introduced no further baseline changes. Focused ESLint also passed for the final navigation-test edit.
+
+Final implementation screenshots in `/tmp/s3desk-ux-followup-final/` include `uploads-draft-restored-and-replaced.png` and `search-error-without-empty-result.png`. Linked job detail captures are also available in `/tmp/s3desk-ux-followup-recheck/`. These were visually inspected to confirm the replacement label, preserved destination, focused job detail, and error presentation without a false empty result.
+
+Uploads draft ownership is documented in [Frontend State Boundaries](../../docs/FRONTEND_STATE_BOUNDARIES.md#upload-drafts-across-routes). Files are retained only in memory until queueing, explicit clearing, or an authenticated/profile scope change; browser reload recovery is outside this change. Local mocks, Chromium, touch emulation, keyboard interactions, and axe do not prove physical-device, assistive-technology, live-provider, or deployed-runtime behavior. `./scripts/check.sh fast/full`, backend tests, Firefox, and WebKit were not run for this frontend-only follow-up. The earlier five-finding implementation and its results remain separately dated below.
+
+## 2026-09-06 Browser Audit Follow-up
+
+The five findings in [the browser audit](../../notes/UI_UX_BROWSER_AUDIT_2026-09-05.md) were implemented within their existing owners. No dependency, public API, or deployment change was needed.
+
+| Finding | Result and evidence |
+| --- | --- |
+| Active transfer disappears on cleanup | Clear finished and individual Remove preserve every active download/upload phase. A mixed-queue unit test checks state and runtime references. The browser flow removes a finished upload while retaining the running upload and its active badge, observes no cancel request from cleanup, then explicitly cancels the remaining server job. |
+| Job Details obscures status | Actions now scroll with the body; status/progress come first. At 320×568, the fixed header measures 81px instead of 249px and status is visible without scrolling. Mobile tests retain 44px action targets and the details/logs flow. |
+| Upload destination and queue action are far apart | One selection summary replaces four cards; queue actions follow destination controls. At 390px, Prefix and Queue upload top positions are 64px apart instead of about 1,094px. Both are visible together at 320px and 390px after scrolling to the destination. Selection/prefix recovery and empty-bucket actions remain covered. |
+| Stale automatic retry notice | Each fetch retry loop owns its notice and clears it in its completion path, including exhaustion and abort. Unit coverage checks concurrent failing requests, unrelated success, legacy status clearing, exhaustion, and manual recovery. Browser recovery checks reject lingering retry notices. |
+| First Objects file is cut off | Mobile header rows and empty spacing are reduced while controls remain accessible. The first complete file row ends at y=558.83 in the 320×568 fixture; the visual test now requires that file row to be fully in the viewport. |
+
+### Current verification
+
+Commands ran from `frontend/` through RTK. Browser lanes used the same local Vite server with `PLAYWRIGHT_BASE_URL=http://127.0.0.1:18120`; each lane set a distinct `PLAYWRIGHT_OUTPUT_DIR` matching its log stem below. The counts below are final runs, excluding interim failures and snapshot generation.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `npm run test:unit -- --maxWorkers=4` | 253 files, 1,094 tests passed | `/tmp/s3desk-ux-unit-final.log` |
+| `npx playwright test tests/transfers-drawer-actions.spec.ts tests/page-load-recovery.spec.ts --project=chromium --workers=2` | 8 passed | `/tmp/s3desk-ux-core.log` |
+| `npx playwright test tests/objects-mobile-responsive.spec.ts tests/uploads-mobile-responsive.spec.ts tests/jobs-mobile-responsive.spec.ts --project=mobile-iphone-13 --project=mobile-pixel-7 --workers=2` | 52 passed | `/tmp/s3desk-ux-mobile-final.log` |
+| `npx playwright test --grep @visual --project=chromium --workers=2` | 35 passed without snapshot updates | `/tmp/s3desk-ux-visual-final-0906.log` |
+| `npx playwright test tests/accessibility-overlays.spec.ts tests/dark-theme-accessibility.spec.ts tests/wcag-reflow.spec.ts tests/objects-network-chaos.spec.ts tests/jobs-network.spec.ts --project=chromium --workers=2` | 54 passed | `/tmp/s3desk-ux-accessibility-0906.log` |
+| `npm run lint` | Passed: ESLint, CSS tokens, import cycles | `/tmp/s3desk-ux-lint-final-0906.log` |
+| `npm run build` | Passed: TypeScript and production build | `/tmp/s3desk-ux-build-final.log` |
+| `npm run check:design` | Passed: tokens, patterns, tracked contrast; pattern advisories remain advisory | `/tmp/s3desk-ux-design-0906.log` |
+| `npm run bundle:budget` | Passed | `/tmp/s3desk-ux-bundle-0906.log` |
+| `npm run check:e2e:geometry` | Passed | `/tmp/s3desk-ux-geometry-0906.log` |
+| `git diff --check` | Passed after final documentation edits | Terminal output |
+
+The final browser lanes contain 149 passing tests. Eight intentional baseline changes were inspected: five Objects captures (light, dark, tablet, narrow mobile, bucket picker) and three Transfers captures (desktop and both mobile tabs). The prior `--update-snapshots=changed` run generated those changes; the separate 35-case run above verified them.
+
+Interim checks exposed obsolete expectations for active Remove and the four selection cards, an empty-bucket action regression, and an icon-inclusive Refresh accessible-name mismatch. The empty-bucket action fallback was restored and the affected assertions were corrected before the final runs. Existing unrelated worktree changes, including the preceding test cleanup, were retained; the unit count difference from September 5 is not solely attributable to these five fixes.
+
+### Direct browser evidence and limits
+
+Fresh local captures are under `/tmp/s3desk-browser-ux-implemented/`: `activity-mobile-320-details.png`, `objects-mobile-320.png`, `uploads-mobile-destination.png`, `uploads-mobile-320-destination.png`, `uploads-desktop.png`, and `buckets-desktop-recovered.png`. Upload geometry and bucket recovery observations are recorded beside them in `uploads-geometry.json` and `bucket-recovery.json`. The mixed upload cleanup/cancel test captures `transfers-clear-keeps-active.png` under `/tmp/s3desk-ux-core/`.
+
+These are local Chromium, mock-response, keyboard, axe, and touch-emulation results. They do not establish real-provider, physical-device, assistive-technology, deployed-runtime, Firefox, or WebKit behavior. Some fixture realtime-ticket requests reached the absent backend and logged proxy errors; the mock assertions passed. `./scripts/check.sh fast/full` and backend tests were not run for this frontend-only follow-up. `/tmp` evidence is disposable; the tracked browser assertions and visual baselines provide repeatable coverage.
+
+## 2026-09-05 UI/UX Review
+
+### Findings and changes
+
+The review covered navigation, action hierarchy, responsive layouts, loading/error/empty states, keyboard recovery, and automated accessibility. Twelve current baseline captures were visually inspected across Login, Profiles, Buckets policy, Objects, Uploads, Activity, Settings, and Transfers, plus the newly reproduced bucket-list error captures. The sampled normal screens showed no additional blocking layout issue; this is not an exhaustive review of every state.
+
+| Priority | Surface | Finding | Result |
+| --- | --- | --- | --- |
+| P1 | Buckets | After request retries were exhausted, the error advised retrying but exposed no retry action. | Added Retry to the error description, connected to the existing profile/token-scoped query. |
+| P1 | Uploads | A destination-list error had no retry action; reloading the page would discard in-memory file selection. | Added Retry without navigation or selection reset. Browser checks retain the chosen file and destination prefix. |
+| P2 | Activity | A failed history request also rendered an empty-history message, including a filter explanation when filters were active. | Failed loads now say “Activity could not be loaded” and direct users to the existing Refresh action. Filter/realtime actions no longer replace the failed-list recovery guidance. |
+| P2 | Activity offline | Empty-state copy instructed users to retry realtime while its button was unavailable offline. | Reconnect guidance now takes precedence. |
+
+Owners: `src/pages/buckets/BucketsPageShell.tsx`, `buildBucketsPageShellViewProps.ts`, `src/pages/uploads/UploadsPageShell.tsx`, `buildUploadsPagePresentationProps.ts`, and `src/pages/jobs/JobsEmptyState.tsx`/`JobsTableSection.tsx`. Existing query and presentation boundaries remain in use.
+
+On an initial-load retry, React Query clears the failed state and the UI returns to its existing loading presentation; on a refetch with cached error data, the visible Retry button uses the fetching state. Requests use `cancelRefetch: false` to avoid restarting an existing fetch. Error-state buttons retain a descriptive accessible name and a minimum 44px mobile target.
+
+### Current verification
+
+Commands below ran from `frontend/`; shell execution used the repository's RTK wrapper. Artifacts under `/tmp` are local, disposable evidence.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `npm run test:unit -- --maxWorkers=4` | 260 files, 1,156 tests passed | `/tmp/s3desk-ux-all-unit.log` |
+| `PLAYWRIGHT_WEB_SERVER_PORT=18104 PLAYWRIGHT_OUTPUT_DIR=/tmp/s3desk-ux-recovery-verified npm run test:e2e -- tests/page-load-recovery.spec.ts --project=chromium --workers=1` | 6 passed; desktop and 320px recovery, keyboard Retry, preserved upload selection, four error-state axe scans | `/tmp/s3desk-ux-recovery-verified.log` |
+| `PLAYWRIGHT_WEB_SERVER_PORT=18105 PLAYWRIGHT_OUTPUT_DIR=/tmp/s3desk-ux-accessibility npm run test:e2e -- tests/accessibility-overlays.spec.ts tests/dark-theme-accessibility.spec.ts tests/wcag-reflow.spec.ts --project=chromium --workers=3` | 51 passed | `/tmp/s3desk-ux-accessibility.log` |
+| `PLAYWRIGHT_WEB_SERVER_PORT=18106 PLAYWRIGHT_OUTPUT_DIR=/tmp/s3desk-ux-mobile npm run test:e2e:mobile-responsive -- --workers=4` | 104 passed; iPhone 13 and Pixel 7 Chromium emulation | `/tmp/s3desk-ux-mobile.log` |
+| `PLAYWRIGHT_WEB_SERVER_PORT=18107 PLAYWRIGHT_OUTPUT_DIR=/tmp/s3desk-ux-visual-final npm run test:e2e:visual -- --workers=3` | 35 passed; unchanged baselines | `/tmp/s3desk-ux-visual-final.log` |
+| `npm run lint` | Passed: ESLint, CSS tokens, import cycles | `/tmp/s3desk-ux-lint-final.log` |
+| `npm run build` | Passed: TypeScript and production build | `/tmp/s3desk-ux-build.log` |
+| `npm run check:design` | Passed: token, pattern, and tracked contrast checks; pattern advisories remain advisory | `/tmp/s3desk-ux-design.log` |
+| `npm run bundle:budget` | Passed | `/tmp/s3desk-ux-bundle.log` |
+| `npm run check:e2e:geometry` | Passed | `/tmp/s3desk-ux-geometry.log` |
+| `git diff --check` | Passed | Terminal output |
+
+The final browser lanes above contain 196 passing tests. The initial 35-case visual capture run also passed (`/tmp/s3desk-ux-visual-baseline.log`, images in `/tmp/s3desk-ux-review-captures`); it is not counted again in that total. Mobile fixtures sometimes logged unmatched realtime-ticket requests to the absent local backend; the mock workflow assertions passed, and this does not provide backend connectivity evidence.
+
+The pre-change bucket recovery cases failed at the missing Retry action at both widths. Initial Activity browser attempts ended during automatic retries; their timeouts are not proof of the empty-state defect. The final Activity fixture disables transport retries with the existing `apiRetryCount` setting, allows query retries to settle, and checks failed-to-empty recovery through Refresh. Unit coverage independently checks failed loads with filters in both layouts and offline guidance. Interim assertions were corrected for React Query's initial retry loading transition and the Refresh button's icon-inclusive accessible name.
+
+No CSS tokens, dependencies, or visual baselines were changed. Local Chromium render, axe, keyboard, and emulation results do not establish physical-device, assistive-technology, live-provider, or deployment behavior. Firefox/WebKit and actual browser-zoom checks listed later are historical evidence and were not rerun for this review. The earlier project-wide `check.sh full` result is recorded separately in [the project quality report](../../notes/PROJECT_QUALITY_ANALYSIS_2026-09-05.md); this pass validates frontend UX changes.
 
 ## Command Results
 
