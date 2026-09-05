@@ -12,6 +12,26 @@ import {
 } from './support/ui'
 
 test.describe('@mobile-responsive Jobs mobile workflows', () => {
+	for (const lineCount of [3, 650]) {
+		test(`latest error is fully visible after jumping through ${lineCount} log lines at 320px`, async ({ page }) => {
+			await page.setViewportSize({ width: 320, height: 568 })
+			const logs = [...Array.from({ length: lineCount - 1 }, (_, i) => `2026-09-06T00:00:00Z INFO step ${i + 1}`), '2026-09-06T00:00:00Z ERROR final failure'].join('\n')
+			await page.route('**/jobs/*/logs*', (route) => route.fulfill({ contentType: 'text/plain', headers: { 'x-log-next-offset': String(logs.length) }, body: logs }))
+			await gotoJobsPage(page)
+			await page.getByRole('button', { name: 'Logs for job job-running', exact: true }).click()
+			const drawer = page.getByRole('dialog', { name: 'Job Logs', exact: true })
+			await expect(drawer.getByText(`Lines: ${lineCount}`, { exact: false })).toBeVisible()
+			await drawer.getByRole('switch', { name: 'Follow job logs' }).uncheck()
+			await drawer.getByRole('button', { name: 'Jump to latest error', exact: true }).click()
+			await expect(drawer.getByText('final failure', { exact: true })).toBeInViewport({ ratio: 1 })
+			await expect(drawer.getByRole('region', { name: 'Job log output' })).toBeFocused()
+			await drawer.getByRole('textbox', { name: 'Search logs' }).fill('final failure')
+			await expect(drawer.getByText('Matches: 1', { exact: false })).toBeVisible()
+			await drawer.getByRole('button', { name: 'Jump to latest error', exact: true }).click()
+			await expect(drawer.getByText('final failure', { exact: true })).toBeInViewport({ ratio: 1 })
+		})
+	}
+
 	test.beforeEach(async ({ page }) => {
 		await installJobsMobileResponsiveFixtures(page)
 		await seedJobsMobileResponsiveStorage(page)
@@ -133,7 +153,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toHaveText('Filters')
 	})
 
-	test('mobile job details and logs drawers stay readable without horizontal overflow', async ({ page }) => {
+	test('mobile job details keep status visible at 320px and logs stay readable', async ({ page }, testInfo) => {
 		await gotoJobsPage(page)
 
 		await expect(page.getByRole('list').filter({ hasText: 'job-running' })).toBeVisible()
@@ -141,6 +161,11 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(runningCard).toBeVisible()
 
 		const detailsDrawer = await openJobDetailsDrawer(page, runningCard)
+		await page.setViewportSize({ width: 320, height: 568 })
+		await expect(detailsDrawer.getByText('running', { exact: true })).toBeInViewport({ ratio: 1 })
+		await expectMinTouchTarget(detailsDrawer.getByRole('button', { name: /Refresh/ }))
+		await expectMinTouchTarget(detailsDrawer.getByRole('button', { name: 'Open logs', exact: true }))
+		await restoreProjectViewport(page, testInfo)
 		await expect(detailsDrawer.getByText('job-running')).toBeVisible()
 		await expect(detailsDrawer.getByText('Operational routing')).toBeVisible()
 		await expect

@@ -252,7 +252,11 @@ export function JobsLogsDrawer(props: Props) {
 							Download {normalizedLogSearchQuery ? 'visible' : 'all'}
 						</Button>
 						{latestErrorIndex >= 0 ? (
-							<Button onClick={() => logVirtualizer.scrollToIndex(latestErrorIndex, { align: 'center' })}>Jump to latest error</Button>
+							<Button onClick={() => {
+								logViewportElement?.scrollIntoView({ block: 'nearest' })
+								logVirtualizer.scrollToIndex(latestErrorIndex, { align: 'center' })
+								logViewportElement?.focus({ preventScroll: true })
+							}}>Jump to latest error</Button>
 						) : null}
 						</div>
 					) : null}

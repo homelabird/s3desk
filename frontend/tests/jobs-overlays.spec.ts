@@ -140,6 +140,22 @@ async function mockJobsOverlayApi(page: Page) {
 }
 
 test.describe('Jobs overlays', () => {
+	for (const lineCount of [3, 650]) {
+		test(`jumps to the latest error in ${lineCount} desktop log lines`, async ({ page }) => {
+			await seedStorage(page)
+			await mockJobsOverlayApi(page)
+			const logs = [...Array.from({ length: lineCount - 1 }, (_, i) => `2026-09-06T00:00:00Z INFO step ${i + 1}`), '2026-09-06T00:00:00Z ERROR final failure'].join('\n')
+			await page.route('**/jobs/*/logs*', (route) => route.fulfill({ contentType: 'text/plain', headers: { 'x-log-next-offset': String(logs.length) }, body: logs }))
+			await gotoJobsPage(page)
+			const drawer = await openJobLogsDrawer(page, jobsTableRow(page, 'job-failed-logs'))
+			await expect(drawer.getByText(`Lines: ${lineCount}`, { exact: false })).toBeVisible()
+			await drawer.getByRole('switch', { name: 'Follow job logs' }).uncheck()
+			await drawer.getByRole('button', { name: 'Jump to latest error', exact: true }).click()
+			await expect(drawer.getByText('final failure', { exact: true })).toBeInViewport({ ratio: 1 })
+			await expect(drawer.getByRole('region', { name: 'Job log output' })).toBeFocused()
+		})
+	}
+
 	test('opens details drawer and renders upload details from the lazy overlay host', async ({ page }) => {
 		await seedStorage(page)
 		await mockJobsOverlayApi(page)
