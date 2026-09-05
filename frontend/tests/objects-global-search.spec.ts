@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { noFavoritesYetTitle } from '../src/lib/actionHints'
-import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { buildFavoritesFixture, installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
 import { dialogByName, gotoWithDynamicImportRecovery, objectsFavoriteItem, objectsListRow, openObjectsGlobalSearchDialog } from './support/ui'
 
 type StorageSeed = {
@@ -98,7 +98,7 @@ async function setupApiMocks(page: Page) {
 		{
 			method: 'GET',
 			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`,
-			handler: () => ({ json: { bucket: defaultStorage.bucket, prefix: '', items: favorites } }),
+			handler: () => ({ json: buildFavoritesFixture({ bucket: defaultStorage.bucket, items: favorites }) }),
 		},
 		{
 			method: 'POST',
@@ -165,3 +165,88 @@ test('global search and favorites update from objects UI', async ({ page }) => {
 	await expect.poll(() => apiState.getSearchRequestCount(), { timeout: 15_000 }).toBeGreaterThan(0)
 	await expect(drawer.getByText('alpha.txt')).toBeVisible({ timeout: 10_000 })
 })
+
+test('search errors remain distinct from empty results and keep cached matches', async ({ page }, testInfo) => {
+	test.setTimeout(60_000)
+	await page.setViewportSize({ width: 320, height: 568 })
+	await seedStorage(page)
+	await seedLocalStorage(page, { apiRetryCount: 0 })
+	await setupApiMocks(page)
+	let response: 'error' | 'empty' | 'match' | 'not_indexed' = 'error'
+	await page.route('**/objects/search?**', route => route.fulfill({
+		status: response === 'error' ? 503 : response === 'not_indexed' ? 409 : 200,
+		contentType: 'application/json',
+		body: JSON.stringify(response === 'error' || response === 'not_indexed'
+			? { error: { code: response === 'error' ? 'unavailable' : 'not_indexed', message: 'Search unavailable' } }
+			: { items: response === 'match' ? [{ key: 'alpha.txt', size: 12, lastModified: now }] : [], nextCursor: null }),
+	}))
+	await gotoWithDynamicImportRecovery(page, '/objects', scope => scope.getByPlaceholder('Search current folder'))
+	const drawer = await openObjectsGlobalSearchDialog(page)
+	await drawer.getByRole('textbox', { name: 'Search files or folders', exact: true }).fill('alpha')
+	await expect(drawer.getByText('Search failed', { exact: true })).toBeVisible({ timeout: 15_000 })
+	await expect(drawer.getByText('No results', { exact: true })).toHaveCount(0)
+	await drawer.getByText('Search failed', { exact: true }).scrollIntoViewIfNeeded()
+	await page.screenshot({ path: testInfo.outputPath('search-error-without-empty-result.png') })
+	response = 'not_indexed'
+	await drawer.getByRole('button', { name: /Refresh/ }).click()
+	await expect(drawer.getByText('Search index needed', { exact: true })).toBeVisible({ timeout: 15_000 })
+	await expect(drawer.getByText('No results', { exact: true })).toHaveCount(0)
+	response = 'empty'
+	await drawer.getByRole('button', { name: /Refresh/ }).click()
+	await expect(drawer.getByText('No results', { exact: true })).toBeVisible()
+	response = 'match'
+	await drawer.getByRole('button', { name: /Refresh/ }).click()
+	await expect(drawer.getByRole('button', { name: 'Open alpha.txt', exact: true })).toBeVisible()
+	response = 'error'
+	await drawer.getByRole('button', { name: /Refresh/ }).click()
+	await expect(drawer.getByText('Search failed', { exact: true })).toBeVisible({ timeout: 15_000 })
+	await expect(drawer.getByRole('button', { name: 'Open alpha.txt', exact: true })).toBeVisible()
+})
+
+for (const width of [320, 1440]) {
+	test(`search range validation preserves inputs and labels at ${width}px`, async ({ page }) => {
+		await page.setViewportSize({ width, height: width === 320 ? 568 : 900 })
+		await seedStorage(page)
+		await setupApiMocks(page)
+		const requests: URL[] = []
+		page.on('request', (request) => {
+			if (request.url().includes('/objects/search?')) requests.push(new URL(request.url()))
+		})
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByRole('heading', { name: 'Objects', exact: true }))
+		const drawer = await openObjectsGlobalSearchDialog(page)
+		await drawer.getByRole('textbox', { name: 'Search files or folders', exact: true }).fill('alpha')
+		await expect(drawer.getByText('1 result(s)', { exact: true })).toBeVisible()
+		await drawer.getByRole('spinbutton', { name: 'Minimum size (MB)' }).fill('100')
+		await drawer.getByRole('spinbutton', { name: 'Maximum size (MB)' }).click()
+		await drawer.getByRole('spinbutton', { name: 'Maximum size (MB)' }).fill('1')
+		await expect(drawer.getByRole('spinbutton', { name: 'Minimum size (MB)' })).toHaveValue('100')
+		await expect(drawer.getByRole('spinbutton', { name: 'Maximum size (MB)' })).toHaveValue('1')
+		await expect(drawer.getByRole('spinbutton', { name: 'Maximum size (MB)' })).toBeInViewport({ ratio: 1 })
+		await expect(drawer.getByText('Minimum size must not exceed maximum size.')).toBeVisible()
+		await expect(drawer.getByRole('button', { name: /Refresh/ })).toBeDisabled()
+		await expect(drawer.getByText('1 result(s)', { exact: true })).toHaveCount(0)
+		await drawer.getByRole('spinbutton', { name: 'Minimum size (MB)' }).fill('1')
+		await expect(drawer.getByText('1 result(s)', { exact: true })).toBeVisible()
+		await drawer.getByLabel('Modified after date', { exact: true }).fill('2026-09-06')
+		await drawer.getByLabel('Modified before date', { exact: true }).click()
+		await drawer.getByLabel('Modified before date', { exact: true }).fill('2026-09-01')
+		await expect(drawer.getByText('Start date must not be after end date.')).toBeVisible()
+		await expect(drawer.getByLabel('Modified before date', { exact: true })).toBeInViewport({ ratio: 1 })
+		await expect(drawer.getByRole('button', { name: /Refresh/ })).toBeDisabled()
+		await drawer.getByLabel('Modified before date', { exact: true }).fill('2026-09-06')
+		await expect(drawer.getByText('1 result(s)', { exact: true })).toBeVisible()
+		for (const name of ['Minimum size (MB)', 'Maximum size (MB)', 'Modified after date', 'Modified before date']) {
+			await expect(drawer.locator('label').filter({ hasText: name })).toBeVisible()
+		}
+		await drawer.getByRole('button', { name: 'Reset', exact: true }).click()
+		await expect(drawer.getByRole('spinbutton', { name: 'Minimum size (MB)' })).toHaveValue('')
+		await expect(drawer.getByLabel('Modified after date', { exact: true })).toHaveValue('')
+		expect(requests.length).toBeGreaterThan(0)
+		for (const url of requests) {
+			const min = url.searchParams.get('minSize'), max = url.searchParams.get('maxSize')
+			if (min !== null && max !== null) expect(Number(min)).toBeLessThanOrEqual(Number(max))
+			const after = url.searchParams.get('modifiedAfter'), before = url.searchParams.get('modifiedBefore')
+			if (after && before) expect(Date.parse(after)).toBeLessThanOrEqual(Date.parse(before))
+		}
+	})
+}

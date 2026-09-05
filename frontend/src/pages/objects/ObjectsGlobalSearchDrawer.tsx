@@ -7,6 +7,7 @@ import { ObjectsGlobalSearchIndexPanel } from './ObjectsGlobalSearchIndexPanel'
 import { ObjectsGlobalSearchResults } from './ObjectsGlobalSearchResults'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import styles from './ObjectsSearch.module.css'
+import { getObjectsSearchRangeErrors } from './objectsSearchValidation'
 
 type ObjectsGlobalSearchDrawerProps = {
 	scopeKey: string
@@ -60,6 +61,8 @@ type ObjectsGlobalSearchDrawerProps = {
 
 export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps) {
 	const drawerWidth = props.isMd ? 'min(92vw, 920px)' : '100%'
+	const rangeErrors = getObjectsSearchRangeErrors(props.minSizeBytes, props.maxSizeBytes, props.modifiedAfterMs, props.modifiedBeforeMs)
+	const hasRangeError = Boolean(rangeErrors.sizeError || rangeErrors.dateError)
 
 	return (
 		<ObjectsOverlaySheet
@@ -79,6 +82,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 			) : (
 				<div className={styles.globalSearchContent} data-testid="objects-global-search-content">
 					<ObjectsGlobalSearchControls
+						{...rangeErrors}
 						extFilter={props.extFilter}
 						isMd={props.isMd}
 						isRefreshing={props.isRefreshing}
@@ -100,7 +104,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						queryDraft={props.queryDraft}
 					/>
 
-					{props.isError ? (
+					{props.isError && !hasRangeError ? (
 						props.isNotIndexed ? (
 							<Alert
 								type="info"
@@ -135,6 +139,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 
 					<div className={styles.globalSearchDivider} />
 
+					{!hasRangeError && (!props.isError || props.items.length > 0) ? (
 						<ObjectsGlobalSearchResults
 							hasNextPage={props.hasNextPage}
 							isFetching={props.isFetching}
@@ -149,6 +154,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							onOpenPrefixForKey={props.onOpenPrefixForKey}
 							searchQueryText={props.searchQueryText}
 						/>
+					) : null}
 				</div>
 			)}
 		</ObjectsOverlaySheet>

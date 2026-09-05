@@ -1,5 +1,8 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Input } from 'antd'
+import { useId } from 'react'
+
+import { FormField } from '../../components/FormField'
 
 import { NativeSelect } from '../../components/NativeSelect'
 import {
@@ -10,6 +13,8 @@ import {
 import styles from './ObjectsSearch.module.css'
 
 type ObjectsGlobalSearchControlsProps = {
+	sizeError?: string
+	dateError?: string
 	extFilter: string
 	isMd: boolean
 	isRefreshing: boolean
@@ -49,6 +54,8 @@ function parseNumberInput(value: string): number | null {
 }
 
 export function ObjectsGlobalSearchControls({
+	sizeError,
+	dateError,
 	extFilter,
 	isMd,
 	isRefreshing,
@@ -69,6 +76,9 @@ export function ObjectsGlobalSearchControls({
 	prefixFilter,
 	queryDraft,
 }: ObjectsGlobalSearchControlsProps) {
+	const fieldId = useId()
+	const sizeErrorId = `${fieldId}-size-error`
+	const dateErrorId = `${fieldId}-date-error`
 	const buttonSize = isMd ? 'middle' : 'small'
 	const modifiedAfterValue = formatLocalDateInputValue(modifiedAfterMs)
 	const modifiedBeforeValue = formatLocalDateInputValue(modifiedBeforeMs)
@@ -125,6 +135,7 @@ export function ObjectsGlobalSearchControls({
 							icon={<ReloadOutlined />}
 							onClick={onRefresh}
 							loading={isRefreshing}
+							disabled={Boolean(sizeError || dateError)}
 						>
 							Refresh
 						</Button>
@@ -138,55 +149,78 @@ export function ObjectsGlobalSearchControls({
 			<section className={styles.globalSearchSection}>
 				<div className={styles.globalSearchSectionTitle}>Filters</div>
 				<div className={styles.globalSearchFieldRow}>
-					<Input
-						size={buttonSize}
-						allowClear
-						placeholder="File type (e.g. log)…"
-						aria-label="Extension filter"
-						className={extFieldClass}
-						value={extFilter}
-						onChange={(event) => onExtFilterChange(event.target.value)}
-					/>
-					<input
-						type="number"
-						min={0}
-						step={0.1}
-						inputMode="decimal"
-						placeholder="Min MB…"
-						aria-label="Minimum size (MB)"
-						className={`${sizeFieldClass} ${styles.globalSearchNumberInput}`}
-						value={minSizeValue == null ? '' : String(minSizeValue)}
-						onChange={(event) => onMinSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
-					/>
-					<input
-						type="number"
-						min={0}
-						step={0.1}
-						inputMode="decimal"
-						placeholder="Max MB…"
-						aria-label="Maximum size (MB)"
-						className={`${sizeFieldClass} ${styles.globalSearchNumberInput}`}
-						value={maxSizeValue == null ? '' : String(maxSizeValue)}
-						onChange={(event) => onMaxSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
-					/>
-					<input
-						type="date"
-						aria-label="Modified after date"
-						className={`${dateFieldClass} ${styles.globalSearchDateInput}`}
-						value={modifiedAfterValue}
-						onChange={(event) => {
-							onModifiedRangeChange(localDayStartMsFromDateInput(event.currentTarget.value), modifiedBeforeMs)
-						}}
-					/>
-					<input
-						type="date"
-						aria-label="Modified before date"
-						className={`${dateFieldClass} ${styles.globalSearchDateInput}`}
-						value={modifiedBeforeValue}
-						onChange={(event) => {
-							onModifiedRangeChange(modifiedAfterMs, localDayEndMsFromDateInput(event.currentTarget.value))
-						}}
-					/>
+					<FormField label="Extension filter" htmlFor={`${fieldId}-ext`} className={extFieldClass}>
+						<Input
+							size={buttonSize}
+							allowClear
+							placeholder="File type (e.g. log)…"
+							id={`${fieldId}-ext`}
+							aria-label="Extension filter"
+							className={`${styles.drawerResponsiveField} ${styles.drawerCompactField}`}
+							value={extFilter}
+							onChange={(event) => onExtFilterChange(event.target.value)}
+						/>
+					</FormField>
+					<FormField label="Minimum size (MB)" htmlFor={`${fieldId}-min-size`} className={sizeFieldClass}>
+						<input
+							type="number"
+							min={0}
+							step={0.1}
+							inputMode="decimal"
+							placeholder="Min MB…"
+							id={`${fieldId}-min-size`}
+							aria-label="Minimum size (MB)"
+							aria-invalid={Boolean(sizeError)}
+							aria-describedby={sizeError ? sizeErrorId : undefined}
+							className={`${styles.drawerResponsiveField} ${styles.drawerCompactField} ${styles.globalSearchNumberInput}`}
+							value={minSizeValue == null ? '' : String(minSizeValue)}
+							onChange={(event) => onMinSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
+						/>
+					</FormField>
+					<FormField label="Maximum size (MB)" htmlFor={`${fieldId}-max-size`} className={sizeFieldClass} error={sizeError} errorId={sizeErrorId}>
+						<input
+							type="number"
+							min={0}
+							step={0.1}
+							inputMode="decimal"
+							placeholder="Max MB…"
+							id={`${fieldId}-max-size`}
+							aria-label="Maximum size (MB)"
+							aria-invalid={Boolean(sizeError)}
+							aria-describedby={sizeError ? sizeErrorId : undefined}
+							className={`${styles.drawerResponsiveField} ${styles.drawerCompactField} ${styles.globalSearchNumberInput}`}
+							value={maxSizeValue == null ? '' : String(maxSizeValue)}
+							onChange={(event) => onMaxSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
+						/>
+					</FormField>
+					<FormField label="Modified after date" htmlFor={`${fieldId}-after`} className={dateFieldClass}>
+						<input
+							type="date"
+							id={`${fieldId}-after`}
+							aria-label="Modified after date"
+							aria-invalid={Boolean(dateError)}
+							aria-describedby={dateError ? dateErrorId : undefined}
+							className={`${styles.drawerResponsiveField} ${styles.drawerCompactField} ${styles.globalSearchDateInput}`}
+							value={modifiedAfterValue}
+							onChange={(event) => {
+								onModifiedRangeChange(localDayStartMsFromDateInput(event.currentTarget.value), modifiedBeforeMs)
+							}}
+						/>
+					</FormField>
+					<FormField label="Modified before date" htmlFor={`${fieldId}-before`} className={dateFieldClass} error={dateError} errorId={dateErrorId}>
+						<input
+							type="date"
+							id={`${fieldId}-before`}
+							aria-label="Modified before date"
+							aria-invalid={Boolean(dateError)}
+							aria-describedby={dateError ? dateErrorId : undefined}
+							className={`${styles.drawerResponsiveField} ${styles.drawerCompactField} ${styles.globalSearchDateInput}`}
+							value={modifiedBeforeValue}
+							onChange={(event) => {
+								onModifiedRangeChange(modifiedAfterMs, localDayEndMsFromDateInput(event.currentTarget.value))
+							}}
+						/>
+					</FormField>
 				</div>
 			</section>
 		</>

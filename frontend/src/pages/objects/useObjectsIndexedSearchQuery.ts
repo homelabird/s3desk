@@ -6,6 +6,7 @@ import { queryKeys } from '../../api/queryKeys'
 import type { ObjectItem } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { normalizePrefix } from './objectsListUtils'
+import { getObjectsSearchRangeErrors } from './objectsSearchValidation'
 
 type UseObjectsIndexedSearchQueryArgs = {
 	api: APIClientShape
@@ -43,21 +44,19 @@ export function useObjectsIndexedSearchQuery({
 	const globalSearchLimitClamped = Math.max(1, Math.min(200, globalSearchLimit))
 	const globalSearchExtNormalized = globalSearchExt.trim().replace(/^\./, '').toLowerCase()
 
-	let globalSearchMinSizeBytes =
+	const globalSearchMinSizeBytes =
 		typeof globalSearchMinSize === 'number' && Number.isFinite(globalSearchMinSize) ? globalSearchMinSize : null
-	let globalSearchMaxSizeBytes =
+	const globalSearchMaxSizeBytes =
 		typeof globalSearchMaxSize === 'number' && Number.isFinite(globalSearchMaxSize) ? globalSearchMaxSize : null
-	if (globalSearchMinSizeBytes != null && globalSearchMaxSizeBytes != null && globalSearchMinSizeBytes > globalSearchMaxSizeBytes) {
-		;[globalSearchMinSizeBytes, globalSearchMaxSizeBytes] = [globalSearchMaxSizeBytes, globalSearchMinSizeBytes]
-	}
 
-	let globalSearchMinTimeMs =
+	const globalSearchMinTimeMs =
 		typeof globalSearchMinModifiedMs === 'number' && Number.isFinite(globalSearchMinModifiedMs) ? globalSearchMinModifiedMs : null
-	let globalSearchMaxTimeMs =
+	const globalSearchMaxTimeMs =
 		typeof globalSearchMaxModifiedMs === 'number' && Number.isFinite(globalSearchMaxModifiedMs) ? globalSearchMaxModifiedMs : null
-	if (globalSearchMinTimeMs != null && globalSearchMaxTimeMs != null && globalSearchMinTimeMs > globalSearchMaxTimeMs) {
-		;[globalSearchMinTimeMs, globalSearchMaxTimeMs] = [globalSearchMaxTimeMs, globalSearchMinTimeMs]
-	}
+	const { sizeError, dateError } = getObjectsSearchRangeErrors(
+		globalSearchMinSizeBytes, globalSearchMaxSizeBytes, globalSearchMinTimeMs, globalSearchMaxTimeMs,
+	)
+	const rangeError = sizeError ?? dateError
 
 	const globalSearchModifiedAfter = globalSearchMinTimeMs != null ? new Date(globalSearchMinTimeMs).toISOString() : undefined
 	const globalSearchModifiedBefore = globalSearchMaxTimeMs != null ? new Date(globalSearchMaxTimeMs).toISOString() : undefined
@@ -76,10 +75,11 @@ export function useObjectsIndexedSearchQuery({
 			modifiedBefore: globalSearchModifiedBefore,
 			apiToken,
 		}),
-		enabled: globalSearchOpen && !!profileId && !!bucket && !!globalSearchQueryText,
+		enabled: globalSearchOpen && !!profileId && !!bucket && !!globalSearchQueryText && !rangeError,
 		initialPageParam: undefined as string | undefined,
-		queryFn: async ({ pageParam, signal }) =>
-			api.objects.searchObjectsIndex({
+		queryFn: async ({ pageParam, signal }) => {
+			if (rangeError) throw new Error(rangeError)
+			return api.objects.searchObjectsIndex({
 				profileId: profileId!,
 				bucket,
 				q: globalSearchQueryText,
@@ -92,7 +92,8 @@ export function useObjectsIndexedSearchQuery({
 				modifiedAfter: globalSearchModifiedAfter,
 				modifiedBefore: globalSearchModifiedBefore,
 				signal,
-			}),
+			})
+		},
 		getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
 	})
 

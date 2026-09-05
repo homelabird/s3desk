@@ -59,6 +59,42 @@ function buildProps() {
 }
 
 describe('ObjectsGlobalSearchDrawer', () => {
+	it('labels filled ranges, links validation errors and hides stale results until corrected', () => {
+		const props = { ...buildProps(), queryDraft: 'alpha', searchQueryText: 'alpha', minSizeBytes: 100 * 1024 ** 2, maxSizeBytes: 1024 ** 2,
+			modifiedAfterMs: 2000, modifiedBeforeMs: 1000, items: [{ key: 'alpha.txt', size: 12, lastModified: '2024-01-01T00:00:00Z' }] }
+		const { rerender } = render(<ObjectsGlobalSearchDrawer {...props} />)
+		expect(screen.getByRole('spinbutton', { name: 'Minimum size (MB)' })).toHaveAccessibleDescription('Minimum size must not exceed maximum size.')
+		expect(screen.getByLabelText('Modified before date')).toHaveAccessibleDescription('Start date must not be after end date.')
+		expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled()
+		expect(screen.queryByRole('button', { name: 'Open alpha.txt' })).not.toBeInTheDocument()
+		expect(screen.queryByText('No results')).not.toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+		expect(props.onReset).toHaveBeenCalledOnce()
+		rerender(<ObjectsGlobalSearchDrawer {...props} maxSizeBytes={100 * 1024 ** 2} modifiedBeforeMs={2000} />)
+		expect(screen.queryByText('Minimum size must not exceed maximum size.')).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: /Refresh/ })).toBeEnabled()
+		expect(screen.getByRole('button', { name: 'Open alpha.txt' })).toBeInTheDocument()
+		for (const name of ['Minimum size (MB)', 'Maximum size (MB)', 'Modified after date', 'Modified before date']) {
+			const input = screen.getByLabelText(name) as HTMLInputElement
+			expect(input.labels?.[0]).toHaveTextContent(name)
+		}
+	})
+
+	it('distinguishes failed searches from empty results and retains cached matches', () => {
+		const props = { ...buildProps(), queryDraft: 'alpha', searchQueryText: 'alpha', isNotIndexed: false }
+		const { rerender } = render(<ObjectsGlobalSearchDrawer {...props} isError errorMessage="Search unavailable" />)
+		expect(screen.getByText('Search failed')).toBeInTheDocument()
+		expect(screen.queryByText('No results')).not.toBeInTheDocument()
+		rerender(<ObjectsGlobalSearchDrawer {...props} isError isNotIndexed />)
+		expect(screen.getByText('Search index needed')).toBeInTheDocument()
+		expect(screen.queryByText('No results')).not.toBeInTheDocument()
+		rerender(<ObjectsGlobalSearchDrawer {...props} />)
+		expect(screen.getByText('No results')).toBeInTheDocument()
+		rerender(<ObjectsGlobalSearchDrawer {...props} isError items={[{ key: 'alpha.txt', size: 12, lastModified: '2024-01-01T00:00:00Z' }]} />)
+		expect(screen.getByText('Search failed')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Open alpha.txt' })).toBeInTheDocument()
+	})
+
 	it('shows shared prerequisite warnings before a profile or bucket is selected', () => {
 		const { rerender } = render(<ObjectsGlobalSearchDrawer {...buildProps()} hasProfile={false} />)
 

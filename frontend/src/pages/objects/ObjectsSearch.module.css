@@ -42,6 +42,14 @@
   align-items: flex-start;
 }
 
+.globalSearchFieldRow > .drawerResponsiveField {
+  margin-bottom: 0;
+}
+
+.globalSearchFieldRow label {
+  font-size: var(--s3d-font-size-base);
+}
+
 .globalSearchButtonRow {
   display: flex;
   flex-wrap: wrap;
