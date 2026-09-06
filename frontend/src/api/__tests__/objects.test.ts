@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { getObjectDownloadURL, getObjectIndexSummary, getObjectMeta, listObjectFavorites, listObjects, searchObjectsIndex } from '../domains/objects'

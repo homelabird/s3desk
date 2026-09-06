@@ -331,6 +331,10 @@ npm run build
 
 Frontend tooling expects Node.js `22.x`.
 
+Keep unit tests focused on behavior and failure cases. Avoid copying constant UI text into standalone assertions or mocking every dependency just to compare forwarded props; exercise those connections through existing page/workflow tests.
+
+DOM-independent `.test.ts` files can opt into Node with `// @vitest-environment node`, avoiding jsdom startup. Keep jsdom for components, storage, DOM events, and browser API behavior, including helpers that publish browser events indirectly. Type-only contracts use `.test-d.ts`: `npm run typecheck` and `npm run build` check them through TypeScript, while `test:unit` counts only executable tests.
+
 `npm run lint` also runs the CSS token guard and source import-cycle guard. For a focused import graph check:
 
 ```bash

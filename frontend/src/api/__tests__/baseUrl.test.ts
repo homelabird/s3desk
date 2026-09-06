@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from 'vitest'
 
 import { buildApiHttpUrlFor, buildApiWsUrlFor, DEFAULT_API_BASE_URL, getSafeBrowserObjectUrl, normalizeApiBaseUrl, stripApiBaseSuffix } from '../baseUrl'

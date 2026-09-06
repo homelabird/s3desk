@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { APIError } from '../../api/client'
 import { describe, expect, it } from 'vitest'
 
