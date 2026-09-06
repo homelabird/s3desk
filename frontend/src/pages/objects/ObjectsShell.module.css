@@ -381,6 +381,10 @@
   gap: 8px;
 }
 
+.inlineAlertStack:empty {
+  display: none;
+}
+
 .inlineAlert {
   border: 1px solid var(--s3d-color-border);
   border-radius: var(--s3d-radius-sm);
@@ -541,6 +545,28 @@
 }
 
 @media (max-width: 480px) {
+  .pageHeader:has(.toolbarSectionStack[data-has-tabs='false'] .toolbarColumn) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .pageHeader:has(.toolbarSectionStack[data-has-tabs='false'] .toolbarColumn) .toolbarSectionStack,
+  .pageHeader:has(.toolbarSectionStack[data-has-tabs='false'] .toolbarColumn) .toolbarColumn {
+    display: contents;
+  }
+
+  .pageHeader:has(.toolbarSectionStack[data-has-tabs='false'] .toolbarColumn) .toolbarTopRow {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .pageHeader:has(.toolbarSectionStack[data-has-tabs='false'] .toolbarColumn) .toolbarBucketMobile,
+  .pageHeader:has(.toolbarSectionStack[data-has-tabs='false'] .toolbarColumn) .pageHeaderAlert,
+  .pageHeader:has(.toolbarSectionStack[data-has-tabs='false'] .toolbarColumn) .toolbarEmptyHint {
+    grid-column: 1 / -1;
+  }
+
   .page,
   .toolbarTopRow,
   .treeStack {

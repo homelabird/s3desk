@@ -872,13 +872,17 @@
 }
 
 @media (max-width: 480px) {
+  .listTop {
+    gap: 4px;
+  }
+
   .breadcrumbRow,
   .listControlsSection {
     gap: 4px;
   }
 
   .listControlsSection {
-    padding: 6px 8px;
+    padding: 4px 8px;
   }
 
   .listControlsLocationStack,
