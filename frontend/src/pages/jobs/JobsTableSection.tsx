@@ -79,6 +79,7 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 		: tableScrollY
 	const emptyState = (
 		<JobsEmptyState
+			loadFailed={!!jobsError}
 			isOffline={isOffline}
 			filtersDirty={filtersDirty}
 			onResetFilters={onResetFilters}

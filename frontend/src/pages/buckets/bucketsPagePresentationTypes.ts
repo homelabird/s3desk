@@ -14,6 +14,8 @@ export type BucketsPageShellViewProps = {
 	bucketCrudUnsupportedReason: string
 	bucketsQueryError: unknown | null
 	bucketsLoading: boolean
+	bucketsRetrying: boolean
+	onRetryBuckets: () => void
 	buckets: BucketsListProps['buckets']
 	showBucketsEmpty: boolean
 	openCreateModal: () => void

@@ -71,6 +71,24 @@ describe('JobsTableSection', () => {
 		expect(screen.getByRole('button', { name: 'Expand History panel' })).toHaveAttribute('aria-pressed', 'false')
 	})
 
+	it.each([false, true])('does not describe failed loads as empty history (compact: %s)', (isCompact) => {
+		renderJobsTableSection({ jobsError: new Error('Unavailable'), filtersDirty: true, eventsConnected: false, isCompact })
+
+		expect(screen.getByText('Activity could not be loaded.')).toBeInTheDocument()
+		expect(screen.getByText('Use Refresh to try again.')).toBeInTheDocument()
+		expect(screen.queryByText('No activity matches the current filters.')).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Reset filters' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Retry realtime' })).not.toBeInTheDocument()
+	})
+
+	it('explains offline recovery without directing users to an unavailable retry action', () => {
+		renderJobsTableSection({ isOffline: true, eventsConnected: false })
+
+		expect(screen.getByText('You are offline. Reconnect to load activity and resume live updates.')).toBeInTheDocument()
+		expect(screen.queryByText('Realtime is disconnected. Retry to resume live updates.')).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Retry realtime' })).not.toBeInTheDocument()
+	})
+
 	it('uses filtered empty state actions when filters hide all loaded jobs', () => {
 		const onResetFilters = vi.fn()
 		renderJobsTableSection({

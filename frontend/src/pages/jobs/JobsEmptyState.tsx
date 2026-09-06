@@ -3,6 +3,7 @@ import { Button, Empty, Space, Typography } from 'antd'
 import styles from './JobsTableSection.module.css'
 
 type Props = {
+	loadFailed: boolean
 	isOffline: boolean
 	filtersDirty: boolean
 	onResetFilters: () => void
@@ -11,18 +12,23 @@ type Props = {
 }
 
 export function JobsEmptyState({
+	loadFailed,
 	isOffline,
 	filtersDirty,
 	onResetFilters,
 	eventsConnected,
 	onRetryRealtime,
 }: Props) {
-	const title = filtersDirty ? 'No activity matches the current filters.' : 'No activity yet.'
-	const hint = filtersDirty
-		? 'Reset filters to return to the broader activity view.'
-		: eventsConnected
-			? 'Background jobs and transfer activity will appear here.'
-			: 'Realtime is disconnected. Retry to resume live updates.'
+	const title = loadFailed ? 'Activity could not be loaded.' : filtersDirty ? 'No activity matches the current filters.' : 'No activity yet.'
+	const hint = isOffline
+		? 'You are offline. Reconnect to load activity and resume live updates.'
+		: loadFailed
+			? 'Use Refresh to try again.'
+			: filtersDirty
+				? 'Reset filters to return to the broader activity view.'
+				: eventsConnected
+					? 'Background jobs and transfer activity will appear here.'
+					: 'Realtime is disconnected. Retry to resume live updates.'
 
 	return (
 		<Empty
@@ -35,7 +41,7 @@ export function JobsEmptyState({
 				</Space>
 			}
 		>
-			{filtersDirty || (!eventsConnected && !isOffline) ? <div className={styles.emptyActionRow}>
+			{!loadFailed && (filtersDirty || (!eventsConnected && !isOffline)) ? <div className={styles.emptyActionRow}>
 				{filtersDirty ? (
 					<Button type="primary" onClick={onResetFilters}>
 						Reset filters
