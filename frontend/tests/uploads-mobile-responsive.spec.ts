@@ -51,7 +51,7 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 		await expect(dialog).toHaveCount(0)
 	})
 
-	test('selected files can be cleared from the mobile uploads header', async ({ page }) => {
+	test('selected files can be cleared beside the mobile upload destination', async ({ page }) => {
 		await gotoUploadsPage(page)
 
 		await addUploadSourceFromDevice(page, {

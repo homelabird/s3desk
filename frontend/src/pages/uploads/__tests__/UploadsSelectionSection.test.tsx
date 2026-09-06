@@ -78,19 +78,15 @@ describe('UploadsSelectionSection', () => {
 			/>,
 		)
 
-		expect(screen.getByText('7 item(s)')).toBeInTheDocument()
-		expect(screen.getByText('7.00 KB')).toBeInTheDocument()
-		expect(screen.getByText('Folder')).toBeInTheDocument()
-		expect(screen.getByText('Ready to queue this selection.')).toBeInTheDocument()
+		expect(screen.getByText('Choosing new files or a folder replaces this selection.')).toBeInTheDocument()
 		expect(screen.getByText('photos/a.txt')).toBeInTheDocument()
 		expect(screen.getByText('photos/f.txt')).toBeInTheDocument()
 		expect(screen.queryByText('photos/g.txt')).not.toBeInTheDocument()
 		expect(screen.getByText('+ 1 more item(s) selected')).toBeInTheDocument()
 		expect(screen.getByRole('status')).toHaveTextContent('7 item(s)')
 		expect(screen.getByRole('status')).toHaveTextContent('7.00 KB')
-		expect(screen.getByRole('status')).toHaveTextContent('s3://primary-bucket/photos')
 		expect(screen.getByRole('status')).toHaveTextContent('Folder')
-		expect(screen.getByRole('button', { name: /Add from device/i }).className).not.toContain('ant-btn-primary')
+		expect(screen.getByRole('button', { name: /Replace selection/i }).className).not.toContain('ant-btn-primary')
 	})
 
 	it('disables the picker when uploads are unavailable', () => {
@@ -107,8 +103,8 @@ describe('UploadsSelectionSection', () => {
 			/>,
 		)
 
-		expect(screen.getByRole('button', { name: /Add from device/i })).toBeDisabled()
+		expect(screen.getByRole('button', { name: /Replace selection/i })).toBeDisabled()
 		expect(screen.getByText(offlineUploadsDisabledHint())).toBeInTheDocument()
-		expect(screen.getByText('Files')).toBeInTheDocument()
+		expect(screen.getByRole('status')).toHaveTextContent('Files')
 	})
 })

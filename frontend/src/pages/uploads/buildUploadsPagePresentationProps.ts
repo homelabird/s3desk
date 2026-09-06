@@ -20,6 +20,8 @@ export type UploadsPagePresentationProps = {
 		showUnsupported: boolean
 		unsupportedDescription: string | null
 		bucketsErrorDescription: string | null
+		bucketsRetrying: boolean
+		onRetryBuckets: () => void
 	}
 	emptyState: {
 		showBucketsEmpty: boolean
@@ -63,6 +65,8 @@ export function buildUploadsPagePresentationProps(state: UploadsPageState): Uplo
 			showUnsupported: !state.uploadsSupported,
 			unsupportedDescription: state.uploadsUnsupportedReason,
 			bucketsErrorDescription: state.bucketsQuery.isError ? formatErr(state.bucketsQuery.error) : null,
+			bucketsRetrying: state.bucketsQuery.isFetching,
+			onRetryBuckets: () => { void state.bucketsQuery.refetch({ cancelRefetch: false }) },
 		},
 		emptyState: {
 			showBucketsEmpty: state.showBucketsEmpty,

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import { useUploadsDraft } from './UploadsDraftContext'
 
 type UseUploadsPageScopedStorageStateArgs = {
 	apiToken: string
@@ -26,9 +27,7 @@ export function useUploadsPageScopedStorageState(props: UseUploadsPageScopedStor
 		legacyLocalStorageKey: 'uploadPrefix',
 		legacyLocalStorageKeys: legacyProfileScopedStorageKeys('uploads', props.apiToken, props.profileId, 'prefix'),
 	})
-	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-	const [selectedFolderLabel, setSelectedFolderLabel] = useState('')
-	const [selectedDirectorySelectionMode, setSelectedDirectorySelectionMode] = useState<'picker' | 'input' | undefined>(undefined)
+	const draft = useUploadsDraft()
 	const [uploadSourceOpen, setUploadSourceOpen] = useState(false)
 	const [uploadSourceBusy, setUploadSourceBusy] = useState(false)
 
@@ -37,12 +36,7 @@ export function useUploadsPageScopedStorageState(props: UseUploadsPageScopedStor
 		setBucket,
 		prefix,
 		setPrefix,
-		selectedFiles,
-		setSelectedFiles,
-		selectedFolderLabel,
-		setSelectedFolderLabel,
-		selectedDirectorySelectionMode,
-		setSelectedDirectorySelectionMode,
+		...draft,
 		uploadSourceOpen,
 		setUploadSourceOpen,
 		uploadSourceBusy,

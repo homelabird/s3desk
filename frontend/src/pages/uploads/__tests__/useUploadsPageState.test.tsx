@@ -7,6 +7,7 @@ import { offlineUploadsDisabledHint } from '../../../lib/actionHints'
 import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { transfersStub } from '../../../test/transfersStub'
+import { UploadsDraftProvider } from '../UploadsDraftContext'
 import { useUploadsPageState } from '../useUploadsPageState'
 
 const {
@@ -78,7 +79,7 @@ function createQueryClient() {
 
 function createWrapper(queryClient: QueryClient) {
 	return function Wrapper(props: PropsWithChildren) {
-		return <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
+		return <QueryClientProvider client={queryClient}><UploadsDraftProvider scopeKey="test">{props.children}</UploadsDraftProvider></QueryClientProvider>
 	}
 }
 

@@ -22,7 +22,7 @@ type Props = {
 export type UploadsSelectionSectionProps = Props
 
 export function UploadsSelectionSection(props: Props) {
-	const { canOpenPicker, destinationLabel, onOpenPicker, queueDisabledReason, selectedFiles, selectionKind } = props
+	const { canOpenPicker, onOpenPicker, queueDisabledReason, selectedFiles, selectionKind } = props
 
 	const selectedFileCount = selectedFiles.length
 	const selectedTotalBytes = useMemo(
@@ -49,32 +49,17 @@ export function UploadsSelectionSection(props: Props) {
 						type={hasSelection ? 'default' : 'primary'}
 						onClick={onOpenPicker}
 					>
-						Add from device…
+						{hasSelection ? 'Replace selection…' : 'Add from device…'}
 					</Button>
 				</div>
 				<Typography.Text type="secondary" className={styles.selectionHint}>
-					{queueDisabledReason ?? 'Ready to queue this selection.'}
+					{queueDisabledReason ?? 'Choosing new files or a folder replaces this selection.'}
 				</Typography.Text>
 
 				{hasSelection ? (
-					<div className={styles.summaryGrid} role="status" aria-live="polite" aria-atomic="true">
-						<div className={styles.summaryCard}>
-							<span className={styles.summaryLabel}>Selection</span>
-							<strong className={styles.summaryValue}>{selectedFileCount.toLocaleString()} item(s)</strong>
-						</div>
-						<div className={styles.summaryCard}>
-							<span className={styles.summaryLabel}>Total size</span>
-							<strong className={styles.summaryValue}>{formatBytes(selectedTotalBytes)}</strong>
-						</div>
-						<div className={styles.summaryCard}>
-							<span className={styles.summaryLabel}>Destination</span>
-							<strong className={styles.summaryValue}>{destinationLabel}</strong>
-						</div>
-						<div className={styles.summaryCard}>
-							<span className={styles.summaryLabel}>Detected type</span>
-							<strong className={styles.summaryValue}>{selectionTypeLabel}</strong>
-						</div>
-					</div>
+					<Typography.Text role="status" aria-live="polite" aria-atomic="true">
+						{selectedFileCount.toLocaleString()} item(s) · {formatBytes(selectedTotalBytes)} · {selectionTypeLabel}
+					</Typography.Text>
 				) : null}
 
 				{previewFiles.length > 0 ? (

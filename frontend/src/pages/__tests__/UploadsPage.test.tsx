@@ -10,6 +10,7 @@ import { failedToLoadBucketsTitle, goToBucketsLabel, noBucketsAvailableHint } fr
 import * as deviceFs from "../../lib/deviceFs";
 import { ensureDomShims } from "../../test/domShims";
 import { transfersStub } from "../../test/transfersStub";
+import { UploadsDraftProvider } from "../uploads/UploadsDraftContext";
 import { UploadsPage } from "../UploadsPage";
 
 const uploadsPageApiMock = vi.hoisted(() => ({
@@ -147,7 +148,7 @@ function renderUploadsPage(
   render(
     <QueryClientProvider client={createClient()}>
       <TransfersContexts value={transfersValue}>
-        <MemoryRouter initialEntries={["/uploads"]}>
+        <UploadsDraftProvider scopeKey="test"><MemoryRouter initialEntries={["/uploads"]}>
           <Routes>
             <Route
               path="/uploads"
@@ -156,7 +157,7 @@ function renderUploadsPage(
             <Route path="/profiles" element={<div>Profiles Route</div>} />
             <Route path="/buckets" element={<div>Buckets Route</div>} />
           </Routes>
-        </MemoryRouter>
+        </MemoryRouter></UploadsDraftProvider>
       </TransfersContexts>
     </QueryClientProvider>,
   );
@@ -282,7 +283,7 @@ describe("UploadsPage", () => {
     const view = render(
       <QueryClientProvider client={client}>
         <TransfersContexts value={transfersValue}>
-          <MemoryRouter initialEntries={["/uploads"]}>
+          <UploadsDraftProvider scopeKey="test"><MemoryRouter initialEntries={["/uploads"]}>
             <Routes>
               <Route
                 path="/uploads"
@@ -291,7 +292,7 @@ describe("UploadsPage", () => {
                 }
               />
             </Routes>
-          </MemoryRouter>
+          </MemoryRouter></UploadsDraftProvider>
         </TransfersContexts>
       </QueryClientProvider>,
     );
@@ -306,7 +307,7 @@ describe("UploadsPage", () => {
     view.rerender(
       <QueryClientProvider client={client}>
         <TransfersContexts value={transfersValue}>
-          <MemoryRouter initialEntries={["/uploads"]}>
+          <UploadsDraftProvider scopeKey="test"><MemoryRouter initialEntries={["/uploads"]}>
             <Routes>
               <Route
                 path="/uploads"
@@ -315,7 +316,7 @@ describe("UploadsPage", () => {
                 }
               />
             </Routes>
-          </MemoryRouter>
+          </MemoryRouter></UploadsDraftProvider>
         </TransfersContexts>
       </QueryClientProvider>,
     );

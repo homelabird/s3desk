@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { Suspense, lazy, useEffect, useMemo, useRef, type ReactNode } from 'react'
 
+import { UploadsDraftProvider } from './pages/uploads/UploadsDraftContext'
 
 const loadProfilesPage = async () => {
 	const m = await import('./pages/ProfilesPage')
@@ -73,50 +74,52 @@ export function FullAppRoutes({
 	}, [jobRequest, location.key, profileId, setProfileId])
 
 	return (
-		<Suspense fallback={loadingFallback}>
-			<Routes>
-				<Route
-					path="/"
-					element={<Navigate to={profileId ? '/objects' : '/profiles'} replace />}
-				/>
-				<Route
-					path="/profiles"
-					element={
-						<ProfilesPage
-							key={`profiles:${apiToken || 'none'}`}
-							apiToken={apiToken}
-							profileId={profileId}
-							setProfileId={setProfileId}
-						/>
-					}
-				/>
-				<Route
-					path="/buckets"
-					element={<BucketsPage key={`buckets:${shellScopeKey}`} apiToken={apiToken} profileId={profileId} />}
-				/>
-				<Route
-					path="/objects"
-					element={<ObjectsPage key={`objects:${shellScopeKey}`} apiToken={apiToken} profileId={profileId} />}
-				/>
-				<Route
-					path="/uploads"
-					element={<UploadsPage key={`uploads:${shellScopeKey}`} apiToken={apiToken} profileId={profileId} />}
-				/>
-				<Route
-					path="/jobs"
-					element={
-						<JobsPage
-							key={`jobs:${apiToken || 'none'}:${profileId ?? 'none'}`}
-							apiToken={apiToken}
-							profileId={profileId}
-							initialJobId={jobRequest?.profileId === profileId ? jobRequest.jobId : undefined}
-							jobRequestKey={location.key}
-						/>
-					}
-				/>
-				<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
-				<Route path="*" element={<Navigate to="/profiles" replace />} />
-			</Routes>
-		</Suspense>
+		<UploadsDraftProvider scopeKey={shellScopeKey}>
+			<Suspense fallback={loadingFallback}>
+				<Routes>
+					<Route
+						path="/"
+						element={<Navigate to={profileId ? '/objects' : '/profiles'} replace />}
+					/>
+					<Route
+						path="/profiles"
+						element={
+							<ProfilesPage
+								key={`profiles:${apiToken || 'none'}`}
+								apiToken={apiToken}
+								profileId={profileId}
+								setProfileId={setProfileId}
+							/>
+						}
+					/>
+					<Route
+						path="/buckets"
+						element={<BucketsPage key={`buckets:${shellScopeKey}`} apiToken={apiToken} profileId={profileId} />}
+					/>
+					<Route
+						path="/objects"
+						element={<ObjectsPage key={`objects:${shellScopeKey}`} apiToken={apiToken} profileId={profileId} />}
+					/>
+					<Route
+						path="/uploads"
+						element={<UploadsPage key={`uploads:${shellScopeKey}`} apiToken={apiToken} profileId={profileId} />}
+					/>
+					<Route
+						path="/jobs"
+						element={
+							<JobsPage
+								key={`jobs:${apiToken || 'none'}:${profileId ?? 'none'}`}
+								apiToken={apiToken}
+								profileId={profileId}
+								initialJobId={jobRequest?.profileId === profileId ? jobRequest.jobId : undefined}
+								jobRequestKey={location.key}
+							/>
+						}
+					/>
+					<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
+					<Route path="*" element={<Navigate to="/profiles" replace />} />
+				</Routes>
+			</Suspense>
+		</UploadsDraftProvider>
 	)
 }

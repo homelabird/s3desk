@@ -1,8 +1,14 @@
+import { type PropsWithChildren } from 'react'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { legacyTokenProfileScopedStorageKey, profileScopedStorageKey } from '../../../lib/profileScopedStorage'
+import { UploadsDraftProvider } from '../UploadsDraftContext'
 import { useUploadsPageScopedStorageState } from '../useUploadsPageScopedStorageState'
+
+function wrapper({ children }: PropsWithChildren) {
+	return <UploadsDraftProvider scopeKey="test">{children}</UploadsDraftProvider>
+}
 
 afterEach(() => {
 	window.localStorage.clear()
@@ -35,6 +41,7 @@ describe('useUploadsPageScopedStorageState', () => {
 				}),
 			{
 				initialProps: { apiToken: 'token-a', profileId: 'profile-1' },
+				wrapper,
 			},
 		)
 
@@ -62,6 +69,7 @@ describe('useUploadsPageScopedStorageState', () => {
 				apiToken: 'token-a',
 				profileId: 'profile-1',
 			}),
+			{ wrapper },
 		)
 
 		expect(result.current.bucket).toBe('legacy-bucket')

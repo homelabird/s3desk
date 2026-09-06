@@ -17,8 +17,8 @@ export type UploadsPageShellProps = {
 export function UploadsPageShell(props: UploadsPageShellProps) {
 	const { presentation } = props
 	const hasSelection = !presentation.header.clearSelectionDisabled
-	const headerActions = hasSelection ? (
-		<Space wrap className={styles.headerActions}>
+	const uploadActions = hasSelection ? (
+		<Space wrap className={styles.uploadActions}>
 			<Tooltip title={presentation.header.queueButtonTooltip}>
 				<span>
 					<Button
@@ -41,7 +41,6 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 				eyebrow="Transfer"
 				title="Uploads"
 				subtitle={presentation.header.subtitle}
-				actions={headerActions}
 			/>
 
 			{presentation.alerts.showOffline ? <Alert type="warning" showIcon title={offlineUploadsDisabledHint()} /> : null}
@@ -66,7 +65,24 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 			) : null}
 
 			{presentation.alerts.bucketsErrorDescription ? (
-				<Alert type="error" showIcon title={failedToLoadBucketsTitle()} description={presentation.alerts.bucketsErrorDescription} />
+				<Alert
+					type="error"
+					showIcon
+					title={failedToLoadBucketsTitle()}
+					description={
+						<Space orientation="vertical">
+							<div>{presentation.alerts.bucketsErrorDescription}</div>
+							<Button
+								onClick={presentation.alerts.onRetryBuckets}
+								loading={presentation.alerts.bucketsRetrying}
+								disabled={presentation.alerts.showOffline || presentation.alerts.bucketsRetrying}
+								aria-label="Retry loading buckets"
+							>
+								Retry
+							</Button>
+						</Space>
+					}
+				/>
 			) : null}
 
 			{presentation.targetSource.show ? (
@@ -108,9 +124,11 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 								/>
 							</label>
 						</div>
+						{uploadActions}
 					</PageSection>
 				</>
 			) : null}
+			{!presentation.targetSource.show ? uploadActions : null}
 			<UploadSourceSheet {...presentation.uploadSourceSheet} />
 		</div>
 	)

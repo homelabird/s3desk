@@ -465,7 +465,7 @@ export async function addUploadSourceFromDevice(
 	} = {},
 ): Promise<Locator> {
 	const dialog = await ensureDialogOpen(page, options.dialogName ?? 'Add upload source', async () => {
-		await page.getByRole('button', { name: options.openButtonName ?? /Add from device/i }).click()
+		await page.getByRole('button', { name: options.openButtonName ?? /Add from device|Replace selection/i }).click()
 	})
 	await setFilesFromNextChooser(page, files, async () => {
 		await dialog.getByRole('button', { name: options.chooseButtonName ?? 'Choose files' }).click()

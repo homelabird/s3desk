@@ -63,6 +63,8 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 			showUnsupported: false,
 			unsupportedDescription: null,
 			bucketsErrorDescription: null,
+			bucketsRetrying: false,
+			onRetryBuckets: vi.fn(),
 		},
 		emptyState: {
 			showBucketsEmpty: false,
@@ -117,7 +119,7 @@ describe('UploadsPageShell', () => {
 		expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument()
 	})
 
-	it('wires header actions and renders the empty bucket route hint', () => {
+	it('keeps selection actions available when the bucket list becomes empty', () => {
 		const presentation = buildPresentation({
 			header: {
 				...buildPresentation().header,
@@ -161,6 +163,8 @@ describe('UploadsPageShell', () => {
 				showUnsupported: true,
 				unsupportedDescription: 'Uploads are disabled by backend policy.',
 				bucketsErrorDescription: null,
+				bucketsRetrying: false,
+				onRetryBuckets: vi.fn(),
 			},
 			selection: {
 				...buildPresentation().selection,
@@ -219,6 +223,8 @@ describe('UploadsPageShell', () => {
 							showUnsupported: false,
 							unsupportedDescription: null,
 							bucketsErrorDescription: 'lookup failed',
+							bucketsRetrying: false,
+							onRetryBuckets: vi.fn(),
 						},
 					})}
 				/>
