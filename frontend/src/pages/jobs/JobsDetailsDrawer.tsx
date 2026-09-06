@@ -272,61 +272,69 @@ export function JobsDetailsDrawer(props: Props) {
 			title="Job Details"
 			placement="right"
 			width={typeof props.drawerWidth === 'number' ? `${props.drawerWidth}px` : props.drawerWidth}
-			extra={
-				<div className={sharedStyles.drawerExtra}>
-					<Button icon={<ReloadOutlined />} disabled={!props.detailsJobId || props.isOffline} loading={props.isFetching} onClick={props.onRefresh}>
-						Refresh
-					</Button>
-					<Button
-						danger
-						disabled={
-							props.isOffline ||
-							!props.detailsJobId ||
-							props.job?.status === 'queued' ||
-							props.job?.status === 'running'
-						}
-						loading={props.deleteLoading}
-						onClick={() => {
-							if (!props.detailsJobId) return
-							const detailsJobId = props.detailsJobId
-							const confirmContextVersion = jobsDetailsDrawerContextVersions.get(detailsInstanceId) ?? 0
-							confirmDangerAction({
-								title: 'Delete job record?',
-								description: (
-									<Space orientation="vertical" style={{ width: '100%' }}>
-										<Typography.Text>
-											Job ID: <Typography.Text code>{detailsJobId}</Typography.Text>
-										</Typography.Text>
-										<Typography.Text type="secondary">This removes the job record and deletes its log file.</Typography.Text>
-									</Space>
-								),
-								onConfirm: async () => {
-									if ((jobsDetailsDrawerContextVersions.get(detailsInstanceId) ?? 0) !== confirmContextVersion) return
-									await props.onDeleteJob(detailsJobId)
-								},
-							})
-						}}
-					>
-						Delete
-					</Button>
-					<Button
-						disabled={!props.detailsJobId || props.isOffline}
-						onClick={() => {
-							if (!props.detailsJobId) return
-							props.onOpenLogs(props.detailsJobId)
-						}}
-					>
-						Open logs
-					</Button>
-				</div>
-			}
 		>
+			<div className={sharedStyles.drawerExtra}>
+				<Button icon={<ReloadOutlined />} disabled={!props.detailsJobId || props.isOffline} loading={props.isFetching} onClick={props.onRefresh}>
+					Refresh
+				</Button>
+				<Button
+					danger
+					disabled={
+						props.isOffline ||
+						!props.detailsJobId ||
+						props.job?.status === 'queued' ||
+						props.job?.status === 'running'
+					}
+					loading={props.deleteLoading}
+					onClick={() => {
+						if (!props.detailsJobId) return
+						const detailsJobId = props.detailsJobId
+						const confirmContextVersion = jobsDetailsDrawerContextVersions.get(detailsInstanceId) ?? 0
+						confirmDangerAction({
+							title: 'Delete job record?',
+							description: (
+								<Space orientation="vertical" style={{ width: '100%' }}>
+									<Typography.Text>
+										Job ID: <Typography.Text code>{detailsJobId}</Typography.Text>
+									</Typography.Text>
+									<Typography.Text type="secondary">This removes the job record and deletes its log file.</Typography.Text>
+								</Space>
+							),
+							onConfirm: async () => {
+								if ((jobsDetailsDrawerContextVersions.get(detailsInstanceId) ?? 0) !== confirmContextVersion) return
+								await props.onDeleteJob(detailsJobId)
+							},
+						})
+					}}
+				>
+					Delete
+				</Button>
+				<Button
+					disabled={!props.detailsJobId || props.isOffline}
+					onClick={() => {
+						if (!props.detailsJobId) return
+						props.onOpenLogs(props.detailsJobId)
+					}}
+				>
+					Open logs
+				</Button>
+			</div>
 			{props.isError ? <Alert type="error" showIcon title="Failed to load job" description={formatErr(props.error)} /> : null}
 
 			{props.detailsJobId ? (
 				props.job ? (
 					<>
 						<Descriptions size="small" bordered column={1}>
+							<Descriptions.Item label="Status">
+								<Tag color={statusColor(props.job.status)}>{props.job.status}</Tag>
+							</Descriptions.Item>
+							<Descriptions.Item label="Progress">
+								{props.job.progress?.objectsDone || props.job.progress?.bytesDone ? (
+									<Typography.Text type="secondary">{formatProgress(props.job.progress)}</Typography.Text>
+								) : (
+									<Typography.Text type="secondary">-</Typography.Text>
+								)}
+							</Descriptions.Item>
 							<Descriptions.Item label="ID">
 								<Typography.Text code className={sharedStyles.detailValue}>{props.job.id}</Typography.Text>
 							</Descriptions.Item>
@@ -345,16 +353,6 @@ export function JobsDetailsDrawer(props: Props) {
 							</Descriptions.Item>
 							<Descriptions.Item label="Summary">
 								{summary ? <Typography.Text type="secondary" className={sharedStyles.detailValue}>{summary}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
-							</Descriptions.Item>
-							<Descriptions.Item label="Status">
-								<Tag color={statusColor(props.job.status)}>{props.job.status}</Tag>
-							</Descriptions.Item>
-							<Descriptions.Item label="Progress">
-								{props.job.progress?.objectsDone || props.job.progress?.bytesDone ? (
-									<Typography.Text type="secondary">{formatProgress(props.job.progress)}</Typography.Text>
-								) : (
-									<Typography.Text type="secondary">-</Typography.Text>
-								)}
 							</Descriptions.Item>
 							<Descriptions.Item label="Created">
 								<Tooltip title={props.job.createdAt}>

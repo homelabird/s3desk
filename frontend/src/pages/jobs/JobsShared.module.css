@@ -1,4 +1,5 @@
 .drawerExtra {
+	margin-bottom: 16px;
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -140,12 +141,5 @@
 
 	.uploadTablePaginationButton {
 		min-height: 44px;
-	}
-}
-
-@media (max-width: 480px) {
-	.drawerExtra {
-		flex-direction: column;
-		align-items: stretch;
 	}
 }
