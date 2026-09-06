@@ -62,7 +62,7 @@ describe('TransferUploadRow', () => {
 		expect(screen.getByText('Local preview')).toBeInTheDocument()
 		expect(screen.getByText('Preview frame: videos/clip.mp4.')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Cancel upload Upload: 2 file(s)' })).toHaveTextContent('Cancel')
-		expect(screen.getByRole('button', { name: 'Remove upload Upload: 2 file(s)' })).toHaveTextContent('Remove')
+		expect(screen.queryByRole('button', { name: 'Remove upload Upload: 2 file(s)' })).not.toBeInTheDocument()
 	})
 
 	it('keeps cancel available while a handed-off upload job is still waiting', () => {
@@ -113,6 +113,7 @@ describe('TransferUploadRow', () => {
 		)
 
 		expect(screen.getByRole('button', { name: 'Retry upload Upload: 2 file(s)' })).toHaveTextContent('Retry')
+		expect(screen.getByRole('button', { name: 'Remove upload Upload: 2 file(s)' })).toHaveTextContent('Remove')
 		expect(screen.getByText('Recovery: Retry will reuse remembered local files.')).toBeInTheDocument()
 	})
 

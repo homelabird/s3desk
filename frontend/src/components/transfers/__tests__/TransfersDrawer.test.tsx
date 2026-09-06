@@ -35,7 +35,7 @@ function buildProps(overrides: Partial<TransfersDrawerProps> = {}): TransfersDra
 		hasCompletedUploads: false,
 		onClearCompletedDownloads: vi.fn(),
 		onClearCompletedUploads: vi.fn(),
-		onClearAll: vi.fn(),
+		onClearFinished: vi.fn(),
 		onCancelDownload: vi.fn(),
 		onRetryDownload: vi.fn(),
 		onRemoveDownload: vi.fn(),
@@ -68,7 +68,7 @@ describe('TransfersDrawer', () => {
 		render(<TransfersDrawer {...buildProps()} />)
 
 		expect(screen.queryByRole('button', { name: 'Clear done' })).not.toBeInTheDocument()
-		expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Clear finished' })).not.toBeInTheDocument()
 		expect(screen.getByText('Committing')).toBeInTheDocument()
 		expect(screen.getByRole('list', { name: 'Upload transfers' })).toBeInTheDocument()
 		expect(screen.getByRole('listitem', { name: /Upload Upload: one file, Committing/i })).toBeInTheDocument()

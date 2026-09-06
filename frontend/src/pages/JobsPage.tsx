@@ -4,6 +4,8 @@ import { useJobsPageController } from './jobs/useJobsPageController'
 type Props = {
 	apiToken: string
 	profileId: string | null
+	initialJobId?: string
+	jobRequestKey?: string
 }
 
 export function JobsPage(props: Props) {

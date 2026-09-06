@@ -51,7 +51,7 @@ describe('TransferDownloadRow', () => {
 		expect(screen.getByText('Waiting for job to finish…')).not.toHaveAttribute('aria-live')
 		expect(screen.getByRole('button', { name: 'Jobs for download Download job artifact' })).toHaveTextContent('Jobs')
 		expect(screen.getByRole('button', { name: 'Cancel download Download job artifact' })).toHaveTextContent('Cancel')
-		expect(screen.getByRole('button', { name: 'Remove download Download job artifact' })).toHaveTextContent('Remove')
+		expect(screen.queryByRole('button', { name: 'Remove download Download job artifact' })).not.toBeInTheDocument()
 	})
 
 	it('labels retry actions with the download context', () => {
@@ -69,6 +69,7 @@ describe('TransferDownloadRow', () => {
 		)
 
 		expect(screen.getByRole('button', { name: 'Retry download Download job artifact' })).toHaveTextContent('Retry')
+		expect(screen.getByRole('button', { name: 'Remove download Download job artifact' })).toHaveTextContent('Remove')
 	})
 
 	it('renders long destinations as wrapping row text instead of an ellipsis-only label', () => {

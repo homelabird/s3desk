@@ -84,6 +84,7 @@ function buildUploadTask(
 	overrides: Partial<{
 		id: string
 		status: 'queued' | 'staging' | 'commit' | 'waiting_job' | 'succeeded' | 'failed' | 'canceled'
+		jobId: string
 		previewUrl?: string
 	}> = {},
 ) {
@@ -166,7 +167,7 @@ describe('useTransfersRuntimeController', () => {
 			removeUploadTask: vi.fn(),
 			clearCompletedUploads: vi.fn(),
 			abortAllTransfers: vi.fn(),
-			clearAllTransfers: vi.fn(),
+			clearFinishedTransfers: vi.fn(),
 		})
 		useTransfersUploadJobLifecycleMock.mockReturnValue({
 			handleUploadJobUpdate: vi.fn(async () => {}),
@@ -207,6 +208,55 @@ describe('useTransfersRuntimeController', () => {
 		})
 	})
 
+	it.each(['running', 'canceled', 'succeeded', 'error', 'replaced'] as const)(
+		'uses the server upload job cancellation outcome: %s',
+		async (outcome) => {
+			let resolveCancel!: (job: { status: string }) => void
+			let rejectCancel!: (error: Error) => void
+			const cancelJob = vi.fn(() => new Promise<{ status: string }>((resolve, reject) => {
+				resolveCancel = resolve
+				rejectCancel = reject
+			}))
+			apiClientRef.current = { jobs: { cancelJob } }
+			const task = buildUploadTask({ status: 'waiting_job', jobId: 'server-job-1' })
+			const notifications = { error: vi.fn(), info: vi.fn(), warning: vi.fn(), uploadCommitted: vi.fn() }
+			const { result } = renderHook(
+				() => useTransfersRuntimeController({ apiToken: 'token-1', notifications }),
+				{ wrapper: createWrapper() },
+			)
+			const { uploadTasksRef } = useTransfersUploadJobLifecycleMock.mock.lastCall![0]
+			uploadTasksRef.current = [task]
+			const actions = useTransfersTaskActionsMock.mock.results.at(-1)!.value
+			const { handleUploadJobUpdate } = useTransfersUploadJobLifecycleMock.mock.results.at(-1)!.value
+
+			act(() => result.current.uiActions.cancelUploadTask(task.id))
+			expect(cancelJob).toHaveBeenCalledWith('profile-1', 'server-job-1')
+			expect(actions.cancelUploadTask).not.toHaveBeenCalled()
+			expect(actions.updateUploadTask).not.toHaveBeenCalled()
+			expect(handleUploadJobUpdate).not.toHaveBeenCalled()
+
+			await act(async () => {
+				if (outcome === 'error') rejectCancel(new Error('Cancel request failed'))
+				else {
+					if (outcome === 'replaced') uploadTasksRef.current = [{ ...task, jobId: 'server-job-2' }]
+					resolveCancel({ status: outcome === 'replaced' ? 'canceled' : outcome })
+				}
+			})
+
+			if (outcome === 'error') {
+				expect(notifications.error).toHaveBeenCalledWith(expect.stringContaining('Cancel request failed'))
+				expect(actions.updateUploadTask.mock.lastCall![1](task)).toMatchObject({
+					status: 'waiting_job', error: expect.stringContaining('Cancel request failed'),
+				})
+				expect(handleUploadJobUpdate).not.toHaveBeenCalled()
+			} else if (outcome === 'replaced') {
+				expect(handleUploadJobUpdate).not.toHaveBeenCalled()
+			} else {
+				expect(handleUploadJobUpdate).toHaveBeenCalledWith(task.id, { status: outcome })
+			}
+		},
+	)
+
 	it('aborts in-flight transfers when the runtime unmounts', () => {
 		const abortAllTransfers = vi.fn()
 		useTransfersTaskActionsMock.mockReturnValue({
@@ -220,7 +270,7 @@ describe('useTransfersRuntimeController', () => {
 			removeUploadTask: vi.fn(),
 			clearCompletedUploads: vi.fn(),
 			abortAllTransfers,
-			clearAllTransfers: vi.fn(),
+			clearFinishedTransfers: vi.fn(),
 		})
 
 		const { unmount } = renderHook(

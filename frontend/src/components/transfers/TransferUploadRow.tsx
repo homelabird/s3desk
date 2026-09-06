@@ -2,14 +2,14 @@ import { memo } from 'react'
 import { Button, Progress, Tag, Typography } from 'antd'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 
-import type { UploadTask } from './transferTypes'
+import { isTransferFinished, type UploadTask } from './transferTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
 import styles from './transferRows.module.css'
 import { buildUploadRecoveryDescriptor } from './uploadRecoveryDescriptor'
 
 type TransferUploadRowProps = {
 	task: UploadTask
-	onOpenJobs?: () => void
+	onOpenJobs?: (profileId: string, jobId: string) => void
 	onCancel: (taskId: string) => void
 	onRetry: (taskId: string) => void
 	onRemove: (taskId: string) => void
@@ -137,7 +137,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 							size="small"
 							type="link"
 							aria-label={`Jobs for ${uploadActionContext}`}
-							onClick={props.onOpenJobs}
+							onClick={() => { if (t.jobId) props.onOpenJobs?.(t.profileId, t.jobId) }}
 						>
 							Jobs
 						</Button>
@@ -170,7 +170,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 						<Typography.Text type="secondary" className={styles.rowActionHint}>
 							Finalizing upload…
 						</Typography.Text>
-					) : (
+					) : isTransferFinished(t.status) ? (
 						<Button
 							size="small"
 							danger
@@ -180,7 +180,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 						>
 							Remove
 						</Button>
-					)}
+					) : null}
 				</div>
 			</div>
 

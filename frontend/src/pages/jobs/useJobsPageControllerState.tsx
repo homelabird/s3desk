@@ -36,6 +36,8 @@ type Props = {
   isOffline: boolean
   locationState: unknown
   profileId: string | null
+  initialJobId?: string
+  jobRequestKey?: string
   queryClient: QueryClient
   screens: JobsPageControllerScreens
   themeToken: JobsPageControllerThemeToken
@@ -94,6 +96,8 @@ export function useJobsPageControllerState(props: Props) {
     apiToken: props.apiToken,
     profileId: props.profileId,
     initialDeletePrefill: deleteJobInitialPrefill,
+    initialJobId: props.initialJobId,
+    jobRequestKey: props.jobRequestKey,
   })
 
   const filters = useJobsFilters(props.apiToken, props.profileId)

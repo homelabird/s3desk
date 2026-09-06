@@ -4,6 +4,20 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useJobsPageSurfaceState } from '../useJobsPageSurfaceState'
 
 describe('useJobsPageSurfaceState', () => {
+	it('opens routed job details and reopens the same job on a new navigation', () => {
+		const { result, rerender } = renderHook(({ jobRequestKey }) => useJobsPageSurfaceState({
+			apiToken: 'token-a', profileId: 'profile-1', initialDeletePrefill: null,
+			initialJobId: 'job-1', jobRequestKey,
+		}), { initialProps: { jobRequestKey: 'first' } })
+		expect(result.current.detailsOpen).toBe(true)
+		expect(result.current.detailsJobId).toBe('job-1')
+		act(() => result.current.setDetailsOpen(false))
+		rerender({ jobRequestKey: 'first' })
+		expect(result.current.detailsOpen).toBe(false)
+		rerender({ jobRequestKey: 'second' })
+		expect(result.current.detailsOpen).toBe(true)
+	})
+
   beforeEach(() => {
     localStorage.clear()
   })

@@ -13,14 +13,14 @@ type UseTransfersDrawerPropsParams = {
 	uploadTasks: UploadTask[]
 	onClearCompletedDownloads: () => void
 	onClearCompletedUploads: () => void
-	onClearAll: () => void
+	onClearFinished: () => void
 	onCancelDownload: (taskId: string) => void
 	onRetryDownload: (taskId: string) => void
 	onRemoveDownload: (taskId: string) => void
 	onCancelUpload: (taskId: string) => void
 	onRetryUpload: (taskId: string) => void
 	onRemoveUpload: (taskId: string) => void
-	onOpenJobs: () => void
+	onOpenJobs: (profileId: string, jobId: string) => void
 }
 
 export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): TransfersDrawerProps {
@@ -33,7 +33,7 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 		uploadTasks,
 		onClearCompletedDownloads,
 		onClearCompletedUploads,
-		onClearAll,
+		onClearFinished,
 		onCancelDownload,
 		onRetryDownload,
 		onRemoveDownload,
@@ -69,7 +69,7 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 			hasCompletedUploads,
 			onClearCompletedDownloads,
 			onClearCompletedUploads,
-			onClearAll,
+			onClearFinished,
 			onCancelDownload,
 			onRetryDownload,
 			onRemoveDownload,
@@ -88,7 +88,7 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 			hasCompletedUploads,
 			onCancelDownload,
 			onCancelUpload,
-			onClearAll,
+			onClearFinished,
 			onClearCompletedDownloads,
 			onClearCompletedUploads,
 			onClose,

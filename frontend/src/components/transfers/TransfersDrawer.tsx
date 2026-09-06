@@ -5,7 +5,7 @@ import { useMemo, useRef, type ReactNode } from 'react'
 
 import { AppTabs } from '../AppTabs'
 import { OverlaySheet } from '../OverlaySheet'
-import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
+import { isTransferFinished, type DownloadTask, type TransfersTab, type UploadTask } from './transferTypes'
 import { TransferDownloadRow } from './TransferDownloadRow'
 import { TransferUploadRow } from './TransferUploadRow'
 
@@ -25,14 +25,14 @@ export type TransfersDrawerProps = {
 	hasCompletedUploads: boolean
 	onClearCompletedDownloads: () => void
 	onClearCompletedUploads: () => void
-	onClearAll: () => void
+	onClearFinished: () => void
 	onCancelDownload: (taskId: string) => void
 	onRetryDownload: (taskId: string) => void
 	onRemoveDownload: (taskId: string) => void
 	onCancelUpload: (taskId: string) => void
 	onRetryUpload: (taskId: string) => void
 	onRemoveUpload: (taskId: string) => void
-	onOpenJobs: () => void
+	onOpenJobs: (profileId: string, jobId: string) => void
 }
 
 function TransferVirtualList<T extends { id: string }>(props: {
@@ -99,8 +99,7 @@ function TransferVirtualList<T extends { id: string }>(props: {
 }
 
 export function TransfersDrawer(props: TransfersDrawerProps) {
-	const clearableUploadCount = props.uploadTasks.filter((task) => task.status !== 'commit').length
-	const hasClearableTransfers = props.downloadTasks.length + clearableUploadCount > 0
+	const hasClearableTransfers = [...props.downloadTasks, ...props.uploadTasks].some((task) => isTransferFinished(task.status))
 	const hasCompletedTransfers = props.tab === 'downloads' ? props.hasCompletedDownloads : props.hasCompletedUploads
 
 	return (
@@ -127,8 +126,8 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 							</Button>
 						) : null}
 						{hasClearableTransfers ? (
-							<Button size="small" danger onClick={props.onClearAll}>
-								Clear all
+							<Button size="small" title="Clear completed, failed and canceled transfers from both queues" onClick={props.onClearFinished}>
+								Clear finished
 							</Button>
 						) : null}
 					</Space>

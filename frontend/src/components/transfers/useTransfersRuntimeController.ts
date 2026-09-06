@@ -2,7 +2,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { UploadFileItem } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import { useAPIClient } from '../../api/useAPIClient'
+import { formatErrorWithHint } from '../../lib/errors'
 import { serverScopedStorageKey } from '../../lib/profileScopedStorage'
 import { TransferEstimator } from '../../lib/transfer'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
@@ -41,7 +43,7 @@ export type TransfersRuntimeUiActions = {
 	closeTransfers: () => void
 	clearCompletedDownloads: () => void
 	clearCompletedUploads: () => void
-	clearAllTransfers: () => void
+	clearFinishedTransfers: () => void
 	cancelDownloadTask: (taskId: string) => void
 	retryDownloadTask: (taskId: string) => void
 	removeDownloadTask: (taskId: string) => void
@@ -135,11 +137,11 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		removeDownloadTask,
 		clearCompletedDownloads,
 		updateUploadTask,
-		cancelUploadTask,
+		cancelUploadTask: cancelLocalUploadTask,
 		removeUploadTask,
 		clearCompletedUploads,
 		abortAllTransfers,
-		clearAllTransfers,
+		clearFinishedTransfers,
 	} = useTransfersTaskActions({
 		setDownloadTasks,
 		setUploadTasks,
@@ -163,6 +165,31 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		uploadTasksRef,
 		updateUploadTask,
 	})
+
+	const cancelUploadTask = useCallback((taskId: string) => {
+		const task = uploadTasksRef.current.find((candidate) => candidate.id === taskId)
+		if (!task) return
+		if (task.status === 'queued' || task.status === 'staging') {
+			cancelLocalUploadTask(taskId)
+			return
+		}
+		if (task.status !== 'waiting_job' || !task.jobId) return
+		const isCurrentJob = (current?: UploadTask) => current?.status === 'waiting_job' &&
+			current.profileId === task.profileId && current.jobId === task.jobId
+		void api.jobs.cancelJob(task.profileId, task.jobId).then(async (job) => {
+			void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(task.profileId, args.apiToken) })
+			if (!isCurrentJob(uploadTasksRef.current.find((candidate) => candidate.id === taskId))) return
+			await handleUploadJobUpdate(taskId, job)
+			if (job.status === 'queued' || job.status === 'running') {
+				args.notifications.info('Upload job cancellation requested')
+			}
+		}).catch((error) => {
+			if (!isCurrentJob(uploadTasksRef.current.find((candidate) => candidate.id === taskId))) return
+			const message = formatErrorWithHint(error)
+			updateUploadTask(taskId, (current) => isCurrentJob(current) ? { ...current, error: message } : current)
+			args.notifications.error(message)
+		})
+	}, [api, args.apiToken, args.notifications, cancelLocalUploadTask, handleUploadJobUpdate, queryClient, updateUploadTask])
 
 	const { queueDownloadObject, queueDownloadObjectsToDevice, queueDownloadJobArtifact } = useTransfersDownloadQueue({
 		api,
@@ -245,7 +272,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 			closeTransfers,
 			clearCompletedDownloads,
 			clearCompletedUploads,
-			clearAllTransfers,
+			clearFinishedTransfers,
 			cancelDownloadTask,
 			retryDownloadTask,
 			removeDownloadTask,
@@ -256,7 +283,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		[
 			cancelDownloadTask,
 			cancelUploadTask,
-			clearAllTransfers,
+			clearFinishedTransfers,
 			clearCompletedDownloads,
 			clearCompletedUploads,
 			closeTransfers,

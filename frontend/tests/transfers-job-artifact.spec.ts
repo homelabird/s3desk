@@ -151,15 +151,20 @@ async function setupApiMocks(page: Page, scenario: JobArtifactApiScenario) {
 		{
 			method: 'GET',
 			path: '/jobs',
-			handle: (ctx) => ctx.json({ items: [scenario.listedJob], nextCursor: null }),
+			handle: (ctx) => {
+				if (ctx.url.searchParams.has('id')) {
+					expect(ctx.url.searchParams.getAll('id')).toEqual([zipJobId])
+					jobPollCount += 1
+					const job = polledJobs[Math.min(jobPollCount - 1, polledJobs.length - 1)] ?? scenario.listedJob
+					return ctx.json({ items: [job], nextCursor: null })
+				}
+				return ctx.json({ items: [scenario.listedJob], nextCursor: null })
+			},
 		},
 		{
 			method: 'GET',
 			path: new RegExp(`^/api/v1/jobs/${zipJobId}$`),
-			handle: (ctx) => {
-				jobPollCount += 1
-				return ctx.json(polledJobs[Math.min(jobPollCount - 1, polledJobs.length - 1)] ?? scenario.listedJob)
-			},
+			handle: (ctx) => ctx.json(scenario.listedJob),
 		},
 		{
 			method: 'GET',

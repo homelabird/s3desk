@@ -3,6 +3,10 @@ export type TransfersTab = 'downloads' | 'uploads'
 export type DownloadTaskStatus = 'queued' | 'waiting' | 'running' | 'succeeded' | 'failed' | 'canceled'
 export type UploadTaskStatus = 'queued' | 'staging' | 'commit' | 'waiting_job' | 'succeeded' | 'failed' | 'canceled'
 
+export function isTransferFinished(status: DownloadTaskStatus | UploadTaskStatus): boolean {
+	return status === 'succeeded' || status === 'failed' || status === 'canceled'
+}
+
 export type DownloadTaskBase = {
 	id: string
 	profileId: string

@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes } from 'react-router'
-import { Suspense, lazy, type ReactNode } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router'
+import { Suspense, lazy, useEffect, useMemo, useRef, type ReactNode } from 'react'
+
 
 const loadProfilesPage = async () => {
 	const m = await import('./pages/ProfilesPage')
@@ -57,6 +58,20 @@ export function FullAppRoutes({
 	shellScopeKey,
 	loadingFallback,
 }: FullAppRoutesProps) {
+	const location = useLocation()
+	const jobRequest = useMemo(() => {
+		const state = location.state as { jobId?: unknown; profileId?: unknown } | null
+		if (location.pathname !== '/jobs' || typeof state?.jobId !== 'string' || !state.jobId.trim() ||
+			typeof state.profileId !== 'string' || !state.profileId.trim()) return null
+		return { jobId: state.jobId, profileId: state.profileId }
+	}, [location.pathname, location.state])
+	const handledJobNavigation = useRef<string | null>(null)
+	useEffect(() => {
+		if (!jobRequest || handledJobNavigation.current === location.key) return
+		handledJobNavigation.current = location.key
+		if (jobRequest.profileId !== profileId) setProfileId(jobRequest.profileId)
+	}, [jobRequest, location.key, profileId, setProfileId])
+
 	return (
 		<Suspense fallback={loadingFallback}>
 			<Routes>
@@ -94,6 +109,8 @@ export function FullAppRoutes({
 							key={`jobs:${apiToken || 'none'}:${profileId ?? 'none'}`}
 							apiToken={apiToken}
 							profileId={profileId}
+							initialJobId={jobRequest?.profileId === profileId ? jobRequest.jobId : undefined}
+							jobRequestKey={location.key}
 						/>
 					}
 				/>

@@ -12,9 +12,11 @@ type TransfersRuntimeUiHostProps = {
 
 export function TransfersRuntimeUiHost({ uiState, uiActions }: TransfersRuntimeUiHostProps) {
 	const navigate = useNavigate()
-	const handleOpenJobs = useCallback(() => {
-		navigate('/jobs')
-	}, [navigate])
+	const { closeTransfers } = uiActions
+	const handleOpenJobs = useCallback((profileId: string, jobId: string) => {
+		closeTransfers()
+		navigate('/jobs', { state: { profileId, jobId } })
+	}, [closeTransfers, navigate])
 
 	const drawerProps = useTransfersDrawerProps({
 		open: uiState.isOpen,
@@ -25,7 +27,7 @@ export function TransfersRuntimeUiHost({ uiState, uiActions }: TransfersRuntimeU
 		uploadTasks: uiState.uploadTasks,
 		onClearCompletedDownloads: uiActions.clearCompletedDownloads,
 		onClearCompletedUploads: uiActions.clearCompletedUploads,
-		onClearAll: uiActions.clearAllTransfers,
+		onClearFinished: uiActions.clearFinishedTransfers,
 		onCancelDownload: uiActions.cancelDownloadTask,
 		onRetryDownload: uiActions.retryDownloadTask,
 		onRemoveDownload: uiActions.removeDownloadTask,

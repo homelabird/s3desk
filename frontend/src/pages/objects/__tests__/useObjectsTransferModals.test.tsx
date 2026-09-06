@@ -60,7 +60,7 @@ function createTransfersStub(): TransfersContextValue {
 	return {
 		activeTab: 'uploads',
 		closeTransfers: vi.fn(),
-		clearAllTransfers: vi.fn(),
+		clearFinishedTransfers: vi.fn(),
 		clearCompletedDownloads: vi.fn(),
 		clearCompletedUploads: vi.fn(),
 		downloadTasks: [],

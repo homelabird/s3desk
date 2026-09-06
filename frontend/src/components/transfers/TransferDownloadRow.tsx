@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { Button, Progress, Tag, Typography } from 'antd'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 
-import type { DownloadTask } from './transferTypes'
+import { isTransferFinished, type DownloadTask } from './transferTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
 import styles from './transferRows.module.css'
 
@@ -11,7 +11,7 @@ type TransferDownloadRowProps = {
 	onCancel: (taskId: string) => void
 	onRetry: (taskId: string) => void
 	onRemove: (taskId: string) => void
-	onOpenJobs?: () => void
+	onOpenJobs?: (profileId: string, jobId: string) => void
 }
 
 export const TransferDownloadRow = memo(function TransferDownloadRow(props: TransferDownloadRowProps) {
@@ -96,7 +96,7 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 							size="small"
 							type="link"
 							aria-label={`Jobs for ${downloadActionContext}`}
-							onClick={props.onOpenJobs}
+							onClick={() => { if (t.kind === 'job_artifact') props.onOpenJobs?.(t.profileId, t.jobId) }}
 						>
 							Jobs
 						</Button>
@@ -120,15 +120,17 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 							Retry
 						</Button>
 					) : null}
-					<Button
-						size="small"
-						danger
-						icon={<DeleteOutlined />}
-						aria-label={`Remove ${downloadActionContext}`}
-						onClick={() => props.onRemove(t.id)}
-					>
-						Remove
-					</Button>
+					{isTransferFinished(t.status) ? (
+						<Button
+							size="small"
+							danger
+							icon={<DeleteOutlined />}
+							aria-label={`Remove ${downloadActionContext}`}
+							onClick={() => props.onRemove(t.id)}
+						>
+							Remove
+						</Button>
+					) : null}
 				</div>
 			</div>
 

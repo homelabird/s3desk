@@ -9,6 +9,8 @@ type UseJobsPageSurfaceStateArgs = {
   apiToken: string
   profileId: string | null
   initialDeletePrefill: DeleteJobPrefill | null
+  initialJobId?: string
+  jobRequestKey?: string
 }
 
 export type JobsLogDrawerRequestState = {
@@ -25,6 +27,8 @@ export function useJobsPageSurfaceState({
   apiToken,
   profileId,
   initialDeletePrefill,
+  initialJobId,
+  jobRequestKey,
 }: UseJobsPageSurfaceStateArgs) {
   const bucketStorageKey = useMemo(
     () => profileScopedStorageKey('jobs', apiToken, profileId, 'bucket'),
@@ -36,8 +40,8 @@ export function useJobsPageSurfaceState({
   })
 
   const [createDeleteOpen, setCreateDeleteOpen] = useState(() => initialDeletePrefill !== null)
-  const [detailsOpen, setDetailsOpen] = useState(false)
-  const [detailsJobId, setDetailsJobId] = useState<string | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(!!initialJobId)
+  const [detailsJobId, setDetailsJobId] = useState<string | null>(initialJobId ?? null)
   const [logDrawerRequest, setLogDrawerRequest] = useState<JobsLogDrawerRequestState>({ jobId: null, nonce: 0 })
   const [logClearRequest, setLogClearRequest] = useState<JobsLogClearRequestState>({ jobIds: [], nonce: 0 })
   const [deleteJobPrefill, setDeleteJobPrefill] = useState<DeleteJobPrefill | null>(() => initialDeletePrefill)
@@ -71,6 +75,11 @@ export function useJobsPageSurfaceState({
     setDeleteJobPrefill(initialDeletePrefill)
     setCreateDeleteOpen(true)
   }, [initialDeletePrefill])
+  useEffect(() => {
+    if (!initialJobId) return
+    setDetailsJobId(initialJobId)
+    setDetailsOpen(true)
+  }, [initialJobId, jobRequestKey])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const beginDeleteRequest = useCallback(() => {

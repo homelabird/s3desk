@@ -122,46 +122,35 @@ describe('useTransfersTaskActions', () => {
 		expect(uploadItemsByTaskIdRef.current['u1']).toBeUndefined()
 	})
 
-	it('clears all transfers without aborting or removing uploads that are committing', () => {
-		const downloadAbort = vi.fn()
-		const uploadAbort = vi.fn()
-		const commitAbort = vi.fn()
-		const downloadAbortByTaskIdRef = { current: { d1: downloadAbort } }
-		const downloadEstimatorByTaskIdRef = { current: { d1: {} } }
-		const uploadAbortByTaskIdRef = { current: { u1: uploadAbort, u2: commitAbort } }
-		const uploadEstimatorByTaskIdRef = { current: { u1: {}, u2: {} } }
-		const uploadItemsByTaskIdRef = { current: { u1: {}, u2: {} } }
-
+	it('clears finished transfers while preserving every active phase and its resources', () => {
+		const downloadStatuses: DownloadTask['status'][] = ['queued', 'waiting', 'running', 'succeeded', 'failed', 'canceled']
+		const uploadStatuses: UploadTask['status'][] = ['queued', 'staging', 'commit', 'waiting_job', 'succeeded', 'failed', 'canceled']
+		const abort = vi.fn()
+		const downloadAbortByTaskIdRef = { current: Object.fromEntries(downloadStatuses.map((status) => [status, abort])) }
+		const downloadEstimatorByTaskIdRef = { current: Object.fromEntries(downloadStatuses.map((status) => [status, {}])) }
+		const uploadAbortByTaskIdRef = { current: Object.fromEntries(uploadStatuses.map((status) => [status, abort])) }
+		const uploadEstimatorByTaskIdRef = { current: Object.fromEntries(uploadStatuses.map((status) => [status, {}])) }
+		const uploadItemsByTaskIdRef = { current: Object.fromEntries(uploadStatuses.map((status) => [status, {}])) }
 		const { result } = renderHook(() => {
-			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([buildDownloadTask('d1', 'running')])
-			const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([
-				buildUploadTask('u1', 'queued'),
-				buildUploadTask('u2', 'commit'),
-			])
-			const actions = useTransfersTaskActions({
-				setDownloadTasks,
-				setUploadTasks,
-				downloadAbortByTaskIdRef,
-				downloadEstimatorByTaskIdRef,
-				uploadAbortByTaskIdRef,
-				uploadEstimatorByTaskIdRef,
-				uploadItemsByTaskIdRef,
-			})
+			const [downloadTasks, setDownloadTasks] = useState(downloadStatuses.map((status) => buildDownloadTask(status, status)))
+			const [uploadTasks, setUploadTasks] = useState(uploadStatuses.map((status) => buildUploadTask(status, status)))
+			const actions = useTransfersTaskActions({ setDownloadTasks, setUploadTasks, downloadAbortByTaskIdRef,
+				downloadEstimatorByTaskIdRef, uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef })
 			return { downloadTasks, uploadTasks, ...actions }
 		})
-
 		act(() => {
-			result.current.clearAllTransfers()
+			for (const status of ['queued', 'waiting', 'running']) result.current.removeDownloadTask(status)
+			for (const status of ['queued', 'staging', 'commit', 'waiting_job']) result.current.removeUploadTask(status)
+			result.current.clearFinishedTransfers()
 		})
-
-		expect(downloadAbort).toHaveBeenCalledTimes(1)
-		expect(uploadAbort).toHaveBeenCalledTimes(1)
-		expect(commitAbort).not.toHaveBeenCalled()
-		expect(result.current.downloadTasks).toEqual([])
-		expect(result.current.uploadTasks.map((task) => task.id)).toEqual(['u2'])
-		expect(uploadAbortByTaskIdRef.current['u1']).toBeUndefined()
-		expect(uploadAbortByTaskIdRef.current['u2']).toBe(commitAbort)
-		expect(uploadEstimatorByTaskIdRef.current['u2']).toBeDefined()
-		expect(uploadItemsByTaskIdRef.current['u2']).toBeDefined()
+		expect(abort).not.toHaveBeenCalled()
+		expect(result.current.downloadTasks.map((task) => task.status)).toEqual(['queued', 'waiting', 'running'])
+		expect(result.current.uploadTasks.map((task) => task.status)).toEqual(['queued', 'staging', 'commit', 'waiting_job'])
+		for (const ref of [downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef]) {
+			expect(Object.keys(ref.current)).toEqual(['queued', 'waiting', 'running'])
+		}
+		for (const ref of [uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef]) {
+			expect(Object.keys(ref.current)).toEqual(['queued', 'staging', 'commit', 'waiting_job'])
+		}
 	})
 })

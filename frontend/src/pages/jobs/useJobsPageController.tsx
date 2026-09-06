@@ -10,6 +10,8 @@ import { useJobsPageControllerState } from './useJobsPageControllerState'
 type Props = {
   apiToken: string
   profileId: string | null
+  initialJobId?: string
+  jobRequestKey?: string
 }
 
 export function useJobsPageController(props: Props) {
@@ -26,6 +28,8 @@ export function useJobsPageController(props: Props) {
     apiToken: props.apiToken,
     isOffline,
     locationState: location.state,
+    initialJobId: props.initialJobId,
+    jobRequestKey: props.jobRequestKey,
     profileId: props.profileId,
     queryClient,
     screens,

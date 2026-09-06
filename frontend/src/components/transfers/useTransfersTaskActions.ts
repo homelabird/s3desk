@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
-import type { DownloadTask, UploadTask } from './transferTypes'
+import { isTransferFinished, type DownloadTask, type UploadTask } from './transferTypes'
 
 type UseTransfersTaskActionsParams = {
 	setDownloadTasks: Dispatch<SetStateAction<DownloadTask[]>>
@@ -53,11 +53,13 @@ export function useTransfersTaskActions({
 
 	const removeDownloadTask = useCallback(
 		(taskId: string) => {
-			const abort = downloadAbortByTaskIdRef.current[taskId]
-			if (abort) abort()
-			delete downloadAbortByTaskIdRef.current[taskId]
-			delete downloadEstimatorByTaskIdRef.current[taskId]
-			setDownloadTasks((prev) => prev.filter((t) => t.id !== taskId))
+			setDownloadTasks((prev) => {
+				if (!prev.some((task) => task.id === taskId && isTransferFinished(task.status))) return prev
+				downloadAbortByTaskIdRef.current[taskId]?.()
+				delete downloadAbortByTaskIdRef.current[taskId]
+				delete downloadEstimatorByTaskIdRef.current[taskId]
+				return prev.filter((task) => task.id !== taskId)
+			})
 		},
 		[downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef, setDownloadTasks],
 	)
@@ -84,14 +86,16 @@ export function useTransfersTaskActions({
 
 	const removeUploadTask = useCallback(
 		(taskId: string) => {
-			const abort = uploadAbortByTaskIdRef.current[taskId]
-			if (abort) abort()
-			delete uploadAbortByTaskIdRef.current[taskId]
-			delete uploadEstimatorByTaskIdRef.current[taskId]
-			delete uploadItemsByTaskIdRef.current[taskId]
-			setUploadTasks((prev) => prev.filter((t) => t.id !== taskId))
+			setUploadTasks((prev) => {
+				if (!prev.some((task) => task.id === taskId && isTransferFinished(task.status))) return prev
+				uploadAbortByTaskIdRef.current[taskId]?.()
+				delete uploadAbortByTaskIdRef.current[taskId]
+				delete uploadEstimatorByTaskIdRef.current[taskId]
+				delete uploadItemsByTaskIdRef.current[taskId]
+				return prev.filter((task) => task.id !== taskId)
+			})
 		},
-		[setUploadTasks, uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef],
+		[uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef, setUploadTasks],
 	)
 
 	const clearCompletedUploads = useCallback(() => {
@@ -122,30 +126,26 @@ export function useTransfersTaskActions({
 		uploadItemsByTaskIdRef,
 	])
 
-	const clearAllTransfers = useCallback(() => {
-		for (const abort of Object.values(downloadAbortByTaskIdRef.current)) abort()
-		downloadAbortByTaskIdRef.current = {}
-		downloadEstimatorByTaskIdRef.current = {}
-		setDownloadTasks([])
+	const clearFinishedTransfers = useCallback(() => {
+		setDownloadTasks((prev) => {
+			for (const task of prev) {
+				if (!isTransferFinished(task.status)) continue
+				delete downloadAbortByTaskIdRef.current[task.id]
+				delete downloadEstimatorByTaskIdRef.current[task.id]
+			}
+			return prev.filter((task) => !isTransferFinished(task.status))
+		})
 		setUploadTasks((prev) => {
 			for (const task of prev) {
-				if (task.status === 'commit') continue
-				uploadAbortByTaskIdRef.current[task.id]?.()
+				if (!isTransferFinished(task.status)) continue
 				delete uploadAbortByTaskIdRef.current[task.id]
 				delete uploadEstimatorByTaskIdRef.current[task.id]
 				delete uploadItemsByTaskIdRef.current[task.id]
 			}
-			return prev.filter((task) => task.status === 'commit')
+			return prev.filter((task) => !isTransferFinished(task.status))
 		})
-	}, [
-		downloadAbortByTaskIdRef,
-		downloadEstimatorByTaskIdRef,
-		setDownloadTasks,
-		setUploadTasks,
-		uploadAbortByTaskIdRef,
-		uploadEstimatorByTaskIdRef,
-		uploadItemsByTaskIdRef,
-	])
+	}, [downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef, setDownloadTasks, setUploadTasks,
+		uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef])
 
 	return {
 		updateDownloadTask,
@@ -158,6 +158,6 @@ export function useTransfersTaskActions({
 		removeUploadTask,
 		clearCompletedUploads,
 		abortAllTransfers,
-		clearAllTransfers,
+		clearFinishedTransfers,
 	}
 }
