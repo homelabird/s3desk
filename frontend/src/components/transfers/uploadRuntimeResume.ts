@@ -22,7 +22,7 @@ const uploadChunkStatusBatchMaxParts = 10_000
 export async function resolveExistingResumeChunks(
 	args: ResolveExistingResumeChunksArgs,
 ): Promise<ExistingResumeChunksResult> {
-	const existingChunksByPath: Record<string, number[]> = {}
+	const existingChunksByPath: Record<string, number[]> = Object.create(null)
 	const requests: Array<{ path: string; total: number; chunkSize: number; fileSize: number }> = []
 
 	for (const item of args.items) {

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from 'vitest'
 
 import type { UploadTask } from '../transferTypes'
@@ -143,5 +145,16 @@ describe('uploadRuntimePlanning', () => {
 			resumeFilesNext: undefined,
 			chunkSizeByPath: {},
 		})
+	})
+
+	it('preserves chunk sizes for the __proto__ filename', () => {
+		const plan = buildResumeTrackingPlan({
+			items: [fileItem('__proto__', 20)],
+			attemptMode: 'staging',
+			resumeFilesByPath: new Map(),
+			chunkThresholdBytes: 10,
+			chunkSizeBytes: 12,
+		})
+		expect(Object.entries(plan.chunkSizeByPath)).toEqual([['__proto__', 12]])
 	})
 })

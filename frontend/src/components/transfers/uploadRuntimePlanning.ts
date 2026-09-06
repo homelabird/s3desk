@@ -95,7 +95,7 @@ export function buildResumeTrackingPlan(args: {
 	chunkSizeBytes: number
 }) {
 	const shouldTrackResume = args.attemptMode !== 'presigned'
-	const chunkSizeByPath: Record<string, number> = {}
+	const chunkSizeByPath: Record<string, number> = Object.create(null)
 
 	const resumeFilesNext = shouldTrackResume
 		? args.items

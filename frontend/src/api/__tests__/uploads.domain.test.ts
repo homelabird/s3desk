@@ -118,6 +118,23 @@ describe('uploadFilesWithProgress', () => {
 		globalThis.XMLHttpRequest = originalXMLHttpRequest
 	})
 
+	it.each([['constructor'], ['toString'], ['__proto__'], ['constructor', 'toString', '__proto__']])(
+		'uploads filenames that overlap inherited properties: %s',
+		async (...names) => {
+			const handle = uploadFilesWithProgress(
+				{ baseUrl: 'http://example.test/api/v1', apiToken: 'test-token' },
+				'profile-1', 'upload-1', names.map((name) => buildItem('data', name)),
+				{ chunkSizeBytes: 2, chunkThresholdBytes: 1, chunkSizeBytesByPath: {}, existingChunksByPath: {} },
+			)
+			await expect(handle.promise).resolves.toEqual({ skipped: 0 })
+			for (const name of names) {
+				const requests = FakeXMLHttpRequest.requests.filter((request) => request.headers['x-upload-relative-path'] === name)
+				expect(requests).toHaveLength(2)
+				expect(requests.map((request) => request.headers['x-upload-chunk-size'])).toEqual(['2', '2'])
+			}
+		},
+	)
+
 	it('routes nested relative paths through chunk uploads even below the chunk threshold', async () => {
 		const handle = uploadFilesWithProgress(
 			{ baseUrl: 'http://example.test/api/v1', apiToken: 'playwright-token' },

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { APIError, RequestAbortedError, type UploadFileItem } from '../../../api/client'
@@ -11,6 +13,20 @@ function uploadItem(name = 'folder/report.bin', size = 256): UploadFileItem {
 }
 
 describe('resolveExistingResumeChunks', () => {
+	it.each([false, true])('preserves __proto__ chunk metadata with compatibility fallback=%s', async (fallback) => {
+		const getUploadChunksBatch = fallback
+			? vi.fn().mockRejectedValue(new APIError({ status: 404, code: 'not_found', message: 'route not found' }))
+			: vi.fn().mockResolvedValue({ items: [{ path: '__proto__', present: [0, 2] }] })
+		const result = await resolveExistingResumeChunks({
+			api: { uploads: { getUploadChunksBatch, getUploadChunks: vi.fn().mockResolvedValue({ present: [0, 2] }) } } as never,
+			profileId: 'profile-1',
+			uploadId: 'session-1',
+			items: [uploadItem('__proto__')],
+			resumeFilesByPath: new Map([['__proto__', { size: 256, chunkSizeBytes: 64 }]]),
+		})
+		expect(result.ok && result.available && Object.entries(result.existingChunksByPath)).toEqual([['__proto__', [0, 2]]])
+	})
+
 	it('loads present chunks for matching resumable files', async () => {
 		const item = uploadItem()
 		const getUploadChunks = vi.fn()

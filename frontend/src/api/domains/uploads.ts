@@ -144,6 +144,8 @@ export function uploadFilesWithProgress(
 	const chunkConcurrency = Math.max(1, args.chunkConcurrency ?? 8)
 	const chunkThresholdBytes = Math.max(1, args.chunkThresholdBytes ?? 256 * 1024 * 1024)
 	const totalBytes = files.reduce((acc, item) => acc + (item.file?.size ?? 0), 0)
+	const chunkSizesByPath = new Map(Object.entries(args.chunkSizeBytesByPath ?? {}))
+	const existingChunksByPath = new Map(Object.entries(args.existingChunksByPath ?? {}))
 
 	if (files.length === 0) {
 		return { promise: Promise.resolve({ skipped: 0 }), abort: () => {} }
@@ -156,7 +158,7 @@ export function uploadFilesWithProgress(
 		// Route folder selections through the chunked path so X-Upload-Relative-Path
 		// remains the source of truth for nested uploads.
 		if (key.includes('/')) return true
-		if (args.chunkSizeBytesByPath?.[key]) return true
+		if (chunkSizesByPath.get(key)) return true
 		return (item.file?.size ?? 0) >= chunkThresholdBytes
 	}
 	const chunkedItems = files.filter(isChunkedItem)
@@ -165,10 +167,10 @@ export function uploadFilesWithProgress(
 	if (files.length === 1 && chunkedItems.length === 1) {
 		const only = chunkedItems[0]
 		const key = resolveUploadFilename(only)
-		const existing = args.existingChunksByPath?.[key] ?? args.existingChunkIndices
+		const existing = existingChunksByPath.get(key) ?? args.existingChunkIndices
 		return uploadFileChunksWithProgress(config, profileId, uploadId, only, {
 			onProgress: args.onProgress,
-			chunkSizeBytes: args.chunkSizeBytesByPath?.[key] ?? chunkSizeBytes,
+			chunkSizeBytes: chunkSizesByPath.get(key) ?? chunkSizeBytes,
 			chunkConcurrency,
 			existingChunkIndices: existing,
 		})
@@ -311,9 +313,9 @@ export function uploadFilesWithProgress(
 						chunkLoadedByPath.set(key, p.loadedBytes)
 						emitProgress()
 					},
-					chunkSizeBytes: args.chunkSizeBytesByPath?.[key] ?? chunkSizeBytes,
+					chunkSizeBytes: chunkSizesByPath.get(key) ?? chunkSizeBytes,
 					chunkConcurrency,
-					existingChunkIndices: args.existingChunksByPath?.[key],
+					existingChunkIndices: existingChunksByPath.get(key),
 				})
 				aborters.push(handle.abort)
 				try {
