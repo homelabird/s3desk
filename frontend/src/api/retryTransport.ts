@@ -108,46 +108,52 @@ export async function fetchWithRetry(url: string, init: RequestInit, options: Re
 	const timeoutMs = options.timeoutMs ?? (idempotent ? DEFAULT_TIMEOUT_MS : 0)
 	const baseDelayMs = options.retryDelayMs ?? retryDefaults.retryDelayMs
 
+	const statusScope = Symbol()
 	let attempt = 0
-	for (;;) {
-		if (init.signal?.aborted) throw new RequestAbortedError()
-		try {
-			const res = await fetchWithTimeout(url, init, timeoutMs)
-			if (!res.ok && idempotent && attempt < retries) {
-				const retryAfterSeconds = parseRetryAfterSeconds(res.headers.get('Retry-After'))
-				const normalizedError = await readNormalizedErrorFromResponse(res)
-				const retryDueToStatus = shouldRetryStatus(res.status)
-				const retryDueToNormalized = normalizedError?.retryable === true
-				if (retryDueToStatus || retryDueToNormalized) {
-					const delayMs =
-						retryAfterSeconds != null ? Math.min(retryAfterSeconds * 1000, MAX_RETRY_DELAY_MS) : retryDelayMs(baseDelayMs, attempt)
+	try {
+		for (;;) {
+			if (init.signal?.aborted) throw new RequestAbortedError()
+			try {
+				const res = await fetchWithTimeout(url, init, timeoutMs)
+				if (!res.ok && idempotent && attempt < retries) {
+					const retryAfterSeconds = parseRetryAfterSeconds(res.headers.get('Retry-After'))
+					const normalizedError = await readNormalizedErrorFromResponse(res)
+					const retryDueToStatus = shouldRetryStatus(res.status)
+					const retryDueToNormalized = normalizedError?.retryable === true
+					if (retryDueToStatus || retryDueToNormalized) {
+						const delayMs =
+							retryAfterSeconds != null ? Math.min(retryAfterSeconds * 1000, MAX_RETRY_DELAY_MS) : retryDelayMs(baseDelayMs, attempt)
+						const delayLabel = retryDelayLabel(delayMs)
+						const reasonParts: string[] = [retryDueToStatus ? `HTTP ${res.status}` : `normalized=${normalizedError?.code ?? 'retryable'}`]
+						if (retryAfterSeconds != null) reasonParts.push(`Retry-After ${retryAfterSeconds}s`)
+						if (retryDueToStatus && normalizedError?.code) reasonParts.push(`normalized=${normalizedError.code}`)
+						const reason = reasonParts.join(', ')
+						logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} in ${delayLabel} (${reason})` })
+						const message = `Temporary request failure (${reason}). Auto-retry in ${delayLabel}.`
+						publishNetworkStatus({ kind: 'unstable', message }, statusScope)
+						await sleep(delayMs, init.signal)
+						publishNetworkStatus({ kind: 'unstable', message: 'Retrying request…' }, statusScope)
+						attempt += 1
+						continue
+					}
+				}
+				return res
+			} catch (err) {
+				if (init.signal?.aborted) throw new RequestAbortedError()
+				if (idempotent && attempt < retries && isRetryableFetchError(err)) {
+					const delayMs = retryDelayMs(baseDelayMs, attempt)
 					const delayLabel = retryDelayLabel(delayMs)
-					const reasonParts: string[] = [retryDueToStatus ? `HTTP ${res.status}` : `normalized=${normalizedError?.code ?? 'retryable'}`]
-					if (retryAfterSeconds != null) reasonParts.push(`Retry-After ${retryAfterSeconds}s`)
-					if (retryDueToStatus && normalizedError?.code) reasonParts.push(`normalized=${normalizedError.code}`)
-					const reason = reasonParts.join(', ')
-					logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} in ${delayLabel} (${reason})` })
-					const message = `Temporary request failure (${reason}). Auto-retry in ${delayLabel}.`
-					publishNetworkStatus({ kind: 'unstable', message })
+					logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} in ${delayLabel} (network error)` })
+					publishNetworkStatus({ kind: 'unstable', message: `Network unstable. Auto-retry in ${delayLabel}.` }, statusScope)
 					await sleep(delayMs, init.signal)
+					publishNetworkStatus({ kind: 'unstable', message: 'Retrying request…' }, statusScope)
 					attempt += 1
 					continue
 				}
+				throw err
 			}
-			if (attempt > 0 && res.ok) clearNetworkStatus()
-			return res
-		} catch (err) {
-			if (init.signal?.aborted) throw new RequestAbortedError()
-			if (idempotent && attempt < retries && isRetryableFetchError(err)) {
-				const delayMs = retryDelayMs(baseDelayMs, attempt)
-				const delayLabel = retryDelayLabel(delayMs)
-				logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} in ${delayLabel} (network error)` })
-				publishNetworkStatus({ kind: 'unstable', message: `Network unstable. Auto-retry in ${delayLabel}.` })
-				await sleep(delayMs, init.signal)
-				attempt += 1
-				continue
-			}
-			throw err
 		}
+	} finally {
+		clearNetworkStatus(statusScope)
 	}
 }

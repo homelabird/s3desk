@@ -48,10 +48,10 @@ export function NetworkStatusBanner() {
 	useEffect(() => {
 		if (!status) return
 		if (status.kind === 'offline') return
-		const ttl = status.kind === 'online' ? 3000 : 10000
+		const duration = status.kind === 'online' ? 3000 : 10000
+		const ttl = Math.max(0, duration - (Date.now() - (status.ts ?? Date.now())))
 		const id = window.setTimeout(() => {
-			clearNetworkStatus()
-			setStatus(null)
+			clearNetworkStatus(status.scope)
 		}, ttl)
 		return () => window.clearTimeout(id)
 	}, [status])

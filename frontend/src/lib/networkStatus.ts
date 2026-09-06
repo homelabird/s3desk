@@ -4,6 +4,7 @@ export type NetworkStatusDetail = {
 	kind: NetworkStatusKind
 	message: string
 	ts?: number
+	scope?: symbol
 }
 
 export type NetworkLogKind = 'status' | 'retry'
@@ -18,23 +19,35 @@ const statusEventName = 'network-status'
 const clearEventName = 'network-status:clear'
 const throttleWindowMs = 4000
 let lastEventAt = 0
+const defaultStatusScope = Symbol()
+const statuses = new Map<symbol, NetworkStatusDetail>()
 const logEventName = 'network-log'
 const clearLogEventName = 'network-log:clear'
 const maxLogEntries = 50
 let networkLog: NetworkLogEvent[] = []
 
-export function publishNetworkStatus(detail: NetworkStatusDetail) {
+export function publishNetworkStatus(detail: NetworkStatusDetail, scope = defaultStatusScope) {
 	if (typeof window === 'undefined') return
 	const now = Date.now()
-	if (now - lastEventAt < throttleWindowMs && detail.kind === 'unstable') return
-	lastEventAt = now
-	logNetworkEvent({ kind: 'status', message: detail.message || detail.kind })
-	window.dispatchEvent(new CustomEvent<NetworkStatusDetail>(statusEventName, { detail: { ...detail, ts: now } }))
+	const current = { ...detail, scope, ts: now }
+	statuses.delete(scope)
+	statuses.set(scope, current)
+	if (now - lastEventAt >= throttleWindowMs || detail.kind !== 'unstable') {
+		lastEventAt = now
+		logNetworkEvent({ kind: 'status', message: detail.message || detail.kind })
+	}
+	window.dispatchEvent(new CustomEvent<NetworkStatusDetail>(statusEventName, { detail: current }))
 }
 
-export function clearNetworkStatus() {
+export function clearNetworkStatus(scope = defaultStatusScope) {
 	if (typeof window === 'undefined') return
-	window.dispatchEvent(new Event(clearEventName))
+	statuses.delete(scope)
+	const remaining = Array.from(statuses.values()).at(-1)
+	if (remaining) {
+		window.dispatchEvent(new CustomEvent<NetworkStatusDetail>(statusEventName, { detail: remaining }))
+	} else {
+		window.dispatchEvent(new Event(clearEventName))
+	}
 }
 
 export function subscribeNetworkStatus(onShow: (detail: NetworkStatusDetail) => void, onClear: () => void): () => void {

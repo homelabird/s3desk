@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIClient, RequestAbortedError, RequestTimeoutError, RETRY_COUNT_STORAGE_KEY, RETRY_DELAY_STORAGE_KEY } from '../client'
-import { fetchWithTimeout } from '../retryTransport'
-import { clearNetworkLog, getNetworkLog } from '../../lib/networkStatus'
+import { fetchWithRetry, fetchWithTimeout } from '../retryTransport'
+import { clearNetworkLog, clearNetworkStatus, getNetworkLog, subscribeNetworkStatus, type NetworkStatusDetail } from '../../lib/networkStatus'
 
 function jsonResponse(status: number, body: unknown, headers: Record<string, string> = {}): Response {
 	return new Response(JSON.stringify(body), {
@@ -222,6 +222,65 @@ describe('APIClient retry semantics', () => {
 		controller.abort()
 		await vi.advanceTimersByTimeAsync(0)
 		expect(abortOutcome).toBeInstanceOf(RequestAbortedError)
+	})
+
+	it('keeps another request warning when an unrelated request succeeds or the latest retry is canceled', async () => {
+		vi.useFakeTimers()
+		const fetchMock = vi.fn()
+			.mockResolvedValueOnce(jsonResponse(503, {}, { 'Retry-After': '2' }))
+			.mockResolvedValueOnce(jsonResponse(503, {}, { 'Retry-After': '3' }))
+			.mockImplementation(() => Promise.resolve(jsonResponse(200, {})))
+		vi.stubGlobal('fetch', fetchMock)
+		let current: NetworkStatusDetail | null = null
+		const readStatus = () => current
+		const unsubscribe = subscribeNetworkStatus((detail) => { current = detail }, () => { current = null })
+		const controller = new AbortController()
+		try {
+			const first = fetchWithRetry('/first', { method: 'GET' }, { retries: 1 })
+			await vi.advanceTimersByTimeAsync(0)
+			const firstStatus = readStatus()
+			expect(firstStatus?.message).toContain('Auto-retry in 2s')
+			const second = fetchWithRetry('/second', { method: 'GET', signal: controller.signal }, { retries: 1 })
+			const canceled = expect(second).rejects.toBeInstanceOf(RequestAbortedError)
+			await vi.advanceTimersByTimeAsync(0)
+			expect(readStatus()?.message).toContain('Auto-retry in 3s')
+			await fetchWithRetry('/unrelated', { method: 'GET' }, { retries: 0 })
+			clearNetworkStatus()
+			expect(readStatus()?.message).toContain('Auto-retry in 3s')
+			controller.abort()
+			await canceled
+			expect(readStatus()).toBe(firstStatus)
+			await vi.advanceTimersByTimeAsync(2000)
+			await first
+			expect(readStatus()).toBeNull()
+		} finally {
+			controller.abort()
+			await vi.runAllTimersAsync()
+			unsubscribe()
+		}
+	})
+
+	it('ends the retry notice after exhaustion and leaves no stale notice after manual recovery', async () => {
+		vi.useFakeTimers()
+		vi.stubGlobal('fetch', vi.fn()
+			.mockResolvedValueOnce(jsonResponse(503, {}, { 'Retry-After': '1' }))
+			.mockResolvedValueOnce(jsonResponse(503, {}))
+			.mockResolvedValueOnce(jsonResponse(200, {})))
+		const show = vi.fn()
+		const clear = vi.fn()
+		const unsubscribe = subscribeNetworkStatus(show, clear)
+		try {
+			const failed = fetchWithRetry('/buckets', { method: 'GET' }, { retries: 1 })
+			await vi.advanceTimersByTimeAsync(0)
+			expect(show).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('Auto-retry in 1s') }))
+			await vi.advanceTimersByTimeAsync(1000)
+			expect((await failed).status).toBe(503)
+			expect(clear).toHaveBeenCalledTimes(1)
+			expect((await fetchWithRetry('/buckets', { method: 'GET' }, { retries: 1 })).ok).toBe(true)
+			expect(clear).toHaveBeenCalledTimes(2)
+		} finally {
+			unsubscribe()
+		}
 	})
 
 	it('returns timeout-free raw streams without buffering their body', async () => {

@@ -10,7 +10,6 @@ import {
 	installApiFixtures,
 	retryAfterErrorResponse,
 	seedLocalStorage,
-	sequenceFixture,
 	type ApiFixture,
 	withDelay,
 } from './support/apiFixtures'
@@ -127,20 +126,21 @@ test.describe('Objects page network chaos', () => {
 	test('recovers after a transient list failure when refresh is triggered', async ({ page }) => {
 		test.setTimeout(45_000)
 		const transientFailure = retryAfterErrorResponse(503, 'list_temporarily_unavailable', 'temporary outage', 0)
+		let recovered = false
 		await installObjectsFixtures(
 			page,
-			sequenceFixture('GET', `/api/v1/buckets/${defaultStorage.bucket}/objects`, [
-				transientFailure,
-				transientFailure,
-				transientFailure,
-				transientFailure,
-				{
-					json: buildObjectsListFixture({
-						bucket: defaultStorage.bucket,
-						items: [objectItem],
-					}),
+			buildObjectsFixture({
+				handler: ({ url }) => {
+					const foldersOnly = url.searchParams.get('prefixesOnly') === 'true'
+					if (!foldersOnly && !recovered) return transientFailure
+					return {
+						json: buildObjectsListFixture({
+							bucket: defaultStorage.bucket,
+							items: foldersOnly ? [] : [objectItem],
+						}),
+					}
 				},
-			]),
+			}),
 		)
 		await seedStorage(page)
 
@@ -149,6 +149,7 @@ test.describe('Objects page network chaos', () => {
 		const listError = page.getByRole('alert').filter({ hasText: failedToListObjectsTitle() })
 		await expect(listError).toBeVisible({ timeout: 30_000 })
 		await expect(listError).toContainText('temporary outage')
+		recovered = true
 
 		const moreButton = await getToolbarMoreButton(page)
 		await moreButton.scrollIntoViewIfNeeded()
