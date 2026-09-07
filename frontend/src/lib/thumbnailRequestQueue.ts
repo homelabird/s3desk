@@ -27,12 +27,17 @@ function pumpThumbnailQueue() {
 		if (!task || task.canceled) continue
 		task.started = true
 		inFlight += 1
-		const handle = task.start()
-		task.abortCurrent = handle.abort
-		handle.promise.then(task.resolve, task.reject).finally(() => {
-			inFlight = Math.max(0, inFlight - 1)
-			pumpThumbnailQueue()
-		})
+		try {
+			const handle = task.start()
+			task.abortCurrent = handle.abort
+			handle.promise.then(task.resolve, task.reject).finally(() => {
+				inFlight -= 1
+				pumpThumbnailQueue()
+			})
+		} catch (err) {
+			inFlight -= 1
+			task.reject(err)
+		}
 	}
 	if (pendingQueueHead === pendingQueue.length) {
 		pendingQueue.length = 0

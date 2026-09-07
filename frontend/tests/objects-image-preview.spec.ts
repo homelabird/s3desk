@@ -191,6 +191,31 @@ function rowFor(page: Page, key: string) {
 }
 
 test.describe('Objects image preview', () => {
+	test('continues loading thumbnails after synchronous XHR startup failures', async ({ page }) => {
+		const pageErrors: string[] = []
+		page.on('pageerror', (error) => pageErrors.push(error.message))
+		await page.addInitScript(() => {
+			const open = XMLHttpRequest.prototype.open
+			let failed = 0
+			XMLHttpRequest.prototype.open = function (method, url, async = true, username, password) {
+				if (String(url).includes('/objects/thumbnail?') && failed++ < 4) {
+					throw new DOMException('Thumbnail startup failed', 'NetworkError')
+				}
+				return open.call(this, method, url, async, username, password)
+			}
+		})
+		const items = Array.from({ length: 8 }, (_, index) => ({ ...fixtures[0], key: `queue-${index}.png` }))
+		await stubObjectsImagePreviewApi(page, items)
+		await seedStorage(page, { detailsOpen: false })
+		await gotoObjectsPage(page)
+		const lastRow = rowFor(page, 'queue-7.png')
+		await lastRow.scrollIntoViewIfNeeded()
+		const thumbnail = lastRow.getByRole('img', { name: 'Thumbnail of queue-7.png' })
+		await expect(thumbnail).toBeVisible()
+		await expect.poll(() => thumbnail.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+		expect(pageErrors).toEqual([])
+	})
+
 	test('details panel viewer supports zoom and reset controls', async ({ page }) => {
 		const passiveListenerErrors: string[] = []
 		page.on('console', (message) => {

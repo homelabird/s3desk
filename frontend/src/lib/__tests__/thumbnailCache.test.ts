@@ -57,6 +57,38 @@ describe('thumbnailCache', () => {
 		expect(cache.get('profile:bucket:key:24')).toBe('blob:thumb-1')
 	})
 
+	it('bounds failure markers and retains the most recently recorded failures', () => {
+		const cache = createThumbnailCache({ maxEntries: 2 })
+		cache.markFailed('first')
+		cache.markFailed('second')
+		cache.markFailed('first')
+		cache.markFailed('third')
+
+		expect(cache.isFailed('first')).toBe(true)
+		expect(cache.isFailed('second')).toBe(false)
+		expect(cache.isFailed('third')).toBe(true)
+	})
+
+	it('prefers exact sizes, then the smallest larger or largest smaller thumbnail, and refreshes LRU', () => {
+		URL.revokeObjectURL = vi.fn()
+		const cache = createThumbnailCache({ maxEntries: 3 })
+		const request = { apiToken: 'token', profileId: 'profile', bucket: 'bucket', objectKey: 'image.png', size: 96 }
+		const keys = [48, 96, 192].map((size) => buildThumbnailCacheKey({ ...request, size }))
+		keys.forEach((key, index) => cache.set(key, `blob:${index}`))
+
+		expect(cache.findBestMatch(request)).toEqual({ cacheKey: keys[1], size: 96, url: 'blob:1' })
+		expect(cache.findBestMatch({ ...request, size: 64 })?.size).toBe(96)
+		expect(cache.findBestMatch({ ...request, size: 256 })?.size).toBe(192)
+		expect(cache.findBestMatch({ ...request, apiToken: 'other' })).toBeNull()
+		cache.findBestMatch({ ...request, size: 48 })
+		cache.findBestMatch(request)
+		cache.set(buildThumbnailCacheKey({ ...request, objectKey: 'other.png' }), 'blob:other')
+
+		expect(cache.get(keys[1])).toBe('blob:1')
+		expect(cache.get(keys[2])).toBeUndefined()
+		expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:2')
+	})
+
 	it('separates thumbnail cache keys by api token', () => {
 		const tokenAKey = buildThumbnailCacheKey({
 			apiToken: 'token-a',

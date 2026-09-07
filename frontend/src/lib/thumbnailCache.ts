@@ -234,7 +234,9 @@ export function createThumbnailCache(options: CacheOptions = {}): ThumbnailCache
 		findBestMatch(args: ThumbnailCacheRequest) {
 			const requested = parseThumbnailCacheKey(buildThumbnailCacheKey(args))
 			if (!requested) return null
-			const candidateKeys = findReusableCacheKeys(entries.keys(), requested)
+			const candidateKeys = entries.has(requested.cacheKey)
+				? [requested.cacheKey]
+				: findReusableCacheKeys(entries.keys(), requested)
 			for (const candidateKey of candidateKeys) {
 				const url = entries.get(candidateKey)
 				if (!url) continue
@@ -257,7 +259,13 @@ export function createThumbnailCache(options: CacheOptions = {}): ThumbnailCache
 				entries.delete(key)
 				URL.revokeObjectURL(existing)
 			}
+			failedEntries.delete(key)
 			failedEntries.set(key, Date.now() + ttlMs)
+			while (failedEntries.size > maxEntries) {
+				const oldestKey = failedEntries.keys().next().value
+				if (oldestKey === undefined) break
+				failedEntries.delete(oldestKey)
+			}
 		},
 		clear() {
 			for (const url of entries.values()) {
