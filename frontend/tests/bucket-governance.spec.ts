@@ -172,6 +172,8 @@ test('GCS governance access uses the structured IAM bindings editor', async ({ p
 		],
 		etag: 'etag-after',
 	})
+	await expect(page.locator('#a11y-status')).toHaveText('IAM bindings updated')
+	await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
 })
 
 test('Azure governance access uses the structured stored access policy editor', async ({ page }) => {
@@ -252,4 +254,6 @@ test('Azure governance access uses the structured stored access policy editor', 
 			},
 		],
 	})
+	await expect(page.locator('#a11y-status')).toHaveText('Stored access policies updated')
+	await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
 })

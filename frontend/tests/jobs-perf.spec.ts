@@ -225,7 +225,7 @@ test.describe('@perf jobs performance', () => {
 
 		const started = Date.now()
 		await logsButton.click()
-		await expect(page.getByText('Job Logs')).toBeVisible()
+		await expect(page.getByRole('dialog', { name: 'Job Logs', exact: true })).toBeVisible()
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `jobs_logs_drawer_ms=${elapsed}` })
 		expect(elapsed).toBeLessThan(1000)
@@ -241,19 +241,22 @@ test.describe('@perf objects performance', () => {
 		await setupObjectsApiMocks(page, 200)
 		const requestedUrls: string[] = []
 		page.on('request', (request) => requestedUrls.push(request.url()))
+		const requestedOverlayScript = () => requestedUrls.some((url) => {
+			const path = new URL(url).pathname
+			return /\/(?:ObjectsPageOverlays|ObjectsImageViewerModal)(?:\.tsx|-[^/]+\.js)$/.test(path)
+		})
 
 		const started = Date.now()
 		await page.goto('/objects')
 		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
 		await expect(page.getByText('object-0.txt')).toBeVisible()
-		expect(
-			requestedUrls.some((url) => {
-				const path = new URL(url).pathname
-				return path.endsWith('/ObjectsPageOverlays.tsx') || path.endsWith('/ObjectsImageViewerModal.tsx')
-			}),
-		).toBe(false)
+		expect(requestedOverlayScript()).toBe(false)
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `objects_page_render_ms=${elapsed}` })
 		expect(elapsed).toBeLessThan(3000)
+
+		await page.getByRole('button', { name: 'New folder', exact: true }).first().click()
+		await expect(page.getByRole('dialog', { name: 'New folder', exact: true })).toBeVisible()
+		expect(requestedOverlayScript()).toBe(true)
 	})
 })

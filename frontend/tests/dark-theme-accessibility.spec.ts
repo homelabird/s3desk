@@ -180,6 +180,7 @@ test.describe('dark theme accessibility scans', () => {
 		await page.getByRole('menuitem', { name: 'Edit' }).click()
 		const dialog = dialogByName(page, 'Edit Profile')
 		await expect(dialog).toBeVisible()
+		await expect(dialog.getByLabel('Name')).toHaveValue('Backup Profile')
 
 		await expectNoA11yViolations(page, dialog)
 	})

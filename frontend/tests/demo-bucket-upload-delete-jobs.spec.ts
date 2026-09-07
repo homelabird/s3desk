@@ -18,6 +18,7 @@ import {
 	expectTransferRowState,
 	gotoBucketsPage,
 	gotoJobsPage,
+	jobsTableRow,
 	gotoProfilesPage,
 	gotoUploadsPage,
 	namedTableRow,
@@ -312,5 +313,5 @@ test('@demo demo flow: profile to jobs', async ({ page }) => {
 
 	console.log('[demo] jobs')
 	await gotoJobsPage(page)
-	await expect(page.getByText('job-upload-1')).toBeVisible({ timeout: 15_000 })
+	await expect(jobsTableRow(page, 'job-upload-1').getByText('succeeded', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
