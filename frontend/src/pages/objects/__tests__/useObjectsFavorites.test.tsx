@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -696,6 +696,55 @@ describe('useObjectsFavorites', () => {
 			await Promise.resolve()
 		})
 		await waitFor(() => expect(result.current.favoritePendingKeys.has('logs/new.txt')).toBe(false))
+	})
+
+	it.each([
+		{ operation: 'add', change: 'profile' }, { operation: 'remove', change: 'profile' },
+		{ operation: 'add', change: 'auth' }, { operation: 'remove', change: 'auth' },
+	] as const)('keeps an offline favorite $operation bound to its origin after $change changes', async ({ operation, change }) => {
+		const key = 'docs/readme.txt'
+		const originalKeys = new Set(operation === 'remove' ? [key] : [])
+		const listObjectFavorites = vi.fn(({ bucket }: { bucket: string }) => Promise.resolve({
+			bucket, prefix: '', count: originalKeys.size,
+			keys: Array.from(originalKeys), hydrated: true, items: [],
+		}))
+		const originalCreate = vi.fn(async () => {
+			originalKeys.add(key)
+			return { key, createdAt: '2026-09-08T00:00:00Z' }
+		})
+		const originalDelete = vi.fn(async () => { originalKeys.delete(key) })
+		const nextCreate = vi.fn().mockResolvedValue({ key, createdAt: '2026-09-08T00:00:00Z' })
+		const nextDelete = vi.fn().mockResolvedValue(undefined)
+		const api = createMockApiClient({ objects: { listObjectFavorites, createObjectFavorite: originalCreate, deleteObjectFavorite: originalDelete } })
+		const nextApi = createMockApiClient({ objects: { listObjectFavorites, createObjectFavorite: nextCreate, deleteObjectFavorite: nextDelete } })
+		const { Wrapper, queryClient } = createWrapper()
+		const initialProps = { api, profileId: 'profile-1', bucket: 'bucket-a', apiToken: 'token-a' }
+		const { result, rerender } = renderHook(
+			(props) => useObjectsFavorites({ ...props, objectsPages: [], hydrateItems: true }),
+			{ initialProps, wrapper: Wrapper },
+		)
+		try {
+			await waitFor(() => expect(result.current.favoritesQuery.isSuccess).toBe(true))
+			onlineManager.setOnline(false)
+			act(() => result.current.toggleFavorite(key))
+			await waitFor(() => expect(result.current.favoritePendingKeys.has(key)).toBe(true))
+			expect(originalCreate).not.toHaveBeenCalled()
+			expect(originalDelete).not.toHaveBeenCalled()
+
+			rerender({ api: nextApi, profileId: change === 'profile' ? 'profile-2' : 'profile-1', bucket: change === 'profile' ? 'bucket-b' : 'bucket-a', apiToken: 'token-b' })
+			onlineManager.setOnline(true)
+			const originalMutation = operation === 'add' ? originalCreate : originalDelete
+			await waitFor(() => expect(originalCreate.mock.calls.length + originalDelete.mock.calls.length + nextCreate.mock.calls.length + nextDelete.mock.calls.length).toBe(1))
+			expect(nextCreate).not.toHaveBeenCalled()
+			expect(nextDelete).not.toHaveBeenCalled()
+			expect(originalMutation).toHaveBeenCalledWith({ profileId: 'profile-1', bucket: 'bucket-a', key })
+			rerender(initialProps)
+			await waitFor(() => expect(result.current.favoritePendingKeys.has(key)).toBe(false))
+			expect(result.current.favoriteKeys.has(key)).toBe(operation === 'add')
+		} finally {
+			onlineManager.setOnline(true)
+			queryClient.clear()
+		}
 	})
 
 	it('keeps the latest same-tick mutation as the pending cache owner', async () => {

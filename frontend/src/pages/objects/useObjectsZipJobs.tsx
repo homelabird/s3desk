@@ -41,6 +41,7 @@ export function useObjectsZipJobs({
 	}, [apiToken, bucket, invalidateZipContext, prefix, profileId, transfers])
 
 	const zipPrefixJobMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'zipPrefix'],
 		mutationFn: async (args: { prefix: string }) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
@@ -92,6 +93,7 @@ export function useObjectsZipJobs({
 	})
 
 	const zipObjectsJobMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'zipObjects'],
 		mutationFn: async (args: { keys: string[] }) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')

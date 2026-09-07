@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -116,6 +116,88 @@ describe('useObjectsDelete', () => {
 		expect(setSelectedKeys).toHaveBeenCalledTimes(1)
 		expect(createJobWithRetry).not.toHaveBeenCalled()
 		expect(api.jobs.getJob).not.toHaveBeenCalled()
+	})
+
+	it.each(
+		(['direct', 'bulk', 'prefix'] as const).flatMap((operation) =>
+			(['profile', 'bucket', 'auth'] as const).map((change) => ({ operation, change })),
+		),
+	)('keeps a paused $operation delete in its original scope after a $change change', async ({ operation, change }) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+		const api = createMockApiClient({
+			objects: { deleteObjects: vi.fn().mockResolvedValue({ deleted: 1 }) },
+			jobs: { getJob: vi.fn() },
+		})
+		const nextApi = createMockApiClient({
+			objects: { deleteObjects: vi.fn().mockResolvedValue({ deleted: 1 }) },
+			jobs: { getJob: vi.fn() },
+		})
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-original', status: 'queued' })
+		const nextCreateJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-next', status: 'queued' })
+		const setSelectedKeys = vi.fn()
+		const initialProps = {
+			api, createJobWithRetry, apiToken: 'token-1', profileId: 'profile-1', bucket: 'bucket-a', prefix: 'logs/',
+		}
+		const { result, rerender, unmount } = renderHook(
+			(props) => useObjectsDelete({ ...props, setSelectedKeys }),
+			{ initialProps, wrapper: Wrapper },
+		)
+		const keys = Array.from({ length: operation === 'bulk' ? 1001 : 1 }, (_, i) => `logs/file-${i}.txt`)
+		let deletePromise!: Promise<unknown>
+		try {
+			onlineManager.setOnline(false)
+			act(() => {
+				deletePromise = operation === 'prefix'
+					? result.current.deletePrefixJobMutation.mutateAsync({ prefix: 'logs/', dryRun: false })
+					: result.current.deleteMutation.mutateAsync(keys)
+			})
+			await waitFor(() => expect(queryClient.getMutationCache().getAll()[0]?.state.isPaused).toBe(true))
+			expect(api.objects.deleteObjects).not.toHaveBeenCalled()
+			expect(createJobWithRetry).not.toHaveBeenCalled()
+			rerender({
+				...initialProps,
+				api: change === 'bucket' ? api : nextApi,
+				createJobWithRetry: change === 'bucket' ? createJobWithRetry : nextCreateJobWithRetry,
+				profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+				bucket: change === 'bucket' ? 'bucket-b' : initialProps.bucket,
+				apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+			})
+			expect(result.current.deleteMutation.isPending).toBe(false)
+			expect(result.current.deletePrefixJobMutation.isPending).toBe(false)
+			expect(result.current.deletingKey).toBeNull()
+			await act(async () => {
+				onlineManager.setOnline(true)
+				await deletePromise
+			})
+			expect(nextApi.objects.deleteObjects).not.toHaveBeenCalled()
+			expect(nextCreateJobWithRetry).not.toHaveBeenCalled()
+			if (operation === 'direct') {
+				expect(api.objects.deleteObjects).toHaveBeenCalledExactlyOnceWith({
+					profileId: 'profile-1', bucket: 'bucket-a', keys,
+				})
+				expect(createJobWithRetry).not.toHaveBeenCalled()
+			} else {
+				expect(api.objects.deleteObjects).not.toHaveBeenCalled()
+				expect(createJobWithRetry).toHaveBeenCalledExactlyOnceWith(operation === 'bulk' ? {
+					type: 's3_delete_objects', payload: { bucket: 'bucket-a', keys },
+				} : {
+					type: 'transfer_delete_prefix',
+					payload: { bucket: 'bucket-a', prefix: 'logs/', dryRun: false, deleteAll: false, allowUnsafePrefix: false, include: [], exclude: [] },
+				})
+				expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+			}
+			expect(api.jobs.getJob).not.toHaveBeenCalled()
+			expect(nextApi.jobs.getJob).not.toHaveBeenCalled()
+			expect(setSelectedKeys).not.toHaveBeenCalled()
+			expect(messageSuccessMock).not.toHaveBeenCalled()
+			expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
+			expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+		}
 	})
 
 	it('waits for a delete job to succeed before refreshing object queries and tree once', async () => {

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -102,6 +102,62 @@ describe('useObjectsCopyMove', () => {
 		expect(result.current.copyMoveSrcKey).toBe('docs/b.txt')
 		expect(messageSuccessMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+	})
+
+	it.each(
+		(['object', 'prefix'] as const).flatMap((kind) =>
+			(['copy', 'move'] as const).flatMap((mode) =>
+				(['profile', 'bucket', 'auth'] as const).map((change) => ({ kind, mode, change })),
+			),
+		),
+	)('keeps a paused $kind $mode in its original scope after a $change change', async ({ kind, mode, change }) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-original' })
+		const nextCreateJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-next' })
+		const initialProps = { profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/', createJobWithRetry }
+		const { result, rerender, unmount } = renderHook(
+			(props) => useObjectsCopyMove({ ...props, splitLines: (value) => value.split('\n').filter(Boolean) }),
+			{ initialProps, wrapper: Wrapper },
+		)
+		try {
+			act(() => {
+				if (kind === 'object') result.current.openCopyMove(mode, 'docs/a.txt')
+				else result.current.openCopyPrefix(mode, 'docs/nested/')
+			})
+			onlineManager.setOnline(false)
+			act(() => {
+				if (kind === 'object') result.current.handleCopyMoveSubmit({ dstBucket: 'destination', dstKey: 'archive/a.txt', dryRun: false, confirm: 'MOVE' })
+				else result.current.handleCopyPrefixSubmit({ dstBucket: 'destination', dstPrefix: 'archive/', include: '*.txt', exclude: '*.tmp', dryRun: false, confirm: 'MOVE' })
+			})
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.isPaused).toBe(true))
+			expect(createJobWithRetry).not.toHaveBeenCalled()
+			rerender({
+				...initialProps,
+				profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+				apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+				bucket: change === 'bucket' ? 'bucket-b' : initialProps.bucket,
+				createJobWithRetry: change === 'bucket' ? createJobWithRetry : nextCreateJobWithRetry,
+			})
+			expect(result.current.copyMoveSubmitting).toBe(false)
+			expect(result.current.copyPrefixSubmitting).toBe(false)
+			onlineManager.setOnline(true)
+			await waitFor(() => expect(mutation.state.status).toBe('success'))
+			expect(nextCreateJobWithRetry).not.toHaveBeenCalled()
+			expect(createJobWithRetry).toHaveBeenCalledExactlyOnceWith({
+				type: `transfer_${mode}_${kind}`,
+				payload: kind === 'object'
+					? { srcBucket: 'bucket-a', srcKey: 'docs/a.txt', dstBucket: 'destination', dstKey: 'archive/a.txt', dryRun: false }
+					: { srcBucket: 'bucket-a', srcPrefix: 'docs/nested/', dstBucket: 'destination', dstPrefix: 'archive/', include: ['*.txt'], exclude: ['*.tmp'], dryRun: false },
+			})
+			expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+			expect(messageSuccessMock).not.toHaveBeenCalled()
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+		}
 	})
 
 	it('ignores stale prefix copy/move responses after the dialog closes and reopens', async () => {

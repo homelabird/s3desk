@@ -182,6 +182,8 @@ export function useObjectsDelete({
 	}
 
 	const rawDeleteMutation = useMutation({
+		// Keep queued deletes bound to the scope that confirmed them.
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'delete'],
 		mutationFn: async ({ keys, contextVersion }: DeleteMutationArgs) => {
 			if (keys.length < 1) throw new Error('select objects first')
 			if (keys.length > 50_000) throw new Error('too many keys; use a prefix delete job instead')
@@ -268,6 +270,7 @@ export function useObjectsDelete({
 	})
 
 	const rawDeletePrefixJobMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'deletePrefix'],
 		mutationFn: async ({ prefix, dryRun, contextVersion }: DeletePrefixMutationArgs) => {
 			const job = await createJobWithRetry({
 				type: 'transfer_delete_prefix',

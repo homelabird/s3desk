@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -80,6 +80,53 @@ describe('useObjectsZipJobs', () => {
 		vi.restoreAllMocks()
 		messageOpenMock.mockClear()
 		messageErrorMock.mockClear()
+	})
+
+	it.each(
+		(['objects', 'prefix'] as const).flatMap((kind) =>
+			(['profile', 'bucket', 'auth', 'prefix'] as const).map((change) => ({ kind, change })),
+		),
+	)('keeps a paused $kind ZIP in its original scope after a $change change', async ({ kind, change }) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-original', status: 'queued' })
+		const nextCreateJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-next', status: 'queued' })
+		const transfers = createTransfersStub()
+		const initialProps = { profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/', transfers, createJobWithRetry }
+		const { result, rerender, unmount } = renderHook((props) => useObjectsZipJobs(props), { initialProps, wrapper: Wrapper })
+		try {
+			onlineManager.setOnline(false)
+			act(() => {
+				if (kind === 'objects') result.current.zipObjectsJobMutation.mutate({ keys: ['docs/nested/a.txt'] })
+				else result.current.zipPrefixJobMutation.mutate({ prefix: 'docs/nested/' })
+			})
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.isPaused).toBe(true))
+			expect(createJobWithRetry).not.toHaveBeenCalled()
+			rerender({
+				...initialProps,
+				profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+				apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+				bucket: change === 'bucket' ? 'bucket-b' : initialProps.bucket,
+				prefix: change === 'prefix' ? 'other/' : initialProps.prefix,
+				createJobWithRetry: change === 'profile' || change === 'auth' ? nextCreateJobWithRetry : createJobWithRetry,
+			})
+			onlineManager.setOnline(true)
+			await waitFor(() => expect(mutation.state.status).toBe('success'))
+			expect(nextCreateJobWithRetry).not.toHaveBeenCalled()
+			expect(createJobWithRetry).toHaveBeenCalledExactlyOnceWith(kind === 'objects' ? {
+				type: 's3_zip_objects', payload: { bucket: 'bucket-a', keys: ['docs/nested/a.txt'], stripPrefix: 'docs/' },
+			} : {
+				type: 's3_zip_prefix', payload: { bucket: 'bucket-a', prefix: 'docs/nested/' },
+			})
+			expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+			expect(transfers.queueDownloadJobArtifact).not.toHaveBeenCalled()
+			expect(messageOpenMock).not.toHaveBeenCalled()
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+		}
 	})
 
 	it('ignores stale prefix-zip responses after the objects context changes', async () => {

@@ -1,10 +1,45 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { SimpleTree } from '../SimpleTree'
+import type { TreeNode } from '../../lib/tree'
 
 describe('SimpleTree', () => {
+	it('reloads replaced expanded nodes without retrying unchanged failed nodes', async () => {
+		const loadData = vi.fn().mockRejectedValue(new Error('offline'))
+		const root: TreeNode = { key: '/', title: 'root', isLeaf: false }
+		const props = {
+			expandedKeys: ['/', 'docs/'], selectedKeys: ['/'],
+			onExpandedKeysChange: vi.fn(), onSelectKey: vi.fn(), loadData,
+		}
+		const { rerender } = render(<SimpleTree {...props} nodes={[root]} />)
+		await waitFor(() => expect(loadData).toHaveBeenCalledTimes(1))
+		expect(loadData).toHaveBeenLastCalledWith('/')
+
+		rerender(<SimpleTree {...props} nodes={[root]} loadingKeys={[]} />)
+		await waitFor(() => expect(screen.getByRole('treeitem', { name: 'root' })).not.toHaveAttribute('aria-busy'))
+		expect(loadData).toHaveBeenCalledTimes(1)
+
+		// Collapsing and expanding remains an explicit retry after a failure.
+		rerender(<SimpleTree {...props} nodes={[root]} expandedKeys={[]} />)
+		rerender(<SimpleTree {...props} nodes={[root]} />)
+		await waitFor(() => expect(loadData).toHaveBeenCalledTimes(2))
+
+		const loadedRoot = { ...root, children: [{ key: 'docs/', title: 'docs', isLeaf: false }] }
+		rerender(<SimpleTree {...props} nodes={[loadedRoot]} />)
+		await waitFor(() => expect(loadData).toHaveBeenCalledTimes(3))
+		expect(loadData).toHaveBeenLastCalledWith('docs/')
+
+		// A scope reset reuses keys and expansion state, but supplies new nodes.
+		rerender(<SimpleTree {...props} nodes={[{ ...root }]} />)
+		await waitFor(() => expect(loadData).toHaveBeenCalledTimes(4))
+		expect(loadData).toHaveBeenLastCalledWith('/')
+		rerender(<SimpleTree {...props} nodes={[{ ...root, children: [{ key: 'docs/', title: 'docs' }] }]} />)
+		await waitFor(() => expect(loadData).toHaveBeenCalledTimes(5))
+		expect(loadData).toHaveBeenLastCalledWith('docs/')
+	})
+
 	it('exposes stable row hooks and indent styles for nested rows', () => {
 		render(
 			<SimpleTree

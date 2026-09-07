@@ -68,6 +68,7 @@ export function useObjectsClipboard({
 	}, [apiToken, bucket, invalidateClipboardContext, prefix, profileId])
 
 	const pasteObjectsMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'paste'],
 		mutationFn: async (args: {
 			mode: 'copy' | 'move'
 			srcBucket: string

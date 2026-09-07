@@ -83,9 +83,11 @@ export function useObjectsSelectionMove({
 	}, [currentScopeKey, invalidateMoveSelectionSession])
 
 	const moveSelectionMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'moveSelection'],
 		mutationFn: async (args: {
 			dstBucket: string
 			dstPrefix: string
+			selectedKeys: string[]
 			sessionId: number
 			scopeProfileId: string | null
 			scopeApiToken: string
@@ -100,7 +102,7 @@ export function useObjectsSelectionMove({
 					prefix,
 					dstBucket: args.dstBucket,
 					dstPrefix: args.dstPrefix,
-					selectedKeys: Array.from(selectedKeys),
+					selectedKeys: args.selectedKeys,
 				}),
 			)
 		},
@@ -153,12 +155,13 @@ export function useObjectsSelectionMove({
 			moveSelectionMutation.mutate({
 				dstBucket: values.dstBucket,
 				dstPrefix: values.dstPrefix,
+				selectedKeys: Array.from(selectedKeys),
 				sessionId: moveSelectionSessionRef.current,
 				scopeProfileId: profileId,
 				scopeApiToken: apiToken,
 			})
 		},
-		[apiToken, bucket, moveSelectionMutation, moveSelectionScopeMatches, profileId, selectedKeys.size],
+		[apiToken, bucket, moveSelectionMutation, moveSelectionScopeMatches, profileId, selectedKeys],
 	)
 
 	return {

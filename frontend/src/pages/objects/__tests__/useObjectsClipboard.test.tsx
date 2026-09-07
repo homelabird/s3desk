@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -78,6 +78,55 @@ describe('useObjectsClipboard', () => {
 		messageWarningMock.mockClear()
 		messageInfoMock.mockClear()
 		messageErrorMock.mockClear()
+	})
+
+	it.each(
+		(['copy', 'move'] as const).flatMap((mode) => (['profile', 'auth'] as const).map((change) => ({ mode, change }))),
+	)('keeps a confirmed paused $mode paste in its original scope after a $change change', async ({ mode, change }) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-original' })
+		const nextCreateJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-next' })
+		copyToClipboardMock.mockResolvedValue({ ok: true })
+		const initialProps = {
+			profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/',
+			selectedKeys: new Set(['docs/nested/a.txt']), createJobWithRetry, queryClient,
+		}
+		const { result, rerender, unmount } = renderHook((props) => useObjectsClipboard(props), { initialProps, wrapper: Wrapper })
+		try {
+			await act(async () => { await result.current.copySelectionToClipboard(mode) })
+			rerender({ ...initialProps, prefix: 'archive/' })
+			onlineManager.setOnline(false)
+			if (mode === 'move') {
+				await act(async () => { await result.current.pasteClipboardObjects() })
+				const confirm = confirmDangerActionMock.mock.calls.at(-1)?.[0] as { onConfirm: () => Promise<void> }
+				act(() => { void confirm.onConfirm() })
+			} else {
+				act(() => { void result.current.pasteClipboardObjects() })
+			}
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.isPaused).toBe(true))
+			expect(createJobWithRetry).not.toHaveBeenCalled()
+			rerender({
+				...initialProps, prefix: 'archive/', createJobWithRetry: nextCreateJobWithRetry,
+				profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+				apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+			})
+			onlineManager.setOnline(true)
+			await waitFor(() => expect(mutation.state.status).toBe('success'))
+			expect(nextCreateJobWithRetry).not.toHaveBeenCalled()
+			expect(createJobWithRetry).toHaveBeenCalledExactlyOnceWith({
+				type: `transfer_${mode}_batch`,
+				payload: { srcBucket: 'bucket-a', dstBucket: 'bucket-a', items: [{ srcKey: 'docs/nested/a.txt', dstKey: 'archive/nested/a.txt' }], dryRun: false },
+			})
+			expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+			expect(messageOpenMock).not.toHaveBeenCalled()
+			if (change === 'profile') expect(result.current.clipboardObjects?.keys).toEqual(['docs/nested/a.txt'])
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+		}
 	})
 
 	it('ignores stale move-paste confirmations after the objects context changes', async () => {

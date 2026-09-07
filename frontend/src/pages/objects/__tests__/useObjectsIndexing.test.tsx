@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -59,6 +59,47 @@ async function flushEffects() {
 }
 
 describe('useObjectsIndexing', () => {
+	it.each(['profile', 'bucket', 'auth'] as const)('keeps a paused index job in its original scope after a %s change', async (change) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-original' })
+		const nextCreateJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-next' })
+		const api = createMockApiClient()
+		const initialProps = { profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/', createJobWithRetry }
+		const { result, rerender, unmount } = renderHook((props) => useObjectsIndexing({
+			...props, api, globalSearchOpen: false, globalSearchQueryText: '', globalSearchPrefixNormalized: '',
+			objectsCostMode: 'aggressive', autoIndexEnabled: false, autoIndexTtlMs: 1000, autoIndexCooldownMs: 1000, setIndexPrefix: vi.fn(),
+		}), { initialProps, wrapper: Wrapper })
+		messageOpenMock.mockClear()
+		try {
+			onlineManager.setOnline(false)
+			act(() => result.current.indexObjectsJobMutation.mutate({ prefix: 'docs/nested', fullReindex: true }))
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.isPaused).toBe(true))
+			expect(createJobWithRetry).not.toHaveBeenCalled()
+			rerender({
+				...initialProps,
+				profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+				apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+				bucket: change === 'bucket' ? 'bucket-b' : initialProps.bucket,
+				createJobWithRetry: change === 'bucket' ? createJobWithRetry : nextCreateJobWithRetry,
+			})
+			onlineManager.setOnline(true)
+			await waitFor(() => expect(mutation.state.status).toBe('success'))
+			expect(nextCreateJobWithRetry).not.toHaveBeenCalled()
+			expect(createJobWithRetry).toHaveBeenCalledExactlyOnceWith({
+				type: 's3_index_objects', payload: { bucket: 'bucket-a', prefix: 'docs/nested/', fullReindex: true },
+			})
+			expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+			expect(messageOpenMock).not.toHaveBeenCalled()
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+			vi.restoreAllMocks()
+		}
+	})
+
 	it('creates an auto-index job for stale prefixes', async () => {
 		const getObjectIndexSummary = vi.fn().mockResolvedValue({ indexedAt: '2020-01-01T00:00:00Z' })
 		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-1' })

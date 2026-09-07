@@ -64,6 +64,12 @@ export function useObjectsContextMenuLifecycle(args: UseObjectsContextMenuLifecy
 		})
 	}, [contextMenuPoint, contextMenuState.open, contextMenuState.source])
 
+	const attachContextMenu = useCallback((menu: HTMLDivElement | null) => {
+		contextMenuRef.current = menu
+		// Suspense may attach the menu after the parent's layout effect has run.
+		if (menu) positionContextMenu()
+	}, [positionContextMenu])
+
 	useLayoutEffect(() => {
 		positionContextMenu()
 	}, [contextMenuState.key, contextMenuState.kind, positionContextMenu, selectedCount])
@@ -163,7 +169,7 @@ export function useObjectsContextMenuLifecycle(args: UseObjectsContextMenuLifecy
 			: null
 
 	return {
-		contextMenuRef,
+		contextMenuRef: attachContextMenu,
 		contextMenuStyle,
 		getListScrollerElement,
 		handleListScrollerContextMenu,

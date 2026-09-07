@@ -82,6 +82,7 @@ export function useObjectsRename({ profileId, apiToken, bucket, prefix, createJo
 	)
 
 	const renameMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'rename'],
 		mutationFn: async (args: {
 			kind: 'object' | 'prefix'
 			src: string

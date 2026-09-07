@@ -121,6 +121,7 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 	)
 
 	const copyPrefixJobMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'copyMovePrefix'],
 		mutationFn: (args: {
 			mode: 'copy' | 'move'
 			srcPrefix: string
@@ -167,6 +168,7 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 	})
 
 	const copyMoveMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'copyMoveObject'],
 		mutationFn: (args: {
 			mode: 'copy' | 'move'
 			srcKey: string

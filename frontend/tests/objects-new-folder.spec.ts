@@ -189,7 +189,7 @@ test.describe('Objects new folder visibility', () => {
 		await expectLocation(page, 'demo/')
 	})
 
-	test('opening a subfolder dialog under a different parent keeps the current location', async ({ page }) => {
+	test('creating a subfolder under a different parent reports success and keeps the current location', async ({ page }) => {
 		await stubObjectsApi(page, { commonPrefixesByPrefix: { '': ['a/'] } })
 		await seedStorage(page)
 		await gotoObjectsPage(page)
@@ -202,6 +202,27 @@ test.describe('Objects new folder visibility', () => {
 		const dialog = page.getByRole('dialog', { name: 'New folder' })
 		await expect(dialog.getByText('s3://test-bucket/a/')).toBeVisible()
 		await expectLocation(page, '')
+		await dialog.getByLabel('Folder name').fill('child')
+		await dialog.getByRole('button', { name: 'Create folder' }).click()
+		await expect(dialog).toHaveCount(0)
+		await expect(page.locator('.ant-message-notice-content').filter({ hasText: 'Folder created (under a/):' })).toBeVisible()
+		await expectLocation(page, '')
+	})
+
+	test('shows validation errors before sending and allows a corrected folder name', async ({ page }) => {
+		const createdKeys: string[] = []
+		await stubObjectsApi(page, { failCreateFolder: (key) => { createdKeys.push(key); return null } })
+		await seedStorage(page)
+		await gotoObjectsPage(page)
+		const dialog = await openNewFolderDialog(page)
+		await dialog.getByLabel('Folder name').fill('.')
+		await dialog.getByRole('button', { name: 'Create folder' }).click()
+		await expect(dialog.getByText('invalid folder name', { exact: false })).toBeVisible()
+		expect(createdKeys).toEqual([])
+		await dialog.getByLabel('Folder name').fill('fixed')
+		await dialog.getByRole('button', { name: 'Create folder' }).click()
+		await expect(dialog).toHaveCount(0)
+		expect(createdKeys).toEqual(['fixed/'])
 	})
 
 	test('nested path failures report the last created folder and provide navigation CTAs', async ({ page }) => {

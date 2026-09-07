@@ -58,6 +58,7 @@ export function useObjectsIndexing({
 	}, [apiToken, bucket, prefix, profileId])
 
 	const indexObjectsJobMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'index'],
 		mutationFn: async (args: { prefix: string; fullReindex: boolean; silent?: boolean }) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')

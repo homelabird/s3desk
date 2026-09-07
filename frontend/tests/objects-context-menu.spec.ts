@@ -11,6 +11,7 @@ import {
 } from './support/apiFixtures'
 import {
 	OBJECTS_LIST_ROW_SELECTOR,
+	dialogByName,
 	gotoObjectsPage,
 	objectsContextMenu,
 	objectsListRow,
@@ -120,6 +121,39 @@ async function stubObjectsApi(page: Page, items: ObjectItem[]) {
 }
 
 test.describe('Objects context menus', () => {
+	for (const mode of ['copy', 'move'] as const) {
+		test(`advanced object menu submits a ${mode} job with the displayed source`, async ({ page }) => {
+			await stubObjectsApi(page, buildObjectItems(1))
+			const requests: Array<{ profileId: string | undefined; body: unknown }> = []
+			await page.route('**/api/v1/jobs', (route) => {
+				const request = route.request()
+				if (request.method() !== 'POST') return route.fallback()
+				const body = request.postDataJSON()
+				requests.push({ profileId: request.headers()['x-profile-id'], body })
+				return route.fulfill({ status: 201, json: { ...body, id: `job-${mode}`, status: 'queued', createdAt: '2024-01-01T00:00:00Z' } })
+			})
+			await seedStorage(page)
+			await gotoObjectsPage(page)
+			await objectsListRow(page, 'video-1.mp4').click({ button: 'right' })
+			const menu = objectsContextMenu(page)
+			await expect(menu).toHaveCSS('opacity', '1')
+			await menu.getByRole('menuitem', { name: mode === 'copy' ? 'Copy…' : 'Move/Rename…' }).click()
+			const dialog = dialogByName(page, mode === 'copy' ? 'Copy object…' : 'Move/Rename object…')
+			await expect(dialog.getByText(`s3://${defaultStorage.bucket}/video-1.mp4`)).toBeVisible()
+			await dialog.getByLabel('Destination key').fill('archive/video-1.mp4')
+			if (mode === 'move') await dialog.getByLabel('Type "MOVE" to confirm').fill('MOVE')
+			await dialog.getByRole('button', { name: mode === 'copy' ? 'Start copy' : 'Start move' }).click()
+			await expect(dialog).toHaveCount(0)
+			expect(requests).toEqual([{
+				profileId: defaultStorage.profileId,
+				body: {
+					type: `transfer_${mode}_object`,
+					payload: { srcBucket: defaultStorage.bucket, srcKey: 'video-1.mp4', dstBucket: defaultStorage.bucket, dstKey: 'archive/video-1.mp4', dryRun: false },
+				},
+			}])
+		})
+	}
+
 	test('simple mode exposes file-manager actions from row and empty-area right clicks', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(3))
 		await seedStorage(page, { objectsUIMode: 'simple' })

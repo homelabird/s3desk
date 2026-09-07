@@ -82,6 +82,7 @@ export function useObjectsNewFolder({
 	)
 
 	const createFolderMutation = useMutation({
+		mutationKey: [...queryKeys.objects.list(profileId, bucket, prefix, apiToken), 'createFolder', newFolderParentPrefix],
 		mutationFn: async (args: NewFolderMutationArgs) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
@@ -111,13 +112,12 @@ export function useObjectsNewFolder({
 			)
 
 			return {
-				sessionId: values.sessionId,
 				objectsQueryKey,
 				previousObjectsData: previous,
 			}
 		},
-		onSuccess: async (resp: { key: string }, _values, context) => {
-			if (context?.sessionId !== newFolderSessionRef.current) {
+		onSuccess: async (resp: { key: string }, values, context) => {
+			if (values.sessionId !== newFolderSessionRef.current) {
 				if (context?.objectsQueryKey) {
 					await queryClient.invalidateQueries({
 						queryKey: context.objectsQueryKey,
@@ -189,11 +189,11 @@ export function useObjectsNewFolder({
 			}
 			void refreshTreeNode(visibility.parentTreeKey)
 		},
-		onError: (err, _values, context) => {
+		onError: (err, values, context) => {
 			if (context?.objectsQueryKey) {
 				queryClient.setQueryData(context.objectsQueryKey, context.previousObjectsData)
 			}
-			if (context?.sessionId !== newFolderSessionRef.current) return
+			if (values.sessionId !== newFolderSessionRef.current) return
 			const partialKey =
 				typeof (err as { partialKey?: unknown })?.partialKey === 'string' && (err as { partialKey?: string }).partialKey
 					? (err as { partialKey?: string }).partialKey!

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -158,6 +158,60 @@ describe('useObjectsSelectionMove', () => {
 			},
 		})
 	})
+
+	it.each(['profile', 'bucket', 'auth', 'prefix', 'selection'] as const)(
+		'keeps the submitted move targets after a paused request and a %s change', async (change) => {
+			const { Wrapper, queryClient } = createWrapper()
+			const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+			const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-original' })
+			const nextCreateJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-next' })
+			const setSelectedKeys = vi.fn()
+			const initialProps = {
+				profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/',
+				selectedKeys: new Set(['docs/a.txt', 'docs/nested/b.txt']), createJobWithRetry, setSelectedKeys,
+			}
+			const { result, rerender, unmount } = renderHook((props) => useObjectsSelectionMove(props), { initialProps, wrapper: Wrapper })
+			try {
+				act(() => result.current.openMoveSelection())
+				onlineManager.setOnline(false)
+				act(() => result.current.handleMoveSelectionSubmit({ dstBucket: 'destination', dstPrefix: 'archive/', confirm: 'MOVE' }))
+				const mutation = queryClient.getMutationCache().getAll()[0]
+				await waitFor(() => expect(mutation.state.isPaused).toBe(true))
+				expect(createJobWithRetry).not.toHaveBeenCalled()
+				rerender({
+					...initialProps,
+					profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+					apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+					bucket: change === 'bucket' ? 'bucket-b' : initialProps.bucket,
+					prefix: change === 'prefix' ? 'elsewhere/' : initialProps.prefix,
+					selectedKeys: change === 'selection' ? new Set(['docs/other.txt']) : initialProps.selectedKeys,
+					createJobWithRetry: change === 'profile' || change === 'auth' ? nextCreateJobWithRetry : createJobWithRetry,
+				})
+				onlineManager.setOnline(true)
+				await waitFor(() => expect(mutation.state.status).toBe('success'))
+				expect(nextCreateJobWithRetry).not.toHaveBeenCalled()
+				expect(createJobWithRetry).toHaveBeenCalledExactlyOnceWith({
+					type: 'transfer_move_batch',
+					payload: {
+						srcBucket: 'bucket-a', dstBucket: 'destination', dryRun: false,
+						items: [
+							{ srcKey: 'docs/a.txt', dstKey: 'archive/a.txt' },
+							{ srcKey: 'docs/nested/b.txt', dstKey: 'archive/nested/b.txt' },
+						],
+					},
+				})
+				expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+				if (change !== 'selection') {
+					expect(setSelectedKeys).not.toHaveBeenCalled()
+					expect(messageOpenMock).not.toHaveBeenCalled()
+				}
+			} finally {
+				onlineManager.setOnline(true)
+				unmount()
+				queryClient.clear()
+			}
+		},
+	)
 
 	it('ignores stale move job responses after the dialog closes and reopens', async () => {
 		const { Wrapper, queryClient } = createWrapper()

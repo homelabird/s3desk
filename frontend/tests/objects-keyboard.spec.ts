@@ -107,6 +107,14 @@ async function installObjectsKeyboardApi(page: Page) {
 test.describe('Objects keyboard interactions', () => {
 	test('selection shortcuts cover range select, select all, clear, and rename', async ({ page }) => {
 		await installObjectsKeyboardApi(page)
+		const renameRequests: Array<{ profileId: string | undefined; body: unknown }> = []
+		await page.route('**/api/v1/jobs', (route) => {
+			const request = route.request()
+			if (request.method() !== 'POST') return route.fallback()
+			const body = request.postDataJSON()
+			renameRequests.push({ profileId: request.headers()['x-profile-id'], body })
+			return route.fulfill({ status: 201, json: { ...body, id: 'job-rename', status: 'queued', createdAt: now } })
+		})
 		await seedStorage(page)
 		await gotoObjectsPage(page)
 
@@ -139,6 +147,17 @@ test.describe('Objects keyboard interactions', () => {
 		const renameDialog = dialogByName(page, 'Rename object…')
 		await expect(renameDialog).toBeVisible()
 		await expect(renameDialog.getByText(`s3://${bucket}/alpha.txt`)).toBeVisible()
+		await renameDialog.getByLabel('New name', { exact: true }).fill('renamed.txt')
+		await renameDialog.getByLabel('Type "RENAME" to confirm').fill('RENAME')
+		await renameDialog.getByRole('button', { name: 'Rename', exact: true }).click()
+		await expect(renameDialog).toHaveCount(0)
+		expect(renameRequests).toEqual([{
+			profileId,
+			body: {
+				type: 'transfer_move_object',
+				payload: { srcBucket: bucket, srcKey: 'alpha.txt', dstBucket: bucket, dstKey: 'renamed.txt', dryRun: false },
+			},
+		}])
 	})
 
 	test('backspace navigates to the parent prefix', async ({ page }) => {

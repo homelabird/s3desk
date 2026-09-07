@@ -127,6 +127,8 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	}
 
 	const addFavoriteMutation = useMutation({
+		// Keep paused requests bound to the profile and auth scope that queued them.
+		mutationKey: [...favoriteSummaryQueryKey, 'add'],
 		mutationFn: (key: string) => api.objects.createObjectFavorite({ profileId: profileId!, bucket, key }),
 		onMutate: async (key) => {
 			const contextVersion = favoriteContextVersionRef.current
@@ -211,6 +213,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	})
 
 	const removeFavoriteMutation = useMutation({
+		mutationKey: [...favoriteSummaryQueryKey, 'remove'],
 		mutationFn: (key: string) => api.objects.deleteObjectFavorite({ profileId: profileId!, bucket, key }),
 		onMutate: async (key) => {
 			const contextVersion = favoriteContextVersionRef.current

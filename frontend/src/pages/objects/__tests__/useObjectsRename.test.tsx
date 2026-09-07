@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -104,6 +104,55 @@ describe('useObjectsRename', () => {
 		expect(result.current.renameSource).toBe('logs/')
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(messageOpenMock).not.toHaveBeenCalled()
+	})
+
+	it.each(
+		(['object', 'prefix'] as const).flatMap((kind) =>
+			(['profile', 'bucket', 'auth'] as const).map((change) => ({ kind, change })),
+		),
+	)('keeps a paused $kind rename in its original scope after a $change change', async ({ kind, change }) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-original' })
+		const nextCreateJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-next' })
+		const initialProps = { profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/', createJobWithRetry }
+		const { result, rerender, unmount } = renderHook((props) => useObjectsRename(props), { initialProps, wrapper: Wrapper })
+		try {
+			act(() => {
+				if (kind === 'object') result.current.openRenameObject('docs/a.txt')
+				else result.current.openRenamePrefix('docs/nested/')
+			})
+			onlineManager.setOnline(false)
+			act(() => result.current.handleRenameSubmit({ name: 'renamed', confirm: 'RENAME' }))
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.isPaused).toBe(true))
+			expect(createJobWithRetry).not.toHaveBeenCalled()
+			rerender({
+				...initialProps,
+				profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+				apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+				bucket: change === 'bucket' ? 'bucket-b' : initialProps.bucket,
+				createJobWithRetry: change === 'bucket' ? createJobWithRetry : nextCreateJobWithRetry,
+			})
+			expect(result.current.renameSubmitting).toBe(false)
+			onlineManager.setOnline(true)
+			await waitFor(() => expect(mutation.state.status).toBe('success'))
+			expect(nextCreateJobWithRetry).not.toHaveBeenCalled()
+			expect(createJobWithRetry).toHaveBeenCalledExactlyOnceWith(kind === 'object' ? {
+				type: 'transfer_move_object',
+				payload: { srcBucket: 'bucket-a', srcKey: 'docs/a.txt', dstBucket: 'bucket-a', dstKey: 'docs/renamed', dryRun: false },
+			} : {
+				type: 'transfer_move_prefix',
+				payload: { srcBucket: 'bucket-a', srcPrefix: 'docs/nested/', dstBucket: 'bucket-a', dstPrefix: 'docs/renamed/', include: [], exclude: [], dryRun: false },
+			})
+			expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+			expect(result.current.renameOpen).toBe(false)
+			expect(messageOpenMock).not.toHaveBeenCalled()
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+		}
 	})
 
 	it('ignores stale rename job responses after the api token changes', async () => {

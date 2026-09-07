@@ -170,40 +170,25 @@ export function SimpleTree(props: Props) {
 		itemRefs.current.get(key)?.focus()
 	}
 
-	const prevExpandedRef = useRef<Set<string>>(new Set())
-	const loadRequestedRef = useRef<Set<string>>(new Set())
+	const loadRequestedRef = useRef(new Map<string, TreeNode>())
 
 	useEffect(() => {
-		const prev = prevExpandedRef.current
-		for (const k of expandedSet) {
-			if (!prev.has(k)) loadRequestedRef.current.add(k)
+		// Replaced nodes need a fresh load even when their keys remain expanded.
+		for (const [key, node] of loadRequestedRef.current) {
+			if (!expandedSet.has(key) || nodeByKey.get(key) !== node) loadRequestedRef.current.delete(key)
 		}
-
-		// If a node is no longer expanded, it should no longer trigger a load.
-		for (const k of loadRequestedRef.current) {
-			if (!expandedSet.has(k)) loadRequestedRef.current.delete(k)
-		}
-
-		prevExpandedRef.current = new Set(expandedSet)
 
 		if (!props.loadData) {
 			loadRequestedRef.current.clear()
 			return
 		}
 
-		for (const key of Array.from(loadRequestedRef.current)) {
+		for (const key of expandedSet) {
 			const node = nodeByKey.get(key)
-			if (!node) continue
-			if (node.isLeaf) {
-				loadRequestedRef.current.delete(key)
-				continue
-			}
-			if (node.children && Array.isArray(node.children) && node.children.length > 0) {
-				loadRequestedRef.current.delete(key)
-				continue
-			}
+			if (!node || node.isLeaf || node.children?.length) continue
+			if (loadRequestedRef.current.get(key) === node) continue
+			loadRequestedRef.current.set(key, node)
 			safeCallLoadData(props.loadData, key)
-			loadRequestedRef.current.delete(key)
 		}
 	}, [expandedSet, nodeByKey, props.loadData])
 

@@ -14,6 +14,74 @@ describe('useObjectsTree', () => {
 		window.localStorage.clear()
 	})
 
+	it.each(['success', 'error'])('coalesces refreshes queued behind an outdated %s response', async (outcome) => {
+		const freshPage = { commonPrefixes: ['new-folder/'], items: [], isTruncated: false }
+		let finishRequest!: () => void
+		const listObjects = vi.fn()
+			.mockImplementationOnce(() => new Promise((resolve, reject) => {
+				finishRequest = () => outcome === 'error'
+					? reject(new Error('old request failed'))
+					: resolve({ ...freshPage, commonPrefixes: ['outdated/'], isTruncated: true, nextContinuationToken: 'old-page-2' })
+			}))
+			.mockResolvedValue(freshPage)
+		const api = createMockApiClient({ objects: { listObjects } })
+		const { result } = renderHook(() => useObjectsTree({
+			api, apiToken: 'token', profileId: 'profile-1', bucket: 'bucket', prefix: '',
+			debugEnabled: false, log: vi.fn(),
+		}))
+		let originalLoad!: Promise<void>
+		act(() => { originalLoad = result.current.onTreeLoadData('/') })
+		await act(async () => {
+			await result.current.refreshTreeNode('/')
+			await result.current.refreshTreeNode('/')
+			await result.current.refreshTreeNode('/')
+		})
+		expect(listObjects).toHaveBeenCalledTimes(1)
+		await act(async () => {
+			finishRequest()
+			await originalLoad
+		})
+		await waitFor(() => expect(getRootChildKeys(result.current.treeData)).toEqual(['new-folder/']))
+		expect(listObjects).toHaveBeenCalledTimes(2)
+		expect(listObjects).toHaveBeenLastCalledWith(expect.objectContaining({ continuationToken: undefined }))
+		expect(result.current.treeErrorMessage).toBeNull()
+		expect(result.current.treeLoadingKeys).toEqual([])
+
+		listObjects.mockRejectedValueOnce(new Error('current request failed'))
+		await act(async () => { await result.current.refreshTreeNode('/') })
+		expect(result.current.treeErrorMessage).toContain('current request failed')
+		expect(result.current.treeLoadingKeys).toEqual([])
+		expect(listObjects).toHaveBeenCalledTimes(3)
+		await act(async () => { await result.current.refreshTreeNode('/') })
+		expect(result.current.treeErrorMessage).toBeNull()
+		expect(listObjects).toHaveBeenCalledTimes(4)
+	})
+
+	it('reloads child folders after refreshing their parent', async () => {
+		const listObjects = vi.fn().mockImplementation(async ({ prefix }) => ({
+			commonPrefixes: prefix === 'docs/' ? ['docs/nested/'] : ['docs/'],
+			items: [], isTruncated: false,
+		}))
+		const api = createMockApiClient({ objects: { listObjects } })
+		const { result } = renderHook(() => useObjectsTree({
+			api, apiToken: 'token', profileId: 'profile-1', bucket: 'bucket', prefix: '',
+			debugEnabled: false, log: vi.fn(),
+		}))
+		await act(async () => {
+			await result.current.onTreeLoadData('/')
+			await result.current.onTreeLoadData('docs/')
+			await result.current.onTreeLoadData('docs/')
+		})
+		expect(listObjects).toHaveBeenCalledTimes(2)
+
+		await act(async () => {
+			await result.current.refreshTreeNode('/')
+			await result.current.onTreeLoadData('docs/')
+		})
+		expect(listObjects).toHaveBeenCalledTimes(4)
+		expect(result.current.treeData[0].children?.[0].children?.map((node) => node.key)).toEqual(['docs/nested/'])
+	})
+
 	it('reloads tree children when the profile changes for the same bucket', async () => {
 		const listObjects = vi
 			.fn()
@@ -125,6 +193,7 @@ describe('useObjectsTree', () => {
 		})
 		await waitFor(() => expect(listObjects).toHaveBeenCalledTimes(1))
 		const firstSignal = listObjects.mock.calls[0]?.[0]?.signal as AbortSignal | undefined
+		await act(async () => { await result.current.refreshTreeNode('/') })
 
 		rerender({ profileId: 'profile-2' })
 

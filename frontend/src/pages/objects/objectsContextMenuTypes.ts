@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from 'react'
+import type { CSSProperties, Ref, RefObject } from 'react'
 import type { MenuProps } from 'antd'
 
 import type { ObjectItem } from '../../api/types'
@@ -48,7 +48,7 @@ export type UseObjectsContextMenuArgs = {
 
 export type ObjectsContextMenuOverlayState = {
 	contextMenuClassName: string
-	contextMenuRef: RefObject<HTMLDivElement | null>
+	contextMenuRef: Ref<HTMLDivElement>
 	contextMenuVisible: boolean
 	contextMenuProps: MenuProps | null
 	contextMenuStyle: CSSProperties | null

@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ContextMenuState } from '../objectsContextMenuTypes'
@@ -58,6 +58,30 @@ describe('useObjectsContextMenuLifecycle', () => {
 		expect(recordContextMenuPoint).toHaveBeenCalledWith(event)
 		expect(openListContextMenu).toHaveBeenCalledWith({ x: 24, y: 48 })
 		expect(closeContextMenu).not.toHaveBeenCalled()
+	})
+
+	it.each(['object', 'prefix', 'list'] as const)('positions a %s menu that mounts after its parent layout effect', async (kind) => {
+		vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 160))
+		const { result } = renderHook(() => useObjectsContextMenuLifecycle({
+			listScrollerEl: null,
+			scrollContainerRef: { current: null },
+			selectedCount: 0,
+			contextMenuState: createContextMenuState({ open: true, source: 'context', kind, key: 'target' }),
+			contextMenuPoint: { x: window.innerWidth - 10, y: window.innerHeight - 10 },
+			contextMenuVisible: true,
+			recordContextMenuPoint: vi.fn(),
+			openListContextMenu: vi.fn(),
+			closeContextMenu: vi.fn(),
+		}))
+		expect(result.current.contextMenuStyle?.opacity).toBe(0)
+		// Suspense can commit the portal without rendering its parent again.
+		render(<div ref={result.current.contextMenuRef} />)
+		await waitFor(() => expect(result.current.contextMenuStyle).toMatchObject({
+			opacity: 1,
+			pointerEvents: 'auto',
+			left: window.innerWidth - 208,
+			top: window.innerHeight - 168,
+		}))
 	})
 
 	it('closes the context menu when Escape is pressed', () => {

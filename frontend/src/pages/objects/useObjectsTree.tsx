@@ -42,6 +42,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 	const [treeSelectedKeys, setTreeSelectedKeys] = useState<string[]>(['/'])
 	const treeLoadedKeysRef = useRef<Set<string>>(new Set())
 	const treeLoadingKeysRef = useRef<Set<string>>(new Set())
+	const treeRefreshKeysRef = useRef<Set<string>>(new Set())
 	const lastTreeScopeKeyRef = useRef<string | null>(null)
 	const [treeLoadingKeys, setTreeLoadingKeys] = useState<string[]>([])
 	const [treeErrorMessage, setTreeErrorMessage] = useState<string | null>(null)
@@ -69,7 +70,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 	)
 
 	const loadTreeChildren = useCallback(
-		async (nodeKey: string): Promise<void> => {
+		async function loadChildren(nodeKey: string): Promise<void> {
 			if (!profileId || !bucket) return
 			if (treeLoadedKeysRef.current.has(nodeKey)) return
 			if (treeLoadingKeysRef.current.has(nodeKey)) return
@@ -105,6 +106,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 						signal,
 					})
 					if (signal.aborted || treeEpochRef.current !== epoch) return
+					if (treeRefreshKeysRef.current.has(nodeKey)) return
 					if (token) {
 						seenTokens.add(token)
 					}
@@ -138,33 +140,36 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 					}
 					token = nextToken
 				}
+				if (treeEpochRef.current !== epoch) return
+
+				// Recreated child nodes no longer contain their previously loaded subtrees.
+				for (const childPrefix of prefixesSet) treeLoadedKeysRef.current.delete(childPrefix)
+
+				const children: TreeNode[] = Array.from(prefixesSet)
+					.sort((a, b) => a.localeCompare(b))
+					.map((p) => ({
+						key: p,
+						title: folderLabelFromPrefix(p),
+						isLeaf: false,
+						icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} />,
+					}))
+
+				setTreeData((prev) => upsertTreeChildren(prev, nodeKey, children))
+				setTreeErrorMessage(null)
+				treeLoadedKeysRef.current.add(nodeKey)
 			} catch (err) {
 				if (signal.aborted || treeEpochRef.current !== epoch) return
-				const nextErrorMessage = objectsFeedback.errorMessage(err)
-				setTreeErrorMessage(nextErrorMessage)
-				treeLoadingKeysRef.current.delete(nodeKey)
-				setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
-				return
+				if (!treeRefreshKeysRef.current.has(nodeKey)) setTreeErrorMessage(objectsFeedback.errorMessage(err))
+			} finally {
+				if (!signal.aborted && treeEpochRef.current === epoch) {
+					treeLoadingKeysRef.current.delete(nodeKey)
+					setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
+					if (treeRefreshKeysRef.current.delete(nodeKey)) {
+						treeLoadedKeysRef.current.delete(nodeKey)
+						void loadChildren(nodeKey)
+					}
+				}
 			}
-
-			if (treeEpochRef.current !== epoch) {
-				return
-			}
-
-			const children: TreeNode[] = Array.from(prefixesSet)
-				.sort((a, b) => a.localeCompare(b))
-				.map((p) => ({
-					key: p,
-					title: folderLabelFromPrefix(p),
-					isLeaf: false,
-					icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} />,
-				}))
-
-			setTreeData((prev) => upsertTreeChildren(prev, nodeKey, children))
-			setTreeErrorMessage(null)
-			treeLoadedKeysRef.current.add(nodeKey)
-			treeLoadingKeysRef.current.delete(nodeKey)
-			setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
 		},
 		[api, bucket, debugEnabled, log, profileId],
 	)
@@ -176,6 +181,10 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 	const refreshTreeNode = useCallback(
 		async (nodeKey: string) => {
 			treeLoadedKeysRef.current.delete(nodeKey)
+			if (treeLoadingKeysRef.current.has(nodeKey)) {
+				treeRefreshKeysRef.current.add(nodeKey)
+				return
+			}
 			await loadTreeChildren(nodeKey)
 		},
 		[loadTreeChildren],
@@ -187,6 +196,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 		treeEpochRef.current++
 		treeLoadedKeysRef.current.clear()
 		treeLoadingKeysRef.current.clear()
+		treeRefreshKeysRef.current.clear()
 		setTreeLoadingKeys([])
 		setTreeErrorMessage(null)
 		setTreeExpandedKeys(bucket ? [...(treeExpandedByBucket[bucket] ?? [])] : [])

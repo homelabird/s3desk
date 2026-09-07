@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsNewFolder } from '../useObjectsNewFolder'
 
 const messageSuccessMock = vi.fn()
@@ -53,7 +54,7 @@ function createWrapper() {
 		return <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
 	}
 
-	return { Wrapper }
+	return { Wrapper, queryClient }
 }
 
 describe('useObjectsNewFolder', () => {
@@ -63,6 +64,93 @@ describe('useObjectsNewFolder', () => {
 		messageWarningMock.mockClear()
 		messageErrorMock.mockClear()
 		invalidateObjectQueriesForPrefixMock.mockClear()
+	})
+
+	it.each(['profile', 'bucket', 'auth', 'parent'] as const)('keeps a paused folder creation in its original scope after a %s change', async (change) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const api = createMockApiClient({ objects: { createFolder: vi.fn().mockResolvedValue(undefined) } })
+		const nextApi = createMockApiClient({ objects: { createFolder: vi.fn().mockResolvedValue(undefined) } })
+		const refreshTreeNode = vi.fn()
+		const initialProps = { api, profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/' }
+		const { result, rerender, unmount } = renderHook((props) => useObjectsNewFolder({
+			...props, typeFilter: 'all', favoritesOnly: false, searchText: '', refreshTreeNode,
+			onClearSearch: vi.fn(), onDisableFavoritesOnly: vi.fn(), onShowFolders: vi.fn(), onOpenPrefix: vi.fn(),
+		}), { initialProps, wrapper: Wrapper })
+		try {
+			act(() => result.current.openNewFolder())
+			onlineManager.setOnline(false)
+			act(() => result.current.handleNewFolderSubmit({ name: 'child', allowPath: false }))
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.context).toBeDefined())
+			expect(mutation.state.isPaused).toBe(true)
+			expect(api.objects.createFolder).not.toHaveBeenCalled()
+			if (change === 'parent') {
+				act(() => {
+					result.current.handleNewFolderCancel()
+					result.current.openNewFolder('other/')
+				})
+			} else {
+				rerender({
+					...initialProps,
+					profileId: change === 'profile' ? 'profile-2' : initialProps.profileId,
+					apiToken: change === 'auth' ? 'token-2' : initialProps.apiToken,
+					bucket: change === 'bucket' ? 'bucket-b' : initialProps.bucket,
+					api: change === 'bucket' ? api : nextApi,
+				})
+			}
+			expect(result.current.newFolderSubmitting).toBe(false)
+			onlineManager.setOnline(true)
+			await waitFor(() => expect(mutation.state.status).toBe('success'))
+			expect(nextApi.objects.createFolder).not.toHaveBeenCalled()
+			expect(api.objects.createFolder).toHaveBeenCalledExactlyOnceWith({ profileId: 'profile-1', bucket: 'bucket-a', key: 'docs/child/' })
+			expect(refreshTreeNode).not.toHaveBeenCalled()
+			expect(messageSuccessMock).not.toHaveBeenCalled()
+			if (change === 'parent') expect(result.current.newFolderParentPrefix).toBe('other/')
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+		}
+	})
+
+	it.each(['success', 'validation', 'provider', 'partial'] as const)('reports %s when the parent is outside the current list and no optimistic snapshot is made', async (outcome) => {
+		const { Wrapper, queryClient } = createWrapper()
+		const createFolder = vi.fn().mockResolvedValue(undefined)
+		if (outcome === 'provider') createFolder.mockRejectedValue(new Error('folder denied'))
+		if (outcome === 'partial') createFolder.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('folder denied'))
+		const api = createMockApiClient({ objects: { createFolder } })
+		const refreshTreeNode = vi.fn()
+		const { result, unmount } = renderHook(() => useObjectsNewFolder({
+			api, profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'docs/',
+			typeFilter: 'all', favoritesOnly: false, searchText: '', refreshTreeNode,
+			onClearSearch: vi.fn(), onDisableFavoritesOnly: vi.fn(), onShowFolders: vi.fn(), onOpenPrefix: vi.fn(),
+		}), { wrapper: Wrapper })
+		try {
+			act(() => result.current.openNewFolder('other/'))
+			await act(async () => {
+				result.current.handleNewFolderSubmit({
+					name: outcome === 'validation' ? '../bad' : outcome === 'partial' ? 'one/two' : 'child', allowPath: true,
+				})
+				await vi.dynamicImportSettled()
+			})
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.status).toBe(outcome === 'success' ? 'success' : 'error'))
+			if (outcome === 'success') {
+				expect(createFolder).toHaveBeenCalledExactlyOnceWith({ profileId: 'profile-1', bucket: 'bucket-a', key: 'other/child/' })
+				expect(refreshTreeNode).toHaveBeenCalledExactlyOnceWith('other/')
+				expect(messageSuccessMock).toHaveBeenCalledOnce()
+				expect(result.current.newFolderOpen).toBe(false)
+			} else {
+				expect(result.current.newFolderError).toContain(outcome === 'validation' ? 'invalid folder name' : 'folder denied')
+				expect(result.current.newFolderPartialKey).toBe(outcome === 'partial' ? 'other/one/' : null)
+				expect(result.current.newFolderOpen).toBe(true)
+				if (outcome === 'validation') expect(createFolder).not.toHaveBeenCalled()
+			}
+			expect(result.current.newFolderSubmitting).toBe(false)
+		} finally {
+			unmount()
+			queryClient.clear()
+		}
 	})
 
 	it('ignores stale create-folder responses after the dialog closes and reopens', async () => {
