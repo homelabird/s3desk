@@ -138,7 +138,7 @@ func stagingMultipartFormPaths(
 	}
 
 	filename := filepath.Base(relOS)
-	dstPath = uniqueFilePath(dstDir, filename)
+	dstPath = filepath.Join(dstDir, filename)
 	return relPath, relOS, dstDir, dstPath, false, nil
 }
 
@@ -148,19 +148,20 @@ func (s *server) stagingMultipartFormWritePart(
 	dstPath string,
 	remainingBytes *int64,
 	maxBytes int64,
-) (int64, *uploadHTTPError) {
-	if uploadMaxBytesConfigured(maxBytes) && *remainingBytes <= 0 {
-		return 0, newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
+) (string, int64, *uploadHTTPError) {
+	defer func() { _ = part.Close() }()
+	if uploadMaxBytesConfigured(maxBytes) && *remainingBytes < 0 {
+		return "", 0, newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
 	}
-	n, err := writePartToFile(part, dstPath, *remainingBytes)
+	tmpPath, n, err := writeReaderToTempFile(part, dstPath, *remainingBytes)
 	if err != nil {
 		if errors.Is(err, errUploadTooLarge) {
-			return 0, newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
+			return "", 0, newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
 		}
-		return 0, newUploadInternalError("failed to store file", map[string]any{"error": err.Error()})
+		return "", 0, newUploadInternalError("failed to store file", map[string]any{"error": err.Error()})
 	}
 	_ = r
-	return n, nil
+	return tmpPath, n, nil
 }
 
 func (s *server) stagingMultipartFormPersistPart(

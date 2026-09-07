@@ -24,7 +24,7 @@ func uploadRemainingBytes(maxBytes, usedBytes int64) (int64, *uploadHTTPError) {
 		return -1, nil
 	}
 	remaining := maxBytes - usedBytes
-	if remaining <= 0 {
+	if remaining < 0 {
 		return 0, newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
 	}
 	return remaining, nil

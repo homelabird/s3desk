@@ -849,7 +849,10 @@ func TestTryAssembleChunkFileConcurrentCalls(t *testing.T) {
 	)
 	assemble := func() {
 		defer wg.Done()
-		err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2)
+		err := tryAssembleChunkFile(context.Background(), stagingDir, relOS, chunkDir, 2)
+		if err == nil {
+			_, err = os.ReadFile(filepath.Join(stagingDir, relOS))
+		}
 		errCh <- err
 	}
 

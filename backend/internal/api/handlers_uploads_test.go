@@ -237,7 +237,7 @@ func TestTryAssembleChunkFile_PreservesPartsOnAssemblyFailure(t *testing.T) {
 		t.Fatalf("write chunk 1: %v", err)
 	}
 
-	err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2)
+	err := tryAssembleChunkFile(context.Background(), stagingDir, relOS, chunkDir, 2)
 	if err == nil {
 		t.Fatalf("expected assembly error, got nil")
 	}
@@ -250,6 +250,18 @@ func TestTryAssembleChunkFile_PreservesPartsOnAssemblyFailure(t *testing.T) {
 		if _, statErr := os.Stat(filepath.Join(chunkDir, name)); statErr != nil {
 			t.Fatalf("expected part %s to remain, stat err=%v", name, statErr)
 		}
+	}
+	if err := os.Remove(filepath.Join(chunkDir, chunkPartName(0))); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(chunkDir, chunkPartName(0)), []byte("hello "), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := tryAssembleChunkFile(context.Background(), stagingDir, relOS, chunkDir, 2); err != nil {
+		t.Fatalf("retry assembly after read failure: %v", err)
+	}
+	if body, err := os.ReadFile(finalPath); err != nil || string(body) != "hello world" {
+		t.Fatalf("retried body=%q, err=%v", body, err)
 	}
 }
 
@@ -277,8 +289,12 @@ func TestTryAssembleChunkFile_ReplacesExistingFinal(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(chunkDir, chunkPartName(1)), []byte("body"), 0o600); err != nil {
 		t.Fatalf("write chunk 1: %v", err)
 	}
+	// Older servers could leave this marker behind when interrupted.
+	if err := os.WriteFile(filepath.Join(chunkDir, ".assemble.lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-	if err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2); err != nil {
+	if err := tryAssembleChunkFile(context.Background(), stagingDir, relOS, chunkDir, 2); err != nil {
 		t.Fatalf("tryAssembleChunkFile: %v", err)
 	}
 

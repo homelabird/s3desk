@@ -2,8 +2,27 @@ package api
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 )
+
+func TestUniqueFilePathRejectsExhaustedNames(t *testing.T) {
+	dir := t.TempDir()
+	for i := 1; i < 10_000; i++ {
+		name := "file.bin"
+		if i > 1 {
+			name = "file-" + strconv.Itoa(i) + ".bin"
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if path, err := uniqueFilePath(dir, "file.bin"); err == nil || path != "" {
+		t.Fatalf("exhausted names must not reuse an existing file: path=%q err=%v", path, err)
+	}
+}
 
 func TestNormalizeUploadMode(t *testing.T) {
 	t.Parallel()

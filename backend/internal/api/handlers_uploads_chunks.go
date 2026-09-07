@@ -1,13 +1,14 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var errUploadTooLarge = errors.New("upload too large")
@@ -21,40 +22,6 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += int64(n)
 	return n, err
-}
-
-func writePartToFile(part *multipart.Part, dstPath string, maxBytes int64) (int64, error) {
-	defer func() { _ = part.Close() }()
-
-	tmpFile, err := os.CreateTemp(filepath.Dir(dstPath), filepath.Base(dstPath)+".*.tmp")
-	if err != nil {
-		return 0, err
-	}
-	tmpPath := tmpFile.Name()
-	f := tmpFile
-	var r io.Reader = part
-	if maxBytes >= 0 {
-		r = io.LimitReader(part, maxBytes+1)
-	}
-	n, copyErr := copyWithTransferBuffer(f, r)
-	closeErr := f.Close()
-	if copyErr != nil {
-		_ = os.Remove(tmpPath)
-		return n, copyErr
-	}
-	if closeErr != nil {
-		_ = os.Remove(tmpPath)
-		return n, closeErr
-	}
-	if maxBytes >= 0 && n > maxBytes {
-		_ = os.Remove(tmpPath)
-		return n, errUploadTooLarge
-	}
-	if err := os.Rename(tmpPath, dstPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return n, err
-	}
-	return n, nil
 }
 
 func writeReaderToTempFile(r io.Reader, dstPath string, maxBytes int64) (string, int64, error) {
@@ -89,7 +56,41 @@ func chunkPartName(index int) string {
 	return fmt.Sprintf("part-%06d", index)
 }
 
-func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int) error {
+// DATA_DIR has one server owner. Claims protect promotion and assembly, not body reception.
+var stagingPathLocks sync.Map
+
+func lockStagingPath(ctx context.Context, path string) (func(), error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		done := make(chan struct{})
+		active, busy := stagingPathLocks.LoadOrStore(path, done)
+		if !busy {
+			return func() {
+				stagingPathLocks.Delete(path)
+				close(done)
+			}, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-active.(chan struct{}):
+		}
+	}
+}
+
+func tryAssembleChunkFile(ctx context.Context, stagingDir, relOS, chunkDir string, totalChunks int) error {
+	release, err := lockStagingPath(ctx, chunkDir)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return assembleChunkFile(ctx, stagingDir, relOS, chunkDir, totalChunks)
+}
+
+// The caller holds the file's staging chunk lock through validation and assembly.
+func assembleChunkFile(ctx context.Context, stagingDir, relOS, chunkDir string, totalChunks int) error {
 	if totalChunks <= 0 {
 		return nil
 	}
@@ -98,15 +99,6 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int) e
 			return nil
 		}
 	}
-
-	lockPath := filepath.Join(chunkDir, ".assemble.lock")
-	// #nosec G304 -- lockPath is derived from the server-managed chunk directory.
-	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		return nil
-	}
-	_ = lock.Close()
-	defer func() { _ = os.Remove(lockPath) }()
 
 	finalPath := filepath.Join(stagingDir, relOS)
 	dstDir := filepath.Dir(finalPath)
@@ -117,7 +109,8 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int) e
 		return err
 	}
 
-	tmpFile, err := os.CreateTemp(dstDir, filepath.Base(finalPath)+".*.tmp")
+	// A retry removes interrupted assembly files together with the completed chunks.
+	tmpFile, err := os.CreateTemp(chunkDir, filepath.Base(finalPath)+".*.tmp")
 	if err != nil {
 		return err
 	}
@@ -126,6 +119,11 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int) e
 
 	for i := 0; i < totalChunks; i++ {
 		partPath := filepath.Join(chunkDir, chunkPartName(i))
+		if err := ctx.Err(); err != nil {
+			_ = f.Close()
+			_ = os.Remove(tmpPath)
+			return err
+		}
 		if _, err := os.Stat(partPath); err != nil {
 			_ = f.Close()
 			_ = os.Remove(tmpPath)

@@ -49,7 +49,6 @@ type uploadMultipartChunksPreparedRequest struct {
 	meta       store.MultipartUpload
 	client     *s3.Client
 	stagingDir string
-	chunkDir   string
 	err        *uploadHTTPError
 }
 
@@ -306,7 +305,6 @@ func (svc uploadMultipartHTTPService) prepareChunks(r *http.Request) uploadMulti
 	}
 	prepared.query = query
 	prepared.stagingDir = stagingDir
-	prepared.chunkDir = chunkDir
 	return prepared
 }
 
@@ -322,7 +320,10 @@ func (svc uploadMultipartHTTPService) executeChunks(r *http.Request, prepared up
 		resp := buildRemoteMultipartChunkState(parts, prepared.meta)
 		return &resp, nil
 	}
-	resp := buildStagingMultipartChunkState(prepared.chunkDir, prepared.query.total, prepared.query.chunkSize, prepared.query.fileSize)
+	resp, uploadErr := buildStagingMultipartChunkState(r.Context(), prepared.stagingDir, prepared.query.path, prepared.query.total, prepared.query.chunkSize, prepared.query.fileSize)
+	if uploadErr != nil {
+		return nil, uploadErr
+	}
 	return &resp, nil
 }
 
@@ -396,7 +397,10 @@ func (svc uploadMultipartHTTPService) executeGetUploadChunksBatch(r *http.Reques
 			if !isUnderDir(stagingDir, chunkDir) {
 				return nil, uploadMultipartInvalidFieldError("invalid upload path", map[string]any{"path": query.path}), nil
 			}
-			state := buildStagingMultipartChunkState(chunkDir, query.total, query.chunkSize, query.fileSize)
+			state, uploadErr := buildStagingMultipartChunkState(r.Context(), stagingDir, query.path, query.total, query.chunkSize, query.fileSize)
+			if uploadErr != nil {
+				return nil, uploadErr, nil
+			}
 			resp.Items = append(resp.Items, models.UploadChunkStatusBatchItem{Path: query.path, Present: state.Present})
 		}
 		return resp, nil, nil

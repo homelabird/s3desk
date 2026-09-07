@@ -122,7 +122,12 @@ func (s *server) stagingChunkFlow(
 		return uploadErr
 	}
 
+	release, err := lockStagingPath(r.Context(), filepath.Dir(chunkPath))
+	if err != nil {
+		return newUploadInternalError("failed to inspect staged file", map[string]any{"error": err.Error()})
+	}
 	alreadyAssembled, uploadErr := stagingChunkAlreadyAssembled(stagingDir, relOS, filepath.Dir(chunkPath), chunkValues.fileSize)
+	release()
 	if uploadErr != nil {
 		return uploadErr
 	}
@@ -132,16 +137,17 @@ func (s *server) stagingChunkFlow(
 	}
 
 	maxBytes := s.cfg.UploadMaxBytes
-	releasedBytes, uploadErr := s.releaseExistingStagingChunkFinal(r, profileID, uploadID, stagingDir, relOS)
-	if uploadErr != nil {
-		return uploadErr
+	// Credit the replaced file while receiving; change it only after the body is validated.
+	bytesTracked -= fileSizeIfExists(filepath.Join(stagingDir, relOS))
+	remainingBytes := int64(-1)
+	if uploadMaxBytesConfigured(maxBytes) {
+		remainingBytes = maxBytes - bytesTracked
+		// The stored chunk will be replaced, so it already owns these bytes.
+		if remainingBytes+prevSize < 0 {
+			return newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
+		}
 	}
-	bytesTracked -= releasedBytes
-	remainingBytes, uploadErr := uploadRemainingBytes(maxBytes, bytesTracked)
-	if uploadErr != nil {
-		return uploadErr
-	}
-	return s.stagingChunkStore(r, profileID, uploadID, stagingDir, relOS, chunkPath, prevSize, chunkValues, &remainingBytes, maxBytes)
+	return s.stagingChunkWrite(r, profileID, uploadID, stagingDir, relOS, chunkValues, chunkPath, prevSize, &remainingBytes, maxBytes)
 }
 
 func stagingChunkUploadPaths(
@@ -160,18 +166,4 @@ func stagingChunkUploadPaths(
 	chunkPath = filepath.Join(chunkDir, chunkPartName(chunkValues.index))
 	prevSize = fileSizeIfExists(chunkPath)
 	return relOS, chunkDir, chunkPath, prevSize, nil
-}
-
-func (s *server) stagingChunkStore(
-	r *http.Request,
-	profileID, uploadID, stagingDir, relOS, chunkPath string,
-	prevSize int64,
-	chunkValues uploadChunkHeaderValues,
-	remainingBytes *int64,
-	maxBytes int64,
-) *uploadHTTPError {
-	if uploadErr := s.stagingChunkWrite(r, profileID, uploadID, stagingDir, relOS, chunkValues, chunkPath, prevSize, remainingBytes, maxBytes); uploadErr != nil {
-		return uploadErr
-	}
-	return nil
 }

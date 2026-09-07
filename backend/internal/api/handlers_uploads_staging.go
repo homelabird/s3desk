@@ -34,11 +34,23 @@ func (s *server) stagingChunkWrite(
 	}
 	tmpPath, n, err := writeReaderToTempFile(r.Body, chunkPath, limitBytes)
 	if err != nil {
+		if tmpPath == "" && errors.Is(err, os.ErrNotExist) {
+			// Assembly can remove the directory after the readiness check. Confirm
+			// completion under the file lock before acknowledging the duplicate.
+			state, uploadErr := buildStagingMultipartChunkState(r.Context(), stagingDir, filepath.ToSlash(relOS), chunkValues.total, chunkValues.chunkSize, chunkValues.fileSize)
+			if uploadErr != nil {
+				return uploadErr
+			}
+			if len(state.Present) == chunkValues.total {
+				return nil
+			}
+		}
 		if errors.Is(err, errUploadTooLarge) {
 			return newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
 		}
 		return newUploadInternalError("failed to store chunk", map[string]any{"error": err.Error()})
 	}
+	defer func() { _ = os.Remove(tmpPath) }()
 	expectedSize := expectedUploadChunkSize(chunkValues.index, chunkValues.total, chunkValues.chunkSize, chunkValues.fileSize)
 	if n != expectedSize {
 		_ = os.Remove(tmpPath)
@@ -48,6 +60,36 @@ func (s *server) stagingChunkWrite(
 		})
 	}
 
+	if uploadErr := s.stagingChunkStore(r, profileID, uploadID, stagingDir, relOS, chunkPath, tmpPath, n, chunkValues.fileSize); uploadErr != nil {
+		return uploadErr
+	}
+	_, uploadErr := buildStagingMultipartChunkState(r.Context(), stagingDir, filepath.ToSlash(relOS), chunkValues.total, chunkValues.chunkSize, chunkValues.fileSize)
+	return uploadErr
+}
+
+func (s *server) stagingChunkStore(
+	r *http.Request,
+	profileID, uploadID, stagingDir, relOS, chunkPath, tmpPath string,
+	n, fileSize int64,
+) *uploadHTTPError {
+	release, err := lockStagingPath(r.Context(), filepath.Dir(chunkPath))
+	if err != nil {
+		return newUploadInternalError("failed to store chunk", map[string]any{"error": err.Error()})
+	}
+	defer release()
+
+	assembled, uploadErr := stagingChunkAlreadyAssembled(stagingDir, relOS, filepath.Dir(chunkPath), fileSize)
+	if uploadErr != nil {
+		return uploadErr
+	}
+	if assembled {
+		return nil
+	}
+	if _, uploadErr := s.releaseExistingStagingChunkFinal(r, profileID, uploadID, stagingDir, relOS); uploadErr != nil {
+		return uploadErr
+	}
+	// Another request may have stored this same chunk while its body was arriving.
+	prevSize := fileSizeIfExists(chunkPath)
 	delta := n - prevSize
 	if delta != 0 {
 		if uploadErr := s.addUploadSessionBytesWithReservation(r.Context(), profileID, uploadID, delta); uploadErr != nil {
@@ -71,9 +113,6 @@ func (s *server) stagingChunkWrite(
 			details["cleanupError"] = cleanupErr.Error()
 		}
 		return newUploadInternalError("failed to store chunk", details)
-	}
-	if err := tryAssembleChunkFile(stagingDir, relOS, filepath.Dir(chunkPath), chunkValues.total); err != nil {
-		return newUploadInternalError("failed to assemble upload", map[string]any{"error": err.Error()})
 	}
 	return nil
 }
@@ -115,6 +154,7 @@ func (s *server) releaseExistingStagingChunkFinal(
 	return size, nil
 }
 
+// The caller holds the file's staging chunk lock while checking and cleaning up.
 func stagingChunkAlreadyAssembled(stagingDir, relOS, chunkDir string, expectedSize int64) (bool, *uploadHTTPError) {
 	finalPath := filepath.Join(stagingDir, relOS)
 	if !isUnderDir(stagingDir, finalPath) {
@@ -133,26 +173,12 @@ func stagingChunkAlreadyAssembled(stagingDir, relOS, chunkDir string, expectedSi
 	if info.Size() != expectedSize {
 		return false, nil
 	}
-	if stagingChunkDirHasParts(chunkDir) {
-		return false, nil
+	// Promotion is complete once the final file is renamed. A crash or a late
+	// duplicate body may leave chunks or temporary files behind afterwards.
+	if err := os.RemoveAll(chunkDir); err != nil {
+		return false, newUploadInternalError("failed to clean up assembled chunks", map[string]any{"error": err.Error()})
 	}
 	return true, nil
-}
-
-func stagingChunkDirHasParts(chunkDir string) bool {
-	entries, err := os.ReadDir(chunkDir)
-	if err != nil {
-		return false
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			return true
-		}
-		if entry.Type().IsRegular() {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *server) handleStagingMultipartFormUpload(
@@ -171,16 +197,31 @@ func (s *server) stagingMultipartFormPart(
 	remainingBytes *int64,
 	maxBytes int64,
 ) (int, int, *uploadHTTPError) {
-	_, _, _, dstPath, skipped, uploadErr := stagingMultipartFormPaths(stagingDir, part)
+	_, _, dstDir, dstPath, skipped, uploadErr := stagingMultipartFormPaths(stagingDir, part)
 	if skipped {
 		return 0, 1, nil
 	}
 	if uploadErr != nil {
 		return 0, 0, uploadErr
 	}
-	n, uploadErr := s.stagingMultipartFormWritePart(r, part, dstPath, remainingBytes, maxBytes)
+	tmpPath, n, uploadErr := s.stagingMultipartFormWritePart(r, part, dstPath, remainingBytes, maxBytes)
 	if uploadErr != nil {
 		return 0, 0, uploadErr
+	}
+	defer func() { _ = os.Remove(tmpPath) }()
+	// ponytail: serialize name allocation and promotion per directory; use atomic
+	// no-replace promotion if this short section becomes a throughput bottleneck.
+	release, err := lockStagingPath(r.Context(), dstDir)
+	if err != nil {
+		return 0, 0, newUploadInternalError("failed to store file", map[string]any{"error": err.Error()})
+	}
+	defer release()
+	dstPath, err = uniqueFilePath(dstDir, filepath.Base(dstPath))
+	if err != nil {
+		return 0, 0, newUploadInternalError("failed to choose upload filename", map[string]any{"error": err.Error()})
+	}
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		return 0, 0, newUploadInternalError("failed to store file", map[string]any{"error": err.Error()})
 	}
 	if uploadErr := s.stagingMultipartFormPersistPart(r, profileID, uploadID, n, remainingBytes, maxBytes); uploadErr != nil {
 		if cleanupErr := os.Remove(dstPath); cleanupErr != nil {

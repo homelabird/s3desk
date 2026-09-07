@@ -172,22 +172,44 @@ func buildRemoteMultipartChunkState(parts []types.Part, meta store.MultipartUplo
 	return models.UploadChunkState{Present: present}
 }
 
-func buildStagingMultipartChunkState(chunkDir string, total int, chunkSize, fileSize int64) models.UploadChunkState {
+func buildStagingMultipartChunkState(ctx context.Context, stagingDir, relPath string, total int, chunkSize, fileSize int64) (models.UploadChunkState, *uploadHTTPError) {
+	relOS := filepath.FromSlash(relPath)
+	chunkDir := filepath.Join(stagingDir, ".chunks", relOS)
+	release, err := lockStagingPath(ctx, chunkDir)
+	if err != nil {
+		return models.UploadChunkState{}, newUploadInternalError("failed to inspect staged file", map[string]any{"error": err.Error()})
+	}
+	defer release()
+	assembled, uploadErr := stagingChunkAlreadyAssembled(stagingDir, relOS, chunkDir, fileSize)
+	if uploadErr != nil {
+		return models.UploadChunkState{}, uploadErr
+	}
 	present := make([]int, 0, total)
 	for i := 0; i < total; i++ {
+		if assembled {
+			present = append(present, i)
+			continue
+		}
 		partPath := filepath.Join(chunkDir, chunkPartName(i))
-		info, err := os.Stat(partPath)
+		info, err := os.Lstat(partPath)
 		if err != nil {
 			continue
 		}
 		expected := expectedUploadChunkSize(i, total, chunkSize, fileSize)
-		if expected > 0 && info.Size() != expected {
-			_ = os.Remove(partPath)
+		if !info.Mode().IsRegular() || info.Size() != expected {
+			// Keep the stored bytes until replacement can reserve only the size delta.
 			continue
 		}
 		present = append(present, i)
 	}
-	return models.UploadChunkState{Present: present}
+	if !assembled && len(present) == total {
+		// A restarted client skips every reported part, so finish interrupted
+		// assembly before reporting all parts as available for commit.
+		if err := assembleChunkFile(ctx, stagingDir, relOS, chunkDir, total); err != nil {
+			return models.UploadChunkState{}, newUploadInternalError("failed to assemble upload", map[string]any{"error": err.Error()})
+		}
+	}
+	return models.UploadChunkState{Present: present}, nil
 }
 
 func expectedUploadChunkSize(index, total int, chunkSize, fileSize int64) int64 {

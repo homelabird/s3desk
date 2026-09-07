@@ -93,20 +93,21 @@ func safeUploadPath(part *multipart.Part) string {
 	return sanitizeUploadPath(part.FileName())
 }
 
-func uniqueFilePath(dir, filename string) string {
+func uniqueFilePath(dir, filename string) (string, error) {
 	dst := filepath.Join(dir, filename)
-	if _, err := os.Stat(dst); err != nil {
-		return dst
-	}
 	ext := filepath.Ext(filename)
 	base := strings.TrimSuffix(filename, ext)
-	for i := 2; i < 10_000; i++ {
-		candidate := filepath.Join(dir, fmt.Sprintf("%s-%d%s", base, i, ext))
-		if _, err := os.Stat(candidate); err != nil {
-			return candidate
+	for i := 1; i < 10_000; i++ {
+		if i > 1 {
+			dst = filepath.Join(dir, fmt.Sprintf("%s-%d%s", base, i, ext))
+		}
+		if _, err := os.Lstat(dst); os.IsNotExist(err) {
+			return dst, nil
+		} else if err != nil {
+			return "", err
 		}
 	}
-	return dst
+	return "", fmt.Errorf("too many files with the same name")
 }
 
 func parseUploadChunkHeaders(headers http.Header, chunkIndexRaw string, enforceMaxParts bool) (uploadChunkHeaderValues, *uploadHTTPError) {

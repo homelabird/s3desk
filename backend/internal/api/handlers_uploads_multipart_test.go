@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -257,8 +258,12 @@ func TestBuildRemoteMultipartChunkStateFiltersUnexpectedParts(t *testing.T) {
 	}
 }
 
-func TestBuildStagingMultipartChunkStateRemovesWrongSizedChunk(t *testing.T) {
-	chunkDir := t.TempDir()
+func TestBuildStagingMultipartChunkStatePreservesWrongSizedChunkForReplacement(t *testing.T) {
+	stagingDir := t.TempDir()
+	chunkDir := filepath.Join(stagingDir, ".chunks", "file.bin")
+	if err := os.MkdirAll(chunkDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(chunkDir, chunkPartName(0)), []byte("hello"), 0o600); err != nil {
 		t.Fatalf("write chunk0: %v", err)
 	}
@@ -266,11 +271,18 @@ func TestBuildStagingMultipartChunkStateRemovesWrongSizedChunk(t *testing.T) {
 		t.Fatalf("write chunk1: %v", err)
 	}
 
-	state := buildStagingMultipartChunkState(chunkDir, 2, 5, 10)
+	state, uploadErr := buildStagingMultipartChunkState(context.Background(), stagingDir, "file.bin", 2, 5, 10)
+	if uploadErr != nil {
+		t.Fatalf("chunk state: %+v", uploadErr)
+	}
 	if !reflect.DeepEqual(state.Present, []int{0}) {
 		t.Fatalf("expected present [0], got %v", state.Present)
 	}
-	if _, err := os.Stat(filepath.Join(chunkDir, chunkPartName(1))); !os.IsNotExist(err) {
-		t.Fatalf("expected wrong-sized chunk to be removed, got err=%v", err)
+	if body, err := os.ReadFile(filepath.Join(chunkDir, chunkPartName(1))); err != nil || string(body) != "bad" {
+		t.Fatalf("expected wrong-sized chunk retained for byte accounting, body=%q err=%v", body, err)
+	}
+	state, uploadErr = buildStagingMultipartChunkState(context.Background(), stagingDir, "file.bin", 1, 5, 0)
+	if uploadErr != nil || len(state.Present) != 0 {
+		t.Fatalf("nonempty chunk must not satisfy a zero-byte file: state=%+v error=%+v", state, uploadErr)
 	}
 }
