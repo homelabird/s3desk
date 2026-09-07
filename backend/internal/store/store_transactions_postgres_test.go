@@ -18,6 +18,7 @@ func TestPostgresTransactionReliability(t *testing.T) {
 		{"upload object byte limit", testUpsertUploadObjectWithByteLimitConcurrentSessionLimit},
 		{"upload session byte limit", testAddUploadSessionBytesWithinLimitRejectsConcurrentOverage},
 		{"upload metadata rollback", testDeleteUploadSessionRollsBackAllMetadataOnFailure},
+		{"expired upload pagination", testListExpiredUploadSessionsPagination},
 		{"profile rollback", testUpdateProfileRollsBackWhenReloadFails},
 		{"profile concurrent updates", testUpdateProfileSerializesProviderConfigChanges},
 		{"job batch rollback", testCancelQueuedJobsByIDsRollsBackFailedBatch},

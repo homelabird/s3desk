@@ -87,10 +87,13 @@ func (m *Manager) runMaintenanceCycle(ctx context.Context) {
 func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 	const resource = "upload_sessions"
 	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
+	// Jobs starting after this cutoff reject these already-expired sessions.
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var after *store.UploadSession
+	activeUploads := make(map[[2]string]struct{})
 
 	for {
-		sessions, err := m.store.ListExpiredUploadSessions(ctx, now, 200)
+		sessions, err := m.store.ListExpiredUploadSessions(ctx, now, 200, after)
 		m.metrics.AddMaintenanceCleanup(resource, "db_batch", 1)
 		if err != nil {
 			m.recordMaintenanceError(resource, "list_expired", err)
@@ -99,14 +102,32 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 		if len(sessions) == 0 {
 			return
 		}
+		if after == nil {
+			runningJobs, err := m.store.ListJobsByStatus(ctx, models.JobStatusRunning)
+			m.metrics.AddMaintenanceCleanup(resource, "db_batch", 1)
+			if err != nil {
+				m.recordMaintenanceError(resource, "list_running_jobs", err)
+				return
+			}
+			for _, job := range runningJobs {
+				if job.Job.Type != JobTypeTransferSyncStagingToS3 {
+					continue
+				}
+				if uploadID, ok := job.Job.Payload["uploadId"].(string); ok && uploadID != "" {
+					activeUploads[[2]string{job.ProfileID, uploadID}] = struct{}{}
+				}
+			}
+		}
 		m.metrics.AddMaintenanceCleanup(resource, "scanned", len(sessions))
 		secretsByProfile := make(map[string]models.ProfileSecrets)
-		deleted := 0
 		for _, us := range sessions {
 			select {
 			case <-ctx.Done():
 				return
 			default:
+			}
+			if _, active := activeUploads[[2]string{us.ProfileID, us.ID}]; active {
+				continue
 			}
 			logCleanupError := func(step string, err error) {
 				if err == nil {
@@ -140,12 +161,10 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 				logCleanupError("upload_session_state", err)
 				continue
 			}
-			deleted++
 			m.metrics.AddMaintenanceCleanup(resource, "deleted", 1)
 		}
-		if deleted == 0 {
-			return
-		}
+		// Retry failures next cycle without blocking later sessions or revisiting this batch.
+		after = &sessions[len(sessions)-1]
 	}
 }
 

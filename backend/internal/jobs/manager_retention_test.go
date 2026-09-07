@@ -764,6 +764,148 @@ func TestCleanupExpiredUploadSessionsReusesProfileSecretsWhileAbortingMultipart(
 	}
 }
 
+func TestCleanupExpiredUploadSessionsContinuesPastFailures(t *testing.T) {
+	for _, failureCount := range []int{1, 200} {
+		t.Run(fmt.Sprintf("failures_%d", failureCount), func(t *testing.T) {
+			manager, st, _, _, profile, _ := newManagerConsistencyFixture(t)
+			ctx := context.Background()
+			expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+			var sessions []store.UploadSession
+			failed := make(map[string]bool)
+			for i := 0; i < failureCount+201; i++ {
+				expiresAt := expiredAt
+				if i == failureCount+200 {
+					expiresAt = time.Now().Add(-30 * time.Minute).UTC().Format(time.RFC3339Nano)
+				}
+				session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "incoming", "direct", "", expiresAt)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sessions = append(sessions, session)
+				failed[session.ID] = i < failureCount
+			}
+			future, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "incoming", "direct", "", time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano))
+			if err != nil {
+				t.Fatal(err)
+			}
+			attempts := make(map[string]int)
+			allowCleanup := false
+			installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, jobID string, _ []string) (*rcloneProcess, error) {
+				id := strings.TrimPrefix(jobID, "upload-session-cleanup-")
+				attempts[id]++
+				if failed[id] && !allowCleanup {
+					return nil, errors.New("temporary provider failure")
+				}
+				return newTestRcloneProcess("", "", nil), nil
+			})
+
+			manager.cleanupExpiredUploadSessions(ctx)
+
+			for _, session := range sessions {
+				if attempts[session.ID] != 1 {
+					t.Errorf("session %s attempts=%d, want one per cycle", session.ID, attempts[session.ID])
+				}
+				if _, exists, err := st.GetUploadSession(ctx, profile.ID, session.ID); err != nil || exists != failed[session.ID] {
+					t.Errorf("session %s exists=%v err=%v, want exists=%v", session.ID, exists, err, failed[session.ID])
+				}
+			}
+			if attempts[future.ID] != 0 {
+				t.Fatal("unexpired session was cleaned")
+			}
+
+			allowCleanup = true
+			manager.cleanupExpiredUploadSessions(ctx)
+			for id, wasFailed := range failed {
+				if !wasFailed {
+					continue
+				}
+				if attempts[id] != 2 {
+					t.Errorf("failed session %s attempts=%d, want a retry next cycle", id, attempts[id])
+				}
+				if _, exists, err := st.GetUploadSession(ctx, profile.ID, id); err != nil || exists {
+					t.Errorf("recovered session %s exists=%v err=%v", id, exists, err)
+				}
+			}
+		})
+	}
+}
+
+func TestCleanupExpiredUploadSessionsPreservesRunningStagingTransfer(t *testing.T) {
+	manager, st, _, gormDB, profile, dataDir := newManagerConsistencyFixture(t)
+	ctx := context.Background()
+	expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "incoming", "staging", "pending", expiredAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagingDir, err := store.ResolveUploadStagingDir(dataDir, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUploadSessionStagingDir(ctx, profile.ID, session.ID, stagingDir); err != nil {
+		t.Fatal(err)
+	}
+	filePath := filepath.Join(stagingDir, "pending.bin")
+	if err := os.WriteFile(filePath, []byte("still uploading"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job, err := st.CreateJob(ctx, profile.ID, store.CreateJobInput{
+		Type: JobTypeTransferSyncStagingToS3, Payload: map[string]any{"uploadId": session.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpdateJobStatus(ctx, job.ID, models.JobStatusRunning, nil, nil, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	unrelated, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "incoming", "staging", "", expiredAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const callback = "test_expired_upload_running_job_lookup_failure"
+	if err := gormDB.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement.Table == "jobs" {
+			tx.AddError(errors.New("running job lookup unavailable"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manager.cleanupExpiredUploadSessions(ctx)
+	if err := gormDB.Callback().Query().Remove(callback); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists, err := st.GetUploadSession(ctx, profile.ID, unrelated.ID); err != nil || !exists {
+		t.Fatalf("cleanup proceeded without running job state: exists=%v err=%v", exists, err)
+	}
+
+	manager.cleanupExpiredUploadSessions(ctx)
+
+	if content, err := os.ReadFile(filePath); err != nil || string(content) != "still uploading" {
+		t.Fatalf("running transfer lost its source: content=%q err=%v", content, err)
+	}
+	if _, exists, err := st.GetUploadSession(ctx, profile.ID, session.ID); err != nil || !exists {
+		t.Fatalf("running transfer lost its session: exists=%v err=%v", exists, err)
+	}
+	if _, exists, err := st.GetUploadSession(ctx, profile.ID, unrelated.ID); err != nil || exists {
+		t.Fatalf("unrelated expired session exists=%v err=%v", exists, err)
+	}
+
+	if err := st.UpdateJobStatus(ctx, job.ID, models.JobStatusFailed, nil, nil, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	manager.cleanupExpiredUploadSessions(ctx)
+	if _, err := os.Stat(stagingDir); !os.IsNotExist(err) {
+		t.Fatalf("finished transfer staging remains: %v", err)
+	}
+	if _, exists, err := st.GetUploadSession(ctx, profile.ID, session.ID); err != nil || exists {
+		t.Fatalf("finished transfer session exists=%v err=%v", exists, err)
+	}
+}
+
 func TestCleanupOrphanAPIRcloneConfigsRemovesOnlyExpiredFiles(t *testing.T) {
 	dataDir := t.TempDir()
 	dir := filepath.Join(dataDir, "tmp", "rclone")

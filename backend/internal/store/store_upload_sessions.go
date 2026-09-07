@@ -283,7 +283,7 @@ func (s *Store) DeleteUploadSession(ctx context.Context, profileID, uploadID str
 	return err == nil && rowsAffected > 0, err
 }
 
-func (s *Store) ListExpiredUploadSessions(ctx context.Context, nowRFC3339Nano string, limit int) ([]UploadSession, error) {
+func (s *Store) ListExpiredUploadSessions(ctx context.Context, nowRFC3339Nano string, limit int, after *UploadSession) ([]UploadSession, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -291,10 +291,13 @@ func (s *Store) ListExpiredUploadSessions(ctx context.Context, nowRFC3339Nano st
 		limit = 1000
 	}
 
+	query := s.db.WithContext(ctx).Where("expires_at < ?", nowRFC3339Nano)
+	if after != nil {
+		query = query.Where("expires_at > ? OR (expires_at = ? AND id > ?)", after.ExpiresAt, after.ExpiresAt, after.ID)
+	}
 	var rows []uploadSessionRow
-	if err := s.db.WithContext(ctx).
-		Where("expires_at < ?", nowRFC3339Nano).
-		Order("expires_at ASC").
+	if err := query.
+		Order("expires_at ASC, id ASC").
 		Limit(limit).
 		Find(&rows).Error; err != nil {
 		return nil, err
