@@ -12,13 +12,16 @@ export function useBucketsPageScopeState({
 	profileId,
 }: UseBucketsPageScopeStateArgs) {
 	const currentScopeKey = `${apiToken}:${profileId ?? 'none'}`
-	const bucketsPageContextVersionRef = useRef(0)
+	const bucketsPageContextVersionRef = useRef(1)
 	const latestScopeKeyRef = useRef(currentScopeKey)
 	const viewState = useBucketScopedViewState(currentScopeKey)
 
 	useLayoutEffect(() => {
 		latestScopeKeyRef.current = currentScopeKey
-		bucketsPageContextVersionRef.current += 1
+		return () => {
+			latestScopeKeyRef.current = ''
+			bucketsPageContextVersionRef.current += 1
+		}
 	}, [currentScopeKey])
 
 	return {

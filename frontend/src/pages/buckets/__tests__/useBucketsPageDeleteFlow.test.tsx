@@ -1,13 +1,15 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
+import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { buildDialogPreferenceKey, setDialogDismissed } from '../../../lib/dialogPreferences'
 import { buildBucketDeleteJobNavigationState, buildBucketObjectsNavigationState } from '../bucketNotEmptyNavigation'
 import { useBucketsPageDeleteFlow } from '../useBucketsPageDeleteFlow'
+import { useBucketsPageScopeState } from '../useBucketsPageScopeState'
 
 const { messageSuccessMock, messageWarningMock, messageErrorMock } = vi.hoisted(() => ({
   messageSuccessMock: vi.fn(),
@@ -51,6 +53,58 @@ afterEach(() => {
 })
 
 describe('useBucketsPageDeleteFlow', () => {
+  it('ignores a delete confirmation accepted after leaving the page', async () => {
+    const queryClient = createQueryClient()
+    const deleteBucket = vi.fn().mockResolvedValue(undefined)
+    const { result, unmount } = renderHook(() => {
+      const scope = useBucketsPageScopeState({ apiToken: 'token-a', profileId: 'profile-1' })
+      return useBucketsPageDeleteFlow({
+        ...scope, api: createMockApiClient({ buckets: { deleteBucket } }),
+        apiToken: 'token-a', profileId: 'profile-1', queryClient, navigate: vi.fn(),
+      })
+    }, { wrapper: createWrapper(queryClient) })
+    const confirmDelete = result.current.deleteBucket
+    unmount()
+    await confirmDelete('primary-bucket')
+    expect(deleteBucket).not.toHaveBeenCalled()
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+    queryClient.clear()
+  })
+
+  it.each(['success', 'error'] as const)('suppresses a %s result after leaving the page while preserving the original deletion', async (outcome) => {
+    const queryClient = createQueryClient()
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+    const deleteBucket = vi.fn().mockResolvedValue(undefined)
+    if (outcome === 'error') deleteBucket.mockRejectedValue(new Error('deletion denied'))
+    const api = createMockApiClient({ buckets: { deleteBucket } })
+    const initialProps = { api, apiToken: 'token-a', profileId: 'profile-1' }
+    const { result, unmount } = renderHook((props) => {
+      const scope = useBucketsPageScopeState(props)
+      return useBucketsPageDeleteFlow({ ...props, ...scope, queryClient, navigate: vi.fn() })
+    }, { initialProps, wrapper: createWrapper(queryClient) })
+    try {
+      onlineManager.setOnline(false)
+      act(() => { void result.current.deleteBucket('primary-bucket').catch(() => undefined) })
+      const mutation = queryClient.getMutationCache().getAll()[0]
+      await waitFor(() => expect(mutation.state.context).toBeDefined())
+      expect(mutation.state.isPaused).toBe(true)
+      expect(api.buckets.deleteBucket).not.toHaveBeenCalled()
+      unmount()
+      onlineManager.setOnline(true)
+      await queryClient.resumePausedMutations()
+      await waitFor(() => expect(mutation.state.status).toBe(outcome === 'success' ? 'success' : 'error'))
+      expect(api.buckets.deleteBucket).toHaveBeenCalledExactlyOnceWith('profile-1', 'primary-bucket')
+      if (outcome === 'error') expect(invalidateQueries).not.toHaveBeenCalled()
+      else expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({ queryKey: queryKeys.buckets.list('profile-1', 'token-a'), exact: true })
+      expect(messageSuccessMock).not.toHaveBeenCalled()
+      expect(messageErrorMock).not.toHaveBeenCalled()
+    } finally {
+      onlineManager.setOnline(true)
+      unmount()
+      queryClient.clear()
+    }
+  })
+
   it('ignores stale delete callbacks captured before the scope changes', async () => {
     const deleteBucketApi = vi.fn().mockResolvedValue(undefined)
     const api = createMockApiClient({

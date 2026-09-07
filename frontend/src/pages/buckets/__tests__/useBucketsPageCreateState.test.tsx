@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { APIError } from '../../../api/client'
 import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useBucketsPageCreateState } from '../useBucketsPageCreateState'
+import { useBucketsPageScopeState } from '../useBucketsPageScopeState'
 
 const {
 	messageErrorMock,
@@ -53,6 +54,49 @@ afterEach(() => {
 })
 
 describe('useBucketsPageCreateState', () => {
+	it.each(['success', 'partial', 'error'] as const)('suppresses a %s result after leaving the page while preserving the created bucket cache', async (outcome) => {
+		const queryClient = createQueryClient()
+		const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+		const createBucket = vi.fn().mockResolvedValue(undefined)
+		if (outcome === 'partial') createBucket.mockRejectedValue(new APIError({
+			status: 500, code: 'bucket_defaults_apply_failed', message: 'secure defaults failed',
+			details: { bucketCreated: true, applySection: 'retention' },
+		}))
+		if (outcome === 'error') createBucket.mockRejectedValue(new Error('creation denied'))
+		const api = createMockApiClient({ buckets: { createBucket } })
+		const closeCreateModal = vi.fn()
+		const initialProps = { api, apiToken: 'token-a', profileId: 'profile-1' }
+		const { result, unmount } = renderHook((props) => {
+			const scope = useBucketsPageScopeState(props)
+			return useBucketsPageCreateState({
+				...props, queryClient, closeCreateModal, bucketsPageContextVersionRef: scope.bucketsPageContextVersionRef,
+			})
+		}, { initialProps, wrapper: createWrapper(queryClient) })
+		try {
+			onlineManager.setOnline(false)
+			act(() => result.current.submitCreateBucket({ name: 'primary-bucket' }))
+			const mutation = queryClient.getMutationCache().getAll()[0]
+			await waitFor(() => expect(mutation.state.context).toBeDefined())
+			expect(mutation.state.isPaused).toBe(true)
+			expect(createBucket).not.toHaveBeenCalled()
+			unmount()
+			onlineManager.setOnline(true)
+			await queryClient.resumePausedMutations()
+			await waitFor(() => expect(mutation.state.status).toBe(outcome === 'success' ? 'success' : 'error'))
+			expect(createBucket).toHaveBeenCalledExactlyOnceWith('profile-1', { name: 'primary-bucket' })
+			if (outcome === 'error') expect(invalidateQueries).not.toHaveBeenCalled()
+			else expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({ queryKey: queryKeys.buckets.list('profile-1', 'token-a'), exact: true })
+			expect(closeCreateModal).not.toHaveBeenCalled()
+			expect(messageSuccessMock).not.toHaveBeenCalled()
+			expect(messageWarningMock).not.toHaveBeenCalled()
+			expect(messageErrorMock).not.toHaveBeenCalled()
+		} finally {
+			onlineManager.setOnline(true)
+			unmount()
+			queryClient.clear()
+		}
+	})
+
 	it('warns and closes the modal when secure defaults fail after bucket creation', async () => {
 		const createBucket = vi.fn().mockRejectedValue(
 			new APIError({

@@ -5,7 +5,7 @@ import {
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
 import { expectMinTouchTarget, restoreProjectViewport } from './support/geometry'
-import { clickBucketCardManageAction, gotoBucketsPage } from './support/ui'
+import { clickBucketCardManageAction, gotoBucketsPage, gotoProfilesPage } from './support/ui'
 
 const primaryBucket = 'responsive-bucket'
 
@@ -129,6 +129,99 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		await expect(dialog).toBeVisible()
 		await dialog.getByRole('button', { name: 'Cancel' }).click()
 		await expect(dialog).toHaveCount(0)
+	})
+
+	for (const outcome of ['success', 'partial'] as const) {
+		test(`refreshes the bucket list after creation with ${outcome} result and after deletion`, async ({ page }) => {
+			await setupBucketsPage(page, { profileProvider: 'aws_s3' })
+			const bucketName = `created-${outcome}-bucket`
+			let created = false
+			const creates: Array<{ profileId?: string; request: unknown }> = []
+			const deletes: Array<string | undefined> = []
+			await page.route('**/api/v1/buckets', async (route) => {
+				if (route.request().method() === 'GET') {
+					return route.fulfill({ json: [{ name: primaryBucket }, ...(created ? [{ name: bucketName }] : [])] })
+				}
+				if (route.request().method() !== 'POST') return route.fallback()
+				creates.push({ profileId: route.request().headers()['x-profile-id'], request: route.request().postDataJSON() })
+				created = true
+				return route.fulfill(outcome === 'success' ? { status: 201, json: { name: bucketName } } : {
+					status: 500, json: { error: {
+						code: 'bucket_defaults_apply_failed', message: 'secure defaults failed',
+						details: { bucketCreated: true, applySection: 'encryption' },
+					} },
+				})
+			})
+			await page.route(`**/api/v1/buckets/${bucketName}`, async (route) => {
+				if (route.request().method() !== 'DELETE') return route.fallback()
+				deletes.push(route.request().headers()['x-profile-id'])
+				created = false
+				return route.fulfill({ status: 204 })
+			})
+			await page.getByRole('button', { name: 'New Bucket' }).click()
+			const dialog = page.getByRole('dialog', { name: 'Create Bucket' })
+			await dialog.getByLabel('Bucket name').fill(bucketName)
+			await dialog.getByRole('switch', { name: 'Apply recommended AWS secure defaults' }).click()
+			await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+			await expect(dialog).toHaveCount(0)
+			expect(creates).toEqual([{ profileId: 'profiles-buckets-mobile-profile', request: expect.objectContaining({
+				name: bucketName, defaults: expect.objectContaining({ encryption: { mode: 'sse_s3' } }),
+			}) }])
+			const feedback = page.locator('.ant-message-notice-content').filter({
+				hasText: outcome === 'success' ? 'Bucket created' : 'Bucket created, but secure defaults failed while applying encryption.',
+			})
+			await expect(feedback).toBeVisible()
+			const bucketCard = getBucketCard(page, bucketName)
+			await expect(bucketCard).toBeVisible()
+			await clickBucketCardManageAction(page, bucketCard, bucketName, /Delete bucket/)
+			const confirmDialog = page.getByRole('dialog', { name: `Delete bucket "${bucketName}"?` })
+			await confirmDialog.getByLabel(`Type "${bucketName}" to confirm`).fill(bucketName)
+			await confirmDialog.getByRole('button', { name: 'Delete', exact: true }).click()
+			await expect(confirmDialog).toHaveCount(0)
+			await expect(bucketCard).toHaveCount(0)
+			expect(deletes).toEqual(['profiles-buckets-mobile-profile'])
+		})
+	}
+
+	test('does not show a late creation warning after browser back and refreshes the list on return', async ({ page }) => {
+		await installProfilesBucketsMobileResponsiveFixtures(page, { profileProvider: 'aws_s3' })
+		await seedProfilesBucketsMobileResponsiveStorage(page)
+		const bucketName = 'late-created-bucket'
+		let created = false
+		let started = false
+		let releaseCreate!: () => void
+		const createGate = new Promise<void>((resolve) => { releaseCreate = resolve })
+		await page.route('**/api/v1/buckets', async (route) => {
+			if (route.request().method() === 'GET') {
+				return route.fulfill({ json: [{ name: primaryBucket }, ...(created ? [{ name: bucketName }] : [])] })
+			}
+			if (route.request().method() !== 'POST') return route.fallback()
+			started = true
+			await createGate
+			created = true
+			return route.fulfill({ status: 500, json: { error: {
+				code: 'bucket_defaults_apply_failed', message: 'secure defaults failed',
+				details: { bucketCreated: true, applySection: 'encryption' },
+			} } })
+		})
+		await gotoProfilesPage(page)
+		await page.getByRole('button', { name: 'Open navigation' }).click()
+		await page.getByRole('link', { name: 'Buckets', exact: true }).click()
+		await page.getByRole('button', { name: 'New Bucket' }).click()
+		const dialog = page.getByRole('dialog', { name: 'Create Bucket' })
+		await dialog.getByLabel('Bucket name').fill(bucketName)
+		await dialog.getByRole('switch', { name: 'Apply recommended AWS secure defaults' }).click()
+		const response = page.waitForResponse((resp) => resp.request().method() === 'POST' && new URL(resp.url()).pathname === '/api/v1/buckets')
+		await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+		await expect.poll(() => started).toBe(true)
+		await page.goBack()
+		await expect(page).toHaveURL(/\/profiles$/)
+		await expect(dialog).toHaveCount(0)
+		releaseCreate()
+		await response
+		await page.goForward()
+		await expect(getBucketCard(page, bucketName)).toBeVisible()
+		expect(await page.locator('.ant-message-notice-content').filter({ hasText: 'secure defaults failed' }).count()).toBe(0)
 	})
 
 	test('opens policy and controls overlays from compact bucket cards', async ({ page }) => {

@@ -49,23 +49,25 @@ export function useBucketsPageCreateState({
 			})
 		},
 		onError: async (err, __, context) => {
-			if (context?.contextVersion && context.contextVersion !== bucketsPageContextVersionRef.current) {
-				return
-			}
-			if (
+			const bucketCreated =
 				err instanceof APIError &&
 				err.code === 'bucket_defaults_apply_failed' &&
 				err.details?.bucketCreated === true
-			) {
+			if (bucketCreated) {
+				await queryClient.invalidateQueries({
+					queryKey: queryKeys.buckets.list(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
+					exact: true,
+				})
+			}
+			if (context?.contextVersion && context.contextVersion !== bucketsPageContextVersionRef.current) {
+				return
+			}
+			if (bucketCreated) {
 				const applySection =
 					typeof err.details?.applySection === 'string'
 						? err.details.applySection.trim()
 						: ''
 				bucketsFeedback.secureDefaultsApplyFailed(applySection)
-				await queryClient.invalidateQueries({
-					queryKey: queryKeys.buckets.list(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
-					exact: true,
-				})
 				closeCreateModal()
 				return
 			}
