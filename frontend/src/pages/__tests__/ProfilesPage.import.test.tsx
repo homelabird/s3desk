@@ -166,7 +166,7 @@ afterEach(() => {
 })
 
 describe('ProfilesPage import flow', () => {
-	it('closes the import modal and ignores stale import success after the api token changes', async () => {
+	it('refreshes only the original import scope after the api token changes', async () => {
 		const client = createClient()
 		const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 		const createProfileRequest = deferred<{
@@ -187,7 +187,7 @@ describe('ProfilesPage import flow', () => {
 		const { rerender } = render(
 			<QueryClientProvider client={client}>
 				<MemoryRouter>
-					<ProfilesPage apiToken="token-1" profileId={null} setProfileId={vi.fn()} />
+					<ProfilesPage key="profiles:token-1" apiToken="token-1" profileId={null} setProfileId={vi.fn()} />
 				</MemoryRouter>
 			</QueryClientProvider>,
 		)
@@ -205,7 +205,7 @@ describe('ProfilesPage import flow', () => {
 		rerender(
 			<QueryClientProvider client={client}>
 				<MemoryRouter>
-					<ProfilesPage apiToken="token-2" profileId={null} setProfileId={vi.fn()} />
+					<ProfilesPage key="profiles:token-2" apiToken="token-2" profileId={null} setProfileId={vi.fn()} />
 				</MemoryRouter>
 			</QueryClientProvider>,
 		)
@@ -231,7 +231,7 @@ describe('ProfilesPage import flow', () => {
 		})
 
 		expect(screen.queryByRole('dialog', { name: 'Import Profile YAML' })).not.toBeInTheDocument()
-		expect(invalidateSpy).not.toHaveBeenCalled()
+		expect(invalidateSpy).toHaveBeenCalledExactlyOnceWith({ queryKey: queryKeys.profiles.list('token-1'), exact: true })
 	})
 
 	it('ignores stale file-reader results after closing and reopening the import modal', async () => {

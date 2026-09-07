@@ -124,7 +124,6 @@ export function useProfilesYamlImportExport({
 		mutationFn: async ({
 			profileId,
 			yamlText,
-			requestId,
 		}: {
 			profileId: string
 			yamlText: string
@@ -132,55 +131,54 @@ export function useProfilesYamlImportExport({
 		}) => {
 			const { updateRequest, tlsConfig, hasTLSBlock } = await parseProfileYamlForUpdate(yamlText)
 			const updated = await api.profiles.updateProfile(profileId, updateRequest)
-			if (hasTLSBlock) {
-				if (tlsConfig) {
-					await api.profiles.updateProfileTLS(profileId, tlsConfig)
-				} else {
-					await api.profiles.deleteProfileTLS(profileId)
+			try {
+				if (hasTLSBlock) {
+					if (tlsConfig) {
+						await api.profiles.updateProfileTLS(profileId, tlsConfig)
+					} else {
+						await api.profiles.deleteProfileTLS(profileId)
+					}
 				}
+				const canonicalYaml = await api.profiles.exportProfileYaml(profileId)
+				return { updated, canonicalYaml }
+			} finally {
+				await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(apiToken), exact: true })
+				await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.tls(profileId, apiToken), exact: true })
 			}
-			const canonicalYaml = await api.profiles.exportProfileYaml(profileId)
-			return { updated, canonicalYaml, requestId }
 		},
 		onMutate: ({ profileId, requestId }) => ({
 			profileId,
 			requestId,
-			scopeApiToken: apiToken,
 			scopeKey: currentScopeKey,
 			scopeVersion: serverScopeVersionRef.current,
 		}),
-		onSuccess: async ({ updated, canonicalYaml, requestId }, _vars, context) => {
+		onSuccess: ({ updated, canonicalYaml }, vars, context) => {
 			if (
 				!matchesScopedProfileRequest({
 					context,
 					isActiveRef,
 					currentScopeKey,
 					currentScopeVersion: serverScopeVersionRef.current,
-					expectedRequestId: requestId,
+					expectedRequestId: yamlRequestIdRef.current,
 					expectedProfileId: yamlProfileIdRef.current,
 				})
 			) return
 			profilesFeedback.profileYamlSaved()
 			yamlProfileIdRef.current = updated.id
-				setYamlProfile(updated)
-				setYamlContent(canonicalYaml)
-				setYamlDraft(canonicalYaml)
-				setYamlError(null)
-				setYamlIncludesSecrets(false)
-				await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(context.scopeApiToken), exact: true })
-			await queryClient.invalidateQueries({
-				queryKey: queryKeys.profiles.tls(updated.id, context.scopeApiToken),
-				exact: true,
-			})
+			setYamlProfile(updated)
+			setYamlContent(canonicalYaml)
+			setYamlDraft((draft) => draft === vars.yamlText ? canonicalYaml : draft)
+			setYamlError(null)
+			setYamlIncludesSecrets(false)
 		},
-		onError: (err, vars, context) => {
+		onError: (err, _vars, context) => {
 			if (
 				!matchesScopedProfileRequest({
 					context,
 					isActiveRef,
 					currentScopeKey,
 					currentScopeVersion: serverScopeVersionRef.current,
-					expectedRequestId: vars.requestId,
+					expectedRequestId: yamlRequestIdRef.current,
 					expectedProfileId: yamlProfileIdRef.current,
 				})
 			) return
@@ -193,15 +191,18 @@ export function useProfilesYamlImportExport({
 		mutationFn: async ({ yamlText }: { yamlText: string; sessionToken: number }) => {
 			const { request, tlsConfig } = await parseProfileYaml(yamlText)
 			const created = await api.profiles.createProfile(request)
-			if (tlsConfig) {
-				await api.profiles.updateProfileTLS(created.id, tlsConfig)
+			try {
+				if (tlsConfig) {
+					await api.profiles.updateProfileTLS(created.id, tlsConfig)
+				}
+				return created
+			} finally {
+				await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(apiToken), exact: true })
 			}
-			return created
 		},
 		onMutate: ({ sessionToken }) => {
 			const context = {
 				sessionToken,
-				scopeApiToken: apiToken,
 				scopeKey: currentScopeKey,
 				scopeVersion: serverScopeVersionRef.current,
 			}
@@ -209,7 +210,7 @@ export function useProfilesYamlImportExport({
 			setImportLoading(true)
 			return context
 		},
-		onSuccess: async (created, _vars, context) => {
+		onSuccess: (created, _vars, context) => {
 			if (
 				!matchesScopedSession({
 					context,
@@ -221,7 +222,6 @@ export function useProfilesYamlImportExport({
 			) return
 			profilesFeedback.importedProfile(created.name)
 			closeImportModal()
-			await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(context.scopeApiToken), exact: true })
 		},
 		onError: (err, _vars, context) => {
 			if (

@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import type { ProfileFormValues } from '../profileTypes'
 import { useProfilesPageMutations } from '../useProfilesPageMutations'
+import { useProfilesPageScopeState } from '../useProfilesPageScopeState'
+import { useProfilesPageTLSState } from '../useProfilesPageTLSState'
 
 function deferred<T>() {
 	let resolve!: (value: T) => void
@@ -72,7 +74,6 @@ function buildBaseArgs(
 		api: createMockApiClient(),
 		apiToken: 'token-a',
 		currentScopeKey: 'token-a::profiles',
-		profileId: 'profile-1',
 		setProfileId: vi.fn(),
 		createModalSession: 1,
 		editModalSession: 1,
@@ -91,6 +92,108 @@ afterEach(() => {
 })
 
 describe('useProfilesPageMutations', () => {
+	it.each(['create', 'edit', 'delete'] as const)('finishes %s cache and TLS work after the page unmounts', async (operation) => {
+		const request = deferred<{ id: string }>()
+		const save = vi.fn().mockImplementation(() => request.promise)
+		const updateProfileTLS = vi.fn().mockResolvedValue(undefined)
+		const deleteProfileTLS = vi.fn().mockResolvedValue(undefined)
+		const args = buildBaseArgs({
+			api: createMockApiClient({ profiles: {
+				createProfile: save, updateProfile: save, deleteProfile: save, updateProfileTLS, deleteProfileTLS,
+			} }),
+		})
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		const success = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const { result, unmount } = renderHook(() => {
+			const scope = useProfilesPageScopeState(args.apiToken)
+			const tls = useProfilesPageTLSState({
+				api: args.api, apiToken: args.apiToken, queryClient, activeEditProfile: null, tlsCapability: { enabled: true },
+			})
+			return useProfilesPageMutations({ ...args, ...scope, applyTLSUpdate: tls.applyTLSUpdate })
+		}, { wrapper: createWrapper(queryClient) })
+		const values = { ...buildProfileFormValues(), tlsEnabled: true, tlsAction: 'disable' as const,
+			tlsClientCertPem: 'test-cert', tlsClientKeyPem: 'test-key' }
+		let pending!: Promise<unknown>
+		act(() => {
+			pending = operation === 'create' ? result.current.createMutation.mutateAsync(values)
+				: operation === 'edit' ? result.current.updateMutation.mutateAsync({ id: 'profile-1', values })
+					: result.current.deleteMutation.mutateAsync('profile-1')
+		})
+		await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+		unmount()
+		await act(async () => { request.resolve({ id: 'profile-1' }); await pending })
+		expect(args.invalidateProfilesQuery).toHaveBeenCalledExactlyOnceWith('token-a')
+		if (operation === 'create') {
+			expect(updateProfileTLS).toHaveBeenCalledExactlyOnceWith('profile-1', {
+				mode: 'mtls', clientCertPem: 'test-cert', clientKeyPem: 'test-key',
+			})
+		} else if (operation === 'edit') {
+			expect(deleteProfileTLS).toHaveBeenCalledExactlyOnceWith('profile-1')
+		} else {
+			expect(updateProfileTLS).not.toHaveBeenCalled()
+			expect(deleteProfileTLS).not.toHaveBeenCalled()
+		}
+		expect(args.setProfileId).not.toHaveBeenCalled()
+		expect(args.closeCreateModal).not.toHaveBeenCalled()
+		expect(args.closeEditModal).not.toHaveBeenCalled()
+		expect(success).not.toHaveBeenCalled()
+		queryClient.clear()
+	})
+
+	it.each([
+		['create', false], ['create', true], ['edit', false], ['edit', true],
+	] as const)('reports a late %s TLS failure only while the page is active (unmounted: %s)', async (operation, leavePage) => {
+		const tls = deferred<void>()
+		const args = buildBaseArgs({
+			api: createMockApiClient({ profiles: {
+				createProfile: vi.fn().mockResolvedValue({ id: 'profile-1' }),
+				updateProfile: vi.fn().mockResolvedValue({ id: 'profile-1' }),
+			} }),
+			applyTLSUpdate: vi.fn(() => tls.promise),
+		})
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const error = vi.spyOn(message, 'error').mockImplementation(() => undefined as never)
+		const { result, unmount } = renderHook(() => {
+			const scope = useProfilesPageScopeState(args.apiToken)
+			return useProfilesPageMutations({ ...args, ...scope })
+		}, { wrapper: createWrapper(queryClient) })
+		let pending!: Promise<unknown>
+		act(() => {
+			pending = operation === 'create' ? result.current.createMutation.mutateAsync(buildProfileFormValues())
+				: result.current.updateMutation.mutateAsync({ id: 'profile-1', values: buildProfileFormValues() })
+		})
+		await waitFor(() => expect(args.applyTLSUpdate).toHaveBeenCalledTimes(1))
+		if (leavePage) unmount()
+		await act(async () => { tls.reject(new Error('TLS unavailable')); await pending })
+		if (leavePage) expect(error).not.toHaveBeenCalled()
+		else expect(error).toHaveBeenCalledWith('mTLS update failed: TLS unavailable')
+		if (!leavePage) unmount()
+		queryClient.clear()
+	})
+
+	it('leaves active profile reconciliation to the app after deletion refresh', async () => {
+		const refresh = deferred<void>()
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		const invalidateProfilesQuery = vi.fn(() => refresh.promise)
+		const setProfileId = vi.fn()
+		vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const initialArgs = buildBaseArgs({
+			api: createMockApiClient({ profiles: { deleteProfile: vi.fn().mockResolvedValue(undefined) } }),
+			invalidateProfilesQuery, setProfileId,
+		})
+		const { result, unmount } = renderHook((args) => useProfilesPageMutations(args), {
+			initialProps: initialArgs, wrapper: createWrapper(queryClient),
+		})
+		act(() => result.current.deleteMutation.mutate('profile-1'))
+		await waitFor(() => expect(invalidateProfilesQuery).toHaveBeenCalledWith('token-a'))
+		await act(async () => { refresh.resolve() })
+		await waitFor(() => expect(result.current.deleteMutation.isSuccess).toBe(true))
+		expect(setProfileId).not.toHaveBeenCalled()
+		unmount()
+		queryClient.clear()
+	})
+
 	it('ignores stale create success for a newer modal session while still refreshing the current scope', async () => {
 		const createRequest = deferred<{
 			id: string
@@ -190,7 +293,6 @@ describe('useProfilesPageMutations', () => {
 			api: createMockApiClient({
 				profiles: { deleteProfile },
 			}),
-			profileId: 'profile-1',
 			setProfileId,
 			invalidateProfilesQuery,
 		})

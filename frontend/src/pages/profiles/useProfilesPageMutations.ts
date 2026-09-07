@@ -7,7 +7,6 @@ import {
 	clearPendingModalState,
 	clearPendingProfileState,
 	matchesCurrentMutationRequest,
-	matchesServerScope,
 	type PendingModalState,
 	type PendingProfileState,
 } from './profileMutationScope'
@@ -18,7 +17,6 @@ export function useProfilesPageMutations(args: {
 	api: APIClientShape
 	apiToken: string
 	currentScopeKey: string
-	profileId: string | null
 	setProfileId: (value: string | null) => void
 	createModalSession: number
 	editModalSession: number
@@ -33,7 +31,6 @@ export function useProfilesPageMutations(args: {
 		api,
 		apiToken,
 		currentScopeKey,
-		profileId,
 		setProfileId,
 		createModalSession,
 		editModalSession,
@@ -89,23 +86,23 @@ export function useProfilesPageMutations(args: {
 				expectedRequestToken: createRequestTokenRef.current,
 				expectedModalSession: createModalSession,
 			})
-			const inCurrentServerScope = matchesServerScope({
-				context,
-				isActiveRef,
-				currentScopeKey,
-				currentScopeVersion: serverScopeVersionRef.current,
-			})
 			if (matchesCurrentSession) {
 				profilesFeedback.profileCreated()
 				setProfileId(created.id)
 				closeCreateModal()
 			}
-			if (inCurrentServerScope && context) {
+			if (context) {
 				await invalidateProfilesQuery(context.apiToken)
 				try {
 					await applyTLSUpdate(created.id, values, 'create', context.apiToken)
 				} catch (err) {
-					if (matchesCurrentSession) {
+					if (matchesCurrentSession && matchesCurrentMutationRequest({
+						context,
+						isActiveRef,
+						currentScopeKey,
+						currentScopeVersion: serverScopeVersionRef.current,
+						expectedRequestToken: createRequestTokenRef.current,
+					})) {
 						profilesFeedback.mtlsUpdateFailed(err)
 					}
 				}
@@ -151,22 +148,22 @@ export function useProfilesPageMutations(args: {
 				expectedRequestToken: updateRequestTokenRef.current,
 				expectedModalSession: editModalSession,
 			})
-			const inCurrentServerScope = matchesServerScope({
-				context,
-				isActiveRef,
-				currentScopeKey,
-				currentScopeVersion: serverScopeVersionRef.current,
-			})
 			if (matchesCurrentSession) {
 				profilesFeedback.profileUpdated()
 				closeEditModal()
 			}
-			if (inCurrentServerScope && context) {
+			if (context) {
 				await invalidateProfilesQuery(context.apiToken)
 				try {
 					await applyTLSUpdate(mutationArgs.id, mutationArgs.values, 'edit', context.apiToken)
 				} catch (err) {
-					if (matchesCurrentSession) {
+					if (matchesCurrentSession && matchesCurrentMutationRequest({
+						context,
+						isActiveRef,
+						currentScopeKey,
+						currentScopeVersion: serverScopeVersionRef.current,
+						expectedRequestToken: updateRequestTokenRef.current,
+					})) {
 						profilesFeedback.mtlsUpdateFailed(err)
 					}
 				}
@@ -203,13 +200,8 @@ export function useProfilesPageMutations(args: {
 			setDeletingProfileState({ profileId: id, scopeKey: currentScopeKey })
 			return context
 		},
-		onSuccess: async (_, id, context) => {
-			if (matchesServerScope({
-				context,
-				isActiveRef,
-				currentScopeKey,
-				currentScopeVersion: serverScopeVersionRef.current,
-			}) && context) {
+		onSuccess: async (_, _id, context) => {
+			if (context) {
 				await invalidateProfilesQuery(context.apiToken)
 			}
 			if (!matchesCurrentMutationRequest({
@@ -222,9 +214,6 @@ export function useProfilesPageMutations(args: {
 				return
 			}
 			profilesFeedback.profileDeleted()
-			if (profileId === id) {
-				setProfileId(null)
-			}
 		},
 		onSettled: (_, __, id, context) =>
 			setDeletingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),

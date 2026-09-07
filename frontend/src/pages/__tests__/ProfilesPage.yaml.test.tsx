@@ -421,7 +421,7 @@ describe('ProfilesPage YAML flow', () => {
 		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.profiles.tls('profile-1', 'token'), exact: true })
 	})
 
-	it('ignores stale YAML save responses after the api token changes', async () => {
+	it('refreshes only the original YAML save scope after the api token changes', async () => {
 		const client = createClient()
 		const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 		const updateProfileRequest = deferred<{
@@ -497,7 +497,7 @@ describe('ProfilesPage YAML flow', () => {
 		const { rerender } = render(
 			<QueryClientProvider client={client}>
 				<MemoryRouter>
-					<ProfilesPage apiToken="token-1" profileId={null} setProfileId={setProfileId} />
+					<ProfilesPage key="profiles:token-1" apiToken="token-1" profileId={null} setProfileId={setProfileId} />
 				</MemoryRouter>
 			</QueryClientProvider>,
 		)
@@ -519,7 +519,7 @@ describe('ProfilesPage YAML flow', () => {
 		rerender(
 			<QueryClientProvider client={client}>
 				<MemoryRouter>
-					<ProfilesPage apiToken="token-2" profileId={null} setProfileId={setProfileId} />
+					<ProfilesPage key="profiles:token-2" apiToken="token-2" profileId={null} setProfileId={setProfileId} />
 				</MemoryRouter>
 			</QueryClientProvider>,
 		)
@@ -545,6 +545,8 @@ describe('ProfilesPage YAML flow', () => {
 		})
 
 		expect(screen.queryByRole('dialog', { name: 'Profile YAML' })).not.toBeInTheDocument()
-		expect(invalidateSpy).not.toHaveBeenCalled()
+		expect(invalidateSpy).toHaveBeenCalledTimes(2)
+		expect(invalidateSpy).toHaveBeenNthCalledWith(1, { queryKey: queryKeys.profiles.list('token-1'), exact: true })
+		expect(invalidateSpy).toHaveBeenNthCalledWith(2, { queryKey: queryKeys.profiles.tls('profile-1', 'token-1'), exact: true })
 	})
 })

@@ -8,6 +8,7 @@ import { queryKeys } from '../../../api/queryKeys'
 import type { Profile } from '../../../api/types'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useProfilesYamlImportExport } from '../useProfilesYamlImportExport'
+import { useProfilesPageScopeState } from '../useProfilesPageScopeState'
 
 const { parseProfileYamlForUpdateMock, parseProfileYamlMock } = vi.hoisted(() => ({
 	parseProfileYamlForUpdateMock: vi.fn(),
@@ -79,6 +80,129 @@ afterEach(() => {
 })
 
 describe('useProfilesYamlImportExport', () => {
+	it.each(['success', 'tls failure', 'export failure', 'update failure'] as const)(
+		'refreshes persisted YAML changes after unmount (%s)', async (outcome) => {
+			const update = deferred<Profile>()
+			const updateProfile = vi.fn(() => update.promise)
+			const updateProfileTLS = vi.fn().mockImplementation(async () => {
+				if (outcome === 'tls failure') throw new Error('TLS unavailable')
+			})
+			const exportProfileYaml = vi.fn().mockResolvedValueOnce('name: initial\n').mockImplementation(async () => {
+				if (outcome === 'export failure') throw new Error('Export unavailable')
+				return 'name: canonical\n'
+			})
+			parseProfileYamlForUpdateMock.mockResolvedValue({
+				updateRequest: { name: 'Updated Profile' }, hasTLSBlock: true,
+				tlsConfig: { mode: 'mtls', clientCertPem: 'test-cert', clientKeyPem: 'test-key' },
+			})
+			const args = buildArgs({ api: createMockApiClient({ profiles: { updateProfile, updateProfileTLS, exportProfileYaml } }) })
+			const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+			const success = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+			const error = vi.spyOn(message, 'error').mockImplementation(() => undefined as never)
+			const { result, unmount } = renderHook(() => {
+				const scope = useProfilesPageScopeState(args.apiToken)
+				return useProfilesYamlImportExport({ ...args, ...scope })
+			}, { wrapper: createWrapper(queryClient) })
+			act(() => result.current.openYamlModal(buildProfile()))
+			await waitFor(() => expect(result.current.activeYamlDraft).toBe('name: initial\n'))
+			act(() => result.current.saveYaml())
+			await waitFor(() => expect(updateProfile).toHaveBeenCalledTimes(1))
+			unmount()
+			await act(async () => {
+				if (outcome === 'update failure') update.reject(new Error('Update unavailable'))
+				else update.resolve(buildProfile({ name: 'Updated Profile' }))
+			})
+			await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+			if (outcome === 'update failure') {
+				expect(args.queryClient.invalidateQueries).not.toHaveBeenCalled()
+				expect(updateProfileTLS).not.toHaveBeenCalled()
+			} else {
+				expect(args.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.profiles.list('token-a'), exact: true })
+				expect(args.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.profiles.tls('profile-1', 'token-a'), exact: true })
+				expect(updateProfileTLS).toHaveBeenCalledTimes(1)
+			}
+			expect(success).not.toHaveBeenCalled()
+			expect(error).not.toHaveBeenCalled()
+			queryClient.clear()
+		},
+	)
+
+	it.each(['success', 'tls failure', 'create failure'] as const)('refreshes a persisted import after unmount (%s)', async (outcome) => {
+		const create = deferred<Profile>()
+		const createProfile = vi.fn(() => create.promise)
+		const updateProfileTLS = vi.fn().mockImplementation(async () => {
+			if (outcome === 'tls failure') throw new Error('TLS unavailable')
+		})
+		parseProfileYamlMock.mockResolvedValue({
+			request: { name: 'Imported Profile' },
+			tlsConfig: { mode: 'mtls', clientCertPem: 'test-cert', clientKeyPem: 'test-key' },
+		})
+		const args = buildArgs({ api: createMockApiClient({ profiles: { createProfile, updateProfileTLS } }) })
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		const success = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const error = vi.spyOn(message, 'error').mockImplementation(() => undefined as never)
+		const { result, unmount } = renderHook(() => {
+			const scope = useProfilesPageScopeState(args.apiToken)
+			return useProfilesYamlImportExport({ ...args, ...scope })
+		}, { wrapper: createWrapper(queryClient) })
+		act(() => result.current.openImportModal())
+		act(() => result.current.setImportText('name: imported\n'))
+		act(() => result.current.submitImport())
+		await waitFor(() => expect(createProfile).toHaveBeenCalledTimes(1))
+		unmount()
+		await act(async () => {
+			if (outcome === 'create failure') create.reject(new Error('Create unavailable'))
+			else create.resolve(buildProfile({ name: 'Imported Profile' }))
+		})
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+		if (outcome === 'create failure') {
+			expect(args.queryClient.invalidateQueries).not.toHaveBeenCalled()
+			expect(updateProfileTLS).not.toHaveBeenCalled()
+		} else {
+			expect(args.queryClient.invalidateQueries).toHaveBeenCalledExactlyOnceWith({ queryKey: queryKeys.profiles.list('token-a'), exact: true })
+			expect(updateProfileTLS).toHaveBeenCalledTimes(1)
+		}
+		expect(success).not.toHaveBeenCalled()
+		expect(error).not.toHaveBeenCalled()
+		queryClient.clear()
+	})
+
+	it.each([['success', true], ['failure', true], ['success', false]] as const)(
+		'preserves a newer YAML draft when an earlier save ends with %s (reopened: %s)', async (outcome, reopen) => {
+		const update = deferred<Profile>()
+		const updateProfile = vi.fn(() => update.promise)
+		const exportProfileYaml = vi.fn().mockResolvedValue('name: initial\n')
+		parseProfileYamlForUpdateMock.mockResolvedValue({ updateRequest: { name: 'Saved Profile' }, hasTLSBlock: false })
+		const args = buildArgs({ api: createMockApiClient({ profiles: { updateProfile, exportProfileYaml } }) })
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		const success = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const error = vi.spyOn(message, 'error').mockImplementation(() => undefined as never)
+		const { result, unmount } = renderHook(() => useProfilesYamlImportExport(args), { wrapper: createWrapper(queryClient) })
+		act(() => result.current.openYamlModal(buildProfile()))
+		await waitFor(() => expect(result.current.activeYamlDraft).toBe('name: initial\n'))
+		act(() => result.current.saveYaml())
+		await waitFor(() => expect(updateProfile).toHaveBeenCalledTimes(1))
+		if (reopen) {
+			act(() => result.current.closeYamlModal())
+			act(() => result.current.openYamlModal(buildProfile()))
+			await waitFor(() => expect(result.current.activeYamlDraft).toBe('name: initial\n'))
+		}
+		act(() => result.current.setYamlDraft('name: new unsaved draft\n'))
+		await act(async () => {
+			if (outcome === 'failure') update.reject(new Error('Old save failed'))
+			else update.resolve(buildProfile({ name: 'Saved Profile' }))
+		})
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+		expect(result.current.activeYamlDraft).toBe('name: new unsaved draft\n')
+		expect(result.current.activeYamlProfile?.name).toBe(reopen ? 'Primary Profile' : 'Saved Profile')
+		expect(result.current.activeYamlError).toBe(null)
+		if (reopen) expect(success).not.toHaveBeenCalled()
+		else expect(success).toHaveBeenCalledWith('Profile YAML saved')
+		expect(error).not.toHaveBeenCalled()
+		unmount()
+		queryClient.clear()
+	})
+
 	it('ignores stale export responses when switching profiles', async () => {
 		const primaryExport = deferred<string>()
 		const secondaryExport = deferred<string>()
@@ -250,7 +374,7 @@ describe('useProfilesYamlImportExport', () => {
 		expect(result.current.activeYamlError).toBe(null)
 	})
 
-	it('ignores stale import success after the modal is closed and reopened', async () => {
+	it('refreshes a completed import without changing a reopened modal', async () => {
 		const createProfileRequest = deferred<Profile>()
 		const createProfile = vi.fn().mockImplementation(() => createProfileRequest.promise)
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
@@ -312,7 +436,7 @@ describe('useProfilesYamlImportExport', () => {
 		})
 
 		expect(successSpy).not.toHaveBeenCalledWith('Imported profile "Imported Profile"')
-		expect(invalidateQueries).not.toHaveBeenCalledWith({
+		expect(invalidateQueries).toHaveBeenCalledWith({
 			queryKey: queryKeys.profiles.list('token-a'),
 			exact: true,
 		})

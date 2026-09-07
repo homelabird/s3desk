@@ -74,7 +74,6 @@ export function useProfilesPageState(args: UseProfilesPageStateArgs): ProfilesPa
 		api,
 		apiToken,
 		currentScopeKey,
-		profileId,
 		setProfileId,
 		createModalSession,
 		editModalSession,
