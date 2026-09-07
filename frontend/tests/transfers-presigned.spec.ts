@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockApi, type MockApiContext, type MockApiRoute } from './support/apiFixtures'
-import { dropFileIntoObjectsUploadZone, gotoObjectsUploadBucketPage } from './support/ui'
+import { dropFileIntoObjectsUploadZone, gotoObjectsUploadBucketPage, openTransfersUploadRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -30,8 +30,21 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 
 const now = '2024-01-01T00:00:00Z'
 
-function baseObjectRoutes(): MockApiRoute[] {
+function baseObjectRoutes(jobId: string): MockApiRoute[] {
 	return [
+		{
+			method: 'GET',
+			path: `/jobs/${jobId}`,
+			handle: (ctx) => ctx.json({ id: jobId, status: 'running' }),
+		},
+		{
+			method: 'GET',
+			path: '/jobs',
+			handle: (ctx) => ctx.json({
+				items: ctx.url.searchParams.getAll('id').includes(jobId) ? [{ id: jobId, status: 'succeeded' }] : [],
+				nextCursor: null,
+			}),
+		},
 		{
 			method: 'GET',
 			path: '/events',
@@ -126,7 +139,7 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 	let presignedUrlHit = false
 
 	await installMockApi(page, [
-		...baseObjectRoutes(),
+		...baseObjectRoutes(jobId),
 		{
 			method: 'POST',
 			path: '/uploads',
@@ -157,7 +170,6 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 				return ctx.json({ jobId }, 201)
 			},
 		},
-		{ method: 'GET', path: `/jobs/${jobId}`, handle: (ctx) => ctx.json({ status: 'running' }) },
 	])
 
 	await page.route('https://presigned.example/**', async (route) => {
@@ -186,11 +198,14 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 	).toBeVisible()
 	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
 	expect(presignedUrlHit).toBe(false)
+	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt')
+	await expect(row.getByText('Done', { exact: true })).toBeVisible()
 })
 
 test('reconciles an ambiguous presigned response without proxy fallback', async ({ page }) => {
 	test.setTimeout(presignedUploadTestTimeoutMs)
 	const uploadId = 'upload-cors'
+	const jobId = 'job-cors'
 	const presignedURL = 'https://presigned.example/upload/test'
 	let presignRequested = false
 	let presignedUploadAttempts = 0
@@ -198,7 +213,7 @@ test('reconciles an ambiguous presigned response without proxy fallback', async 
 	let commitCalled = false
 
 	await installMockApi(page, [
-		...baseObjectRoutes(),
+		...baseObjectRoutes(jobId),
 		{
 			method: 'POST',
 			path: `/uploads/${uploadId}/files`,
@@ -234,7 +249,7 @@ test('reconciles an ambiguous presigned response without proxy fallback', async 
 			path: `/uploads/${uploadId}/commit`,
 			handle: (ctx) => {
 				commitCalled = true
-				return ctx.json({ jobId: 'job-cors' }, 201)
+				return ctx.json({ jobId }, 201)
 			},
 		},
 	])
@@ -260,18 +275,21 @@ test('reconciles an ambiguous presigned response without proxy fallback', async 
 	await expect.poll(() => presignedUploadAttempts, { timeout: 5000 }).toBe(2)
 	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
 	expect(proxyUploadAttempted).toBe(false)
+	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt')
+	await expect(row.getByText('Done', { exact: true })).toBeVisible()
 })
 
 test('uses capability matrix to skip presigned mode for unsupported providers', async ({ page }) => {
 	test.setTimeout(presignedUploadTestTimeoutMs)
 	const uploadId = 'upload-capability'
+	const jobId = 'job-capability'
 	let profilesLoaded = false
 	let presignedAttempted = false
 	let stagingAttempted = false
 	let commitCalled = false
 
 	await installMockApi(page, [
-		...baseObjectRoutes().filter((route) => route.path !== '/meta' && route.path !== '/profiles'),
+		...baseObjectRoutes(jobId).filter((route) => route.path !== '/meta' && route.path !== '/profiles'),
 		{
 			method: 'GET',
 			path: '/meta',
@@ -356,10 +374,9 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 			path: `/uploads/${uploadId}/commit`,
 			handle: (ctx) => {
 				commitCalled = true
-				return ctx.json({ jobId: 'job-capability' }, 201)
+				return ctx.json({ jobId }, 201)
 			},
 		},
-		{ method: 'GET', path: '/jobs/job-capability', handle: (ctx) => ctx.json({ status: 'running' }) },
 	])
 
 	await seedStorage(page)
@@ -378,4 +395,6 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 	await expect.poll(() => stagingAttempted, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
 	expect(presignedAttempted).toBe(false)
+	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt')
+	await expect(row.getByText('Done', { exact: true })).toBeVisible()
 })

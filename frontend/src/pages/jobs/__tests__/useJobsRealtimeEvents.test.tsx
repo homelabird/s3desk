@@ -96,6 +96,51 @@ describe('useJobsRealtimeEvents', () => {
 		vi.unstubAllGlobals()
 	})
 
+	it.each(['ws', 'sse'])('aborts pending %s tickets when the scope changes or unmounts', async (transport) => {
+		fetchMock.mockImplementation((_input, init) => new Promise((_resolve, reject) => {
+			init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+		}))
+		if (transport === 'sse') fetchMock.mockRejectedValueOnce(new Error('ws unavailable'))
+		const queryClient = new QueryClient()
+		const { rerender, unmount } = renderHook(
+			({ apiToken }) => useJobsRealtimeEvents({ apiToken, profileId: 'profile-1', queryClient }),
+			{ initialProps: { apiToken: 'token-a' } },
+		)
+		await flushRealtimeSetup()
+		const request = fetchMock.mock.calls.at(-1)
+		expect(String(request?.[0])).toContain(`transport=${transport}`)
+		const signal = request?.[1]?.signal
+
+		rerender({ apiToken: 'token-b' })
+		await flushRealtimeSetup()
+		expect(signal?.aborted).toBe(true)
+		const nextSignal = fetchMock.mock.calls.at(-1)?.[1]?.signal
+		expect(nextSignal?.aborted).toBe(false)
+		const requestCount = fetchMock.mock.calls.length
+		unmount()
+		await flushRealtimeSetup()
+		expect(nextSignal?.aborted).toBe(true)
+		expect(fetchMock).toHaveBeenCalledTimes(requestCount)
+		expect(MockWebSocket.instances).toHaveLength(0)
+		expect(MockEventSource.instances).toHaveLength(0)
+	})
+
+	it.each(['missing', 'throws'])('falls back to sse when the websocket constructor %s', async (behavior) => {
+		vi.stubGlobal('WebSocket', behavior === 'missing' ? undefined : class {
+			constructor() { throw new DOMException('WebSocket blocked', 'SecurityError') }
+		})
+		const queryClient = new QueryClient()
+		const { result, unmount } = renderHook(() =>
+			useJobsRealtimeEvents({ apiToken: 'token', profileId: 'profile-1', queryClient }),
+		)
+		await flushRealtimeSetup()
+		expect(MockEventSource.instances).toHaveLength(1)
+		act(() => MockEventSource.instances[0].emitOpen())
+		expect(result.current.eventsConnected).toBe(true)
+		expect(result.current.eventsTransport).toBe('sse')
+		unmount()
+	})
+
 	it('invalidates jobs when it detects an event sequence gap', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const setQueriesData = vi.fn()

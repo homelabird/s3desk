@@ -199,6 +199,32 @@ async function installRealtimeJobsApi(page: Page, args: {
 }
 
 test.describe('Jobs realtime overlays', () => {
+	test('receives live job updates over SSE when WebSocket construction is blocked', async ({ page }) => {
+		const pageErrors: string[] = []
+		page.on('pageerror', (error) => pageErrors.push(error.message))
+		await page.addInitScript(() => {
+			Object.defineProperty(window, 'WebSocket', {
+				configurable: true,
+				value: class {
+					constructor() { throw new DOMException('WebSocket blocked', 'SecurityError') }
+				},
+			})
+		})
+		const jobId = 'job-sse-fallback'
+		await installRealtimeJobsApi(page, {
+			jobs: [buildUploadJob(jobId)],
+			realtimeTransport: 'ws',
+			eventDelayMs: 500,
+			eventBody: `data: ${JSON.stringify({
+				type: 'job.completed', seq: 1, jobId, payload: { status: 'succeeded' },
+			})}\n\n`,
+		})
+		await seedStorage(page)
+		await gotoJobsPage(page)
+		await expect(jobsTableRow(page, jobId).getByText('succeeded', { exact: true })).toBeVisible()
+		expect(pageErrors).toEqual([])
+	})
+
 	test('settings overlay keeps the jobs realtime transport mounted', async ({ page }) => {
 		await page.addInitScript(() => {
 			class MockWebSocket {

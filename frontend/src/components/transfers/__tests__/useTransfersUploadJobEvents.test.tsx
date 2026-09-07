@@ -136,6 +136,42 @@ describe('useTransfersUploadJobEvents', () => {
 		vi.restoreAllMocks()
 	})
 
+	it.each(['ws', 'sse'])('aborts pending %s tickets when uploads finish or the hook unmounts', async (transport) => {
+		fetchMock.mockImplementation((_input, init) => new Promise((_resolve, reject) => {
+			init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+		}))
+		if (transport === 'sse') fetchMock.mockRejectedValueOnce(new Error('ws unavailable'))
+		const api = { jobs: { listJobs: vi.fn().mockResolvedValue(jobsListResponse()) } } as unknown as APIClientShape
+		const uploadTasksRef = { current: [buildUploadTask()] }
+		const handleUploadJobUpdate = vi.fn(async () => {})
+		const updateUploadTask = vi.fn()
+		const { rerender, unmount } = renderHook(
+			({ hasPendingUploadJobs }) => useTransfersUploadJobEvents({
+				api, apiToken: 'token', hasPendingUploadJobs, uploadTasksRef, handleUploadJobUpdate, updateUploadTask,
+			}),
+			{ initialProps: { hasPendingUploadJobs: true } },
+		)
+		await flushRealtimeSetup()
+		const request = fetchMock.mock.calls.at(-1)
+		expect(String(request?.[0])).toContain(`transport=${transport}`)
+		const signal = request?.[1]?.signal
+
+		rerender({ hasPendingUploadJobs: false })
+		await flushRealtimeSetup()
+		expect(signal?.aborted).toBe(true)
+		const requestCount = fetchMock.mock.calls.length
+		rerender({ hasPendingUploadJobs: true })
+		await flushRealtimeSetup()
+		const nextSignal = fetchMock.mock.calls.at(-1)?.[1]?.signal
+		expect(nextSignal?.aborted).toBe(false)
+		unmount()
+		await flushRealtimeSetup()
+		expect(nextSignal?.aborted).toBe(true)
+		expect(fetchMock).toHaveBeenCalledTimes(requestCount + 1)
+		expect(MockWebSocket.instances).toHaveLength(0)
+		expect(MockEventSource.instances).toHaveLength(0)
+	})
+
 	it('requests websocket realtime tickets and does not leak apiToken in realtime urls', async () => {
 		const handleUploadJobUpdate = vi.fn(async () => {})
 		const api = {

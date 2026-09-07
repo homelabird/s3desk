@@ -75,6 +75,7 @@ export function useJobsRealtimeEvents({
 		let ws: WebSocket | null = null
 		let es: EventSource | null = null
 		let stopped = false
+		const controller = new AbortController()
 		let hadConnected = false
 		let shouldRefreshOnOpen = false
 		let reconnectTimer: number | null = null
@@ -222,6 +223,7 @@ export function useJobsRealtimeEvents({
 			url.searchParams.set('transport', transport)
 			const response = await fetch(url.toString(), {
 				method: 'POST',
+				signal: controller.signal,
 				headers: {
 					'X-Api-Token': apiToken,
 				},
@@ -283,7 +285,12 @@ export function useJobsRealtimeEvents({
 				return
 			}
 			if (stopped || nonce !== connectNonce) return
-			ws = new WebSocket(buildWSURL(ticket, lastSeqRef.current))
+			try {
+				ws = new WebSocket(buildWSURL(ticket, lastSeqRef.current))
+			} catch {
+				await connectSSE()
+				return
+			}
 
 			let opened = false
 			let disconnectHandled = false
@@ -324,8 +331,9 @@ export function useJobsRealtimeEvents({
 		}
 
 		connectWS()
-			return () => {
+		return () => {
 			stopped = true
+			controller.abort()
 			clearReconnectTimer()
 			try {
 				ws?.close()

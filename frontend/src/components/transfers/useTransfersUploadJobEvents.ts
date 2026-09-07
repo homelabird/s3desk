@@ -276,6 +276,7 @@ export function useTransfersUploadJobEvents({
 			const response = await fetch(url.toString(), {
 				method: 'POST',
 				headers,
+				signal: controller.signal,
 			})
 			if (!response.ok) {
 				throw new Error(`ticket request failed: ${response.status}`)
