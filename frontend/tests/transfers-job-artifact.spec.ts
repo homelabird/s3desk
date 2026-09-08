@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockApi } from './support/apiFixtures'
@@ -299,4 +300,28 @@ test('zip artifact download can be retried after the artifact request fails', as
 
 	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(2)
 	await expectTransferRowState(row, 'Done', { timeout: 10_000 })
+})
+
+
+test('canceling an artifact download allows a fresh retry to complete', async ({ page }) => {
+	test.setTimeout(zipArtifactTestTimeoutMs)
+	const apiState = await setupApiMocks(page, {
+		listedJob: buildZipJob('succeeded'),
+		artifactResponses: [
+			{ kind: 'success', delayMs: 5000, filename: 'canceled.zip', body: 'old-attempt' },
+			{ kind: 'success', delayMs: 100, filename: 'retried.zip', body: 'fresh-attempt' },
+		],
+	})
+	await seedStorage(page)
+	const { row } = await queueZipArtifactDownload(page)
+	await expect.poll(() => apiState.getArtifactRequestCount()).toBe(1)
+	await clickTransferRowButton(row, 'Cancel')
+	await expectTransferRowState(row, 'Canceled')
+	const saved = page.waitForEvent('download')
+	await clickTransferRowButton(row, 'Retry')
+	const download = await saved
+	await expectTransferRowState(row, 'Done')
+	expect(apiState.getArtifactRequestCount()).toBe(2)
+	expect(download.suggestedFilename()).toBe('retried.zip')
+	expect(await readFile((await download.path())!, 'utf8')).toBe('fresh-attempt')
 })

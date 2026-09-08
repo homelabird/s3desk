@@ -6,11 +6,14 @@ import type { APIClientShape } from '../../../api/client'
 import { directoryPickerUnavailableHint } from '../../../lib/secureContext'
 import type { DownloadTask, JobArtifactDownloadTask } from '../transferTypes'
 import { useTransfersDownloadQueue } from '../useTransfersDownloadQueue'
+import { useTransfersTaskActions } from '../useTransfersTaskActions'
+import { createMockApiClient } from '../../../test/mockApiClient'
 
-const { devicePickerSupportRef, downloadURLWithProgressMock, saveBlobMock } = vi.hoisted(() => ({
+const { devicePickerSupportRef, downloadURLWithProgressMock, saveBlobMock, downloadObjectToDeviceMock } = vi.hoisted(() => ({
 	devicePickerSupportRef: { current: { ok: true } as { ok: boolean; reason?: string } },
 	downloadURLWithProgressMock: vi.fn(),
 	saveBlobMock: vi.fn(),
+	downloadObjectToDeviceMock: vi.fn(),
 }))
 
 const messageErrorMock = vi.fn()
@@ -32,6 +35,8 @@ vi.mock('antd', async () => {
 vi.mock('../../../lib/deviceFs', () => ({
 	getDevicePickerSupport: () => devicePickerSupportRef.current,
 }))
+
+vi.mock('../downloadObjectToDevice', () => ({ downloadObjectToDevice: downloadObjectToDeviceMock }))
 
 vi.mock('../transferDownloadUtils', async () => {
 	const actual = await vi.importActual<typeof import('../transferDownloadUtils')>('../transferDownloadUtils')
@@ -69,6 +74,7 @@ describe('useTransfersDownloadQueue', () => {
 		messageSuccessMock.mockClear()
 		downloadURLWithProgressMock.mockReset()
 		saveBlobMock.mockReset()
+		downloadObjectToDeviceMock.mockReset()
 	})
 
 	it('does not queue the same device download twice for the same target', async () => {
@@ -336,6 +342,109 @@ describe('useTransfersDownloadQueue', () => {
 		expect(downloadURLWithProgressMock).not.toHaveBeenCalled()
 		expect(saveBlobMock).not.toHaveBeenCalled()
 	})
+
+	it('keeps a retried download running when the canceled presign settles late', async () => {
+		let resolveFirst!: (value: { url: string }) => void
+		const first = new Promise<{ url: string }>((resolve) => { resolveFirst = resolve })
+		let resolveSecond!: (value: { url: string }) => void
+		const second = new Promise<{ url: string }>((resolve) => { resolveSecond = resolve })
+		const getObjectDownloadURL = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+		const api = createMockApiClient({ objects: { getObjectDownloadURL } })
+		downloadURLWithProgressMock.mockReturnValue({
+			promise: Promise.resolve({ blob: new Blob(['download']), contentDisposition: null, contentType: null }),
+			abort: vi.fn(),
+		})
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
+			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
+			const downloadEstimatorByTaskIdRef = useRef({})
+			const actions = useTransfersTaskActions({
+				setDownloadTasks, setUploadTasks: vi.fn(), downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef,
+				uploadAbortByTaskIdRef: useRef({}), uploadEstimatorByTaskIdRef: useRef({}), uploadItemsByTaskIdRef: useRef({}),
+			})
+			const queue = useTransfersDownloadQueue({
+				api, downloadLinkProxyEnabled: false, downloadConcurrency: 1, downloadTasks, setDownloadTasks,
+				downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef,
+				updateDownloadTask: actions.updateDownloadTask, openTransfers: vi.fn(),
+			})
+			return { downloadTasks, downloadAbortByTaskIdRef, ...actions, ...queue }
+		})
+		act(() => result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf' }))
+		await waitFor(() => expect(getObjectDownloadURL).toHaveBeenCalledTimes(1))
+		const taskId = result.current.downloadTasks[0]!.id
+		act(() => result.current.cancelDownloadTask(taskId))
+		act(() => result.current.retryDownloadTask(taskId))
+		await waitFor(() => expect(getObjectDownloadURL).toHaveBeenCalledTimes(2))
+		const retryAbort = result.current.downloadAbortByTaskIdRef.current[taskId]
+		await act(async () => resolveFirst({ url: 'https://example.com/old' }))
+		expect(result.current.downloadTasks[0]?.status).toBe('running')
+		expect(result.current.downloadAbortByTaskIdRef.current[taskId]).toBe(retryAbort)
+		expect(downloadURLWithProgressMock).not.toHaveBeenCalled()
+		await act(async () => resolveSecond({ url: 'https://example.com/new' }))
+		await waitFor(() => expect(result.current.downloadTasks[0]?.status).toBe('succeeded'))
+		expect(saveBlobMock).toHaveBeenCalledTimes(1)
+		expect(downloadURLWithProgressMock).toHaveBeenCalledWith('https://example.com/new', expect.any(Object))
+	})
+
+	it.each(['object', 'job_artifact', 'object_device'] as const)(
+		'ignores late progress and completion of a canceled %s attempt during retry', async (kind) => {
+			let resolveFirst!: (value: { blob: Blob; contentDisposition: null; contentType: null }) => void
+			let resolveSecond!: (value: { blob: Blob; contentDisposition: null; contentType: null }) => void
+			const first = new Promise<{ blob: Blob; contentDisposition: null; contentType: null }>((resolve) => { resolveFirst = resolve })
+			const second = new Promise<{ blob: Blob; contentDisposition: null; contentType: null }>((resolve) => { resolveSecond = resolve })
+			const progress: Array<(value: { loadedBytes: number; totalBytes: number }) => void> = []
+			const aborts = [vi.fn(), vi.fn()]
+			const start = (options: { onProgress: (value: { loadedBytes: number; totalBytes: number }) => void }) => {
+				progress.push(options.onProgress)
+				return { promise: progress.length === 1 ? first : second, abort: aborts[progress.length - 1] }
+			}
+			downloadURLWithProgressMock.mockImplementation((_url, options) => start(options))
+			downloadObjectToDeviceMock.mockImplementation((options) => start(options).promise)
+			const api = createMockApiClient({
+				objects: { getObjectDownloadURL: vi.fn().mockResolvedValue({ url: 'https://example.com/test-download' }) },
+				jobs: { downloadJobArtifact: vi.fn((_args, options) => start(options as never)) },
+			})
+			const { result } = renderHook(() => {
+				const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
+				const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
+				const downloadEstimatorByTaskIdRef = useRef({})
+				const actions = useTransfersTaskActions({
+					setDownloadTasks, setUploadTasks: vi.fn(), downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef,
+					uploadAbortByTaskIdRef: useRef({}), uploadEstimatorByTaskIdRef: useRef({}), uploadItemsByTaskIdRef: useRef({}),
+				})
+				const queue = useTransfersDownloadQueue({
+					api, downloadLinkProxyEnabled: false, downloadConcurrency: 1, downloadTasks, setDownloadTasks,
+					downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef,
+					updateDownloadTask: actions.updateDownloadTask, openTransfers: vi.fn(),
+				})
+				return { downloadTasks, downloadAbortByTaskIdRef, ...actions, ...queue }
+			})
+			act(() => {
+				if (kind === 'object') result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf' })
+				else if (kind === 'job_artifact') result.current.queueDownloadJobArtifact({ profileId: 'profile-1', jobId: 'job-1' })
+				else result.current.queueDownloadObjectsToDevice({ profileId: 'profile-1', bucket: 'bucket-a', items: [{ key: 'report.pdf' }], targetDirHandle: createDirectoryHandle('downloads') })
+			})
+			await waitFor(() => expect(progress).toHaveLength(1))
+			const taskId = result.current.downloadTasks[0]!.id
+			act(() => result.current.cancelDownloadTask(taskId))
+			act(() => result.current.retryDownloadTask(taskId))
+			await waitFor(() => expect(progress).toHaveLength(2))
+			const retryAbort = result.current.downloadAbortByTaskIdRef.current[taskId]
+			act(() => progress[0]!({ loadedBytes: 99, totalBytes: 100 }))
+			expect(result.current.downloadTasks[0]?.loadedBytes).toBe(0)
+			await act(async () => resolveFirst({ blob: new Blob(['old']), contentDisposition: null, contentType: null }))
+			expect(result.current.downloadTasks[0]?.status).toBe('running')
+			expect(result.current.downloadAbortByTaskIdRef.current[taskId]).toBe(retryAbort)
+			expect(saveBlobMock).not.toHaveBeenCalled()
+			expect(messageSuccessMock).not.toHaveBeenCalled()
+			act(() => progress[1]!({ loadedBytes: 10, totalBytes: 10 }))
+			await act(async () => resolveSecond({ blob: new Blob(['new']), contentDisposition: null, contentType: null }))
+			await waitFor(() => expect(result.current.downloadTasks[0]?.status).toBe('succeeded'))
+			expect(result.current.downloadTasks[0]?.loadedBytes).toBe(10)
+			expect(saveBlobMock).toHaveBeenCalledTimes(kind === 'object_device' ? 0 : 1)
+			expect(messageSuccessMock).toHaveBeenCalledTimes(1)
+		},
+	)
 
 	it('batches waiting jobs, preserves canceled tasks, and aborts polling on unmount', async () => {
 		vi.useFakeTimers()

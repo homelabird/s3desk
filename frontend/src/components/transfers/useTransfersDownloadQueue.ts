@@ -69,8 +69,14 @@ export function useTransfersDownloadQueue({
 				error: undefined,
 			}))
 
+			const controller = new AbortController()
+			const isCurrentAttempt = () => downloadEstimatorByTaskIdRef.current[taskId] === estimator
+			const updateRunningTask = (updater: (task: DownloadTask) => DownloadTask) => {
+				if (!isCurrentAttempt()) return
+				updateDownloadTask(taskId, (task) => task.status === 'running' ? updater(task) : task)
+			}
+
 			if (current.kind === 'object_device') {
-				const controller = new AbortController()
 				downloadAbortByTaskIdRef.current[taskId] = () => controller.abort()
 
 				try {
@@ -81,9 +87,9 @@ export function useTransfersDownloadQueue({
 						signal: controller.signal,
 						onProgress: (p) => {
 							const e = downloadEstimatorByTaskIdRef.current[taskId]
-							if (!e) return
+							if (e !== estimator) return
 							const stats = e.update(p.loadedBytes, p.totalBytes)
-							updateDownloadTask(taskId, (t) => ({
+							updateRunningTask((t) => ({
 								...t,
 								loadedBytes: stats.loadedBytes,
 								totalBytes: stats.totalBytes ?? t.totalBytes,
@@ -93,7 +99,9 @@ export function useTransfersDownloadQueue({
 						},
 					})
 
-					updateDownloadTask(taskId, (t) => ({
+					if (!isCurrentAttempt()) return
+					controller.signal.throwIfAborted()
+					updateRunningTask((t) => ({
 						...t,
 						status: 'succeeded',
 						finishedAtMs: Date.now(),
@@ -101,24 +109,26 @@ export function useTransfersDownloadQueue({
 					}))
 					transfersFeedback.downloaded(current.targetPath)
 				} catch (err) {
+					if (!isCurrentAttempt()) return
 					const error = err as Error
-					if (error?.name === 'AbortError' || err instanceof RequestAbortedError) {
-						updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
+					if (controller.signal.aborted || error?.name === 'AbortError' || err instanceof RequestAbortedError) {
+						updateRunningTask((t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
 						return
 					}
 					maybeReportNetworkError(err)
 					const msg = formatErr(err)
-					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
+					updateRunningTask((t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
 					transfersFeedback.errorText(msg)
 				} finally {
-					delete downloadAbortByTaskIdRef.current[taskId]
-					delete downloadEstimatorByTaskIdRef.current[taskId]
+					if (isCurrentAttempt()) {
+						delete downloadAbortByTaskIdRef.current[taskId]
+						delete downloadEstimatorByTaskIdRef.current[taskId]
+					}
 				}
 				return
 			}
 
 			if (current.kind === 'object') {
-				const controller = new AbortController()
 				let abortRawDownload = () => {}
 				downloadAbortByTaskIdRef.current[taskId] = () => {
 					controller.abort()
@@ -141,9 +151,9 @@ export function useTransfersDownloadQueue({
 						const handle = downloadURLWithProgress(presigned.url, {
 							onProgress: (p) => {
 								const e = downloadEstimatorByTaskIdRef.current[taskId]
-								if (!e) return
+								if (e !== estimator) return
 								const stats = e.update(p.loadedBytes, p.totalBytes)
-								updateDownloadTask(taskId, (t) => ({
+								updateRunningTask((t) => ({
 									...t,
 									loadedBytes: stats.loadedBytes,
 									totalBytes: stats.totalBytes ?? t.totalBytes,
@@ -171,8 +181,10 @@ export function useTransfersDownloadQueue({
 					}
 					const fallbackName = defaultFilenameFromKey(current.key)
 					const filename = filenameFromContentDisposition(resp.contentDisposition) ?? (current.filenameHint?.trim() || fallbackName)
+					if (!isCurrentAttempt()) return
+					controller.signal.throwIfAborted()
 					saveBlob(resp.blob, filename)
-					updateDownloadTask(taskId, (t) => ({
+					updateRunningTask((t) => ({
 						...t,
 						status: 'succeeded',
 						finishedAtMs: Date.now(),
@@ -181,17 +193,20 @@ export function useTransfersDownloadQueue({
 					}))
 					transfersFeedback.downloaded(filename)
 				} catch (err) {
-					if (err instanceof RequestAbortedError) {
-						updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
+					if (!isCurrentAttempt()) return
+					if (controller.signal.aborted || err instanceof RequestAbortedError) {
+						updateRunningTask((t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
 						return
 					}
 					maybeReportNetworkError(err)
 					const msg = formatErr(err)
-					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
+					updateRunningTask((t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
 					transfersFeedback.errorText(msg)
 				} finally {
-					delete downloadAbortByTaskIdRef.current[taskId]
-					delete downloadEstimatorByTaskIdRef.current[taskId]
+					if (isCurrentAttempt()) {
+						delete downloadAbortByTaskIdRef.current[taskId]
+						delete downloadEstimatorByTaskIdRef.current[taskId]
+					}
 				}
 				return
 			}
@@ -201,9 +216,9 @@ export function useTransfersDownloadQueue({
 				{
 					onProgress: (p) => {
 						const e = downloadEstimatorByTaskIdRef.current[taskId]
-						if (!e) return
+						if (e !== estimator) return
 						const stats = e.update(p.loadedBytes, p.totalBytes)
-						updateDownloadTask(taskId, (t) => ({
+						updateRunningTask((t) => ({
 							...t,
 							loadedBytes: stats.loadedBytes,
 							totalBytes: stats.totalBytes ?? t.totalBytes,
@@ -214,14 +229,19 @@ export function useTransfersDownloadQueue({
 				},
 			)
 
-			downloadAbortByTaskIdRef.current[taskId] = handle.abort
+			downloadAbortByTaskIdRef.current[taskId] = () => {
+				controller.abort()
+				handle.abort()
+			}
 
 			try {
 				const resp = await handle.promise
 				const fallbackName = current.filenameHint?.trim() || `job-${current.jobId}.zip`
 				const filename = filenameFromContentDisposition(resp.contentDisposition) ?? fallbackName
+				if (!isCurrentAttempt()) return
+				controller.signal.throwIfAborted()
 				saveBlob(resp.blob, filename)
-				updateDownloadTask(taskId, (t) => ({
+				updateRunningTask((t) => ({
 					...t,
 					status: 'succeeded',
 					finishedAtMs: Date.now(),
@@ -230,17 +250,20 @@ export function useTransfersDownloadQueue({
 				}))
 				transfersFeedback.downloaded(filename)
 			} catch (err) {
-				if (err instanceof RequestAbortedError) {
-					updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
+				if (!isCurrentAttempt()) return
+				if (controller.signal.aborted || err instanceof RequestAbortedError) {
+					updateRunningTask((t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
 					return
 				}
 				maybeReportNetworkError(err)
 				const msg = formatErr(err)
-				updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
+				updateRunningTask((t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
 				transfersFeedback.errorText(msg)
 			} finally {
-				delete downloadAbortByTaskIdRef.current[taskId]
-				delete downloadEstimatorByTaskIdRef.current[taskId]
+				if (isCurrentAttempt()) {
+					delete downloadAbortByTaskIdRef.current[taskId]
+					delete downloadEstimatorByTaskIdRef.current[taskId]
+				}
 			}
 		},
 		[api, downloadEstimatorByTaskIdRef, downloadAbortByTaskIdRef, downloadLinkProxyEnabled, updateDownloadTask],
