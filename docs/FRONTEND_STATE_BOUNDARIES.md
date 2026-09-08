@@ -120,6 +120,17 @@ notifications is resolved by `FullAppRoutes`, which selects the originating
 profile and passes the requested job to the existing Jobs details state while
 preserving that profile's list filters.
 
+## Object download selection and favorite recovery
+
+`useObjectDownloads` owns pending single-object and selection download pickers.
+A scope change or page unmount invalidates their late results and errors before
+anything is queued in the cross-route Transfers provider.
+
+The favorites pane receives its retry callback through the existing pane builders.
+`useObjectsScreenPanes` refetches the active favorites query without replacing an
+in-flight request. Search text, view filters, and cached favorite items retain
+their existing owners while the query recovers.
+
 ## Bucket name search
 
 `useBucketScopedViewState` owns the Buckets name query and clears it on authentication

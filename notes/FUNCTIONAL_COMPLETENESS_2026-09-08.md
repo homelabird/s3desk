@@ -221,3 +221,111 @@ retain the source profile; the mobile workflow follows the job to completion
 without changing its saved filter; stale-request and drag/drop navigation
 checks pass. The maintained state-boundary document describes this ownership.
 This round remains a local, uncommitted change on `b3c0590`.
+
+
+## Round 4: recover favorites and discard abandoned download pickers
+
+Base: published `01265e5`, with a clean worktree at the start of this round.
+The preceding turn made progress by publishing the Round 3 implementation and
+its validation record. This round resumes the functional-completeness audit.
+
+Two gaps were reproduced in existing owners:
+
+- A single-object or multi-selection device-folder picker could finish after
+  leaving Objects and queue a download in the persistent Transfers provider.
+  Rejected pickers could also display an error on the new page. Four focused
+  unit cases failed before the fix; valid mounted completions already passed.
+  The shared download hook now invalidates pending completions in its existing
+  layout-effect cleanup. Existing profile/bucket/prefix/auth guards remain.
+- Favorites displayed query errors without a retry action in the pane. A new
+  rendered unit assertion failed because no Retry favorites button existed.
+  The header now exposes Retry, including when collapsed. Its callback uses
+  the active React Query instance with `cancelRefetch: false`; the button is
+  disabled while fetching. Existing cache, search, and filter owners remain.
+
+Four focused unit files passed all 56 cases. Production build and lint passed.
+The first browser run passed 17 cases, including route navigation followed by
+late picker completion and an empty Transfers download queue. Two new favorites
+cases initially used exact menu names that omitted the icons' accessible names;
+matching the existing menu helpers' behavior corrected those test selectors.
+Both corrected recovery cases then passed at 1600px and 390px. The 390px retry
+button also passed the shared 44px minimum touch-target assertion without any
+CSS change. Retry/error and recovered screenshots were inspected.
+
+The recovery browser cases preserve a cached favorite and the search text during
+a delayed retry, verify only one additional hydrated query, retain Favorites
+only, and exclude non-favorites after recovery. The initial-failure case also
+checks retry followed by returning to the unfiltered object list.
+
+Pre-final artifacts: `/tmp/s3desk-recovery-browser-artifacts/`,
+`/tmp/s3desk-recovery-browser-artifacts-2/`, and
+`/tmp/s3desk-recovery-touch-before/`. The last directory's name describes when
+its touch-target check ran; the check passed and required no styling fix.
+These checks use mock APIs, a controlled directory-picker promise, and Chromium
+viewport emulation. They do not establish native OS picker, physical-device,
+provider download, or deployment behavior.
+
+
+### Round 4 final verification
+
+- `GOTOOLCHAIN=auto CHECK_FRONTEND_DEPS_READY=1 CHECK_FRONTEND_MAX_WORKERS=4 ./scripts/check.sh fast`:
+  exit 0; 254 frontend test files / 1,239 tests, lint, build, OpenAPI drift,
+  geometry, workflow/Helm checks, Go tests/vet, bundle-report contract, and
+  notice checks passed. Backend package tests used valid cache.
+- `npm run bundle:budget`: exit 0. Initial JS gzip is 164.4 KiB / 170 KiB;
+  ObjectsPage gzip is 69.0 KiB / 72 KiB. No new dependency or CSS rule was added.
+- The source/test and maintained-document hashes match
+  `/tmp/s3desk-recovery-final-snapshot.json` on base `01265e5` after the fast
+  gate. The round's evidence note is outside that snapshot.
+
+Logs: `/tmp/s3desk-recovery-final-fast.log` and
+`/tmp/s3desk-recovery-final-bundle.log`.
+
+
+The first broad browser pass completed Core with 198 passed / 15 live skips.
+Mobile completed 124 passed / 2 failed because a partial Favorites button name
+also matched Retry favorites. The disclosure selector now uses its exact name.
+Tracing that state additionally exposed an invalid shared mobile fixture:
+`ObjectFavoritesResponse` requires `keys`, `count`, and `hydrated`, but the fixture
+returned only `bucket`, `prefix`, and `items`. The shared `buildFavoritesFixture`
+now supplies the actual contract. The exact selector's two focused cases passed;
+both later browser-only changes passed focused ESLint and the geometry guard.
+No production source or previously validated unit test changed during this step.
+
+Final browser commands used `E2E_LIVE=0` and
+`PLAYWRIGHT_BASE_URL=http://127.0.0.1:18234` against the unchanged production
+analysis build:
+
+- `npm run test:e2e:core -- --project=chromium --workers=3 --reporter=list,json`:
+  exit 0; 198 passed / 15 skipped in 173.5 seconds. Every skip annotation is
+  `E2E_LIVE=1 required`.
+- `npm run test:e2e:mobile-responsive -- --workers=2 --reporter=list,json`:
+  exit 0; 126 passed in 105.8 seconds, with iPhone 13 and Pixel 7 Chromium
+  device-context emulation.
+- `npm run test:e2e:visual -- --workers=2 --reporter=list,json`:
+  exit 0; 35 passed in 44.0 seconds. No screenshot baseline was changed.
+- Every final JSON report has zero unexpected results, flaky results, or
+  runner errors. The initial and cached-favorites recovery cases, the 44px
+  retry target, and the navigation-before-picker-completion case are included
+  in Core. Final desktop error and mobile recovered screenshots were inspected.
+- All 16 source/test/maintained-document hashes, base commit, and production
+  index hash match `/tmp/s3desk-recovery-final-browser-snapshot.json` after the
+  final lanes. `git diff --check` passed, and owned preview port 18234 is closed.
+
+Final logs/JSON: `/tmp/s3desk-recovery-final-{core-2,mobile-2,visual}.{log,json}`.
+Artifacts: `/tmp/s3desk-recovery-final-{core-artifacts-2,mobile-artifacts-2,visual-artifacts}/`.
+The combined preview log (`/tmp/s3desk-recovery-final-preview.log`) records 54
+unmocked proxied requests refused at local port 8080 across the broad runs;
+no other preview error message was observed. Passing mock lanes do not imply a
+running backend for those requests. Backend security analysis, the full gate,
+performance, live-provider, native OS picker, physical-device, and deployment
+lanes were not run in this round.
+
+Completion audit: both reproduced gaps are corrected in their shared owners.
+Valid mounted downloads still queue with the original metadata; abandoned
+picker results and failures have no transfer or notification side effect.
+Favorites recover from both an initial failure and a failed refresh, retain
+cached items and user filters, and prevent duplicate pending refetches. Existing
+all-folder search already offers Refresh; its recovery flow also passes Core.
+The maintained ownership document and this record describe the implementation
+and its evidence boundaries. Round 4 changes remain local on published `01265e5`.
