@@ -202,6 +202,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						disabled={!props.hasProfile}
 						onClick={toggle}
 						data-testid="objects-toolbar-more"
+						className={styles.toolbarMoreButton}
 						aria-label={moreButtonAriaLabel}
 						aria-haspopup="menu"
 						aria-expanded={open}

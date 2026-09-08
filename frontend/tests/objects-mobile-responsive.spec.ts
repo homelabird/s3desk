@@ -196,26 +196,39 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		expect(downloadUrl.pathname).toBe('/download-proxy')
 	})
 
-	test('opens image preview directly from a mobile grid card', async ({ page }) => {
-		await openObjectsMobilePage(page)
+	test('separates thumbnail selection, action menus, and folder taps in the four-column grid', async ({ page }) => {
+		for (const width of [320, 360, 390, 412]) {
+			await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
+			await openObjectsMobilePage(page)
 
-		await page.getByRole('button', { name: /Grid/i }).click()
-		await expect(page.getByTestId('objects-grid-content')).toBeVisible()
-		await expect(page.getByRole('region', { name: 'Objects' })).toBeVisible()
-		await expect(page.getByRole('list', { name: 'Objects card list' })).toBeVisible()
+			await page.getByRole('button', { name: /Grid/i }).click()
+			await expect(page.getByTestId('objects-grid-content')).toBeVisible()
+			await expect(page.getByRole('region', { name: 'Objects' })).toBeVisible()
+			await expect(page.getByRole('list', { name: 'Objects card list' })).toBeVisible()
 
-		const card = objectsListRow(page, 'preview.png')
-		await expect(card).toBeVisible()
-		await card.getByRole('button', { name: 'Object actions for preview.png' }).click()
-		const cardMenu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Open large preview' }) }).last()
-		await expect(cardMenu.getByRole('menuitem', { name: 'Add favorite for preview.png' })).toBeVisible()
-		await cardMenu.getByRole('menuitem', { name: 'Open large preview' }).click()
+			const card = objectsListRow(page, 'preview.png')
+			await expect(card).toBeVisible()
+			await card.locator('[class*="gridCardPreviewFrame"]').tap()
+			await expect(card.getByRole('button', { name: 'Select object preview.png' })).toHaveAttribute('aria-pressed', 'true')
+			const actions = card.getByRole('button', { name: 'Object actions for preview.png' })
+			await expect(actions).toHaveAttribute('aria-expanded', 'false')
+			await expectMinTouchTarget(actions)
+			const selectionBar = page.getByTestId('objects-selection-bar')
+			await expect(selectionBar.getByText('preview.png', { exact: true })).toBeVisible()
+			await actions.tap()
+			const cardMenu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Open large preview' }) }).last()
+			await expect(cardMenu.getByRole('menuitem', { name: 'Add favorite for preview.png' })).toBeVisible()
+			await cardMenu.getByRole('menuitem', { name: 'Open large preview' }).click()
 
-		const modal = page.getByTestId('objects-image-viewer-modal')
-		await expect(modal).toBeVisible()
-		await expect(modal.getByTestId('objects-image-viewer-image')).toBeVisible()
-		await modal.getByRole('button', { name: 'Close' }).click()
-		await expect(modal).toHaveCount(0)
+			const modal = page.getByTestId('objects-image-viewer-modal')
+			await expect(modal).toBeVisible()
+			await expect(modal.getByTestId('objects-image-viewer-image')).toBeVisible()
+			await modal.getByRole('button', { name: 'Close' }).click()
+			await expect(modal).toHaveCount(0)
+			await selectionBar.getByRole('button', { name: 'Clear' }).click()
+			await page.getByRole('group', { name: 'Folder reports/' }).locator('[class*="gridCardMedia"]').tap()
+			await expect(page.getByRole('navigation', { name: 'Location breadcrumb' })).toContainText('reports')
+		}
 	})
 
 	test('shows selection actions and clears selected objects on mobile', async ({ page }) => {
@@ -235,6 +248,13 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(selectionBar).toHaveCount(0)
 		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).not.toBeChecked()
 		await expect(page.getByRole('button', { name: 'Details' })).toHaveCount(0)
+
+		const longRow = objectsListRow(page, /a-very-long-object-key/)
+		const key = (await longRow.getAttribute('data-object-key'))!
+		await longRow.getByRole('checkbox').click()
+		await expect(selectionBar.getByText(key.split('/').at(-1)!, { exact: true })).toBeVisible()
+		await page.getByRole('button', { name: 'Details', exact: true }).click()
+		await expect(page.getByTestId('objects-details-sheet').getByText(key, { exact: true })).toBeVisible()
 	})
 
 	test('folders drawer opens, navigates to a prefix, and closes on mobile', async ({ page }) => {

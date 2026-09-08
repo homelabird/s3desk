@@ -69,6 +69,18 @@
   white-space: nowrap;
 }
 
+.selectionBarFilename {
+  flex-basis: 100%;
+  min-width: 0;
+  font-size: var(--s3d-font-size-lg);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .selectionBarButton {
   min-height: var(--s3d-control-size-xs);
   line-height: 1.2;

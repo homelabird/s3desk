@@ -259,10 +259,7 @@
   }
 
   .gridCardTopRow {
-    position: absolute;
-    z-index: 1;
-    top: 4px;
-    right: 4px;
+    justify-content: flex-end;
   }
 
   .gridCardCheckboxWrap,
@@ -298,8 +295,8 @@
   }
 
   .gridCardTitle {
-    font-size: var(--s3d-font-size-xs);
-    line-height: 1.2;
+    font-size: var(--s3d-font-size-md);
+    line-height: 1.35;
   }
 
   .gridCardMetaLine,

@@ -6,6 +6,7 @@ import styles from './ObjectsListView.module.css'
 import { ObjectsSelectionBar } from './ObjectsListPane'
 import type { UIAction, UIActionOrDivider } from './objectsActions'
 import { buildActionMenu, filterActionItems, trimActionDividers } from './objectsActions'
+import { fileNameFromKey } from './objectsListUtils'
 
 type ObjectsSelectionBarContentProps = {
 	selectedCount: number
@@ -36,6 +37,11 @@ export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProp
 
 	return (
 		<ObjectsSelectionBar>
+			{props.singleSelectedKey ? (
+				<Typography.Text strong className={styles.selectionBarFilename} title={props.singleSelectedKey}>
+					{fileNameFromKey(props.singleSelectedKey)}
+				</Typography.Text>
+			) : null}
 			<div className={styles.selectionBarMeta}>
 				<Typography.Text
 					strong
