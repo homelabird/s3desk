@@ -297,48 +297,74 @@ test('Azure governance access uses the structured stored access policy editor', 
 })
 
 
-test('OCI sharing keeps the creation URL after refreshing and clears it when closed', async ({ page }) => {
-	let submitted: unknown
-	const accessUri = 'https://example.com/test-created-par'
-	await seedBucketsPage({
-		page,
-		profile: { id: profileId, provider: 'oci_object_storage', name: 'Test OCI', createdAt: now, updatedAt: now },
-		governance: {
-			provider: 'oci_object_storage', bucket,
-			capabilities: { bucket_sharing: { enabled: true } },
-			sharing: { provider: 'oci_object_storage', bucket, preauthenticatedSupport: true, preauthenticatedRequests: [] },
-		},
-		onPutSharing: (body) => {
-			submitted = body
-			return {
-				provider: 'oci_object_storage', bucket, preauthenticatedSupport: true,
-				preauthenticatedRequests: [{
-					id: 'new-par', name: 'Download link', accessType: 'AnyObjectRead',
-					bucketListingAction: 'Deny', objectName: '', timeCreated: now,
-					timeExpires: '2027-01-01T00:00:00Z', accessUri,
-				}],
-			}
-		},
+for (const width of [1280, 390]) {
+	test(`OCI sharing retains active creation URLs across saves and clears them when closed (${width}px)`, async ({ page }) => {
+		await page.setViewportSize({ width, height: 844 })
+		let submitted: unknown
+		let createdCount = 0
+		const accessUri = 'https://example.com/test-created-par-1'
+		await seedBucketsPage({
+			page,
+			profile: { id: profileId, provider: 'oci_object_storage', name: 'Test OCI', createdAt: now, updatedAt: now },
+			governance: {
+				provider: 'oci_object_storage', bucket,
+				capabilities: { bucket_sharing: { enabled: true } },
+				sharing: { provider: 'oci_object_storage', bucket, preauthenticatedSupport: true, preauthenticatedRequests: [] },
+			},
+			onPutSharing: (body) => {
+				submitted = body
+				return {
+					provider: 'oci_object_storage', bucket, preauthenticatedSupport: true,
+					preauthenticatedRequests: (body as { preauthenticatedRequests: Record<string, unknown>[] }).preauthenticatedRequests.map((item) => {
+						if (item.id) return item
+						createdCount += 1
+						return { ...item, id: `par-${createdCount}`, timeCreated: now, accessUri: `https://example.com/test-created-par-${createdCount}` }
+					}),
+				}
+			},
+		})
+		await openControls(page)
+		const section = page.getByTestId('bucket-governance-sharing')
+		await section.getByRole('button', { name: 'Add PAR' }).click()
+		await section.getByRole('textbox', { name: 'Name', exact: true }).fill('Download link')
+		await section.getByRole('textbox', { name: 'Expires at (RFC3339)' }).fill('2027-01-01T00:00:00Z')
+		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		await expect(section.getByRole('textbox', { name: 'Name', exact: true })).toBeDisabled()
+		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
+		await expect(section.getByText(accessUri, { exact: true })).toBeVisible()
+		expect(submitted).toEqual({ preauthenticatedRequests: [{
+			name: 'Download link', accessType: 'AnyObjectRead', bucketListingAction: 'Deny',
+			timeExpires: '2027-01-01T00:00:00Z',
+		}] })
+		await section.getByRole('button', { name: 'Add PAR' }).click()
+		await section.getByRole('textbox', { name: 'Name', exact: true }).last().fill('Second link')
+		await section.getByRole('textbox', { name: 'Expires at (RFC3339)' }).last().fill('2027-01-01T00:00:00Z')
+		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		await expect(section.getByRole('textbox', { name: 'Name', exact: true }).last()).toBeDisabled()
+		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
+		const secondUri = 'https://example.com/test-created-par-2'
+		await expect(section.getByText(accessUri, { exact: true })).toBeVisible()
+		await expect(section.getByText(secondUri, { exact: true })).toBeVisible()
+		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
+		await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+		await section.getByRole('button', { name: 'Copy PAR URL for Download link' }).click()
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(accessUri)
+		await section.getByRole('button', { name: 'Copy PAR URL for Second link' }).click()
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secondUri)
+		await section.getByRole('button', { name: 'Remove', exact: true }).first().click()
+		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		await expect(section.getByText(accessUri, { exact: true })).toHaveCount(0)
+		await expect(section.getByText(secondUri, { exact: true })).toBeVisible()
+		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
+		await page.getByRole('button', { name: 'Close', exact: true }).last().click()
+		await expect(section).toHaveCount(0)
+		await clickBucketCardManageAction(page, page.locator('body'), bucket, /Controls/)
+		await expect(section.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Second link')
+		await expect(section.getByText(accessUri, { exact: true })).toHaveCount(0)
+		await expect(section.getByText(secondUri, { exact: true })).toHaveCount(0)
 	})
-	await openControls(page)
-	const section = page.getByTestId('bucket-governance-sharing')
-	await section.getByRole('button', { name: 'Add PAR' }).click()
-	await section.getByRole('textbox', { name: 'Name', exact: true }).fill('Download link')
-	await section.getByRole('textbox', { name: 'Expires at (RFC3339)' }).fill('2027-01-01T00:00:00Z')
-	await section.getByRole('button', { name: 'Save', exact: true }).click()
-	await expect(section.getByRole('textbox', { name: 'Name', exact: true })).toBeDisabled()
-	await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
-	await expect(section.getByText(accessUri, { exact: true })).toBeVisible()
-	expect(submitted).toEqual({ preauthenticatedRequests: [{
-		name: 'Download link', accessType: 'AnyObjectRead', bucketListingAction: 'Deny',
-		timeExpires: '2027-01-01T00:00:00Z',
-	}] })
-	await page.getByRole('button', { name: 'Close', exact: true }).last().click()
-	await expect(section).toHaveCount(0)
-	await clickBucketCardManageAction(page, page.locator('body'), bucket, /Controls/)
-	await expect(section.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Download link')
-	await expect(section.getByText(accessUri, { exact: true })).toHaveCount(0)
-})
+}
 
 
 test('provider validation only describes the current policy draft', async ({ page }) => {

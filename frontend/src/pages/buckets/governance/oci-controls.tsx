@@ -111,9 +111,10 @@ function OCIControlsDraft(props: GovernanceControlsCommonProps & {
         buildOCISharingRequest(preauthenticatedRequests),
       ),
     onSuccess: (view) => {
-      setCreatedPARs(
+      setCreatedPARs((previous) =>
         buildCreatedOCIPreauthenticatedRequests(
           view as OCISharingView | undefined,
+          previous,
         ),
       );
     },

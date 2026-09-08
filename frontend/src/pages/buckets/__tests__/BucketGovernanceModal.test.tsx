@@ -1293,6 +1293,14 @@ describe("BucketGovernanceModal", () => {
     await waitFor(() => expect(screen.getByDisplayValue("New PAR")).toBeDisabled());
     expect(screen.getByText(created.accessUri)).toBeInTheDocument();
 
+    vi.mocked(api.buckets.putBucketSharing).mockResolvedValueOnce({
+      ...refreshed.sharing, provider: "oci_object_storage", bucket: "demo-bucket",
+    });
+    fireEvent.click(within(screen.getByTestId("bucket-governance-sharing")).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.buckets.putBucketSharing).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(message.success).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(created.accessUri)).toBeInTheDocument();
+
     rerender(
       <QueryClientProvider client={client}>
         <BucketGovernanceModal api={api} apiToken="token" profileId="profile-2"

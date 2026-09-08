@@ -226,11 +226,14 @@ export function buildOCISharingRequest(
 
 export function buildCreatedOCIPreauthenticatedRequests(
   view: OCISharingView | undefined,
+  previous: OCIPreauthenticatedRequestDraft[],
 ): OCIPreauthenticatedRequestDraft[] {
+  const previousURLs = new Map(previous.filter((item) => item.id).map((item) => [item.id, item.accessUri]));
   const nextRequests = Array.isArray(view?.preauthenticatedRequests)
     ? view.preauthenticatedRequests
     : [];
   return nextRequests
+    .map((item) => ({ ...item, accessUri: item.accessUri?.trim() || previousURLs.get(item.id ?? "") }))
     .filter(
       (item): item is OCIPreauthenticatedRequestDraft =>
         typeof item.accessUri === "string" && item.accessUri.trim().length > 0,
