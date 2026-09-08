@@ -1,4 +1,4 @@
-import { Alert, Typography } from "antd";
+import { Alert, Button, Typography } from "antd";
 import type { ReactNode } from "react";
 
 import type { BucketPolicyResponse } from "../../api/types";
@@ -12,21 +12,37 @@ export function BucketPolicyModalShell(props: {
   isError: boolean;
   error: unknown;
   policyData: BucketPolicyResponse | undefined;
-  children: (policyData: BucketPolicyResponse) => ReactNode;
+  isFetching: boolean;
+  onRetry: () => void;
+  children: (policyData: BucketPolicyResponse, loadErrorAlert: ReactNode) => ReactNode;
 }) {
-  if (props.isError) {
+  const loadErrorAlert = props.isError ? (
+    <Alert
+      type={props.policyData ? "warning" : "error"}
+      showIcon
+      title={props.policyData ? "Could not refresh policy" : "Failed to load policy"}
+      description={formatErr(props.error)}
+      action={
+        <Button
+          onClick={props.onRetry}
+          loading={props.isFetching}
+          disabled={props.isFetching}
+          aria-label="Retry loading policy"
+        >
+          Retry
+        </Button>
+      }
+    />
+  ) : null;
+
+  if (props.isError && !props.policyData) {
     return (
       <BucketPolicyDialogShell
         mobile={props.mobile}
         title={`Policy: ${props.bucket}`}
         onClose={props.onClose}
       >
-        <Alert
-          type="error"
-          showIcon
-          title="Failed to load policy"
-          description={formatErr(props.error)}
-        />
+        {loadErrorAlert}
       </BucketPolicyDialogShell>
     );
   }
@@ -43,5 +59,5 @@ export function BucketPolicyModalShell(props: {
     );
   }
 
-  return <>{props.children(props.policyData)}</>;
+  return <>{props.children(props.policyData, loadErrorAlert)}</>;
 }

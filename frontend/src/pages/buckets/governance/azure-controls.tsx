@@ -159,6 +159,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
       summaryTags={headerTags}
       isRefreshing={props.isFetching || anyMutationPending}
       warnings={props.governance}
+      loadErrorAlert={props.loadErrorAlert}
       advancedPolicy={extractAdvancedPolicy(props.governance)}
       onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
     >

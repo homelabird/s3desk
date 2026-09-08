@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, type QueryKey } from "@tanstack/react-query";
 import { message } from "antd";
 import {
   act,
@@ -605,7 +605,7 @@ describe("BucketGovernanceModal", () => {
     "azure_blob",
     "oci_object_storage",
   ] as const)(
-    "ignores stale %s public exposure responses after the modal context changes",
+    "refreshes the original %s cache without updating the new modal after saving",
     async (provider) => {
       const pendingSave = deferred<void>();
       const api = createApi(provider, {
@@ -657,10 +657,85 @@ describe("BucketGovernanceModal", () => {
 
       expect(message.success).not.toHaveBeenCalled();
       expect(message.error).not.toHaveBeenCalled();
-      expect(invalidateSpy).not.toHaveBeenCalled();
+      const expectedKeys: QueryKey[] = [
+        queryKeys.buckets.governance("profile-1", "demo-bucket", "token-a"),
+      ];
+      if (provider === "gcp_gcs" || provider === "azure_blob") {
+        expectedKeys.push(queryKeys.buckets.policy("profile-1", "demo-bucket", "token-a"));
+      }
+      await waitFor(() => expect(invalidateSpy).toHaveBeenCalledTimes(expectedKeys.length));
+      expect(invalidateSpy.mock.calls.map(([filters]) => filters)).toEqual(
+        expectedKeys.map((queryKey) => ({ queryKey, exact: true })),
+      );
     },
     SLOW_GOVERNANCE_TIMEOUT_MS,
   );
+
+  it("reloads actual retention state after a partially applied OCI save fails", async () => {
+    const rules = [
+      { id: "rule-1", displayName: "Retention Rule 1", days: 45, locked: false },
+      { id: "rule-2", displayName: "Retention Rule 2", days: 45, locked: false },
+    ];
+    const governance = {
+      ...createGovernance("oci_object_storage"),
+      protection: { provider: "oci_object_storage", bucket: "demo-bucket", retention: { enabled: true, rules } },
+    };
+    const refreshed = {
+      ...governance,
+      protection: {
+        provider: "oci_object_storage", bucket: "demo-bucket",
+        retention: { enabled: true, rules: [{ ...rules[0], days: 60 }, rules[1]] },
+      },
+    };
+    const api = createApi("oci_object_storage", {
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(governance).mockResolvedValue(refreshed),
+      putBucketProtection: vi.fn().mockRejectedValue(new Error("second retention update failed")),
+    });
+    renderModal(api, { provider: "oci_object_storage" });
+    const section = await screen.findByTestId("bucket-governance-protection");
+    const days = within(section).getAllByRole("textbox", { name: /retention days/i });
+    fireEvent.change(days[0], { target: { value: "60" } });
+    fireEvent.change(days[1], { target: { value: "90" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.buckets.putBucketProtection).toHaveBeenCalledOnce());
+    await waitFor(() => expect(within(screen.getByTestId("bucket-governance-protection"))
+      .getAllByRole("textbox", { name: /retention days/i })[1]).toHaveValue("45"));
+    expect(within(screen.getByTestId("bucket-governance-protection"))
+      .getAllByRole("textbox", { name: /retention days/i })[0]).toHaveValue("60");
+    expect(message.error).toHaveBeenCalled();
+    expect(message.success).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed controls load in the open dialog", async () => {
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi.fn().mockRejectedValueOnce(new Error("controls service unavailable"))
+        .mockResolvedValue(createGovernance("aws_s3")),
+    });
+    const onClose = vi.fn();
+    renderModal(api, { onClose });
+    await screen.findByText("Failed to load controls");
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading controls" }));
+    await screen.findByTestId("bucket-governance-public-exposure");
+    expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keeps edited controls during a background read failure and retry", async () => {
+    const loaded = createGovernance("aws_s3");
+    const api = createApi("aws_s3", { getBucketGovernance: vi.fn().mockResolvedValueOnce(loaded)
+      .mockRejectedValueOnce(new Error("refresh unavailable")).mockResolvedValue(loaded) });
+    const { client } = renderModal(api);
+    const toggle = await screen.findByRole("switch", { name: "Block public bucket policies" });
+    fireEvent.click(toggle);
+    expect(toggle).not.toBeChecked();
+    await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.buckets.governance("profile-1", "demo-bucket", "token") }); });
+    await screen.findByText(/refresh unavailable/);
+    expect(screen.getByRole("switch", { name: "Block public bucket policies" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading controls" }));
+    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.queryByText("Could not refresh controls")).not.toBeInTheDocument());
+    expect(screen.getByRole("switch", { name: "Block public bucket policies" })).not.toBeChecked();
+  });
 
   it("opens the policy editor from the AWS controls surface", async () => {
     const api = createApi("aws_s3");
@@ -1179,6 +1254,53 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
+
+  it("keeps newly created OCI sharing links available after the refreshed inventory arrives", async () => {
+    const created = {
+      id: "par-new",
+      name: "New PAR",
+      accessType: "AnyObjectRead",
+      bucketListingAction: "Deny",
+      objectName: "",
+      timeCreated: "2026-03-10T00:00:00Z",
+      timeExpires: "2026-10-01T00:00:00Z",
+      accessUri: "https://example.com/new-test-par",
+    };
+    const governance = createGovernance("oci_object_storage");
+    const refreshed = {
+      ...governance,
+      sharing: {
+        ...governance.sharing,
+        preauthenticatedRequests: [{ ...created, accessUri: undefined }],
+      },
+    };
+    const api = createApi("oci_object_storage", {
+      getBucketGovernance: vi.fn()
+        .mockResolvedValueOnce(governance)
+        .mockResolvedValue(refreshed),
+      putBucketSharing: vi.fn().mockResolvedValue({
+        ...refreshed.sharing,
+        preauthenticatedRequests: [created],
+      }),
+    });
+    const { client, rerender } = renderModal(api, { provider: "oci_object_storage" });
+    const section = await screen.findByTestId("bucket-governance-sharing");
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.getQueryData(
+      queryKeys.buckets.governance("profile-1", "demo-bucket", "token"),
+    )).toEqual(refreshed));
+    await waitFor(() => expect(screen.getByDisplayValue("New PAR")).toBeDisabled());
+    expect(screen.getByText(created.accessUri)).toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={client}>
+        <BucketGovernanceModal api={api} apiToken="token" profileId="profile-2"
+          provider="oci_object_storage" bucket="demo-bucket" onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId("bucket-governance-sharing");
+    expect(screen.queryByText(created.accessUri)).not.toBeInTheDocument();
   }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
   it("ignores stale OCI sharing responses after the modal context changes", async () => {

@@ -400,6 +400,7 @@ export function GovernanceControlsLayout(props: {
   summaryTags: string[];
   isRefreshing: boolean;
   warnings?: WarningCarrier | null;
+  loadErrorAlert?: ReactNode;
   advancedPolicy?: BucketAdvancedView;
   onOpenAdvancedPolicy?: (bucket: string) => void;
   children: ReactNode;
@@ -421,6 +422,8 @@ export function GovernanceControlsLayout(props: {
         </div>
       }
     >
+      {props.loadErrorAlert}
+
       <GovernanceSummaryCard
         title={props.summaryTitle}
         description={props.summaryDescription}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 
 import {
   OCIPreauthenticatedRequestsActions,
@@ -32,10 +32,28 @@ import type {
 import {
   buildOCIDraft,
   buildOCISharingDraft,
+  buildGovernanceDraftKey,
   getOCISharingView,
 } from "./utils";
 
 export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps) {
+  // Creation URLs survive inventory refreshes, but remain local to this open bucket.
+  const [createdPARs, setCreatedPARs] = useState<OCIPreauthenticatedRequestDraft[]>([]);
+
+  return (
+    <OCIControlsDraft
+      key={buildGovernanceDraftKey(props.bucket, props.governance)}
+      {...props}
+      createdPARs={createdPARs}
+      setCreatedPARs={setCreatedPARs}
+    />
+  );
+}
+
+function OCIControlsDraft(props: GovernanceControlsCommonProps & {
+  createdPARs: OCIPreauthenticatedRequestDraft[];
+  setCreatedPARs: Dispatch<SetStateAction<OCIPreauthenticatedRequestDraft[]>>;
+}) {
   const draft = buildOCIDraft(props.governance);
   const sharingDraft = buildOCISharingDraft(props.governance);
   const [visibility, setVisibility] = useState<
@@ -50,9 +68,7 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
   const [preauthenticatedRequests, setPreauthenticatedRequests] = useState<
     OCIPreauthenticatedRequestDraft[]
   >(sharingDraft);
-  const [createdPARs, setCreatedPARs] = useState<OCIPreauthenticatedRequestDraft[]>(
-    [],
-  );
+  const { createdPARs, setCreatedPARs } = props;
   const sharing = getOCISharingView(props.governance);
   const mutationRunner = useGovernanceMutationState(props);
 
@@ -125,6 +141,7 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
       summaryTags={headerTags}
       isRefreshing={props.isFetching || anyMutationPending}
       warnings={props.governance}
+      loadErrorAlert={props.loadErrorAlert}
     >
       <GovernanceControlSections
         sections={[

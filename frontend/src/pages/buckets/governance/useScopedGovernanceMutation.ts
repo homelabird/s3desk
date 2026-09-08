@@ -40,12 +40,16 @@ export function useScopedGovernanceMutation<TData = unknown, TVariables = void>(
     onSuccess: async (data, variables, context) => {
       if (!args.mutationScope.isCurrentRequest(context, requestTokenRef.current)) return;
       await args.onSuccess?.(data, variables, context);
+      if (!args.mutationScope.isCurrentRequest(context, requestTokenRef.current)) return;
       appFeedback.success(args.successMessage);
-      await args.refreshState(context.apiToken);
     },
     onError: (err, _variables, context) => {
       if (!args.mutationScope.isCurrentRequest(context, requestTokenRef.current)) return;
       appFeedback.error(formatErr(err));
+    },
+    onSettled: async (_data, _error, _variables, context) => {
+      // Provider errors can follow partial writes; refresh even after navigation.
+      if (context) await args.refreshState(context.apiToken);
     },
   });
 }

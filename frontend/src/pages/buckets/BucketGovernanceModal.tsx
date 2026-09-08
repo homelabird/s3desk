@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Grid, Typography } from "antd";
+import { Alert, Button, Grid, Typography } from "antd";
 
 import type { APIClientShape } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
@@ -52,19 +52,33 @@ export function BucketGovernanceModal(props: {
     );
   }
 
-  if (governanceQuery.isError) {
+  const loadErrorAlert = governanceQuery.isError ? (
+    <Alert
+      type={governance ? "warning" : "error"}
+      showIcon
+      title={governance ? "Could not refresh controls" : "Failed to load controls"}
+      description={formatErr(governanceQuery.error)}
+      action={
+        <Button
+          onClick={() => void governanceQuery.refetch({ cancelRefetch: false })}
+          loading={governanceQuery.isFetching}
+          disabled={governanceQuery.isFetching}
+          aria-label="Retry loading controls"
+        >
+          Retry
+        </Button>
+      }
+    />
+  ) : null;
+
+  if (governanceQuery.isError && !governance) {
     return (
       <BucketGovernanceDialogShell
         mobile={isMobile}
         title={`Controls: ${bucket}`}
         onClose={props.onClose}
       >
-        <Alert
-          type="error"
-          showIcon
-          title="Failed to load controls"
-          description={formatErr(governanceQuery.error)}
-        />
+        {loadErrorAlert}
       </BucketGovernanceDialogShell>
     );
   }
@@ -88,6 +102,7 @@ export function BucketGovernanceModal(props: {
     provider: props.provider,
     bucket,
     governance,
+    loadErrorAlert,
     isFetching: governanceQuery.isFetching,
     isMobile,
     queryClient,
@@ -121,7 +136,7 @@ export function BucketGovernanceModal(props: {
     case "oci_object_storage":
       return (
         <BucketGovernanceOCIControls
-          key={controlsKey}
+          key={`${props.profileId}:${props.apiToken}:${bucket}`}
           {...commonProps}
         />
       );

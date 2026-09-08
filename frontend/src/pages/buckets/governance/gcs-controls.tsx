@@ -131,6 +131,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
       summaryTags={headerTags}
       isRefreshing={props.isFetching || anyMutationPending}
       warnings={props.governance}
+      loadErrorAlert={props.loadErrorAlert}
       advancedPolicy={extractAdvancedPolicy(props.governance)}
       onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
     >

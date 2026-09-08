@@ -122,6 +122,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
       summaryTags={headerTags}
       isRefreshing={props.isFetching || anyMutationPending}
       warnings={props.governance}
+      loadErrorAlert={props.loadErrorAlert}
       advancedPolicy={advancedPolicy}
       onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
     >

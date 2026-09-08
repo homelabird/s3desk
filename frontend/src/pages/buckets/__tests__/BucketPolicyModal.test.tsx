@@ -483,6 +483,37 @@ describe("BucketPolicyModal", () => {
     await expectTwoAzurePolicyControls();
   });
 
+  it("retries a failed policy load in the open dialog", async () => {
+    const api = createApi({
+      getBucketPolicy: vi.fn().mockRejectedValueOnce(new Error("policy service unavailable"))
+        .mockResolvedValue({ bucket: "demo-bucket", exists: true, policy: {} }),
+    });
+    const onClose = vi.fn();
+    renderModal(api, { onClose });
+    await screen.findByText("Failed to load policy");
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading policy" }));
+    await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    expect(api.buckets.getBucketPolicy).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keeps an edited policy during a background read failure and retry", async () => {
+    const loaded = { bucket: "demo-bucket", exists: true, policy: {} };
+    const api = createApi({ getBucketPolicy: vi.fn().mockResolvedValueOnce(loaded)
+      .mockRejectedValueOnce(new Error("refresh unavailable")).mockResolvedValue(loaded) });
+    const { client } = renderModal(api);
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    const draft = JSON.stringify({ Id: "draft-to-preserve", Statement: [] });
+    fireEvent.change(editor, { target: { value: draft } });
+    await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.buckets.policy("profile-1", "demo-bucket", "token") }); });
+    await screen.findByText(/refresh unavailable/);
+    expect(screen.getByRole("textbox", { name: "Raw policy JSON" })).toHaveValue(draft);
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading policy" }));
+    await waitFor(() => expect(api.buckets.getBucketPolicy).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.queryByText("Could not refresh policy")).not.toBeInTheDocument());
+    expect(screen.getByRole("textbox", { name: "Raw policy JSON" })).toHaveValue(draft);
+  });
+
   it("shows validation warning details for ok=false provider responses", async () => {
     mockViewportWidth(1280);
     const api = createApi({
@@ -513,6 +544,30 @@ describe("BucketPolicyModal", () => {
         8,
       );
     });
+  });
+
+  it.each(["success", "error"])("ignores a late provider validation %s after editing the draft", async (outcome) => {
+    mockViewportWidth(1280);
+    const pending = deferred<{ ok: boolean; provider: string; errors: string[]; warnings: string[] }>();
+    const api = createApi({ validateBucketPolicy: vi.fn().mockReturnValue(pending.promise) });
+    const successSpy = vi.spyOn(message, "success").mockImplementation(() => undefined as never);
+    const warningSpy = vi.spyOn(message, "warning").mockImplementation(() => undefined as never);
+    renderModal(api);
+    fireEvent.click(await screen.findByRole("button", { name: "Validate with provider" }));
+    await waitFor(() => expect(api.buckets.validateBucketPolicy).toHaveBeenCalledOnce());
+    const editor = screen.getByRole("textbox", { name: "Raw policy JSON" });
+    const nextText = JSON.stringify({ Version: "2012-10-17", Statement: [], Id: "new-draft" });
+    fireEvent.change(editor, { target: { value: nextText } });
+    await act(async () => {
+      if (outcome === "success") pending.resolve({ ok: true, provider: "aws_s3", errors: [], warnings: [] });
+      else pending.reject(new Error("old validation unavailable"));
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Validate with provider" })).toBeEnabled());
+    expect(editor).toHaveValue(nextText);
+    expect(screen.queryByText("Server validation OK")).not.toBeInTheDocument();
+    expect(screen.queryByText(/old validation unavailable/)).not.toBeInTheDocument();
+    expect(successSpy).not.toHaveBeenCalled();
+    expect(warningSpy).not.toHaveBeenCalled();
   });
 
   it("shows unavailable validation errors for API failures", async () => {

@@ -12,8 +12,13 @@ async function seedBucketsPage(args: {
 	profile: Record<string, unknown>
 	governance: Record<string, unknown>
 	onPutAccess?: (body: unknown) => void
+	onPutPolicy?: (body: unknown) => void
+	onPutSharing?: (body: unknown) => Record<string, unknown>
+	onValidatePolicy?: (body: unknown) => Promise<Record<string, unknown>>
+	settingsUnavailable?: () => boolean
 }) {
 	let currentGovernance = structuredClone(args.governance)
+	let currentPolicy: unknown = {}
 	await installApiFixtures(args.page, [
 		{
 			method: 'GET',
@@ -47,11 +52,43 @@ async function seedBucketsPage(args: {
 			}),
 		},
 		{
+			method: 'GET', path: `/buckets/${bucket}/policy`,
+			handler: () => args.settingsUnavailable?.()
+				? { status: 503, json: { error: { code: 'upstream_unavailable', message: 'Settings temporarily unavailable' } } }
+				: { json: { bucket, exists: true, policy: currentPolicy } },
+		},
+		{
+			method: 'PUT', path: `/buckets/${bucket}/policy`,
+			handler: (ctx) => {
+				const body = ctx.request.postDataJSON()
+				args.onPutPolicy?.(body)
+				currentPolicy = body.policy
+				return { status: 204 }
+			},
+		},
+		{
+			method: 'POST', path: `/buckets/${bucket}/policy/validate`,
+			handler: async (ctx) => ({ json: await args.onValidatePolicy?.(ctx.request.postDataJSON()) }),
+		},
+		{
 			method: 'GET',
 			path: `/buckets/${bucket}/governance`,
-			handler: () => ({
-				json: currentGovernance,
-			}),
+			handler: () => args.settingsUnavailable?.()
+				? { status: 503, json: { error: { code: 'upstream_unavailable', message: 'Settings temporarily unavailable' } } }
+				: { json: currentGovernance },
+		},
+		{
+			method: 'PUT',
+			path: `/buckets/${bucket}/governance/sharing`,
+			handler: (ctx) => {
+				const sharing = args.onPutSharing?.(ctx.request.postDataJSON())
+				const requests = (sharing?.preauthenticatedRequests ?? []) as Record<string, unknown>[]
+				currentGovernance = {
+					...currentGovernance,
+					sharing: { ...sharing, preauthenticatedRequests: requests.map((item) => ({ ...item, accessUri: undefined })) },
+				}
+				return { json: sharing }
+			},
 		},
 		{
 			method: 'PUT',
@@ -76,6 +113,7 @@ async function seedBucketsPage(args: {
 
 	await seedLocalStorage(args.page, {
 		apiToken: 'playwright-token',
+		apiRetryCount: 0,
 		profileId,
 		bucket,
 	})
@@ -256,4 +294,134 @@ test('Azure governance access uses the structured stored access policy editor', 
 	})
 	await expect(page.locator('#a11y-status')).toHaveText('Stored access policies updated')
 	await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
+})
+
+
+test('OCI sharing keeps the creation URL after refreshing and clears it when closed', async ({ page }) => {
+	let submitted: unknown
+	const accessUri = 'https://example.com/test-created-par'
+	await seedBucketsPage({
+		page,
+		profile: { id: profileId, provider: 'oci_object_storage', name: 'Test OCI', createdAt: now, updatedAt: now },
+		governance: {
+			provider: 'oci_object_storage', bucket,
+			capabilities: { bucket_sharing: { enabled: true } },
+			sharing: { provider: 'oci_object_storage', bucket, preauthenticatedSupport: true, preauthenticatedRequests: [] },
+		},
+		onPutSharing: (body) => {
+			submitted = body
+			return {
+				provider: 'oci_object_storage', bucket, preauthenticatedSupport: true,
+				preauthenticatedRequests: [{
+					id: 'new-par', name: 'Download link', accessType: 'AnyObjectRead',
+					bucketListingAction: 'Deny', objectName: '', timeCreated: now,
+					timeExpires: '2027-01-01T00:00:00Z', accessUri,
+				}],
+			}
+		},
+	})
+	await openControls(page)
+	const section = page.getByTestId('bucket-governance-sharing')
+	await section.getByRole('button', { name: 'Add PAR' }).click()
+	await section.getByRole('textbox', { name: 'Name', exact: true }).fill('Download link')
+	await section.getByRole('textbox', { name: 'Expires at (RFC3339)' }).fill('2027-01-01T00:00:00Z')
+	await section.getByRole('button', { name: 'Save', exact: true }).click()
+	await expect(section.getByRole('textbox', { name: 'Name', exact: true })).toBeDisabled()
+	await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
+	await expect(section.getByText(accessUri, { exact: true })).toBeVisible()
+	expect(submitted).toEqual({ preauthenticatedRequests: [{
+		name: 'Download link', accessType: 'AnyObjectRead', bucketListingAction: 'Deny',
+		timeExpires: '2027-01-01T00:00:00Z',
+	}] })
+	await page.getByRole('button', { name: 'Close', exact: true }).last().click()
+	await expect(section).toHaveCount(0)
+	await clickBucketCardManageAction(page, page.locator('body'), bucket, /Controls/)
+	await expect(section.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Download link')
+	await expect(section.getByText(accessUri, { exact: true })).toHaveCount(0)
+})
+
+
+test('provider validation only describes the current policy draft', async ({ page }) => {
+	let finishFirst!: () => void
+	const pending = new Promise<void>((resolve) => { finishFirst = resolve })
+	const requests: unknown[] = []
+	await seedBucketsPage({
+		page,
+		profile: { id: profileId, provider: 'aws_s3', name: 'Test AWS', createdAt: now, updatedAt: now },
+		governance: { provider: 'aws_s3', bucket },
+		onValidatePolicy: async (body) => {
+			requests.push(body)
+			if (requests.length === 1) await pending
+			return { ok: true, provider: 'aws_s3', errors: [], warnings: [] }
+		},
+	})
+	await gotoBucketsPage(page, { ready: (scope) => scope.getByText(bucket) })
+	await clickBucketCardManageAction(page, page.locator('body'), bucket, /Policy editor/)
+	const editor = page.getByRole('textbox', { name: 'Raw policy JSON' })
+	const validate = page.getByRole('button', { name: 'Validate with provider' })
+	await validate.click()
+	await expect.poll(() => requests.length).toBe(1)
+	const draft = { Version: '2012-10-17', Statement: [], Id: 'changed-draft' }
+	await editor.fill(JSON.stringify(draft))
+	finishFirst()
+	await expect(validate).toBeEnabled()
+	await expect(page.getByText('Server validation OK', { exact: true })).toHaveCount(0)
+	await expect(editor).toHaveValue(JSON.stringify(draft))
+	await validate.click()
+	await expect(page.getByText('Server validation OK', { exact: true })).toBeVisible()
+	expect(requests).toEqual([{ policy: {} }, { policy: draft }])
+})
+
+
+for (const surface of ['controls', 'policy'] as const) {
+	test(`retries ${surface} loading without reopening the dialog`, async ({ page }) => {
+		let unavailable = true
+		await seedBucketsPage({
+			page,
+			profile: { id: profileId, provider: 'aws_s3', name: 'Test AWS', createdAt: now, updatedAt: now },
+			governance: { provider: 'aws_s3', bucket, publicExposure: { mode: 'private' } },
+			settingsUnavailable: () => unavailable,
+		})
+		await gotoBucketsPage(page, { ready: (scope) => scope.getByText(bucket) })
+		await clickBucketCardManageAction(page, page.locator('body'), bucket, surface === 'controls' ? /Controls/ : /Policy editor/)
+		const retry = page.getByRole('button', { name: `Retry loading ${surface}` })
+		await expect(retry).toBeVisible({ timeout: 15000 })
+		unavailable = false
+		await retry.click()
+		await expect(retry).toHaveCount(0)
+		if (surface === 'controls') await expect(page.getByTestId('bucket-governance-public-exposure')).toBeVisible()
+		else await expect(page.getByRole('textbox', { name: 'Raw policy JSON' })).toBeVisible()
+	})
+}
+
+test('policy draft survives a failed reconnect refresh and retry', async ({ page }) => {
+	let unavailable = false
+	let savedPolicy: unknown
+	await seedBucketsPage({
+		page,
+		profile: { id: profileId, provider: 'aws_s3', name: 'Test AWS', createdAt: now, updatedAt: now },
+		governance: { provider: 'aws_s3', bucket },
+		settingsUnavailable: () => unavailable,
+		onPutPolicy: (body) => { savedPolicy = body },
+	})
+	await gotoBucketsPage(page, { ready: (scope) => scope.getByText(bucket) })
+	await clickBucketCardManageAction(page, page.locator('body'), bucket, /Policy editor/)
+	const editor = page.getByRole('textbox', { name: 'Raw policy JSON' })
+	const draft = '{"Id":"keep-my-draft","Statement":[]}'
+	await editor.fill(draft)
+	unavailable = true
+	await page.clock.install()
+	await page.evaluate(() => window.dispatchEvent(new Event('offline')))
+	await page.clock.fastForward(31000)
+	await page.evaluate(() => window.dispatchEvent(new Event('online')))
+	const retry = page.getByRole('button', { name: 'Retry loading policy' })
+	await expect(retry).toBeVisible({ timeout: 15000 })
+	await expect(editor).toHaveValue(draft)
+	unavailable = false
+	await retry.click()
+	await expect(retry).toHaveCount(0)
+	await expect(editor).toHaveValue(draft)
+	await page.getByRole('button', { name: 'Save', exact: true }).click()
+	await expect(editor).toHaveCount(0)
+	expect(savedPolicy).toEqual({ policy: JSON.parse(draft) })
 })

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { APIClientShape } from "../../../api/client";
@@ -19,6 +20,7 @@ export type GovernanceControlsCommonProps = {
   provider: Profile["provider"];
   bucket: string;
   governance: BucketGovernanceView;
+  loadErrorAlert?: ReactNode;
   isFetching: boolean;
   isMobile: boolean;
   queryClient: QueryClient;

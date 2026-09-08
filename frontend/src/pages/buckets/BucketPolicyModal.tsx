@@ -1,5 +1,5 @@
 import { Grid } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { APIError, type APIClientShape } from "../../api/client";
 import type {
@@ -91,8 +91,10 @@ export function BucketPolicyModal(props: {
       isError={policyQuery.isError}
       error={policyQuery.error}
       policyData={policyQuery.data}
+      isFetching={policyQuery.isFetching}
+      onRetry={() => void policyQuery.refetch({ cancelRefetch: false })}
     >
-      {(policyData) => (
+      {(policyData, loadErrorAlert) => (
         <BucketPolicyEditor
           key={`${props.profileId}:${props.apiToken}:${bucket}:${policyKind}`}
           api={props.api}
@@ -102,6 +104,7 @@ export function BucketPolicyModal(props: {
           policyKind={policyKind}
           provider={props.provider}
           policyData={policyData}
+          loadErrorAlert={loadErrorAlert}
           policyIsFetching={policyQuery.isFetching}
           mobile={isMobile}
           onClose={props.onClose}
@@ -120,6 +123,7 @@ function BucketPolicyEditor(props: {
   policyKind: PolicyKind;
   provider?: Profile["provider"];
   policyData: BucketPolicyResponse;
+  loadErrorAlert?: ReactNode;
   policyIsFetching: boolean;
   mobile: boolean;
   onClose: () => void;
@@ -275,6 +279,7 @@ function BucketPolicyEditor(props: {
       profileId: props.profileId,
       bucket,
       provider: props.provider,
+      validationKey: effectivePolicyText,
       onClose: props.onClose,
       setActiveTab,
       setLastProviderError,
@@ -496,6 +501,7 @@ function BucketPolicyEditor(props: {
       footer={footerContent}
       closeDisabled={isBusy}
     >
+      {props.loadErrorAlert}
       <BucketPolicyWorkspaceHeader
         policyKind={policyKind}
         controlsShortcut={controlsShortcut}

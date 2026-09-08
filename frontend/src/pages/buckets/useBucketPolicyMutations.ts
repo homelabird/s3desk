@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { APIError, type APIClientShape } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
@@ -16,6 +16,7 @@ export function useBucketPolicyMutations(props: {
   profileId: string;
   bucket: string;
   provider?: Profile["provider"];
+  validationKey: string;
   onClose: () => void;
   setActiveTab: (tab: "validate" | "preview" | "diff") => void;
   setLastProviderError: (error: APIError | null) => void;
@@ -28,6 +29,13 @@ export function useBucketPolicyMutations(props: {
   const putRequestTokenRef = useRef(0);
   const deleteRequestTokenRef = useRef(0);
   const validateRequestTokenRef = useRef(0);
+  const { validationKey, setServerValidation, setServerValidationError } = props;
+
+  useLayoutEffect(() => {
+    validateRequestTokenRef.current += 1;
+    setServerValidation(null);
+    setServerValidationError(null);
+  }, [validationKey, setServerValidation, setServerValidationError]);
 
   useEffect(() => {
     isActiveRef.current = true;
