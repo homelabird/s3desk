@@ -59,42 +59,17 @@ function createLogEntry(line: string, lineNumber: number): JobsLogEntry {
 	}
 }
 
-function parseLogEntries(text: string, firstLineNumber = 1): JobsLogEntry[] {
+function parseLogChunk(text: string, firstLineNumber = 1) {
 	const lines = text.split('\n')
 	const entries: JobsLogEntry[] = []
 	for (let index = 0; index < lines.length; index += 1) {
 		const line = (lines[index] ?? '').trimEnd()
 		if (line.length > 0) entries.push(createLogEntry(line, firstLineNumber + index))
 	}
-	return entries
-}
-
-function getNextLineNumberAfterText(text: string, firstLineNumber = 1) {
-	if (!text) return firstLineNumber
-	let newlineCount = 0
-	for (let index = 0; index < text.length; index += 1) {
-		if (text.charCodeAt(index) === 10) newlineCount += 1
-	}
-	const sourceLineCount = newlineCount + (text.endsWith('\n') ? 0 : 1)
-	return firstLineNumber + sourceLineCount
-}
-
-function consumeCompleteLogEntries(text: string, firstLineNumber: number) {
-	if (!text) return { entries: [] as JobsLogEntry[], nextLineNumber: firstLineNumber, remainder: '' }
-
-	const parts = text.split('\n')
-	const remainder = text.endsWith('\n') ? '' : (parts.pop() ?? '')
-	const completeParts = text.endsWith('\n') ? parts.slice(0, -1) : parts
-	const entries: JobsLogEntry[] = []
-	for (let index = 0; index < completeParts.length; index += 1) {
-		const line = (completeParts[index] ?? '').trimEnd()
-		if (line.length > 0) entries.push(createLogEntry(line, firstLineNumber + index))
-	}
-
 	return {
 		entries,
-		nextLineNumber: firstLineNumber + completeParts.length,
-		remainder,
+		nextLineNumber: firstLineNumber + lines.length - 1,
+		remainder: lines.at(-1) ?? '',
 	}
 }
 
@@ -252,11 +227,11 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		},
 		onSuccess: ({ text, nextOffset }, { jobId, requestToken }) => {
 			if (requestToken !== logRequestTokenRef.current) return
-			const entries = parseLogEntries(text).slice(-maxLogLines)
-			setLogByJobId((prev) => ({ ...prev, [jobId]: entries }))
+			const { entries, nextLineNumber, remainder } = parseLogChunk(text)
+			setLogByJobId((prev) => ({ ...prev, [jobId]: entries.slice(-maxLogLines) }))
 			logOffsetsRef.current[jobId] = nextOffset
-			logRemaindersRef.current[jobId] = ''
-			logNextLineNumberRef.current[jobId] = getNextLineNumberAfterText(text)
+			logRemaindersRef.current[jobId] = remainder
+			logNextLineNumberRef.current[jobId] = nextLineNumber
 			setLogsError(null)
 			setIsLogsLoading(false)
 		},
@@ -425,6 +400,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 					logOffsetsRef.current[jobId] = nextOffset
 					logRemaindersRef.current[jobId] = ''
 					logNextLineNumberRef.current[jobId] = 1
+					setLogByJobId((prev) => ({ ...prev, [jobId]: [] }))
 				}
 				recordSuccess()
 				if (nextOffset === offset || !text) return
@@ -432,14 +408,14 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 
 				const combined = (logRemaindersRef.current[jobId] ?? '') + text
 				const firstLineNumber = logNextLineNumberRef.current[jobId] ?? 1
-				const { entries: newEntries, nextLineNumber, remainder } = consumeCompleteLogEntries(combined, firstLineNumber)
+				const { entries: newEntries, nextLineNumber, remainder } = parseLogChunk(combined, firstLineNumber)
 				logRemaindersRef.current[jobId] = remainder
 				logNextLineNumberRef.current[jobId] = nextLineNumber
 				if (newEntries.length === 0) return
 
 				setLogByJobId((prev) => {
 					const next = { ...prev }
-					const existing = offsetReset ? [] : (next[jobId] ?? [])
+					const existing = offsetReset ? [] : (next[jobId] ?? []).filter((entry) => entry.lineNumber < firstLineNumber)
 					next[jobId] = [...existing, ...newEntries].slice(-maxLogLines)
 					return next
 				})

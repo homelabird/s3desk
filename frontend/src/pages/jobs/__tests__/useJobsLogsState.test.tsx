@@ -123,6 +123,53 @@ describe('useJobsLogsState', () => {
 		expect(result.current.visibleLogEntries).toEqual(['one line'])
 	})
 
+	it.each(['', 'new '])('clears old logs when the file resets to %j and resumes from the new offset', async (resetText) => {
+		const reset = deferred<{ text: string; nextOffset: number }>()
+		const getJobLogsAfterOffset = vi.fn().mockReturnValueOnce(reset.promise)
+			.mockResolvedValue({ text: resetText ? 'line\n' : 'new line\n', nextOffset: 9 })
+		const api = createMockApiClient({ jobs: {
+			getJobLogsTail: vi.fn().mockResolvedValue({ text: 'old line\n', nextOffset: 9 }),
+			getJobLogsAfterOffset,
+		} })
+		const { result } = renderHook(() => useJobsLogsState({ api, apiToken: 'token-a', profileId: 'profile-1' }), {
+			wrapper: createWrapper(),
+		})
+		act(() => result.current.openLogsForJob('job-1'))
+		await waitFor(() => expect(result.current.visibleLogEntries).toEqual(['old line']))
+		act(() => result.current.setFollowLogs(true))
+		await waitFor(() => expect(getJobLogsAfterOffset).toHaveBeenCalledOnce())
+		await act(async () => reset.resolve({ text: resetText, nextOffset: resetText.length }))
+		expect(result.current.visibleLogEntries).toEqual(resetText ? ['new'] : [])
+		act(() => result.current.setFollowLogs(false))
+		act(() => result.current.setFollowLogs(true))
+		await waitFor(() => expect(result.current.visibleLogEntries).toEqual(['new line']))
+		expect(result.current.visibleLogLineNumbers).toEqual([1])
+		expect(getJobLogsAfterOffset).toHaveBeenLastCalledWith('profile-1', 'job-1', resetText.length, 128 * 1024,
+			expect.objectContaining({ signal: expect.any(AbortSignal) }))
+	})
+
+	it('joins an unfinished initial line with later chunks without duplicating it', async () => {
+		const getJobLogsAfterOffset = vi.fn()
+			.mockResolvedValueOnce({ text: 'line', nextOffset: 18 })
+			.mockResolvedValue({ text: '\nnext\n', nextOffset: 24 })
+		const api = createMockApiClient({ jobs: {
+			getJobLogsTail: vi.fn().mockResolvedValue({ text: 'start\npending ', nextOffset: 14 }),
+			getJobLogsAfterOffset,
+		} })
+		const { result } = renderHook(() => useJobsLogsState({ api, apiToken: 'token-a', profileId: 'profile-1', maxLogLines: 2 }), {
+			wrapper: createWrapper(),
+		})
+		act(() => result.current.openLogsForJob('job-1'))
+		await waitFor(() => expect(result.current.visibleLogEntries).toEqual(['start', 'pending']))
+		act(() => result.current.setFollowLogs(true))
+		await waitFor(() => expect(result.current.visibleLogEntries).toEqual(['start', 'pending line']))
+		expect(result.current.visibleLogLineNumbers).toEqual([1, 2])
+		act(() => result.current.setFollowLogs(false))
+		act(() => result.current.setFollowLogs(true))
+		await waitFor(() => expect(result.current.visibleLogEntries).toEqual(['pending line', 'next']))
+		expect(result.current.visibleLogLineNumbers).toEqual([2, 3])
+	})
+
 	it('keeps prior logs visible when refresh fails and clears the error on retry', async () => {
 		const getJobLogsTail = vi
 			.fn()
@@ -377,7 +424,7 @@ describe('useJobsLogsState', () => {
 				},
 			)
 			.mockImplementationOnce(() => secondTail.promise)
-		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 0 })
+		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 11 })
 		const api = createMockApiClient({
 			jobs: {
 				getJobLogsTail,
@@ -445,7 +492,7 @@ describe('useJobsLogsState', () => {
 			.fn()
 			.mockImplementationOnce(() => firstTail.promise)
 			.mockImplementationOnce(() => secondTail.promise)
-		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 0 })
+		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 11 })
 		const api = createMockApiClient({
 			jobs: {
 				getJobLogsTail,

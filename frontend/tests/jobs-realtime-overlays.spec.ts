@@ -129,9 +129,14 @@ async function installRealtimeJobsApi(page: Page, args: {
 				const jobId = path.match(/^\/api\/v1\/jobs\/([^/]+)\/logs$/)?.[1] ?? ''
 				const body = args.logsByJobId?.[jobId] ?? ''
 				if (url.searchParams.has('afterOffset')) {
+					const bytes = Buffer.from(body)
+					const requested = Number(url.searchParams.get('afterOffset'))
+					const offset = requested > bytes.length ? 0 : requested
 					return route.fulfill({
-						status: 204,
-						headers: { 'x-log-next-offset': url.searchParams.get('afterOffset') ?? String(body.length) },
+						status: 200,
+						contentType: 'text/plain',
+						headers: { 'x-log-next-offset': String(bytes.length) },
+						body: bytes.subarray(offset),
 					})
 				}
 				return route.fulfill({
@@ -459,4 +464,45 @@ test.describe('Jobs realtime overlays', () => {
 		await expect(page.getByRole('dialog', { name: 'Job Logs' })).toHaveCount(0, { timeout: 10_000 })
 		await expect(jobsTableRow(page, jobId)).toHaveCount(0, { timeout: 10_000 })
 	})
+})
+
+
+test('followed job logs discard truncated content before displaying replacement lines', async ({ page }) => {
+	const jobId = 'job-log-truncate'
+	const logs = { [jobId]: 'old log entry\n' }
+	await installRealtimeJobsApi(page, {
+		jobs: [buildUploadJob(jobId)], eventBody: ': keepalive\n\n', logsByJobId: logs,
+	})
+	await seedStorage(page)
+	await gotoJobsPage(page)
+	const drawer = await openJobLogsDrawer(page, jobsTableRow(page, jobId))
+	await expect(drawer.getByText('old log entry', { exact: true })).toBeVisible()
+	const follow = drawer.getByRole('switch', { name: /Follow/ })
+	if (await follow.getAttribute('aria-checked') !== 'true') await follow.click()
+	logs[jobId] = ''
+	await expect(drawer.getByText('old log entry', { exact: true })).toHaveCount(0)
+	logs[jobId] = 'replacement line\n'
+	await expect(drawer.getByText('replacement line', { exact: true })).toBeVisible()
+	await expect(drawer.getByText('old log entry', { exact: true })).toHaveCount(0)
+})
+
+
+test('followed job logs extend the unfinished tail as one line', async ({ page }) => {
+	const jobId = 'job-log-partial'
+	const logs = { [jobId]: 'start\npending ' }
+	await installRealtimeJobsApi(page, {
+		jobs: [buildUploadJob(jobId)], eventBody: ': keepalive\n\n', logsByJobId: logs,
+	})
+	await seedStorage(page)
+	await gotoJobsPage(page)
+	const drawer = await openJobLogsDrawer(page, jobsTableRow(page, jobId))
+	await expect(drawer.getByText('pending', { exact: true })).toBeVisible()
+	const follow = drawer.getByRole('switch', { name: 'Follow job logs' })
+	if (await follow.getAttribute('aria-checked') !== 'true') await follow.click()
+	logs[jobId] += 'line'
+	await expect(drawer.getByText('pending line', { exact: true })).toBeVisible()
+	await expect(drawer.getByText('pending', { exact: true })).toHaveCount(0)
+	logs[jobId] += '\nnext\n'
+	await expect(drawer.getByText('next', { exact: true })).toBeVisible()
+	await expect(drawer.getByText('pending line', { exact: true })).toHaveCount(1)
 })
