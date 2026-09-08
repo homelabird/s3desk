@@ -115,4 +115,21 @@ describe('resolveRetryUploadItems', () => {
 
 		expect(result).toEqual({ ok: false, canceled: true })
 	})
+
+	it.each([true, false])('requires the whole mixed-size selection when small file is present: %s', async (includeSmall) => {
+		const large = createFile('large.bin', 128, 'selected-root/folder/large.bin')
+		const small = createFile('small.txt', 4, 'selected-root/folder/small.txt')
+		promptForFilesMock.mockResolvedValue(includeSmall ? [large, small] : [large])
+		const result = await resolveRetryUploadItems({ task: createUploadTask({
+			fileCount: 2,
+			filePaths: ['folder/large.bin', 'folder/small.txt'],
+			resumeFileSize: undefined,
+			resumeFiles: [{ path: 'folder/large.bin', size: 128, chunkSizeBytes: 32 }],
+		}) })
+		if (includeSmall) {
+			expect(result).toMatchObject({ ok: true, selection: { filePaths: ['folder/large.bin', 'folder/small.txt'], totalBytes: 132 } })
+		} else {
+			expect(result).toEqual({ ok: false, error: 'Missing 1 file(s). Select the same files or folder to resume.' })
+		}
+	})
 })

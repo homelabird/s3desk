@@ -58,9 +58,9 @@ export async function executeUploadAttempt(args: ExecuteUploadAttemptArgs): Prom
 		resumeFiles: resumeFilesNext,
 	}))
 
+	const estimator = args.uploadEstimatorByTaskIdRef.current[args.taskId]
 	const handleProgress = (progress: { loadedBytes: number; totalBytes?: number }) => {
-		const estimator = args.uploadEstimatorByTaskIdRef.current[args.taskId]
-		if (!estimator) return
+		if (args.signal.aborted || !estimator || args.uploadEstimatorByTaskIdRef.current[args.taskId] !== estimator) return
 		const stats = estimator.update(progress.loadedBytes, progress.totalBytes)
 		args.updateUploadTask(args.taskId, (task) => ({
 			...task,

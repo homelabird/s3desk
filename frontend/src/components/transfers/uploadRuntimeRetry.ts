@@ -21,7 +21,7 @@ type ResolveRetryUploadItemsArgs = {
 
 export async function resolveRetryUploadItems({ task }: ResolveRetryUploadItemsArgs): Promise<RetryUploadSelectionResult> {
 	const resumeFiles = task.resumeFiles ?? []
-	const expectedPaths = (resumeFiles.length > 0 ? resumeFiles.map((f) => f.path) : task.filePaths ?? [])
+	const expectedPaths = (task.filePaths?.length ? task.filePaths : resumeFiles.map((f) => f.path))
 		.map(normalizeRelPath)
 		.filter(Boolean)
 	const expectDirectory = expectedPaths.some((p) => p.includes('/'))

@@ -51,6 +51,38 @@ function uploadItem(name = 'folder/report.bin', size = 256): UploadFileItem {
 }
 
 describe('executeUploadAttempt', () => {
+	it.each(['direct', 'staging', 'presigned'] as const)('ignores late %s progress after cancellation and retry', async (mode) => {
+		const pending = deferred<{ skipped: number }>()
+		const controller = new AbortController()
+		let current = uploadTask()
+		let progress!: (value: { loadedBytes: number; totalBytes?: number }) => void
+		const start = (options: { onProgress: typeof progress }) => {
+			progress = options.onProgress
+			return { abort: vi.fn(), promise: pending.promise }
+		}
+		uploadPresignedFilesWithProgressMock.mockImplementation(start)
+		const estimators = { current: { 'upload-1': new TransferEstimator({ totalBytes: 256 }) } }
+		const attempt = executeUploadAttempt({
+			api: { uploads: { uploadFilesWithProgress: (_profile: string, _id: string, _items: UploadFileItem[], options: { onProgress: typeof progress }) => start(options) } } as never,
+			taskId: 'upload-1', task: current, uploadId: 'session-1', mode, items: [uploadItem()],
+			tuning: { batchConcurrency: 1, batchBytes: 1024, chunkSizeBytes: 64, chunkConcurrency: 1, chunkThresholdBytes: 128 },
+			resumeFilesByPath: new Map(), resumeChunkSizeBytes: 0, allowPerFileChunkSize: false,
+			directMultipartUpload: true, uploadChunkFileConcurrency: 1, signal: controller.signal,
+			uploadEstimatorByTaskIdRef: estimators,
+			updateUploadTask: (_id, updater) => { current = updater(current) },
+		})
+		await vi.waitFor(() => expect(progress).toBeTypeOf('function'))
+		progress({ loadedBytes: 32, totalBytes: 256 })
+		expect(current.loadedBytes).toBe(32)
+		controller.abort()
+		current = uploadTask()
+		estimators.current['upload-1'] = new TransferEstimator({ totalBytes: 256 })
+		progress({ loadedBytes: 128, totalBytes: 256 })
+		pending.resolve({ skipped: 0 })
+		await expect(attempt).rejects.toBeInstanceOf(RequestAbortedError)
+		expect(current.loadedBytes).toBe(0)
+	})
+
 	it('executes direct/staging uploads with resume tracking, progress, and abort cleanup', async () => {
 		const item = uploadItem()
 		const task = uploadTask()
