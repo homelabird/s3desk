@@ -132,3 +132,92 @@ provider-side chunk storage or large-file integrity.
 Snapshot: `/tmp/s3desk-publish-completeness-snapshot.json`.
 Logs: `/tmp/s3desk-publish-completeness-{fast,browser,preview}.log`.
 Browser JSON: `/tmp/s3desk-publish-completeness-browser.json`.
+
+
+## Round 3: follow object jobs through completion
+
+Base: published `b3c0590`, with a clean worktree at the start of this round.
+The previous round made progress through verified fixes and publication.
+
+Object copy jobs exposed only a transient ID. Other object actions offered
+Open Jobs but opened the list without selecting the job. Existing filters
+could hide that new job. A mobile move reproduction clicked Open Jobs and
+failed because no Job Details dialog appeared.
+
+- Copy and background delete reuse the existing job-start notification with
+  an Open Jobs action. The replaced text-only helpers have no callers and
+  were removed.
+- Every object job notification now supplies its job ID and originating
+  profile to the existing Jobs route: object/folder copy and move, selection
+  move, rename, clipboard paste, drag/drop, ZIP, deletion, and indexing.
+- The existing route selects that profile and opens the job details without
+  changing Jobs filters. The mobile flow switches profiles after submitting,
+  opens the original job, explicitly refreshes queued to succeeded, checks
+  the request's profile header, and verifies the original failed filter.
+- Existing request/session guards remain in place. Unit assertions check
+  that stale copy/delete requests emit neither a text-only success nor an
+  actionable notification. A drag/drop unit case clicks the rendered action
+  and checks the actual router location and state.
+
+The pre-fix browser failure is recorded at
+`/tmp/s3desk-object-job-before.log`. Focused hook tests passed (8 files / 89
+cases), and the additional drag/drop navigation assertion passed (4 existing
+cases in its file). The initial focused browser run passed 14 cases; six
+folder copy/move/rename/ZIP/delete/index flows also passed. These overlapping
+focused counts are not added to the final regression total below.
+
+Fixture corrections matched native folder menus, accessible textbox names,
+the index-summary response contract, and profile-scoped filter storage.
+The new job initially renders from cache; an explicit Refresh establishes
+which profile the API request uses. No production change was made to bypass
+these checks. Focused artifacts use local mock APIs and Chromium, including
+390px viewport rendering; they are not live provider or physical-device proof.
+
+
+### Round 3 final verification
+
+The shared job-feedback helper is now used directly by clipboard, copy, and
+background delete actions. Its formerly deferred clipboard import no longer
+created a separate chunk; removing that redundant path eliminated the mixed
+static/dynamic import warning. Clipboard's seven cases passed after cleanup.
+
+- `GOTOOLCHAIN=auto CHECK_FRONTEND_DEPS_READY=1 CHECK_FRONTEND_MAX_WORKERS=4 ./scripts/check.sh fast`:
+  final run exited 0; 254 frontend files / 1,232 tests, lint, build, OpenAPI,
+  geometry, workflow, Helm, Go tests/vet, bundle-report contract, and notice
+  reproducibility passed. Backend package tests used valid cache.
+- `npm run bundle:budget`: final run exited 0. Initial JS gzip remains
+  164.4 KiB under the 170 KiB budget. ObjectsPage gzip is 69.0 KiB.
+  The mixed-import warning is absent from the final production build.
+
+Final logs: `/tmp/s3desk-object-job-final-fast-2.log` and
+`/tmp/s3desk-object-job-final-bundle-2.log`.
+Final source/test snapshot: `/tmp/s3desk-object-job-final-snapshot.json`.
+
+- Final Core command:
+  `E2E_LIVE=0 PLAYWRIGHT_BASE_URL=http://127.0.0.1:18233 npm run test:e2e:core -- --project=chromium --workers=3 --reporter=list,json`.
+  Exit 0; 195 passed / 15 skipped in 165.4 seconds. All skips require
+  `E2E_LIVE=1`. JSON reports zero unexpected results, flaky results, or runner
+  errors. This includes all six folder-action navigation cases and the
+  mobile profile-switch / completion / filter-preservation flow.
+- The final production analysis build served these tests without rebuilding
+  during the run. The preview logged seven unmatched background requests
+  refused at local port 8080: six realtime tickets and one object list. No
+  other preview error type was observed.
+- All 17 source/test hashes and the base commit match the final snapshot.
+  `git diff --check` passed. All three owned preview ports (18231–18233) were
+  confirmed closed after verification.
+- The fast gate excludes backend security analysis. Full, dedicated mobile
+  device-emulation, visual, performance, live-provider, deployment, and
+  physical-device lanes were not rerun in this round. The wide and 390px
+  browser cases establish the local mocked navigation contract only.
+
+Core log/JSON: `/tmp/s3desk-object-job-final-core.{log,json}`.
+Preview log: `/tmp/s3desk-object-job-final-preview.log`.
+Browser artifacts: `/tmp/s3desk-object-job-final-core-artifacts/`.
+
+Round 3 completion audit: the reproduced missing-detail behavior is corrected;
+copy and background delete expose the same actionable result path; job links
+retain the source profile; the mobile workflow follows the job to completion
+without changing its saved filter; stale-request and drag/drop navigation
+checks pass. The maintained state-boundary document describes this ownership.
+This round remains a local, uncommitted change on `b3c0590`.
