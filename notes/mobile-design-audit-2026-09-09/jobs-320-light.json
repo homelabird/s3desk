@@ -1,0 +1,70 @@
+{
+  "viewport": {
+    "width": 320,
+    "height": 568,
+    "scrollWidth": 320,
+    "clientWidth": 320
+  },
+  "smallControls": [],
+  "inputs": [
+    {
+      "name": "Profile",
+      "font": "14px",
+      "x": 8,
+      "y": 58,
+      "width": 252,
+      "height": 48
+    },
+    {
+      "name": "Search jobs",
+      "font": "14px",
+      "x": 38,
+      "y": 334.015625,
+      "width": 131.875,
+      "height": 48
+    }
+  ],
+  "smallText": [
+    {
+      "name": "Realtime disconnected",
+      "font": "12px",
+      "x": 8,
+      "y": 167.875,
+      "width": 137.40625,
+      "height": 22
+    },
+    {
+      "name": "Active",
+      "font": "12px",
+      "x": 33.640625,
+      "y": 275.59375,
+      "width": 36.03125,
+      "height": 18.84375
+    },
+    {
+      "name": "Failed",
+      "font": "12px",
+      "x": 128.96875,
+      "y": 275.59375,
+      "width": 34.6875,
+      "height": 18.84375
+    },
+    {
+      "name": "Succeeded",
+      "font": "12px",
+      "x": 222.953125,
+      "y": 275.59375,
+      "width": 63.375,
+      "height": 18.84375
+    },
+    {
+      "name": "queued",
+      "font": "12px",
+      "x": 39,
+      "y": 548.8125,
+      "width": 56.046875,
+      "height": 22
+    }
+  ],
+  "clippedText": []
+}

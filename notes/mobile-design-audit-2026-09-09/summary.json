@@ -1,0 +1,83 @@
+{
+  "head": "96f179c02d00f2bf526138975c5cce2c7870adc5",
+  "mobile": {
+    "startTime": "2026-09-08T15:56:03.350Z",
+    "duration": 103123.889,
+    "expected": 126,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "reflow_visual_inspection": {
+    "startTime": "2026-09-08T15:59:20.120Z",
+    "duration": 20831.487,
+    "expected": 26,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "widths": [
+    320,
+    360,
+    390,
+    412
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "inspection_screenshots": 64,
+  "touch_observations": [
+    {
+      "viewportWidth": 320,
+      "x": 197.25,
+      "y": 401.4375,
+      "width": 52.5,
+      "height": 52.5,
+      "centerTarget": "Object actions for preview.png",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0.7024036281179138,
+      "menuOpen": true
+    },
+    {
+      "viewportWidth": 360,
+      "x": 222.25,
+      "y": 521.4375,
+      "width": 62.5,
+      "height": 62.5,
+      "centerTarget": "Object actions for preview.png",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0.495616,
+      "menuOpen": true
+    },
+    {
+      "viewportWidth": 390,
+      "x": 241,
+      "y": 527.890625,
+      "width": 70,
+      "height": 70,
+      "centerTarget": "Object actions for preview.png",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0.39510204081632655,
+      "menuOpen": true
+    },
+    {
+      "viewportWidth": 412,
+      "x": 254.75,
+      "y": 476.640625,
+      "width": 75.5,
+      "height": 75.5,
+      "centerTarget": "Object actions for preview.png",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0.33963422656901016,
+      "menuOpen": true
+    }
+  ],
+  "runtime": "local production preview + mocked API; Chromium mobile emulation",
+  "source_modifications": "existing uncommitted server-download preference changes included; no UI fixes made during audit",
+  "webkit": "launch blocked by missing host dependencies including libgtk-4-1 and libicu74"
+}

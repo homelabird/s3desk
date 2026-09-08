@@ -1,0 +1,110 @@
+{
+  "viewport": {
+    "width": 320,
+    "height": 568,
+    "scrollWidth": 320,
+    "clientWidth": 320
+  },
+  "smallControls": [
+    {
+      "name": "Search current folder",
+      "x": 29,
+      "y": 261.1875,
+      "width": 234,
+      "height": 30
+    }
+  ],
+  "inputs": [
+    {
+      "name": "Profile",
+      "font": "14px",
+      "x": 8,
+      "y": 58,
+      "width": 252,
+      "height": 48
+    },
+    {
+      "name": "Search current folder",
+      "font": "14px",
+      "x": 29,
+      "y": 261.1875,
+      "width": 234,
+      "height": 30
+    }
+  ],
+  "smallText": [
+    {
+      "name": "1 folders, 3 files",
+      "font": "12px",
+      "x": 218.90625,
+      "y": 232,
+      "width": 84.09375,
+      "height": 16.1875
+    },
+    {
+      "name": "Filters",
+      "font": "11px",
+      "x": 43,
+      "y": 319.9375,
+      "width": 29.953125,
+      "height": 16.5
+    },
+    {
+      "name": "Search bucket",
+      "font": "11px",
+      "x": 109.953125,
+      "y": 319.9375,
+      "width": 70.328125,
+      "height": 16.5
+    },
+    {
+      "name": "List",
+      "font": "11px",
+      "x": 217.28125,
+      "y": 319.9375,
+      "width": 17.125,
+      "height": 16.5
+    },
+    {
+      "name": "Grid",
+      "font": "11px",
+      "x": 271.40625,
+      "y": 319.9375,
+      "width": 20.78125,
+      "height": 16.5
+    },
+    {
+      "name": "reports/",
+      "font": "11px",
+      "x": 18,
+      "y": 435.6875,
+      "width": 60.5,
+      "height": 13.1875
+    },
+    {
+      "name": "alpha.txt",
+      "font": "11px",
+      "x": 92.5,
+      "y": 435.6875,
+      "width": 60.5,
+      "height": 13.1875
+    },
+    {
+      "name": "preview.png",
+      "font": "11px",
+      "x": 167,
+      "y": 435.6875,
+      "width": 60.5,
+      "height": 26.375
+    },
+    {
+      "name": "reports/mobile/a-very-long-object-key-that-should-wrap-on-mobile-without-causing-horizontal-overflow",
+      "font": "11px",
+      "x": 241.5,
+      "y": 435.6875,
+      "width": 60.5,
+      "height": 26.375
+    }
+  ],
+  "clippedText": []
+}

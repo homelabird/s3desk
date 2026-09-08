@@ -1,0 +1,116 @@
+{
+  "viewport": {
+    "width": 320,
+    "height": 568,
+    "scrollWidth": 320,
+    "clientWidth": 320
+  },
+  "smallControls": [
+    {
+      "name": "Search current folder",
+      "x": 29,
+      "y": 261.1875,
+      "width": 234,
+      "height": 30
+    },
+    {
+      "name": "Select all objects",
+      "x": 31,
+      "y": 380.1875,
+      "width": 20,
+      "height": 20
+    },
+    {
+      "name": "Select alpha.txt",
+      "x": 29,
+      "y": 510,
+      "width": 20,
+      "height": 20
+    }
+  ],
+  "inputs": [
+    {
+      "name": "Profile",
+      "font": "14px",
+      "x": 8,
+      "y": 58,
+      "width": 252,
+      "height": 48
+    },
+    {
+      "name": "Search current folder",
+      "font": "14px",
+      "x": 29,
+      "y": 261.1875,
+      "width": 234,
+      "height": 30
+    },
+    {
+      "name": "Select all objects",
+      "font": "14px",
+      "x": 31,
+      "y": 380.1875,
+      "width": 20,
+      "height": 20
+    },
+    {
+      "name": "Select alpha.txt",
+      "font": "14px",
+      "x": 29,
+      "y": 510,
+      "width": 20,
+      "height": 20
+    }
+  ],
+  "smallText": [
+    {
+      "name": "1 folders, 3 files",
+      "font": "12px",
+      "x": 218.90625,
+      "y": 232,
+      "width": 84.09375,
+      "height": 16.1875
+    },
+    {
+      "name": "Filters",
+      "font": "11px",
+      "x": 43,
+      "y": 319.9375,
+      "width": 29.953125,
+      "height": 16.5
+    },
+    {
+      "name": "Search bucket",
+      "font": "11px",
+      "x": 109.953125,
+      "y": 319.9375,
+      "width": 70.328125,
+      "height": 16.5
+    },
+    {
+      "name": "List",
+      "font": "11px",
+      "x": 217.28125,
+      "y": 319.9375,
+      "width": 17.125,
+      "height": 16.5
+    },
+    {
+      "name": "Grid",
+      "font": "11px",
+      "x": 271.40625,
+      "y": 319.9375,
+      "width": 20.78125,
+      "height": 16.5
+    },
+    {
+      "name": "12 B · 01/01/2024, 09:00:00 AM",
+      "font": "11px",
+      "x": 66,
+      "y": 538.1875,
+      "width": 188,
+      "height": 12.640625
+    }
+  ],
+  "clippedText": []
+}

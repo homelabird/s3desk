@@ -1,0 +1,50 @@
+[
+  {
+    "viewportWidth": 320,
+    "x": 197.25,
+    "y": 401.4375,
+    "width": 52.5,
+    "height": 52.5,
+    "centerTarget": "Object actions for preview.png",
+    "menuWidth": 48,
+    "menuHeight": 48,
+    "coveredFraction": 0.7024036281179138,
+    "menuOpen": true
+  },
+  {
+    "viewportWidth": 360,
+    "x": 222.25,
+    "y": 521.4375,
+    "width": 62.5,
+    "height": 62.5,
+    "centerTarget": "Object actions for preview.png",
+    "menuWidth": 48,
+    "menuHeight": 48,
+    "coveredFraction": 0.495616,
+    "menuOpen": true
+  },
+  {
+    "viewportWidth": 390,
+    "x": 241,
+    "y": 527.890625,
+    "width": 70,
+    "height": 70,
+    "centerTarget": "Object actions for preview.png",
+    "menuWidth": 48,
+    "menuHeight": 48,
+    "coveredFraction": 0.39510204081632655,
+    "menuOpen": true
+  },
+  {
+    "viewportWidth": 412,
+    "x": 254.75,
+    "y": 476.640625,
+    "width": 75.5,
+    "height": 75.5,
+    "centerTarget": "Object actions for preview.png",
+    "menuWidth": 48,
+    "menuHeight": 48,
+    "coveredFraction": 0.33963422656901016,
+    "menuOpen": true
+  }
+]

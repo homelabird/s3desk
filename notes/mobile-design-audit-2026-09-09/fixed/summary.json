@@ -1,0 +1,115 @@
+{
+  "base_commit": "4f3e27e4a8014c1132157dc9491536fb6a972c44",
+  "scope": "local production preview, mock APIs, Chromium; no provider or physical-device proof",
+  "rendered_combinations": 64,
+  "horizontal_overflow_count": 0,
+  "widths": [
+    320,
+    360,
+    390,
+    412
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "grid_touch": [
+    {
+      "viewportWidth": 320,
+      "x": 197.25,
+      "y": 400.4375,
+      "width": 52.5,
+      "height": 52.5,
+      "centerTarget": null,
+      "gridColumns": 4,
+      "titleFont": "13px",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0,
+      "menuOpen": false
+    },
+    {
+      "viewportWidth": 360,
+      "x": 222.25,
+      "y": 458.4375,
+      "width": 62.5,
+      "height": 62.5,
+      "centerTarget": null,
+      "gridColumns": 4,
+      "titleFont": "13px",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0,
+      "menuOpen": false
+    },
+    {
+      "viewportWidth": 390,
+      "x": 241,
+      "y": 464.890625,
+      "width": 70,
+      "height": 70,
+      "centerTarget": null,
+      "gridColumns": 4,
+      "titleFont": "13px",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0,
+      "menuOpen": false
+    },
+    {
+      "viewportWidth": 412,
+      "x": 254.75,
+      "y": 467.640625,
+      "width": 75.5,
+      "height": 75.5,
+      "centerTarget": null,
+      "gridColumns": 4,
+      "titleFont": "13px",
+      "menuWidth": 48,
+      "menuHeight": 48,
+      "coveredFraction": 0,
+      "menuOpen": false
+    }
+  ],
+  "checks": {
+    "mobile-final": {
+      "startTime": "2026-09-08T16:38:36.112Z",
+      "duration": 136404.592,
+      "expected": 128,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "visual-final": {
+      "startTime": "2026-09-08T16:38:36.177Z",
+      "duration": 80953.99299999999,
+      "expected": 34,
+      "skipped": 0,
+      "unexpected": 1,
+      "flaky": 0
+    },
+    "visual-recheck": {
+      "startTime": "2026-09-08T16:41:01.697Z",
+      "duration": 3643.175,
+      "expected": 1,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0,
+      "reason": "The preceding visual run failed to load Buckets assets with net::ERR_NETWORK_CHANGED; isolated rerun passed without code or baseline changes."
+    },
+    "focused_unit_tests": {
+      "passed": 31,
+      "files": 9
+    },
+    "reflow": {
+      "passed": 8,
+      "scope": "320 CSS px and simulated 200 percent text enlargement"
+    },
+    "static": [
+      "npm run lint",
+      "npm run build",
+      "npm run check:e2e:geometry",
+      "git diff --check"
+    ]
+  }
+}
