@@ -49,7 +49,6 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 
 	return {
 		header: {
-			subtitle: 'Primary Profile profile is active. Choose a bucket and add files or a folder from this device.',
 			queueButtonLabel: 'Queue upload',
 			queueButtonDisabled: true,
 			queueButtonTooltip: selectBucketFirstSentenceHint(),

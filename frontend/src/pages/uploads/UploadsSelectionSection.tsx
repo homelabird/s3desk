@@ -52,9 +52,11 @@ export function UploadsSelectionSection(props: Props) {
 						{hasSelection ? 'Replace selection…' : 'Add from device…'}
 					</Button>
 				</div>
-				<Typography.Text type="secondary" className={styles.selectionHint}>
-					{queueDisabledReason ?? 'Choosing new files or a folder replaces this selection.'}
-				</Typography.Text>
+				{hasSelection || !canOpenPicker ? (
+					<Typography.Text type="secondary" className={styles.selectionHint}>
+						{queueDisabledReason ?? 'Choosing new files or a folder replaces this selection.'}
+					</Typography.Text>
+				) : null}
 
 				{hasSelection ? (
 					<Typography.Text role="status" aria-live="polite" aria-atomic="true">

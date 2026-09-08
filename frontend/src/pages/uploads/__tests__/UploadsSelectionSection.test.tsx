@@ -44,7 +44,7 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.queryByText('0 item(s)')).not.toBeInTheDocument()
 		expect(screen.queryByText('0 B')).not.toBeInTheDocument()
 		expect(screen.queryByText('Not selected')).not.toBeInTheDocument()
-		expect(screen.getByText(addFilesOrFolderFirstSentenceHint())).toBeInTheDocument()
+		expect(screen.queryByText(addFilesOrFolderFirstSentenceHint())).not.toBeInTheDocument()
 		expect(screen.queryByText('No files or folders selected.')).not.toBeInTheDocument()
 		expect(screen.queryByRole('status')).not.toBeInTheDocument()
 

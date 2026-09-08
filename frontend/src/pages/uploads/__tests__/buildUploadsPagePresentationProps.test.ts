@@ -57,7 +57,6 @@ describe('buildUploadsPagePresentationProps', () => {
 			chooseUploadFolder,
 		})
 
-		expect(presentation.header.subtitle).toContain('Primary Profile profile is active')
 		expect(presentation.header.queueButtonLabel).toBe('Queue upload (1)')
 		expect(presentation.header.queueButtonDisabled).toBe(false)
 		expect(presentation.targetSource.bucketPlaceholder).toBe(bucketFieldPlaceholder())

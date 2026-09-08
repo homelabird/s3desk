@@ -40,7 +40,6 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 			<PageHeader
 				eyebrow="Transfer"
 				title="Uploads"
-				subtitle={presentation.header.subtitle}
 			/>
 
 			{presentation.alerts.showOffline ? <Alert type="warning" showIcon title={offlineUploadsDisabledHint()} /> : null}
