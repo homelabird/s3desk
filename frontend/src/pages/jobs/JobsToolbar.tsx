@@ -175,7 +175,9 @@ export function JobsToolbar(props: JobsToolbarProps) {
 				title="Activity"
 				actions={
 					<Space wrap className={styles.headerActions}>
-						<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
+						{!useCompactFilters || props.eventsConnected ? (
+							<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
+						) : null}
 						<Button icon={<ReloadOutlined />} onClick={props.onRefreshJobs} loading={props.jobsRefreshing} disabled={props.isOffline}>
 							Refresh
 						</Button>

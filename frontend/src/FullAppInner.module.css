@@ -225,6 +225,27 @@
 	flex: 0 0 auto;
 }
 
+@media (max-width: 480px) and (max-height: 640px) {
+	.headerStacked {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.headerStacked .headerTopRow {
+		width: auto;
+		flex: 0 0 auto;
+	}
+
+	.headerStacked .headerProfileRow {
+		width: auto;
+		flex: 1 1 auto;
+	}
+
+	.headerStacked .mobileBrandButton {
+		display: none;
+	}
+}
+
 .content {
 	flex: 1 1 auto;
 	min-height: 0;

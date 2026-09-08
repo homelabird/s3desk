@@ -5,6 +5,7 @@ import {
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
 import { gotoProfilesPage } from './support/ui'
+import { expectMinTouchTarget } from './support/geometry'
 
 const mobileDeviceContracts = {
 	'mobile-iphone-13': { width: 390, height: 664, deviceScaleFactor: 3 },
@@ -18,6 +19,24 @@ async function setupProfilesPage(page: Page) {
 }
 
 test.describe('@mobile-responsive Apple and Google mobile web standards', () => {
+	test('keeps profile switching, navigation, and transfers usable in the short-screen header', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 568 })
+		await setupProfilesPage(page)
+		const profile = page.getByRole('combobox', { name: 'Profile', exact: true })
+		await expectMinTouchTarget(profile)
+		await profile.selectOption({ label: 'Backup Profile' })
+		await expect(profile.locator('option:checked')).toHaveText('Backup Profile')
+		await page.getByRole('button', { name: 'Open navigation' }).tap()
+		const navigation = page.getByRole('dialog', { name: 'Navigation' })
+		await navigation.getByRole('link', { name: 'Buckets' }).tap()
+		await expect(page).toHaveURL(/\/buckets/)
+		await expect(profile.locator('option:checked')).toHaveText('Backup Profile')
+		await page.getByRole('button', { name: 'Transfers', exact: true }).tap()
+		await page.getByRole('dialog', { name: 'Transfers', exact: true }).getByRole('button', { name: 'Close', exact: true }).tap()
+		await page.getByRole('button', { name: 'App menu', exact: true }).tap()
+		await expect(page.getByRole('menuitem', { name: /Settings/ })).toBeVisible()
+	})
+
 	test('keeps the Chromium device contract, standards metadata, and user zoom enabled', async ({ browser, page }, testInfo) => {
 		await setupProfilesPage(page)
 

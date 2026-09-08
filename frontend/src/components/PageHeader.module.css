@@ -120,4 +120,16 @@
 	.actions {
 		gap: 6px;
 	}
+
+	.header:not(:has(.subtitle)) {
+		align-items: center;
+	}
+
+	.header:not(:has(.subtitle)) .copy {
+		flex: 1 1 auto;
+	}
+
+	.header:not(:has(.subtitle)) .actions {
+		width: auto;
+	}
 }
