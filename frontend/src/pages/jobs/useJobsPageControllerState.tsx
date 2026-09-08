@@ -123,6 +123,7 @@ export function useJobsPageControllerState(props: Props) {
     apiToken: props.apiToken,
     profileId: props.profileId,
     queryClient: props.queryClient,
+    onJobRetried: openDetailsForJob,
     setDetailsJobId,
     setDetailsOpen,
     setLogClearRequest,

@@ -12,6 +12,7 @@ type UseJobsActionMutationsArgs = {
 	profileId: string | null
 	queryClient: QueryClient
 	onJobDeleted?: (jobId: string) => void
+	onJobRetried?: (jobId: string) => void
 }
 
 export function useJobsActionMutations({
@@ -20,6 +21,7 @@ export function useJobsActionMutations({
 	profileId,
 	queryClient,
 	onJobDeleted,
+	onJobRetried,
 }: UseJobsActionMutationsArgs) {
 	const currentScopeKey = `${apiToken}:${profileId ?? 'none'}`
 	const [cancelingJobState, setCancelingJobState] = useState<{ jobId: string; scopeKey: string } | null>(null)
@@ -133,6 +135,7 @@ export function useJobsActionMutations({
 				return
 			}
 			jobsFeedback.retryQueued(job.id)
+			onJobRetried?.(job.id)
 		},
 		onSettled: (_, __, jobId, context) =>
 			setRetryingJobState((prev) =>

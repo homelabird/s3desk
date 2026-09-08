@@ -56,6 +56,7 @@ describe('useJobsActionMutations', () => {
 		const retryJob = vi.fn().mockResolvedValue({ id: 'job-retry-new' })
 		const deleteJob = vi.fn().mockResolvedValue(undefined)
 		const onJobDeleted = vi.fn()
+		const onJobRetried = vi.fn()
 
 		const api = createMockApiClient({
 			jobs: {
@@ -73,6 +74,7 @@ describe('useJobsActionMutations', () => {
 					profileId: 'profile-1',
 					queryClient,
 					onJobDeleted,
+					onJobRetried,
 				}),
 			{ wrapper: wrapperWithClient(queryClient) },
 		)
@@ -92,6 +94,7 @@ describe('useJobsActionMutations', () => {
 		})
 		expect(deleteJob).toHaveBeenCalledWith('profile-1', 'job-delete')
 		expect(onJobDeleted).toHaveBeenCalledWith('job-delete')
+		expect(onJobRetried).toHaveBeenCalledWith('job-retry-new')
 
 		expect(messageError).not.toHaveBeenCalled()
 		expect(messageSuccess).toHaveBeenCalledWith('Cancel requested')
@@ -122,6 +125,29 @@ describe('useJobsActionMutations', () => {
 					JSON.stringify({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false }),
 			),
 		).toHaveLength(4)
+	})
+
+	it.each(['scope change', 'unmount'])('does not open a late retry result after %s', async (change) => {
+		const queryClient = new QueryClient()
+		const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+		const pending = deferred<{ id: string }>()
+		const retryJob = vi.fn().mockReturnValue(pending.promise)
+		const onJobRetried = vi.fn()
+		const api = createMockApiClient({ jobs: { retryJob } })
+		const { result, rerender, unmount } = renderHook(
+			({ apiToken, profileId }) => useJobsActionMutations({ api, apiToken, profileId, queryClient, onJobRetried }),
+			{ initialProps: { apiToken: 'token-a', profileId: 'profile-1' }, wrapper: wrapperWithClient(queryClient) },
+		)
+		act(() => result.current.retryMutation.mutate('job-old'))
+		await waitFor(() => expect(retryJob).toHaveBeenCalledWith('profile-1', 'job-old'))
+		if (change === 'scope change') rerender({ apiToken: 'token-b', profileId: 'profile-2' })
+		else unmount()
+		await act(async () => { pending.resolve({ id: 'job-new' }) })
+		await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({
+			queryKey: queryKeys.jobs.detail('profile-1', 'job-new', 'token-a'), exact: true,
+		}))
+		expect(onJobRetried).not.toHaveBeenCalled()
+		expect(messageSuccess).not.toHaveBeenCalled()
 	})
 
 	it('ignores stale delete responses after the jobs scope changes', async () => {

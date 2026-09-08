@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, seedLocalStorage, textFixture } from './support/apiFixtures'
-import { chooseRowAction, gotoJobsPage, jobsTableRow } from './support/ui'
+import { chooseRowAction, closeJobsMobileFilters, dialogByName, gotoJobsPage, jobsTableRow, openJobsMobileFilters } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -142,6 +142,7 @@ async function setupApiMocks(page: Page) {
 		},
 		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),
 	])
+	return { updateJob }
 }
 
 test('jobs cancel and retry flow', async ({ page }) => {
@@ -158,5 +159,36 @@ test('jobs cancel and retry flow', async ({ page }) => {
 
 	const failedRow = jobsTableRow(page, 'job-failed')
 	await chooseRowAction(page, failedRow, 'Retry')
+	const details = dialogByName(page, 'Job Details')
+	await expect(details.getByText('job-retry-1', { exact: true })).toBeVisible()
+	await details.getByRole('button', { name: 'Close', exact: true }).click()
 	await expect(jobsTableRow(page, 'job-retry-1')).toBeVisible()
 })
+
+for (const width of [1280, 390]) {
+	test(`retry opens the new job while preserving the failed filter (${width}px)`, async ({ page }) => {
+		await page.setViewportSize({ width, height: 844 })
+		await seedStorage(page)
+		const apiState = await setupApiMocks(page)
+		await gotoJobsPage(page)
+		const findJob = (id: string) => width < 768 ? page.getByRole('listitem').filter({ hasText: id }) : jobsTableRow(page, id)
+		const filterScope = width < 768 ? await openJobsMobileFilters(page) : page
+		await filterScope.getByRole('combobox', { name: 'Job status filter' }).selectOption('failed')
+		if (width < 768) await closeJobsMobileFilters(page.getByTestId('jobs-mobile-filters-sheet'))
+		await expect(findJob('job-running')).toHaveCount(0)
+		await chooseRowAction(page, findJob('job-failed'), 'Retry')
+		const details = dialogByName(page, 'Job Details')
+		await expect(details).toBeVisible()
+		await expect(details.getByText('job-retry-1', { exact: true })).toBeVisible()
+		await expect(details.getByText('queued', { exact: true })).toBeVisible()
+		apiState.updateJob('job-retry-1', { status: 'succeeded', finishedAt: now })
+		await details.getByRole('button', { name: /Refresh/ }).click()
+		await expect(details.getByText('succeeded', { exact: true })).toBeVisible()
+		await details.getByRole('button', { name: 'Close', exact: true }).click()
+		const finalFilterScope = width < 768 ? await openJobsMobileFilters(page) : page
+		await expect(finalFilterScope.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('failed')
+		if (width < 768) await closeJobsMobileFilters(page.getByTestId('jobs-mobile-filters-sheet'))
+		await expect(findJob('job-failed')).toBeVisible()
+		await expect(findJob('job-retry-1')).toHaveCount(0)
+	})
+}

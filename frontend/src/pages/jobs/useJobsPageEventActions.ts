@@ -11,6 +11,7 @@ type Args = {
 	apiToken: string
 	profileId: string | null
 	queryClient: QueryClient
+	onJobRetried?: (jobId: string) => void
 	setDetailsJobId: Dispatch<SetStateAction<string | null>>
 	setDetailsOpen: Dispatch<SetStateAction<boolean>>
 	setLogClearRequest: Dispatch<SetStateAction<JobsLogClearRequestState>>
@@ -68,6 +69,7 @@ export function useJobsPageEventActions(props: Args) {
 		profileId,
 		queryClient,
 		onJobDeleted: handleJobDeleted,
+		onJobRetried: props.onJobRetried,
 	})
 
 	const requestCancelJob = useCallback((jobId: string) => {
