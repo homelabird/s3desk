@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { profileScopedStorageKeyForOrigin } from '../src/lib/profileScopedStorage'
+
 import {
 	buildBucketFixture,
 	buildFavoritesFixture,
@@ -7,18 +9,32 @@ import {
 	buildObjectsListFixture,
 	buildProfileFixture,
 	installApiFixtures,
+	jsonFixture,
+	textFixture,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { gotoObjectsPage, objectsSelectionCheckbox } from './support/ui'
+import { closeJobsMobileFilters, dialogByName, gotoObjectsPage, objectsSelectionCheckbox, openJobsMobileFilters } from './support/ui'
 
 const profileId = 'playwright-move-profile'
 const bucket = 'move-bucket'
 const now = '2024-01-01T00:00:00Z'
 
-test('mobile selection bar opens move sheet and submits a move job', async ({ page }) => {
+test('mobile selection bar opens move sheet and submits a move job', async ({ page, baseURL }, testInfo) => {
 	let createdJobPayload: unknown = null
+	let detailsProfile: string | undefined
+	let jobStatus = 'queued'
 
 	await installApiFixtures(page, [
+		jsonFixture('GET', '/api/v1/jobs', { items: [], nextCursor: null }),
+		{ method: 'GET', path: '/api/v1/jobs/job-move-1', handler: ({ request }) => {
+			detailsProfile = request.headers()['x-profile-id']
+			return { json: {
+				id: 'job-move-1', type: 'transfer_move_batch', status: jobStatus,
+				payload: { srcBucket: bucket, dstBucket: bucket }, createdAt: now,
+			} }
+		} },
+		textFixture('GET', '/api/v1/jobs/job-move-1/logs', ''),
+		textFixture('GET', '/api/v1/events', '', { contentType: 'text/event-stream' }),
 		{
 			method: 'GET',
 			path: '/api/v1/meta',
@@ -34,6 +50,7 @@ test('mobile selection bar opens move sheet and submits a move job', async ({ pa
 			path: '/api/v1/profiles',
 			handler: () => ({
 				json: [
+					buildProfileFixture({ id: 'another-profile', name: 'Another profile', createdAt: now, updatedAt: now }),
 					buildProfileFixture({
 						id: profileId,
 						name: 'Move Profile',
@@ -95,6 +112,7 @@ test('mobile selection bar opens move sheet and submits a move job', async ({ pa
 		profileId,
 		bucket,
 		objectsUIMode: 'simple',
+		[profileScopedStorageKeyForOrigin('jobs', baseURL, 'change-me', profileId, 'statusFilter')]: 'failed',
 		prefix: '',
 	})
 
@@ -121,4 +139,20 @@ test('mobile selection bar opens move sheet and submits a move job', async ({ pa
 			dryRun: false,
 		},
 	})
+	await expect(page.getByRole('button', { name: 'Open Jobs', exact: true })).toBeVisible()
+	await page.getByTestId('topbar-profile-select').getByLabel('Profile').selectOption('another-profile')
+	await page.getByRole('button', { name: 'Open Jobs', exact: true }).click()
+	const details = dialogByName(page, 'Job Details')
+	await expect(details.getByText('job-move-1', { exact: true })).toBeVisible()
+	await expect(details.getByText('queued', { exact: true })).toBeVisible()
+	jobStatus = 'succeeded'
+	await details.getByRole('button', { name: /Refresh/ }).click()
+	await expect(details.getByText('succeeded', { exact: true })).toBeVisible()
+	await page.screenshot({ path: testInfo.outputPath('created-job-details.png') })
+	expect(detailsProfile).toBe(profileId)
+	await expect(page.getByTestId('topbar-profile-select').getByLabel('Profile')).toHaveValue(profileId)
+	await details.getByRole('button', { name: 'Close', exact: true }).click()
+	const filters = await openJobsMobileFilters(page)
+	await expect(filters.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('failed')
+	await closeJobsMobileFilters(page.getByTestId('jobs-mobile-filters-sheet'))
 })

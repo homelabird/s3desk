@@ -7,6 +7,7 @@ import {
 	buildObjectsListFixture,
 	buildProfileFixture,
 	installApiFixtures,
+	jsonFixture,
 	seedLocalStorage,
 	textFixture,
 } from './support/apiFixtures'
@@ -60,6 +61,11 @@ async function installObjectsClipboardFixtures(page: Page, createdJobs: CreatedJ
 	]
 
 	await installApiFixtures(page, [
+		jsonFixture('GET', '/api/v1/jobs', { items: [], nextCursor: null }),
+		{ method: 'GET', path: '/api/v1/jobs/job-1', handler: () => ({ json: {
+			id: 'job-1', ...createdJobs[0], status: 'queued', createdAt: now,
+		} }) },
+		textFixture('GET', '/api/v1/jobs/job-1/logs', ''),
 		{
 			method: 'GET',
 			path: '/api/v1/meta',
@@ -219,6 +225,10 @@ test.describe('Objects clipboard/paste', () => {
 				dryRun: false,
 			},
 		})
+		await page.getByRole('button', { name: 'Open Jobs', exact: true }).click()
+		const details = dialogByName(page, 'Job Details')
+		await expect(details.getByText('job-1', { exact: true })).toBeVisible()
+		await expect(details.getByText('queued', { exact: true })).toBeVisible()
 	})
 
 	test('cutting selected keys then pasting requires MOVE confirmation and creates a move job', async ({ page }) => {
@@ -254,6 +264,10 @@ test.describe('Objects clipboard/paste', () => {
 				dryRun: false,
 			},
 		})
+		await page.getByRole('button', { name: 'Open Jobs', exact: true }).click()
+		const details = dialogByName(page, 'Job Details')
+		await expect(details.getByText('job-1', { exact: true })).toBeVisible()
+		await expect(details.getByText('queued', { exact: true })).toBeVisible()
 	})
 
 	test('internal clipboard warns and skips paste after switching to a different profile', async ({ page }) => {

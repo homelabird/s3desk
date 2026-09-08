@@ -56,7 +56,7 @@ function buildObjectItems(count: number): ObjectItem[] {
 	}))
 }
 
-async function stubObjectsApi(page: Page, items: ObjectItem[]) {
+async function stubObjectsApi(page: Page, items: ObjectItem[], commonPrefixes: string[] = []) {
 	const now = '2024-01-01T00:00:00Z'
 	const { bucket, profileId } = defaultStorage
 
@@ -91,7 +91,7 @@ async function stubObjectsApi(page: Page, items: ObjectItem[]) {
 		{
 			method: 'GET',
 			path: `/buckets/${bucket}/objects`,
-			handle: ({ json }) => json(buildObjectsListFixture({ bucket, items })),
+			handle: ({ json }) => json(buildObjectsListFixture({ bucket, items, commonPrefixes })),
 		},
 		{
 			method: 'GET',
@@ -132,6 +132,11 @@ test.describe('Objects context menus', () => {
 				requests.push({ profileId: request.headers()['x-profile-id'], body })
 				return route.fulfill({ status: 201, json: { ...body, id: `job-${mode}`, status: 'queued', createdAt: '2024-01-01T00:00:00Z' } })
 			})
+			await page.route(`**/api/v1/jobs/job-${mode}`, (route) => route.fulfill({ json: {
+				id: `job-${mode}`, type: `transfer_${mode}_object`, status: 'queued', payload: {}, createdAt: '2024-01-01T00:00:00Z',
+			} }))
+			await page.route(`**/api/v1/jobs/job-${mode}/logs**`, (route) => route.fulfill({ body: '' }))
+			await page.route('**/api/v1/jobs?**', (route) => route.fulfill({ json: { items: [], nextCursor: null } }))
 			await seedStorage(page)
 			await gotoObjectsPage(page)
 			await objectsListRow(page, 'video-1.mp4').click({ button: 'right' })
@@ -151,6 +156,58 @@ test.describe('Objects context menus', () => {
 					payload: { srcBucket: defaultStorage.bucket, srcKey: 'video-1.mp4', dstBucket: defaultStorage.bucket, dstKey: 'archive/video-1.mp4', dryRun: false },
 				},
 			}])
+			await page.getByRole('button', { name: 'Open Jobs', exact: true }).click()
+			const details = dialogByName(page, 'Job Details')
+			await expect(details.getByText(`job-${mode}`, { exact: true })).toBeVisible()
+			await expect(details.getByText('queued', { exact: true })).toBeVisible()
+		})
+	}
+
+
+	for (const action of ['copy', 'move', 'rename', 'zip', 'delete', 'index'] as const) {
+		test(`folder ${action} opens the created job from its notification`, async ({ page }) => {
+			await stubObjectsApi(page, [], ['docs/'])
+			const jobId = `folder-${action}-job`
+			let createdJob: Record<string, unknown> = {}
+			await page.route('**/api/v1/jobs', (route) => {
+				if (route.request().method() !== 'POST') return route.fulfill({ json: { items: [], nextCursor: null } })
+				createdJob = { ...route.request().postDataJSON(), id: jobId, status: 'queued', createdAt: '2024-01-01T00:00:00Z' }
+				return route.fulfill({ status: 201, json: createdJob })
+			})
+			await page.route('**/api/v1/jobs?**', (route) => route.fulfill({ json: { items: [], nextCursor: null } }))
+			await page.route(`**/api/v1/jobs/${jobId}`, (route) => route.fulfill({ json: createdJob }))
+			await page.route(`**/api/v1/jobs/${jobId}/logs**`, (route) => route.fulfill({ body: '' }))
+			await page.route('**/objects/index-summary**', (route) => route.fulfill({
+				json: { bucket: defaultStorage.bucket, prefix: 'docs/', objectCount: 0, totalBytes: 0, indexedAt: null, sampleKeys: [] },
+			}))
+			await seedStorage(page)
+			await gotoObjectsPage(page)
+			await objectsListRow(page, 'docs/').click({ button: 'right' })
+			const menu = page.getByRole('menu').last()
+			const label = { copy: 'Copy folder…', move: 'Move folder…', rename: 'Rename folder…', zip: 'Download folder (zip)', delete: 'Delete folder…', index: 'Copy folder…' }[action]
+			await menu.getByRole('menuitem', { name: label }).first().click()
+			if (action === 'copy' || action === 'move') {
+				const dialog = dialogByName(page, label)
+				await dialog.getByRole('textbox', { name: 'Destination folder', exact: true }).fill('archive/')
+				if (action === 'move') await dialog.getByLabel('Type "MOVE" to confirm').fill('MOVE')
+				await dialog.getByRole('button', { name: action === 'copy' ? 'Start copy' : 'Start move' }).click()
+			} else if (action === 'rename') {
+				const dialog = dialogByName(page, label)
+				await dialog.getByLabel('New name', { exact: true }).fill('archive')
+				await dialog.getByLabel('Type "RENAME" to confirm').fill('RENAME')
+				await dialog.getByRole('button', { name: 'Rename', exact: true }).click()
+			} else if (action === 'delete') {
+				const dialog = dialogByName(page, 'Delete folder')
+				await dialog.getByLabel('Type DELETE to confirm').fill('DELETE')
+				await dialog.getByRole('button', { name: 'Delete folder', exact: true }).click()
+			} else if (action === 'index') {
+				const dialog = dialogByName(page, 'Copy folder…')
+				await dialog.getByRole('button', { name: 'Index prefix', exact: true }).click()
+			}
+			await page.getByRole('button', { name: 'Open Jobs', exact: true }).click()
+			const details = dialogByName(page, 'Job Details')
+			await expect(details.getByText(jobId, { exact: true })).toBeVisible()
+			await expect(details.getByText('queued', { exact: true })).toBeVisible()
 		})
 	}
 

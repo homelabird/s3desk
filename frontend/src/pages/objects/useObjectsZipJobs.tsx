@@ -78,7 +78,7 @@ export function useObjectsZipJobs({
 						<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 							Open Transfers
 						</Button>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" onClick={() => navigate('/jobs', { state: { jobId: job.id, profileId: context?.scopeProfileId ?? profileId } })}>
 							Open Jobs
 						</Button>
 					</Space>
@@ -135,7 +135,7 @@ export function useObjectsZipJobs({
 						<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 							Open Transfers
 						</Button>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" onClick={() => navigate('/jobs', { state: { jobId: job.id, profileId: context?.scopeProfileId ?? profileId } })}>
 							Open Jobs
 						</Button>
 					</Space>

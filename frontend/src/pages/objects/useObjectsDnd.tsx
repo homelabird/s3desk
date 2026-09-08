@@ -154,7 +154,7 @@ export function useObjectsDnd({
 						isCurrentContext: (version) => version === dndContextVersionRef.current,
 						createJobWithRetry,
 						queryClient,
-						onOpenJobs: () => navigate('/jobs'),
+						onOpenJobs: (jobId) => navigate('/jobs', { state: { jobId, profileId } }),
 					}),
 				)
 				.catch(async (err) => {

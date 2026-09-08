@@ -2,12 +2,14 @@ import '@testing-library/jest-dom/vitest'
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
 import { useObjectsCopyMove } from '../useObjectsCopyMove'
 
 const messageSuccessMock = vi.fn()
+const messageOpenMock = vi.fn()
 const messageErrorMock = vi.fn()
 
 vi.mock('antd', async () => {
@@ -15,6 +17,7 @@ vi.mock('antd', async () => {
 	return {
 		...actual,
 		message: {
+			open: (...args: unknown[]) => messageOpenMock(...args),
 			success: (...args: unknown[]) => messageSuccessMock(...args),
 			error: (...args: unknown[]) => messageErrorMock(...args),
 		},
@@ -40,7 +43,7 @@ function createWrapper() {
 	})
 
 	function Wrapper(props: PropsWithChildren) {
-		return <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
+		return <MemoryRouter><QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider></MemoryRouter>
 	}
 
 	return { Wrapper, queryClient }
@@ -50,6 +53,7 @@ describe('useObjectsCopyMove', () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 		messageSuccessMock.mockClear()
+		messageOpenMock.mockClear()
 		messageErrorMock.mockClear()
 	})
 
@@ -101,6 +105,7 @@ describe('useObjectsCopyMove', () => {
 		expect(result.current.copyMoveMode).toBe('copy')
 		expect(result.current.copyMoveSrcKey).toBe('docs/b.txt')
 		expect(messageSuccessMock).not.toHaveBeenCalled()
+		expect(messageOpenMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
@@ -153,6 +158,7 @@ describe('useObjectsCopyMove', () => {
 			})
 			expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 			expect(messageSuccessMock).not.toHaveBeenCalled()
+			expect(messageOpenMock).not.toHaveBeenCalled()
 		} finally {
 			onlineManager.setOnline(true)
 			unmount()
@@ -210,6 +216,7 @@ describe('useObjectsCopyMove', () => {
 		expect(result.current.copyPrefixMode).toBe('copy')
 		expect(result.current.copyPrefixSrcPrefix).toBe('images/')
 		expect(messageSuccessMock).not.toHaveBeenCalled()
+		expect(messageOpenMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
@@ -263,6 +270,7 @@ describe('useObjectsCopyMove', () => {
 			confirm: '',
 		})
 		expect(messageSuccessMock).not.toHaveBeenCalled()
+		expect(messageOpenMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 

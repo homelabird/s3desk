@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
@@ -15,6 +16,7 @@ import {
 import { useObjectsDelete } from '../useObjectsDelete'
 
 const messageSuccessMock = vi.fn()
+const messageOpenMock = vi.fn()
 const messageErrorMock = vi.fn()
 const invalidateObjectQueriesForPrefixMock = vi.fn()
 const publishObjectsRefreshMock = vi.fn()
@@ -24,6 +26,7 @@ vi.mock('antd', async () => {
 	return {
 		...actual,
 		message: {
+			open: (...args: unknown[]) => messageOpenMock(...args),
 			success: (...args: unknown[]) => messageSuccessMock(...args),
 			error: (...args: unknown[]) => messageErrorMock(...args),
 		},
@@ -65,7 +68,7 @@ function createWrapper() {
 	})
 
 	function Wrapper(props: PropsWithChildren) {
-		return <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
+		return <MemoryRouter><QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider></MemoryRouter>
 	}
 
 	return { Wrapper, queryClient }
@@ -76,6 +79,7 @@ describe('useObjectsDelete', () => {
 		vi.useRealTimers()
 		vi.restoreAllMocks()
 		messageSuccessMock.mockClear()
+		messageOpenMock.mockClear()
 		messageErrorMock.mockClear()
 		invalidateObjectQueriesForPrefixMock.mockClear()
 		publishObjectsRefreshMock.mockClear()
@@ -191,6 +195,7 @@ describe('useObjectsDelete', () => {
 			expect(nextApi.jobs.getJob).not.toHaveBeenCalled()
 			expect(setSelectedKeys).not.toHaveBeenCalled()
 			expect(messageSuccessMock).not.toHaveBeenCalled()
+			expect(messageOpenMock).not.toHaveBeenCalled()
 			expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
 			expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
 		} finally {
@@ -631,6 +636,7 @@ describe('useObjectsDelete', () => {
 
 		expect(setSelectedKeys).not.toHaveBeenCalled()
 		expect(messageSuccessMock).not.toHaveBeenCalled()
+		expect(messageOpenMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
 		expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
@@ -682,6 +688,7 @@ describe('useObjectsDelete', () => {
 
 		expect(setSelectedKeys).not.toHaveBeenCalled()
 		expect(messageSuccessMock).not.toHaveBeenCalled()
+		expect(messageOpenMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-2'), exact: false })
 		expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
 		expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
@@ -736,6 +743,7 @@ describe('useObjectsDelete', () => {
 		})
 
 		expect(messageSuccessMock).not.toHaveBeenCalled()
+		expect(messageOpenMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(api.jobs.getJob).not.toHaveBeenCalled()
 	})

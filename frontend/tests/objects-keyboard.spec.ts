@@ -108,6 +108,11 @@ test.describe('Objects keyboard interactions', () => {
 	test('selection shortcuts cover range select, select all, clear, and rename', async ({ page }) => {
 		await installObjectsKeyboardApi(page)
 		const renameRequests: Array<{ profileId: string | undefined; body: unknown }> = []
+		await page.route('**/api/v1/jobs/job-rename', (route) => route.fulfill({ json: {
+			id: 'job-rename', type: 'transfer_move_object', status: 'queued', payload: {}, createdAt: now,
+		} }))
+		await page.route('**/api/v1/jobs/job-rename/logs**', (route) => route.fulfill({ body: '' }))
+		await page.route('**/api/v1/jobs?**', (route) => route.fulfill({ json: { items: [], nextCursor: null } }))
 		await page.route('**/api/v1/jobs', (route) => {
 			const request = route.request()
 			if (request.method() !== 'POST') return route.fallback()
@@ -158,6 +163,10 @@ test.describe('Objects keyboard interactions', () => {
 				payload: { srcBucket: bucket, srcKey: 'alpha.txt', dstBucket: bucket, dstKey: 'renamed.txt', dryRun: false },
 			},
 		}])
+		await page.getByRole('button', { name: 'Open Jobs', exact: true }).click()
+		const details = dialogByName(page, 'Job Details')
+		await expect(details.getByText('job-rename', { exact: true })).toBeVisible()
+		await expect(details.getByText('queued', { exact: true })).toBeVisible()
 	})
 
 	test('backspace navigates to the parent prefix', async ({ page }) => {

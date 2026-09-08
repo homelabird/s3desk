@@ -24,7 +24,7 @@ type PerformObjectsDropArgs = {
 	isCurrentContext: (contextVersion: number) => boolean
 	createJobWithRetry: CreateJobWithRetry
 	queryClient: QueryClient
-	onOpenJobs: () => void
+	onOpenJobs: (jobId: string) => void
 }
 
 export function showObjectsDndLocalFilesOnFolderTargetUnsupported() {
@@ -58,12 +58,12 @@ async function createJobAndNotify({
 	isCurrentContext: (contextVersion: number) => boolean
 	createJobWithRetry: CreateJobWithRetry
 	queryClient: QueryClient
-	onOpenJobs: () => void
+	onOpenJobs: (jobId: string) => void
 }) {
 	const job = await createJobWithRetry(req)
 	await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(profileId, apiToken), exact: false })
 	if (!isCurrentContext(contextVersion)) return job
-	showObjectsJobStartedFeedback({ jobId: job.id, label: 'Task', onOpenJobs })
+	showObjectsJobStartedFeedback({ jobId: job.id, label: 'Task', onOpenJobs: () => onOpenJobs(job.id) })
 	return job
 }
 

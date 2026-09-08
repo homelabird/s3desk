@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react'
 import type { DragEvent as ReactDragEvent, PropsWithChildren } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useObjectsDnd } from '../useObjectsDnd'
@@ -115,8 +115,8 @@ describe('useObjectsDnd', () => {
 		const setLastSelectedObjectKey = vi.fn()
 
 		const { result } = renderHook(
-			() =>
-				useObjectsDnd({
+			() => ({
+				dnd: useObjectsDnd({
 					profileId: 'profile-1',
 					apiToken: 'token-1',
 					bucket: 'bucket-a',
@@ -129,13 +129,15 @@ describe('useObjectsDnd', () => {
 					createJobWithRetry,
 					queryClient,
 				}),
+				location: useLocation(),
+			}),
 			{ wrapper: Wrapper },
 		)
 
 		const event = buildDropEvent({ kind: 'objects', bucket: 'bucket-a', keys: ['alpha.txt', 'beta.txt'] })
 
 		await act(async () => {
-			result.current.onDndTargetDrop(event, 'docs/')
+			result.current.dnd.onDndTargetDrop(event, 'docs/')
 		})
 
 		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1), waitForLazyDndRuntime)
@@ -159,6 +161,10 @@ describe('useObjectsDnd', () => {
 			},
 		})
 		expect(messageOpenMock).toHaveBeenCalled()
+		const feedback = render(messageOpenMock.mock.lastCall?.[0].content)
+		fireEvent.click(feedback.getByRole('button', { name: 'Open Jobs' }))
+		expect(result.current.location.pathname).toBe('/jobs')
+		expect(result.current.location.state).toEqual({ jobId: 'job-1', profileId: 'profile-1' })
 	})
 
 	it('ignores stale move confirmations after the objects context changes', async () => {

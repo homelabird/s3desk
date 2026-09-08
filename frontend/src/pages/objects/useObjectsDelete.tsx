@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router'
 
 import { APIError, type APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { objectsFeedback } from './objectsFeedback'
+import { showObjectsJobStartedFeedback } from './objectsJobFeedback'
 import {
 	claimObjectJobCompletion,
 	invalidateObjectQueriesForPrefix,
@@ -40,6 +42,7 @@ export function useObjectsDelete({
 	setSelectedKeys,
 }: UseObjectsDeleteArgs) {
 	const queryClient = useQueryClient()
+	const navigate = useNavigate()
 	const currentContextKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
 	const [deleteContextVersion, setDeleteContextVersion] = useState(0)
 	const [deletingState, setDeletingState] = useState<{
@@ -227,7 +230,10 @@ export function useObjectsDelete({
 					exact: false,
 				})
 				if (contextVersion !== deleteContextVersionRef.current) return
-				objectsFeedback.deleteTaskStarted(result.job.id)
+				showObjectsJobStartedFeedback({
+					jobId: result.job.id, label: 'Delete task',
+					onOpenJobs: () => navigate('/jobs', { state: { jobId: result.job.id, profileId: context?.scopeProfileId ?? profileId } }),
+				})
 			}
 			if (contextVersion !== deleteContextVersionRef.current) return
 			setSelectedKeys((prev) => {
@@ -305,7 +311,10 @@ export function useObjectsDelete({
 				exact: false,
 			})
 			if (variables.contextVersion !== deleteContextVersionRef.current) return
-			objectsFeedback.deleteTaskStarted(job.id)
+			showObjectsJobStartedFeedback({
+				jobId: job.id, label: 'Delete task',
+				onOpenJobs: () => navigate('/jobs', { state: { jobId: job.id, profileId: context?.scopeProfileId ?? profileId } }),
+			})
 		},
 		onError: (err, variables, context) => {
 			if ((context?.contextVersion ?? variables.contextVersion) !== deleteContextVersionRef.current) return

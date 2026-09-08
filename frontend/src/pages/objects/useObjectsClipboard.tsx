@@ -7,6 +7,7 @@ import type { Job, JobCreateRequest } from '../../api/types'
 import { copyToClipboard } from '../../lib/clipboard'
 import { normalizePrefix } from './objectsListUtils'
 import { objectsFeedback } from './objectsFeedback'
+import { confirmMoveClipboardObjects, showObjectsJobStartedFeedback } from './objectsJobFeedback'
 import type { ClipboardObjects } from './objectsActionCatalog'
 
 const INTERNAL_CLIPBOARD_BY_SERVER_SCOPE = new Map<string, ClipboardObjects>()
@@ -95,12 +96,7 @@ export function useObjectsClipboard({
 			})
 			if ((context?.contextVersion ?? args.contextVersion) !== clipboardContextVersionRef.current) return
 			const label = args.mode === 'copy' ? 'Paste copy task' : 'Paste move task'
-			try {
-				const { showObjectsJobStartedFeedback } = await import('./objectsJobFeedback')
-				showObjectsJobStartedFeedback({ jobId: job.id, label, onOpenJobs: () => navigate('/jobs') })
-			} catch {
-				objectsFeedback.success(`${label} started: ${job.id}`, 6)
-			}
+			showObjectsJobStartedFeedback({ jobId: job.id, label, onOpenJobs: () => navigate('/jobs', { state: { jobId: job.id, profileId: context?.scopeProfileId ?? profileId } }) })
 			if (args.mode === 'move') {
 				setClipboardObjects(null)
 			}
@@ -186,7 +182,6 @@ export function useObjectsClipboard({
 		}
 
 		if (mode === 'move') {
-			const { confirmMoveClipboardObjects } = await import('./objectsJobFeedback')
 			if (pasteContextVersion !== clipboardContextVersionRef.current) return
 			confirmMoveClipboardObjects({
 				count: src.keys.length,

@@ -92,7 +92,7 @@ export function useObjectsIndexing({
 					content: (
 						<Space>
 							<Typography.Text>Index task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							<Button size="small" type="link" onClick={() => navigate('/jobs', { state: { jobId: job.id, profileId: context?.scopeProfileId ?? profileId } })}>
 								Open Jobs
 							</Button>
 						</Space>

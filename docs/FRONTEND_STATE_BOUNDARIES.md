@@ -115,9 +115,10 @@ retain their own component lifecycle. Queueing or Clear selection releases the
 draft. Files stay in memory and are not restored after a browser reload.
 
 Destination storage and temporary picker state remain in
-`useUploadsPageScopedStorageState`. Jobs navigation from a transfer is resolved by
-`FullAppRoutes`, which selects the transfer's profile and passes the requested job
-to the existing Jobs details state.
+`useUploadsPageScopedStorageState`. Job navigation from transfers and object-action
+notifications is resolved by `FullAppRoutes`, which selects the originating
+profile and passes the requested job to the existing Jobs details state while
+preserving that profile's list filters.
 
 ## Bucket name search
 

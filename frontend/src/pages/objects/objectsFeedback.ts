@@ -45,10 +45,7 @@ export const objectsFeedbackCopy = {
 	typeRenameToProceed: 'Type RENAME to proceed',
 	destinationMustBeDifferent: 'Destination must be different',
 	destinationMustNotBeUnderSource: 'Destination must not be under source',
-	copyMoveTaskStarted: (mode: 'copy' | 'move', jobId: string) =>
-		`${mode === 'copy' ? 'Copy' : 'Move'} task started: ${jobId}`,
 	deletedCount: (count: number) => `Deleted ${count}`,
-	deleteTaskStarted: (jobId: string) => `Delete task started: ${jobId}`,
 }
 
 export const objectsFeedback = {
@@ -121,14 +118,8 @@ export const objectsFeedback = {
 	invalidDownloadUrl(error: unknown) {
 		appFeedback.error(error instanceof Error ? error.message : objectsFeedbackCopy.invalidDownloadUrl)
 	},
-	copyMoveTaskStarted(mode: 'copy' | 'move', jobId: string) {
-		appFeedback.success(objectsFeedbackCopy.copyMoveTaskStarted(mode, jobId))
-	},
 	deletedCount(count: number) {
 		appFeedback.success(objectsFeedbackCopy.deletedCount(count))
-	},
-	deleteTaskStarted(jobId: string) {
-		appFeedback.success(objectsFeedbackCopy.deleteTaskStarted(jobId))
 	},
 	destinationBucketRequired() {
 		appFeedback.error(objectsFeedbackCopy.destinationBucketRequired)

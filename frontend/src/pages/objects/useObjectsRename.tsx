@@ -104,7 +104,7 @@ export function useObjectsRename({ profileId, apiToken, bucket, prefix, createJo
 				content: (
 					<Space>
 						<Typography.Text>Rename task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" onClick={() => navigate('/jobs', { state: { jobId: job.id, profileId: args.scopeProfileId } })}>
 							Open Jobs
 						</Button>
 					</Space>

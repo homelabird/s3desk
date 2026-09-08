@@ -117,7 +117,7 @@ export function useObjectsSelectionMove({
 							Move task started: {job.id}
 							{args.dstPrefix ? ` -> ${args.dstBucket}/${normalizePrefix(args.dstPrefix)}` : ` -> ${args.dstBucket}/`}
 						</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" onClick={() => navigate('/jobs', { state: { jobId: job.id, profileId: args.scopeProfileId } })}>
 							Open Jobs
 						</Button>
 					</Space>

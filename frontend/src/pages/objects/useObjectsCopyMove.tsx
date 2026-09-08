@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router'
 
 import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { objectsFeedback } from './objectsFeedback'
+import { showObjectsJobStartedFeedback } from './objectsJobFeedback'
 import { normalizePrefix, suggestCopyPrefix } from './objectsListUtils'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
@@ -30,6 +32,7 @@ type UseObjectsCopyMoveArgs = {
 
 export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, createJobWithRetry, splitLines }: UseObjectsCopyMoveArgs) {
 	const queryClient = useQueryClient()
+	const navigate = useNavigate()
 	const currentScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
 	const [copyMoveOpen, setCopyMoveOpen] = useState(false)
 	const [copyMoveMode, setCopyMoveMode] = useState<'copy' | 'move'>('copy')
@@ -149,7 +152,10 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 		onSuccess: async (job, args) => {
 			await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(args.scopeProfileId, args.scopeApiToken), exact: false })
 			if (args.sessionId !== copyPrefixSessionRef.current) return
-			objectsFeedback.copyMoveTaskStarted(args.mode, job.id)
+			showObjectsJobStartedFeedback({
+				jobId: job.id, label: args.mode === 'copy' ? 'Copy task' : 'Move task',
+				onOpenJobs: () => navigate('/jobs', { state: { jobId: job.id, profileId: args.scopeProfileId } }),
+			})
 			setCopyPrefixStateScopeKey(currentScopeKey)
 			invalidateCopyPrefixSession()
 			setCopyPrefixOpen(false)
@@ -194,7 +200,10 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 		onSuccess: async (job, args) => {
 			await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(args.scopeProfileId, args.scopeApiToken), exact: false })
 			if (args.sessionId !== copyMoveSessionRef.current) return
-			objectsFeedback.copyMoveTaskStarted(args.mode, job.id)
+			showObjectsJobStartedFeedback({
+				jobId: job.id, label: args.mode === 'copy' ? 'Copy task' : 'Move task',
+				onOpenJobs: () => navigate('/jobs', { state: { jobId: job.id, profileId: args.scopeProfileId } }),
+			})
 			setCopyMoveStateScopeKey(currentScopeKey)
 			invalidateCopyMoveSession()
 			setCopyMoveOpen(false)
