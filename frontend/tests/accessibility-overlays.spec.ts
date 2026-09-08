@@ -1023,7 +1023,7 @@ test.describe('overlay accessibility scans', () => {
 
 		await drawer.getByRole('tab', { name: 'Transfers' }).click()
 		await drawer.getByText('Advanced transfer options').click()
-		await expect(drawer.getByText('Force server proxy for downloads and previews')).toBeVisible()
+		await expect(drawer.getByText('Use server for downloads and previews')).toBeVisible()
 
 		await expectNoA11yViolations(page, drawer)
 	})

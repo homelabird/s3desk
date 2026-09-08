@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect, test, type Page } from '@playwright/test'
 
 import {
@@ -122,6 +124,44 @@ async function stubObjectsApi(page: Page, items: ObjectItem[], commonPrefixes: s
 }
 
 test.describe('Objects context menus', () => {
+	for (const scenario of ['new browser', 'legacy direct default', 'explicit direct choice'] as const) {
+		test(`downloads with unreachable storage (${scenario})`, async ({ page }) => {
+			const body = 'downloaded through S3Desk'
+			const key = 'report.txt'
+			await stubObjectsApi(page, [{ key, size: Buffer.byteLength(body), lastModified: '2024-01-01T00:00:00Z' }])
+			await seedStorage(page)
+			if (scenario !== 'new browser') {
+				await seedLocalStorage(page, {
+					[scenario === 'legacy direct default' ? 'downloadLinkProxyEnabled' : 'downloadLinkProxyEnabledV2']: false,
+				})
+			}
+			const proxyRequests: boolean[] = []
+			await page.route('https://storage.invalid/**', (route) => route.abort('addressunreachable'))
+			await page.route('**/api/v1/buckets/test-bucket/objects/download-url?**', (route) => {
+				const url = new URL(route.request().url())
+				const proxy = url.searchParams.get('proxy') === 'true'
+				proxyRequests.push(proxy)
+				return route.fulfill({ json: {
+					url: proxy ? `${url.origin}/download-proxy?fixture=report` : 'https://storage.invalid/report.txt',
+					expiresAt: '2099-01-01T00:00:00Z',
+				} })
+			})
+			await page.route('**/download-proxy?fixture=report', (route) => route.fulfill({
+				body,
+				contentType: 'text/plain',
+				headers: { 'Content-Disposition': 'attachment; filename="report.txt"' },
+			}))
+			await gotoObjectsPage(page)
+			await objectsListRow(page, key).click({ button: 'right' })
+			const saved = page.waitForEvent('download')
+			await objectsContextMenu(page).getByRole('menuitem', { name: 'Download (client)' }).click()
+			const download = await saved
+			expect(download.suggestedFilename()).toBe(key)
+			expect(await readFile((await download.path())!, 'utf8')).toBe(body)
+			expect(proxyRequests).toEqual(scenario === 'explicit direct choice' ? [false, true] : [true])
+		})
+	}
+
 	test('leaving Objects discards a pending device-folder selection', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(1))
 		await seedStorage(page)

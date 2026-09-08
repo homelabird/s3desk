@@ -14,7 +14,7 @@ afterEach(() => {
 describe('clearResettableUiState', () => {
 	it('clears registered UI keys and scoped UI prefixes while keeping unrelated secrets', () => {
 		window.localStorage.setItem('apiToken', 'keep-token')
-		window.localStorage.setItem('downloadLinkProxyEnabled', 'true')
+		window.localStorage.setItem('downloadLinkProxyEnabledV2', 'true')
 		window.localStorage.setItem('bucket', 'archive')
 		window.localStorage.setItem('objectsSearch', 'photos')
 		window.localStorage.setItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY, '6')
@@ -28,7 +28,7 @@ describe('clearResettableUiState', () => {
 		clearResettableUiState(window.localStorage)
 
 		expect(window.localStorage.getItem('apiToken')).toBe('keep-token')
-		expect(window.localStorage.getItem('downloadLinkProxyEnabled')).toBe('true')
+		expect(window.localStorage.getItem('downloadLinkProxyEnabledV2')).toBe('true')
 		expect(window.localStorage.getItem('other:profile-1:value')).toBe('keep')
 		expect(window.localStorage.getItem('bucket')).toBeNull()
 		expect(window.localStorage.getItem('objectsSearch')).toBeNull()

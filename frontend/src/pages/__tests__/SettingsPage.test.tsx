@@ -13,6 +13,7 @@ import {
 import { buildDialogPreferenceKey, countDismissedDialogs, setDialogDismissed } from '../../lib/dialogPreferences'
 import { serverScopedStorageKey } from '../../lib/profileScopedStorage'
 import { ensureDomShims } from '../../test/domShims'
+import { DOWNLOAD_LINK_PROXY_STORAGE_KEY } from '../../lib/useDownloadLinkProxyPreference'
 import { SettingsPage } from '../SettingsPage'
 
 const { confirmDangerActionMock } = vi.hoisted(() => ({
@@ -111,14 +112,16 @@ describe('SettingsPage', () => {
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
 		expect(await screen.findByText('Defaults work for most connections.')).toBeInTheDocument()
-		expect(screen.queryByRole('switch', { name: 'Force server proxy for downloads and previews' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('switch', { name: 'Use server for downloads and previews' })).not.toBeInTheDocument()
 		fireEvent.click(screen.getByText('Advanced transfer options'))
-		fireEvent.click(await screen.findByRole('switch', { name: 'Force server proxy for downloads and previews' }))
+		const proxySwitch = await screen.findByRole('switch', { name: 'Use server for downloads and previews' })
+		expect(proxySwitch).toHaveAttribute('aria-checked', 'true')
+		fireEvent.click(proxySwitch)
 		fireEvent.change(await screen.findByLabelText('Download task concurrency'), { target: { value: '5' } })
 		fireEvent.change(screen.getByLabelText('Upload task concurrency'), { target: { value: '3' } })
 
 		await waitFor(() => {
-			expect(window.localStorage.getItem('downloadLinkProxyEnabled')).toBe('true')
+			expect(window.localStorage.getItem(DOWNLOAD_LINK_PROXY_STORAGE_KEY)).toBe('false')
 			expect(window.localStorage.getItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBe('5')
 			expect(window.localStorage.getItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBe('3')
 		})

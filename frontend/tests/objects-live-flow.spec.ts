@@ -59,7 +59,7 @@ async function seedStorage(page: Page) {
 		setIfMissing('bucket', '')
 		setIfMissing('prefix', '')
 		setIfMissing('objectsUIMode', 'simple')
-		setIfMissing('downloadLinkProxyEnabled', true)
+		setIfMissing('downloadLinkProxyEnabledV2', true)
 	}, { apiToken })
 }
 

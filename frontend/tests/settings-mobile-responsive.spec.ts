@@ -57,7 +57,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 
 	test('settings drawer persists transfer preferences across mobile reopen', async ({ page }) => {
 		const advancedOptionsName = 'Advanced transfer options'
-		const proxySwitchName = 'Force server proxy for downloads and previews'
+		const proxySwitchName = 'Use server for downloads and previews'
 
 		await page.goto('/settings')
 
@@ -69,10 +69,11 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await expect(drawer.getByText(proxySwitchName)).toBeVisible()
 		await expectMinTouchTarget(drawer.getByRole('switch', { name: proxySwitchName }))
 
-		await setSwitch(drawer, proxySwitchName, true)
+		await expect(drawer.getByRole('switch', { name: proxySwitchName })).toHaveAttribute('aria-checked', 'true')
+		await setSwitch(drawer, proxySwitchName, false)
 		await expect
-			.poll(async () => page.evaluate(() => JSON.parse(window.localStorage.getItem('downloadLinkProxyEnabled') ?? 'false')))
-			.toBe(true)
+			.poll(async () => page.evaluate(() => JSON.parse(window.localStorage.getItem('downloadLinkProxyEnabledV2') ?? 'null')))
+			.toBe(false)
 
 		await drawer.getByRole('button', { name: 'Close' }).click()
 		await expect(drawer).toHaveCount(0)
@@ -81,7 +82,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await reopenSettingsFromCompactHeader(reopenedDrawer)
 		await reopenedDrawer.getByRole('tab', { name: 'Transfers' }).click()
 		await openTransferAdvancedOptions(reopenedDrawer, advancedOptionsName, proxySwitchName)
-		await expect(reopenedDrawer.getByRole('switch', { name: proxySwitchName })).toHaveAttribute('aria-checked', 'true')
+		await expect(reopenedDrawer.getByRole('switch', { name: proxySwitchName })).toHaveAttribute('aria-checked', 'false')
 	})
 
 	test('settings access token survives mobile reopen after apply', async ({ page }) => {

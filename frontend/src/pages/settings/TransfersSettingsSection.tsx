@@ -15,6 +15,7 @@ import {
 	sanitizeDownloadTaskConcurrency,
 	sanitizeUploadTaskConcurrency,
 } from '../../components/transfers/transferConcurrencyPreferences'
+import { useDownloadLinkProxyPreference } from '../../lib/useDownloadLinkProxyPreference'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import styles from '../SettingsPage.module.css'
 
@@ -24,10 +25,7 @@ function clampNumber(value: number | null, fallback: number, min: number, max: n
 }
 
 export function TransfersSettingsSection() {
-	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
-		'downloadLinkProxyEnabled',
-		false,
-	)
+	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useDownloadLinkProxyPreference()
 	const [downloadTaskConcurrencySetting, setDownloadTaskConcurrencySetting] = useLocalStorageState<number>(
 		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 		DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
@@ -87,13 +85,13 @@ export function TransfersSettingsSection() {
 									Saved immediately in this browser.
 								</Typography.Text>
 								<FormField
-									label="Force server proxy for downloads and previews"
-									extra="Leave this off unless direct downloads fail in this browser. When off, S3Desk tries direct links first and falls back automatically when needed."
+									label="Use server for downloads and previews"
+									extra="On by default for reliable access across networks. Turn off to connect directly to storage and reduce server traffic."
 								>
 									<ToggleSwitch
 										checked={downloadLinkProxyEnabled}
 										onChange={setDownloadLinkProxyEnabled}
-										ariaLabel="Force server proxy for downloads and previews"
+										ariaLabel="Use server for downloads and previews"
 									/>
 								</FormField>
 								<FormField

@@ -1,6 +1,7 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { DOWNLOAD_LINK_PROXY_STORAGE_KEY, useDownloadLinkProxyPreference } from '../../../lib/useDownloadLinkProxyPreference'
 import {
 	DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
 	DEFAULT_UPLOAD_TASK_CONCURRENCY,
@@ -20,6 +21,27 @@ describe('useTransfersUploadPreferences', () => {
 
 	afterEach(() => {
 		window.localStorage.clear()
+	})
+
+	it.each([null, 'false', 'true'])('defaults downloads to the server with legacy preference %s', (legacyValue) => {
+		if (legacyValue !== null) window.localStorage.setItem('downloadLinkProxyEnabled', legacyValue)
+		const { result } = renderHook(() => useTransfersUploadPreferences())
+		expect(result.current.downloadLinkProxyEnabled).toBe(true)
+	})
+
+	it('applies an explicit direct-download choice to the runtime and preserves it after remount', () => {
+		const settings = renderHook(() => useDownloadLinkProxyPreference())
+		const runtime = renderHook(() => useTransfersUploadPreferences())
+		act(() => settings.result.current[1](false))
+		expect(runtime.result.current.downloadLinkProxyEnabled).toBe(false)
+		settings.unmount()
+		runtime.unmount()
+		expect(renderHook(() => useTransfersUploadPreferences()).result.current.downloadLinkProxyEnabled).toBe(false)
+	})
+
+	it.each(['null', '0', '"false"', '{'])('keeps server downloads enabled for invalid preference %s', (value) => {
+		window.localStorage.setItem(DOWNLOAD_LINK_PROXY_STORAGE_KEY, value)
+		expect(renderHook(() => useTransfersUploadPreferences()).result.current.downloadLinkProxyEnabled).toBe(true)
 	})
 
 	it('uses conservative faster task concurrency defaults', () => {

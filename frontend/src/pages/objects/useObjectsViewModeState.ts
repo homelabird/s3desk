@@ -11,6 +11,7 @@ import {
 	THUMBNAIL_CACHE_MAX_ENTRIES,
 	THUMBNAIL_CACHE_MIN_ENTRIES,
 } from '../../lib/thumbnailCache'
+import { useDownloadLinkProxyPreference } from '../../lib/useDownloadLinkProxyPreference'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { type ObjectsUIMode } from './objectsPageConstants'
 
@@ -33,7 +34,7 @@ export function useObjectsViewModeState({
 }: UseObjectsViewModeStateArgs) {
 	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
 	const [detailsOpen, setDetailsOpen] = useLocalStorageState<boolean>('objectsDetailsOpen', true)
-	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
+	const [downloadLinkProxyEnabled] = useDownloadLinkProxyPreference()
 	const isAdvanced = uiMode === 'advanced'
 
 	const handleToggleUiMode = useCallback(() => {

@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 
+import { useDownloadLinkProxyPreference } from '../../lib/useDownloadLinkProxyPreference'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import {
 	DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
@@ -19,7 +20,7 @@ export type UploadTuning = {
 }
 
 export function useTransfersUploadPreferences() {
-	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
+	const [downloadLinkProxyEnabled] = useDownloadLinkProxyPreference()
 	const [downloadTaskConcurrency] = useLocalStorageState<number>(
 		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 		DEFAULT_DOWNLOAD_TASK_CONCURRENCY,

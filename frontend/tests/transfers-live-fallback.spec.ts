@@ -53,7 +53,7 @@ async function seedStorage(page: Page, args: { profileId: string; bucket: string
 		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
 		window.localStorage.setItem('prefix', JSON.stringify(''))
 		window.localStorage.setItem('objectsUIMode', JSON.stringify('simple'))
-		window.localStorage.setItem('downloadLinkProxyEnabled', JSON.stringify(false))
+		window.localStorage.setItem('downloadLinkProxyEnabledV2', JSON.stringify(false))
 	}, { apiToken, profileId: args.profileId, bucket: args.bucket })
 }
 
