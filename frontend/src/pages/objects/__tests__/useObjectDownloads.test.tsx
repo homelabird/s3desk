@@ -237,6 +237,46 @@ describe('useObjectDownloads', () => {
 		expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
 	})
 
+	for (const mode of ['single', 'selection'] as const) {
+		it.each(['mounted', 'unmounted', 'rejected after unmount'] as const)(`${mode} picker completion: %s`, async (completion) => {
+			const transfers = createTransfersStub()
+			const picker = createDeferred<FileSystemDirectoryHandle>()
+			pickDirectoryMock.mockReturnValueOnce(picker.promise)
+			const items = [
+				{ key: 'folder/a.txt', size: 10, lastModified: '2026-04-23T00:00:00Z' },
+				{ key: 'folder/b.txt', size: 20, lastModified: '2026-04-23T00:00:00Z' },
+			]
+			const { result, unmount } = renderHook(() => useObjectDownloads({
+				apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: 'folder/',
+				selectedKeys: new Set(items.map((item) => item.key)), selectedCount: items.length,
+				objectByKey: new Map(items.map((item) => [item.key, item])), transfers, onZipObjects: vi.fn(),
+			}))
+			let pending!: Promise<void>
+			act(() => {
+				pending = mode === 'single' ? result.current.onDownloadToDevice('folder/a.txt', 10) : result.current.handleDownloadSelected()
+			})
+			if (completion !== 'mounted') unmount()
+			const directory = { name: 'Downloads' } as FileSystemDirectoryHandle
+			await act(async () => {
+				if (completion === 'rejected after unmount') picker.reject(new Error('Permission denied'))
+				else picker.resolve(directory)
+				await pending
+			})
+			if (completion === 'mounted') {
+				expect(transfers.queueDownloadObjectsToDevice).toHaveBeenCalledExactlyOnceWith({
+					profileId: 'profile-1', bucket: 'bucket-a', prefix: 'folder/',
+					items: (mode === 'single' ? items.slice(0, 1) : items).map(({ key, size }) => ({ key, size })),
+					targetDirHandle: directory, targetLabel: 'Downloads',
+				})
+				expect(transfers.openTransfers).toHaveBeenCalledExactlyOnceWith('downloads')
+			} else {
+				expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
+				expect(transfers.openTransfers).not.toHaveBeenCalled()
+			}
+			expect(messageErrorMock).not.toHaveBeenCalled()
+		})
+	}
+
 	it('does not queue a single device download when the object scope changes before the picker resolves', async () => {
 		const transfers = createTransfersStub()
 		const picker = createDeferred<FileSystemDirectoryHandle>()

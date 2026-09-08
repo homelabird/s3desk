@@ -32,6 +32,9 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 	useLayoutEffect(() => {
 		currentScopeKeyRef.current = currentScopeKey
 		scopeVersionRef.current += 1
+		return () => {
+			scopeVersionRef.current += 1
+		}
 	}, [currentScopeKey])
 
 	const onDownload = (key: string, expectedBytes?: number) => {

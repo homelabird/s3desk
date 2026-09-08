@@ -17,6 +17,7 @@ import {
 	objectsListRow,
 	objectsListRows,
 	objectsSelectionCheckbox,
+	openTransfersDialog,
 } from './support/ui'
 
 type StorageSeed = {
@@ -121,6 +122,32 @@ async function stubObjectsApi(page: Page, items: ObjectItem[], commonPrefixes: s
 }
 
 test.describe('Objects context menus', () => {
+	test('leaving Objects discards a pending device-folder selection', async ({ page }) => {
+		await stubObjectsApi(page, buildObjectItems(1))
+		await seedStorage(page)
+		await page.addInitScript(() => {
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: () => new Promise((resolve) => {
+				Object.assign(window, { finishDownloadPicker: () => resolve({ name: 'Stale download folder' }) })
+			}) })
+		})
+		await gotoObjectsPage(page)
+		await objectsListRow(page, 'video-1.mp4').click({ button: 'right' })
+		await page.getByRole('menuitem', { name: 'Download to folder…' }).click()
+		await expect.poll(() => page.evaluate(() => 'finishDownloadPicker' in window)).toBe(true)
+		await page.getByRole('link', { name: 'Buckets', exact: true }).click()
+		await expect(page).toHaveURL(/\/buckets$/)
+		await expect(page.getByTestId('objects-list-controls-root')).toHaveCount(0)
+		await page.evaluate(async () => {
+			const picker = window as typeof window & { finishDownloadPicker: () => void }
+			picker.finishDownloadPicker()
+			await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+		})
+		await expect(page.getByRole('dialog', { name: /Transfers/i })).toHaveCount(0)
+		const transfers = await openTransfersDialog(page, { tabName: /Downloads/i })
+		await expect(transfers.getByText('No downloads yet')).toBeVisible()
+		await expect(transfers.getByText('Stale download folder')).toHaveCount(0)
+	})
+
 	for (const mode of ['copy', 'move'] as const) {
 		test(`advanced object menu submits a ${mode} job with the displayed source`, async ({ page }) => {
 			await stubObjectsApi(page, buildObjectItems(1))
