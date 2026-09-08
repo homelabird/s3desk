@@ -24,6 +24,7 @@ export function buildObjectsTreePaneProps(args: BuildObjectsPagePanesPropsArgs):
 		onSelectFavoriteFromDrawer: (key) => args.handleFavoriteSelect(key, true),
 		favoritesLoading: args.favoritesLoading,
 		favoritesError: args.favoritesErrorMessage,
+		onRetryFavorites: args.onRetryFavorites,
 		treeData: args.treeData,
 		treeError: args.treeErrorMessage,
 		loadingKeys: args.treeLoadingKeys,

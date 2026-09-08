@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { expectMinTouchTarget } from './support/geometry'
 import { failedToLoadFavoritesTitle } from '../src/lib/actionHints'
 import {
 	buildBucketFixture,
@@ -131,7 +132,7 @@ async function installSearchRecoveryFixtures(page: Page) {
 }
 
 test.describe('Objects global search and favorites chaos', () => {
-	test('favoritesOnly surfaces a favorites error and recovers when the view is turned off', async ({ page }) => {
+	test('favoritesOnly retries an initial failure and can return to unfiltered objects', async ({ page }) => {
 		test.setTimeout(45_000)
 		await installFavoritesFailureFixtures(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
@@ -144,6 +145,13 @@ test.describe('Objects global search and favorites chaos', () => {
 		await expect(favoritesPaneStatus).toContainText(failedToLoadFavoritesTitle())
 		await expect(favoritesPaneStatus).toContainText('favorites backend unavailable')
 		await expect(favoritesAlerts).toHaveCount(3)
+		await page.route(`**/api/v1/buckets/${bucket}/objects/favorites**`, (route) => route.fulfill({
+			json: { bucket, prefix: '', count: 1, hydrated: true, keys: [favoriteItem.key], items: [favoriteItem] },
+		}))
+		await page.getByRole('button', { name: 'Retry favorites' }).click()
+		await expect(favoritesAlerts).toHaveCount(0)
+		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toHaveCount(0)
 
 		await page.getByRole('button', { name: 'Filters' }).click()
 		const viewDrawer = dialogByName(page, 'View options')
@@ -151,10 +159,72 @@ test.describe('Objects global search and favorites chaos', () => {
 		await viewDrawer.getByLabel('Favorites only').uncheck()
 		await viewDrawer.getByRole('button', { name: 'Done' }).click()
 
-		await expect(favoritesAlerts).toHaveCount(2)
+		await expect(favoritesAlerts).toHaveCount(0)
 		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
 		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toBeVisible()
 	})
+
+	for (const width of [1600, 390]) {
+		test(`favorites retry preserves cached items and filters at ${width}px`, async ({ page }, testInfo) => {
+			await installSearchRecoveryFixtures(page)
+			let fail = false
+			let holdRetry = false
+			let hydratedRequests = 0
+			let finishRetry!: () => void
+			const retryGate = new Promise<void>((resolve) => { finishRetry = resolve })
+			await page.route(`**/api/v1/buckets/${bucket}/objects/favorites**`, async (route) => {
+				const hydrate = new URL(route.request().url()).searchParams.get('hydrate') === 'true'
+				if (hydrate) {
+					hydratedRequests += 1
+					if (holdRetry) await retryGate
+					if (fail) return route.fulfill({ status: 503, json: { error: { code: 'favorites_unavailable', message: 'favorites backend unavailable' } } })
+				}
+				return route.fulfill({ json: { bucket, prefix: '', count: 1, hydrated: hydrate, keys: [favoriteItem.key], items: hydrate ? [favoriteItem] : [] } })
+			})
+			await seedStorage(page, { objectsFavoritesOnly: true })
+			await page.setViewportSize({ width, height: 900 })
+			await gotoObjectsPage(page)
+			const openFavorites = async () => {
+				if (width < 1000) {
+					await page.getByRole('button', { name: 'More actions', exact: true }).click()
+					await page.getByRole('menuitem', { name: 'Folders' }).click()
+				}
+			}
+			await openFavorites()
+			const pane = page.getByTestId('objects-favorites-pane')
+			await expect(pane.getByTestId('objects-favorite-item')).toBeVisible()
+			await pane.getByRole('textbox', { name: 'Find favorite' }).fill('alpha')
+			if (width < 1000) await page.getByRole('dialog', { name: 'Browse' }).getByRole('button', { name: 'Close', exact: true }).click()
+			fail = true
+			await page.getByTestId('objects-toolbar-more').click()
+			await page.getByRole('menuitem', { name: 'Refresh' }).click()
+			await openFavorites()
+			await expect(pane.getByTestId('objects-favorites-status')).toContainText('favorites backend unavailable')
+			await expect(pane.getByTestId('objects-favorite-item')).toBeVisible()
+			const requestsBeforeRetry = hydratedRequests
+			fail = false
+			holdRetry = true
+			const retry = pane.getByRole('button', { name: 'Retry favorites' })
+			await page.screenshot({ path: testInfo.outputPath('favorites-retry.png') })
+			if (width < 1000) await expectMinTouchTarget(retry)
+			try {
+				await retry.click()
+				await expect(retry).toBeDisabled()
+				await expect(pane.getByRole('textbox', { name: 'Find favorite' })).toHaveValue('alpha')
+				await expect(pane.getByTestId('objects-favorite-item')).toBeVisible()
+			} finally {
+				finishRetry()
+			}
+			await expect(pane.getByTestId('objects-favorites-status')).toHaveCount(0)
+			await expect(retry).toHaveCount(0)
+			expect(hydratedRequests).toBe(requestsBeforeRetry + 1)
+			await expect(pane.getByRole('switch', { name: 'Favorites only' })).toBeChecked()
+			await page.screenshot({ path: testInfo.outputPath('favorites-recovered.png') })
+			if (width < 1000) await page.getByRole('dialog', { name: 'Browse' }).getByRole('button', { name: 'Close', exact: true }).click()
+			await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
+			await expect(objectsSelectionCheckbox(page, 'beta.txt')).toHaveCount(0)
+		})
+	}
 
 	test('all-folder search recovers from a transient error while favoritesOnly view stays stable', async ({ page }) => {
 		test.setTimeout(90_000)

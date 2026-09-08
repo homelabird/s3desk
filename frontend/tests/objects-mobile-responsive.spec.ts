@@ -303,7 +303,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await openFoldersFromMoreActions(page)
 		const treeDrawer = page.getByTestId('objects-tree-sheet')
 		await expect(treeDrawer).toBeVisible()
-		await expect(treeDrawer.getByRole('button', { name: 'Favorites' })).toBeVisible()
+		await expect(treeDrawer.getByRole('button', { name: 'Favorites', exact: true })).toBeVisible()
 		await treeDrawer.getByLabel('Close', { exact: true }).click()
 		await expect(treeDrawer).toHaveCount(0)
 

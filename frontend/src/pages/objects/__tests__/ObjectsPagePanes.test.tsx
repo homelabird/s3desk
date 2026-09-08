@@ -58,6 +58,7 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 			onSelectFavoriteFromDrawer: () => {},
 			favoritesLoading: false,
 			favoritesError: null,
+			onRetryFavorites: vi.fn(),
 			treeData: [],
 			loadingKeys: [],
 			onLoadData: async () => {},

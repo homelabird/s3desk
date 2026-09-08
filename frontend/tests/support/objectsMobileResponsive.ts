@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import {
 	buildBucketFixture,
+	buildFavoritesFixture,
 	buildMetaFixture,
 	buildObjectsListFixture,
 	buildProfileFixture,
@@ -151,7 +152,7 @@ export async function installObjectsMobileResponsiveFixtures(page: Page) {
 		{
 			method: 'GET',
 			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`,
-			handler: () => ({ json: { bucket: defaultStorage.bucket, prefix: '', items: [] } }),
+			handler: () => ({ json: buildFavoritesFixture({ bucket: defaultStorage.bucket }) }),
 		},
 		{
 			method: 'GET',

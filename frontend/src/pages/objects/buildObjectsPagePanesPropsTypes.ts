@@ -29,6 +29,7 @@ export type BuildObjectsPagePanesPropsArgs = {
 	handleFavoriteSelect: (key: string, closeDrawer: boolean) => void
 	favoritesLoading: boolean
 	favoritesErrorMessage: string | null
+	onRetryFavorites: () => void
 	treeData: TreeProps['treeData']
 	treeErrorMessage: string | null
 	treeLoadingKeys: TreeProps['loadingKeys']

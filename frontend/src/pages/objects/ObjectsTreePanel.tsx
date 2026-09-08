@@ -29,6 +29,7 @@ type ObjectsTreePanelProps = {
 	onSelectFavoriteFromDrawer: (key: string) => void
 	favoritesLoading: boolean
 	favoritesError?: string | null
+	onRetryFavorites: () => void
 	treeData: TreeNode[]
 	treeError?: string | null
 	loadingKeys?: string[]
@@ -100,6 +101,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 					onSelectFavorite={onSelectFavorite}
 					isLoading={props.favoritesLoading}
 					errorMessage={props.favoritesError}
+					onRetry={props.onRetryFavorites}
 					expanded={favoritesExpanded}
 					onExpandedChange={props.onFavoritesExpandedChange}
 				/>

@@ -1,4 +1,4 @@
-import { Badge, Input, Typography } from "antd";
+import { Badge, Button, Input, Typography } from "antd";
 import { SearchOutlined, StarFilled } from "@ant-design/icons";
 import { useMemo, useRef, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -31,6 +31,7 @@ type ObjectsFavoritesPaneProps = {
   favoriteCount: number;
   isLoading: boolean;
   errorMessage?: string | null;
+  onRetry: () => void;
   favorites: FavoriteObjectItem[];
   favoritesOnly: boolean;
   onFavoritesOnlyChange: (value: boolean) => void;
@@ -213,6 +214,18 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
       onExpandedChange={props.onExpandedChange}
       extra={
         <>
+          {!disabled && props.errorMessage ? (
+            <Button
+              size="small"
+              type="text"
+              aria-label="Retry favorites"
+              loading={props.isLoading}
+              disabled={props.isLoading}
+              onClick={props.onRetry}
+            >
+              Retry
+            </Button>
+          ) : null}
           <span
             data-testid="objects-favorites-badge"
             aria-label={badgeLabel}

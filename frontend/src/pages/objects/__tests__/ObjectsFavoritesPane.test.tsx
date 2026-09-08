@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -30,6 +30,7 @@ function buildProps(
 		favoriteCount: 0,
 		isLoading: false,
 		errorMessage: null,
+		onRetry: vi.fn(),
 		favorites: [],
 		favoritesOnly: false,
 		onFavoritesOnlyChange: vi.fn(),
@@ -144,6 +145,23 @@ describe('ObjectsFavoritesPane', () => {
 		expect(status).toHaveTextContent('favorite hydration failed')
 		expect(badge).toHaveAttribute('aria-label', failedToLoadFavoritesTitle())
 		expect(badge).toHaveTextContent('!')
+	})
+
+	it('retries a failed query without clearing cached favorites or the search', () => {
+		const props = buildProps({
+			favoriteCount: 1, query: 'readme', errorMessage: 'favorite hydration failed',
+			favorites: [{ key: 'docs/readme.txt', size: 12, lastModified: '2026-03-09T00:00:00Z', createdAt: '2026-03-09T00:00:00Z' }],
+		})
+		const onRetry = vi.fn()
+		const { rerender } = render(<ObjectsFavoritesPane {...props} onRetry={onRetry} />)
+		fireEvent.click(screen.getByRole('button', { name: 'Retry favorites' }))
+		expect(onRetry).toHaveBeenCalledOnce()
+		rerender(<ObjectsFavoritesPane {...props} onRetry={onRetry} isLoading />)
+		expect(screen.getByRole('button', { name: 'Retry favorites' })).toBeDisabled()
+		expect(screen.getByRole('textbox', { name: 'Find favorite' })).toHaveValue('readme')
+		expect(screen.getByTitle('docs/readme.txt')).toBeVisible()
+		rerender(<ObjectsFavoritesPane {...props} onRetry={onRetry} errorMessage={null} />)
+		expect(screen.queryByRole('button', { name: 'Retry favorites' })).not.toBeInTheDocument()
 	})
 
 	it('announces the pinned favorite count in the header badge', () => {

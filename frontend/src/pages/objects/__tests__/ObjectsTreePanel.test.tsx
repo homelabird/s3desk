@@ -30,6 +30,7 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsTreePanel>> 
 		onSelectFavoriteFromDrawer: vi.fn(),
 		favoritesLoading: false,
 		favoritesError: null,
+		onRetryFavorites: vi.fn(),
 		treeData: [
 			{
 				key: '/',

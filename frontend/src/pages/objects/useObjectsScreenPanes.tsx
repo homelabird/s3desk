@@ -67,6 +67,7 @@ export function useObjectsScreenPanes({
 		setFavoritesPaneExpanded: paneVm.setFavoritesPaneExpanded,
 		handleFavoriteSelect: actions.handleFavoriteSelect,
 		favoritesLoading: listVm.favoritesQuery.isFetching,
+		onRetryFavorites: () => { void listVm.favoritesQuery.refetch({ cancelRefetch: false }) },
 		favoritesErrorMessage: listVm.favoritesQuery.isError ? formatErr(listVm.favoritesQuery.error) : null,
 		treeData: paneVm.treeData,
 		treeErrorMessage: paneVm.treeErrorMessage,

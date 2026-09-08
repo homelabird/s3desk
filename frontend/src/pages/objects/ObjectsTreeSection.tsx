@@ -21,6 +21,7 @@ type ObjectsTreeSectionProps = {
 	onSelectFavoriteFromDrawer: (key: string) => void
 	favoritesLoading: boolean
 	favoritesError?: string | null
+	onRetryFavorites: () => void
 	treeData: TreeNode[]
 	treeError?: string | null
 	loadingKeys?: string[]
