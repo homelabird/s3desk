@@ -240,6 +240,8 @@ echo "[check] frontend"
   npm run check:openapi
   npm run check:e2e:geometry
   npm run lint
+  node --test "${ROOT}/scripts/tests/transfer_resilience.test.cjs"
+  node --test "${ROOT}/scripts/tests/ip_mobility.test.cjs"
   npm run test:unit -- --maxWorkers="${CHECK_FRONTEND_MAX_WORKERS:-50%}"
   npm run build
   if [[ "${MODE}" == "full" ]]; then

@@ -114,6 +114,8 @@
 }
 
 .rowProgress {
+	min-width: 0;
+	overflow-wrap: anywhere;
 	display: flex;
 	flex-direction: column;
 	gap: 4px;

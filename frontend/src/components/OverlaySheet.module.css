@@ -1,6 +1,9 @@
 .backdrop {
 	position: fixed;
 	inset: 0;
+	top: var(--s3d-visual-viewport-top, 0px);
+	bottom: auto;
+	height: var(--s3d-visual-viewport-height, 100dvh);
 	z-index: 1100;
 	display: flex;
 	background: color-mix(in srgb, var(--s3d-color-bg) 34%, rgba(0, 0, 0, 0.34));
@@ -46,11 +49,12 @@
 
 .panelBottom {
 	width: 100%;
-	max-height: calc(min(100dvh, 100vh) - env(safe-area-inset-top));
+	max-height: calc(100% - env(safe-area-inset-top));
 	border-radius: 16px 16px 0 0;
 }
 
 .header {
+	flex: 0 0 auto;
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
@@ -125,6 +129,7 @@
 }
 
 .footer {
+	flex: 0 0 auto;
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;

@@ -74,7 +74,7 @@ func prepareCreateProfileRequest(req models.ProfileCreateRequest, allowRemote bo
 	if err := validateProfileEndpointURL("endpoint", req.Endpoint, allowRemote); err != nil {
 		return req, err
 	}
-	if err := validateProfileEndpointURL("publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
+	if err := validateProfilePublicEndpointURL("publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
 		return req, err
 	}
 	if err := validateCreateProfileProvider(&req); err != nil {
@@ -155,7 +155,7 @@ func validatePreparedUpdateProfileRequest(currentProfile models.Profile, req mod
 	if err := validateProfileEndpointURL("endpoint", req.Endpoint, allowRemote); err != nil {
 		return err
 	}
-	if err := validateProfileEndpointURL("publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
+	if err := validateProfilePublicEndpointURL("publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
 		return err
 	}
 

@@ -7,7 +7,7 @@ S3Desk uses `rclone` underneath. A provider is considered supported when S3Desk 
 | Provider | Tier | Notes |
 | --- | --- | --- |
 | AWS S3 | Tier 1 | Standard AWS S3 support |
-| S3-compatible | Tier 1 | For MinIO, Ceph RGW, and similar systems |
+| S3-compatible | Tier 1 | For SeaweedFS, MinIO, Ceph RGW, and similar systems |
 | Azure Blob Storage | Tier 1 | Container operations are surfaced as bucket-like flows in the UI |
 | Google Cloud Storage | Tier 1 | Full core workflow support |
 | OCI Object Storage | Tier 2 | Native OCI backend with lower automation coverage |

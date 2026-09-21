@@ -1,4 +1,6 @@
+import { useMobileBack } from '../lib/useMobileBack'
 import { useEffect, useRef, type RefObject } from 'react'
+import { useVisualViewport } from './useVisualViewport'
 
 type OverlayLayerRegistration = {
 	id: symbol
@@ -168,6 +170,8 @@ function lockBodyScroll() {
 }
 
 export function useOverlayLayer(options: UseOverlayLayerOptions) {
+	useVisualViewport(options.open, options.containerRef)
+	useMobileBack(options.open, () => getTopOverlayLayer()?.onEscape(), 300)
 	const onEscapeRef = useRef(options.onEscape)
 	const restoreFocusTargetRef = useRef<HTMLElement | null>(null)
 

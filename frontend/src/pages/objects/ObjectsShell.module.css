@@ -659,3 +659,13 @@
     display: flex;
   }
 }
+
+/* Shared overlay hook supplies visual geometry during soft-keyboard resize. */
+.objectsOverlayBackdrop {
+  top: var(--s3d-visual-viewport-top, 0px);
+  bottom: auto;
+  height: var(--s3d-visual-viewport-height, 100dvh);
+}
+
+.objectsOverlayBackdrop .objectsOverlayPanel { max-height: 100%; }
+.objectsOverlayHeader, .objectsOverlayFooter { flex: 0 0 auto; }

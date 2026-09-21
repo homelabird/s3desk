@@ -225,8 +225,11 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		seen[num] = struct{}{}
 	}
 
-	svc.server.multipartStateMu.Lock()
-	defer svc.server.multipartStateMu.Unlock()
+	unlock, lockErr := svc.server.multipartStateMu.Lock(r.Context(), multipartStateKey{prepared.profileID, prepared.uploadID, prepared.relPath})
+	if lockErr != nil {
+		return nil, &uploadHTTPError{status: http.StatusRequestTimeout, code: "request_timeout", message: "multipart request canceled while waiting for the object"}
+	}
+	defer unlock()
 
 	meta, found, err := svc.server.store.GetMultipartUpload(r.Context(), prepared.profileID, prepared.uploadID, prepared.relPath)
 	if err != nil {

@@ -197,7 +197,7 @@ def release_unit_for(path: str) -> str:
         or path.startswith("charts/")
         or path.startswith("compose/")
         or path.startswith("deploy/")
-        or path == "e2e/runner/Dockerfile"
+        or path.startswith("e2e/runner/")
         or path.startswith("k8s/")
         or path in {".containerignore", ".dockerignore", ".env", ".env.example", ".gitlab-ci.yml", ".golangci.yml", "Containerfile", "Containerfile.deploy", "Containerfile.local"}
         or path in {

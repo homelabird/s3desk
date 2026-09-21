@@ -1,3 +1,4 @@
+import { isDownloadLinkFresh } from './nativeDownloadLink'
 import { memo } from 'react'
 import { Button, Progress, Tag, Typography } from 'antd'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -10,6 +11,7 @@ type TransferDownloadRowProps = {
 	task: DownloadTask
 	onCancel: (taskId: string) => void
 	onRetry: (taskId: string) => void
+	onHandOff?: (taskId: string) => void
 	onRemove: (taskId: string) => void
 	onOpenJobs?: (profileId: string, jobId: string) => void
 }
@@ -31,7 +33,7 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 						: t.status === 'failed'
 							? 'error'
 							: 'default'
-	const tagText =
+	const tagText = t.status === 'ready' ? 'Ready to save' : t.status === 'handed_off' ? 'Sent to browser' :
 		t.status === 'queued'
 			? 'Queued'
 			: t.status === 'waiting'
@@ -91,7 +93,24 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 				</div>
 
 				<div className={styles.rowActions}>
-					{t.kind === 'job_artifact' && props.onOpenJobs ? (
+					{t.status === 'ready' && t.nativeDownloadUrl ? (
+						<Button size="small" type="primary" href={t.nativeDownloadUrl}
+							target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+							download={t.filenameHint || t.label}
+							aria-label={`Save ${downloadActionContext}`}
+							onClick={(event) => {
+								if (!isDownloadLinkFresh(t.nativeDownloadExpiresAtMs)) {
+									event.preventDefault()
+									props.onRetry(t.id)
+									return
+								}
+								// Keep the anchor in the DOM through its default navigation.
+								setTimeout(() => props.onHandOff?.(t.id), 0)
+							}}>
+							Save file
+						</Button>
+					) : null}
+					{t.kind === 'job_artifact'  && props.onOpenJobs ? (
 						<Button
 							size="small"
 							type="link"
@@ -101,7 +120,7 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 							Jobs
 						</Button>
 					) : null}
-					{t.status === 'running' || t.status === 'queued' || t.status === 'waiting' ? (
+					{t.status === 'running' || t.status === 'queued' || t.status === 'waiting' || t.status === 'ready' ? (
 						<Button
 							size="small"
 							aria-label={`Cancel ${downloadActionContext}`}
@@ -110,14 +129,15 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 							Cancel
 						</Button>
 					) : null}
-					{t.status === 'failed' || t.status === 'canceled' ? (
+					{t.status === 'failed' || t.status === 'canceled' || t.status === 'ready' || t.status === 'handed_off' ? (
 						<Button
 							size="small"
 							icon={<ReloadOutlined />}
-							aria-label={`Retry ${downloadActionContext}`}
+							aria-label={`${t.status === 'handed_off' ? 'Download again' : 'Retry'} ${downloadActionContext}`}
+							title={t.status === 'handed_off' ? 'Prepare a new link. Check the browser download manager first to avoid a duplicate.' : undefined}
 							onClick={() => props.onRetry(t.id)}
 						>
-							Retry
+							{t.status === 'handed_off' ? 'Download again' : 'Retry'}
 						</Button>
 					) : null}
 					{isTransferFinished(t.status) ? (
@@ -134,7 +154,13 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 				</div>
 			</div>
 
-			<div className={styles.rowProgress}>
+			{t.status === 'ready' || t.status === 'handed_off' ? (
+				<Typography.Text type="secondary">
+					{t.status === 'ready'
+						? 'Tap Save file to start the browser download. Links expire after five minutes; Retry renews the link.'
+						: 'Sent to the browser download manager. This page cannot confirm disk saving or cancel the browser download. Check the download manager before preparing another link to avoid duplicates.'}
+				</Typography.Text>
+			) : <div className={styles.rowProgress}>
 				<Progress
 					aria-label={`Download progress for ${t.label}`}
 					percent={progressPercent}
@@ -146,7 +172,7 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 						{progressText}
 					</Typography.Text>
 				) : null}
-			</div>
+			</div>}
 		</div>
 	)
 })

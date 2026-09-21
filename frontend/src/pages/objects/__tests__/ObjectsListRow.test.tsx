@@ -29,7 +29,7 @@ describe('ObjectsListRow', () => {
 		render(
 			<ObjectsObjectRow
 				offset={24}
-				rowMinHeight={44}
+				rowMinHeight={52}
 				listGridClassName={styles.listGridCompact}
 				isCompact
 				canDragDrop={false}
@@ -53,7 +53,11 @@ describe('ObjectsListRow', () => {
 			/>,
 		)
 
-		expect(screen.getByText('1.2 MB · 2026-03-07 20:00')).toBeInTheDocument()
+		const compactMetadata = screen.getByText('1.2 MB · 2026-03-07 20:00')
+		expect(compactMetadata).toBeInTheDocument()
+		// Name and metadata share one touch target instead of stacking below
+		// the favorite/name button row and increasing every row's height.
+		expect(compactMetadata.closest('button')).toBe(screen.getByRole('button', { name: 'Select object cat.png' }))
 		expect(screen.getByTestId('row-thumbnail')).toBeInTheDocument()
 
 		const row = screen.getByRole('listitem')

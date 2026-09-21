@@ -857,18 +857,18 @@ jobs:
       CRITICAL_LIVE_TESTS: tests/api-crud.spec.ts tests/objects-live-flow.spec.ts tests/jobs-live-flow.spec.ts tests/transfers-live-fallback.spec.ts tests/bucket-policy-live.spec.ts tests/docs-smoke.spec.ts tests/server-migration-live.spec.ts tests/uploads-folder-live.spec.ts tests/objects-image-preview-live.spec.ts
       E2E_API_TOKEN: s3desk-e2e-token-0123456789abcdef012345
       E2E_ENCRYPTION_KEY: QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=
-      E2E_S3_ENDPOINT: http://minio:9000
-      E2E_S3_PUBLIC_ENDPOINT: http://127.0.0.1:9000
+      E2E_S3_ENDPOINT: http://seaweedfs:8333
+      E2E_S3_PUBLIC_ENDPOINT: http://127.0.0.1:8333
       E2E_S3_REGION: us-east-1
-      E2E_S3_ACCESS_KEY: minioadmin
-      E2E_S3_SECRET_KEY: minioadmin
+      E2E_S3_ACCESS_KEY: demo-seaweedfs
+      E2E_S3_SECRET_KEY: demo-seaweedfs-secret
       E2E_S3_FORCE_PATH_STYLE: "true"
       E2E_S3_TLS_SKIP_VERIFY: "false"
       E2E_GCS_ENDPOINT: http://fake-gcs-server:4443/storage/v1/v1
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
       DOCS_BASE_URL: http://127.0.0.1:8080
       S3DESK_IMAGE: s3desk-e2e:ci
-      MINIO_IMAGE: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+      SEAWEEDFS_IMAGE: docker.io/chrislusf/seaweedfs:4.47
       AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite:3.33.0
       FAKE_GCS_IMAGE: fsouza/fake-gcs-server:1.47.7
       S3DESK_COMPOSE_PROVIDER: docker
@@ -905,7 +905,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=live-e2e
 
       - name: Start live E2E stack
-        run: ./scripts/compose.sh e2e up -d minio azurite fake-gcs-server s3desk
+        run: ./scripts/compose.sh e2e up -d seaweedfs azurite fake-gcs-server s3desk
 
       - name: Wait for backend health
         run: |
@@ -945,3 +945,42 @@ jobs:
       - name: Stop live E2E stack
         if: always()
         run: ./scripts/compose.sh e2e down -v
+
+  mobile-webkit-e2e:
+    name: Mobile WebKit E2E (Engine Compatibility)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_WEBKIT: "1"
+      PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-mobile-webkit
+      PLAYWRIGHT_OUTPUT_DIR: test-results-mobile-webkit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install actual WebKit engine
+        run: npx playwright install --with-deps webkit
+      - name: Check responsive geometry probes
+        run: npm run check:e2e:geometry
+      - name: Run mobile WebKit task flows
+        run: npm run test:e2e:mobile-webkit -- --workers=2
+      - name: Upload engine compatibility evidence (not physical iOS certification)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mobile-webkit-engine-evidence
+          path: |
+            frontend/playwright-report-mobile-webkit
+            frontend/test-results-mobile-webkit
+          if-no-files-found: ignore

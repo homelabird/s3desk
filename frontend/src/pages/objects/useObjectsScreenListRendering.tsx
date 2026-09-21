@@ -1,3 +1,7 @@
+import { StarFilled, StarOutlined } from '@ant-design/icons'
+import { fileNameFromKey } from './objectsListUtils'
+import type { UIActionOrDivider } from './objectsActions'
+
 import {
 	COMPACT_ROW_HEIGHT_PX,
 	WIDE_ROW_HEIGHT_PX,
@@ -321,7 +325,17 @@ export function useObjectsScreenListRendering({
 		contextMenuVisible,
 		currentPrefixActionMap,
 		getListScrollerElement,
-		getObjectActions,
+		getObjectActions: (key: string, size?: number): UIActionOrDivider[] => [
+			{
+				id: 'toggle_favorite',
+				label: `${favoriteKeys.has(key) ? 'Remove favorite for' : 'Add favorite for'} ${fileNameFromKey(key)}`,
+				icon: favoriteKeys.has(key) ? <StarFilled /> : <StarOutlined />,
+				enabled: !favoritePendingKeys.has(key) && !isOffline && !!props.profileId && !!bucket && objectCrudSupported,
+				run: () => toggleFavorite(key),
+			},
+			{ type: 'divider' },
+			...getObjectActions(key, size),
+		],
 		getPrefixActions,
 		globalActionMap,
 		handleListScrollerContextMenu,

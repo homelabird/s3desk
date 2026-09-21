@@ -131,9 +131,9 @@ describe('uploadRuntimePlanning', () => {
 		})
 	})
 
-	it('does not track resume metadata for presigned uploads', () => {
+	it('tracks multipart geometry for presigned uploads', () => {
 		const plan = buildResumeTrackingPlan({
-			items: [fileItem('large.bin', 20)],
+			items: [fileItem('large.bin', 10 * 1024 * 1024)],
 			attemptMode: 'presigned',
 			resumeFilesByPath: new Map(),
 			chunkThresholdBytes: 10,
@@ -141,9 +141,9 @@ describe('uploadRuntimePlanning', () => {
 		})
 
 		expect(plan).toEqual({
-			shouldTrackResume: false,
-			resumeFilesNext: undefined,
-			chunkSizeByPath: {},
+			shouldTrackResume: true,
+			resumeFilesNext: [{ path: 'large.bin', size: 10 * 1024 * 1024, chunkSizeBytes: 5 * 1024 * 1024 }],
+			chunkSizeByPath: { 'large.bin': 5 * 1024 * 1024 },
 		})
 	})
 

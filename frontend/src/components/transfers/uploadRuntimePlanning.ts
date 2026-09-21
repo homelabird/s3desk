@@ -1,3 +1,4 @@
+import { planPresignedMultipart } from './presignedMultipartPlan'
 import type { UploadFileItem } from '../../api/client'
 import type { UploadTask } from './transferTypes'
 import type { UploadCapabilityByProfileId } from './transfersTypes'
@@ -9,7 +10,7 @@ import {
 
 export type UploadRuntimeMode = NonNullable<UploadTask['uploadMode']>
 export type UploadFallbackMode = Exclude<UploadRuntimeMode, 'presigned'>
-export type ResumeFileInfo = { size: number; chunkSizeBytes: number }
+export type ResumeFileInfo = { size: number; chunkSizeBytes: number; fingerprint?: string }
 
 export function planUploadMode(args: {
 	uploadCapability?: UploadCapabilityByProfileId[string]
@@ -43,8 +44,8 @@ export function buildResumeFilesByPath(args: {
 	if (args.task.resumeFiles && args.task.resumeFiles.length > 0) {
 		for (const file of args.task.resumeFiles) {
 			const pathKey = normalizeRelPath(file.path)
-			if (!pathKey) continue
-			resumeFilesByPath.set(pathKey, { size: file.size, chunkSizeBytes: file.chunkSizeBytes })
+			if (!pathKey || !Number.isSafeInteger(file.size) || file.size < 0 || !Number.isSafeInteger(file.chunkSizeBytes) || file.chunkSizeBytes <= 0) continue
+			resumeFilesByPath.set(pathKey, { size: file.size, chunkSizeBytes: file.chunkSizeBytes, fingerprint: file.fingerprint })
 		}
 		return resumeFilesByPath
 	}
@@ -93,36 +94,34 @@ export function buildResumeTrackingPlan(args: {
 	resumeFilesByPath: Map<string, ResumeFileInfo>
 	chunkThresholdBytes: number
 	chunkSizeBytes: number
+	fingerprintsByPath?: Map<string, string>
 }) {
-	const shouldTrackResume = args.attemptMode !== 'presigned'
 	const chunkSizeByPath: Record<string, number> = Object.create(null)
-
-	const resumeFilesNext = shouldTrackResume
-		? args.items
-				.filter((item) => {
-					const pathKey = resolveUploadItemPathNormalized(item)
-					if (args.resumeFilesByPath.has(pathKey)) return true
-					return (item.file?.size ?? 0) >= args.chunkThresholdBytes
-				})
-				.map((item) => {
-					const pathKey = resolveUploadItemPathNormalized(item)
-					const pathRaw = resolveUploadItemPath(item)
-					const resumeInfo = args.resumeFilesByPath.get(pathKey)
-					const fileChunkSize = resumeInfo?.chunkSizeBytes ?? args.chunkSizeBytes
-					if (pathRaw) {
-						chunkSizeByPath[pathRaw] = fileChunkSize
-					}
-					return {
-						path: pathKey,
-						size: item.file?.size ?? 0,
-						chunkSizeBytes: fileChunkSize,
-					}
-				})
-		: undefined
-
-	return {
-		shouldTrackResume,
-		resumeFilesNext,
-		chunkSizeByPath,
+	const resumeFilesNext: Array<ResumeFileInfo & { path: string }> = []
+	for (const item of args.items) {
+		const pathKey = resolveUploadItemPathNormalized(item)
+		const pathRaw = resolveUploadItemPath(item)
+		const resumeInfo = args.resumeFilesByPath.get(pathKey)
+		const requestedChunkSize = resumeInfo?.chunkSizeBytes ?? args.chunkSizeBytes
+		const multipartPlan = args.attemptMode === 'presigned'
+			? planPresignedMultipart({
+				fileSize: item.file.size,
+				partSizeBytes: requestedChunkSize,
+				thresholdBytes: resumeInfo ? 1 : args.chunkThresholdBytes,
+			})
+			: null
+		const shouldTrack = !!resumeInfo || (args.attemptMode === 'presigned'
+			? !!multipartPlan
+			: item.file.size >= args.chunkThresholdBytes)
+		if (!shouldTrack) continue
+		const fileChunkSize = multipartPlan?.partSizeBytes ?? requestedChunkSize
+		if (pathRaw) chunkSizeByPath[pathRaw] = fileChunkSize
+		resumeFilesNext.push({
+			path: pathKey,
+			size: item.file.size,
+			chunkSizeBytes: fileChunkSize,
+			fingerprint: args.fingerprintsByPath?.get(pathKey),
+		})
 	}
+	return { shouldTrackResume: true, resumeFilesNext, chunkSizeByPath }
 }

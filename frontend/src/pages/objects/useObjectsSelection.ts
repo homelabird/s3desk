@@ -1,3 +1,4 @@
+import { useMobileBack } from '../../lib/useMobileBack'
 import { useCallback, useState } from 'react'
 
 export function useObjectsSelection() {
@@ -8,6 +9,8 @@ export function useObjectsSelection() {
 		setSelectedKeys(new Set())
 		setLastSelectedObjectKey(null)
 	}, [])
+
+	useMobileBack(selectedKeys.size > 0, clearSelection, 200)
 
 	return {
 		selectedKeys,

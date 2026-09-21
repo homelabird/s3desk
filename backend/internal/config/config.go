@@ -3,6 +3,8 @@ package config
 import "time"
 
 type Config struct {
+	S3NativeList                       bool
+	S3NativeDownload                   bool
 	Addr                               string
 	ExternalBaseURL                    string
 	DataDir                            string
@@ -31,7 +33,10 @@ type Config struct {
 	UploadMaxBytes                     int64
 	ServerRestoreMaxBytes              int64
 	UploadDirectStream                 bool
+	UploadProxyOnly                    bool
 	UploadMaxConcurrentRequests        int
+	DownloadMaxConcurrentRequests      int
+	DownloadMaxConcurrentPerProfile    int
 	RcloneDownloadMultiThreadStreams   int
 	RcloneDownloadMultiThreadCutoffMiB int
 	RcloneDownloadBufferSizeMiB        int

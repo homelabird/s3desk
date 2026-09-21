@@ -117,16 +117,18 @@ export function ObjectsObjectRow({
 									<FileOutlined className={styles.listRowFileIcon} />
 								</span>
 							)}
-							<Typography.Text className={styles.listRowTextEllipsis} title={objectKey}>
-								{highlightText(displayName)}
-							</Typography.Text>
+							<span className={styles.listRowTextStack}>
+								<Typography.Text className={styles.listRowTextEllipsis} title={objectKey}>
+									{highlightText(displayName)}
+								</Typography.Text>
+								{isCompact ? (
+									<Typography.Text type="secondary" className={styles.listRowMetaCompact} title={metaLabel}>
+										{metaLabel}
+									</Typography.Text>
+								) : null}
+							</span>
 						</button>
 					</div>
-					{isCompact ? (
-						<Typography.Text type="secondary" className={styles.listRowMetaCompact}>
-							{metaLabel}
-						</Typography.Text>
-					) : null}
 				</div>
 
 				{isCompact ? null : (

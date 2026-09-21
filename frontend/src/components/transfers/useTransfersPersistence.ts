@@ -1,9 +1,12 @@
-import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { readPendingUploadCommit } from './uploadCommitRecovery'
+import { useEffect, useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { subscribePageLifecycle } from '../../lib/pageLifecycle'
 
+import { isTransferFinished } from './transferTypes'
 import type { DownloadTask, JobArtifactDownloadTask, ObjectDownloadTask, UploadTask } from './transferTypes'
 
 type PersistedDownloadTask = ObjectDownloadTask | JobArtifactDownloadTask
-type PersistedUploadTask = Omit<UploadTask, 'preview'>
+type PersistedUploadTask = Omit<UploadTask, 'preview' | 'preparation'>
 
 type PersistedTransfers = {
 	version: 1
@@ -44,30 +47,34 @@ export function clearPersistedTransfersStorage() {
 }
 
 const isActiveDownloadStatus = (status: DownloadTask['status']) =>
-	status === 'queued' || status === 'waiting' || status === 'running'
+	status === 'queued' || status === 'waiting' || status === 'running' || status === 'ready'
 
 const isActiveUploadStatus = (status: UploadTask['status']) =>
 	status === 'queued' || status === 'staging' || status === 'commit'
 
-function withoutPreview<T extends { preview?: unknown }>(task: T): Omit<T, 'preview'> {
-	const { preview, ...rest } = task
+function withoutPreview<T extends { preview?: unknown; preparation?: unknown }>(task: T): Omit<T, 'preview' | 'preparation'> {
+	const { preview, preparation, ...rest } = task
 	void preview
+	void preparation
 	return rest
 }
 
-const normalizeDownloadTask = (task: PersistedDownloadTask, now: number): DownloadTask => {
+const normalizeDownloadTask = (input: PersistedDownloadTask, now: number): DownloadTask => {
+	const task = withoutDownloadLink(input)
+	if (task.kind === 'job_artifact' && task.status === 'waiting') return task
 	if (!isActiveDownloadStatus(task.status)) return task
 	return {
 		...task,
 		status: 'canceled',
 		finishedAtMs: now,
-		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
+		error: task.error ?? 'Download interrupted. Retry requests a new download; check the browser download manager first.',
 	}
 }
 
 const normalizeUploadTask = (task: PersistedUploadTask, now: number): UploadTask => {
 	const normalized = withoutPreview(task as PersistedUploadTask & { preview?: unknown })
 	if (normalized.status === 'waiting_job') return normalized
+	if (normalized.status === 'commit' && normalized.jobId) return { ...normalized, status: 'waiting_job', error: undefined }
 	if (!isActiveUploadStatus(task.status)) {
 		if (normalized.status === 'failed' || normalized.status === 'canceled') {
 			return {
@@ -81,7 +88,7 @@ const normalizeUploadTask = (task: PersistedUploadTask, now: number): UploadTask
 		...normalized,
 		status: 'canceled',
 		finishedAtMs: now,
-		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
+		error: task.error ?? 'Upload interrupted. Select the same file(s) and Retry; confirmed chunks are reused when available.',
 		retryFileHandleState: 'selection_required',
 	}
 }
@@ -90,12 +97,27 @@ const toPersistedUploadTask = (task: UploadTask): PersistedUploadTask => {
 	return withoutPreview(task)
 }
 
-const persistTransfers = (downloadTasks: DownloadTask[], uploadTasks: UploadTask[]) => {
-	if (typeof window === 'undefined') return
-	const downloads = downloadTasks
-		.filter((task): task is PersistedDownloadTask => task.kind !== 'object_device')
-		.slice(0, MAX_PERSISTED_TRANSFERS)
-	const uploads = uploadTasks.slice(0, MAX_PERSISTED_TRANSFERS).map(toPersistedUploadTask)
+type WithoutDownloadLink<T> = T extends unknown ? Omit<T, 'nativeDownloadUrl' | 'nativeDownloadExpiresAtMs'> : never
+
+export function withoutDownloadLink<T extends { nativeDownloadUrl?: string; nativeDownloadExpiresAtMs?: number }>(task: T): WithoutDownloadLink<T> {
+	const { nativeDownloadUrl, nativeDownloadExpiresAtMs, ...safe } = task
+	void nativeDownloadUrl
+	void nativeDownloadExpiresAtMs
+	// Preserve the object/job discriminated union while removing optional secrets.
+	return safe as WithoutDownloadLink<T>
+}
+
+export function selectPersistedTasks<T extends { status: DownloadTask['status'] | UploadTask['status'] }>(tasks: T[], historyLimit = MAX_PERSISTED_TRANSFERS): T[] {
+	let completed = 0
+	return tasks.filter((task) => !isTransferFinished(task.status) || completed++ < historyLimit)
+}
+
+export const persistTransfers = (downloadTasks: DownloadTask[], uploadTasks: UploadTask[]): 'full' | 'active_only' | 'failed' => {
+	if (typeof window === 'undefined') return 'failed'
+	const downloads = selectPersistedTasks(downloadTasks
+		.filter((task): task is PersistedDownloadTask => task.kind !== 'object_device'))
+		.map(withoutDownloadLink)
+	const uploads = selectPersistedTasks(uploadTasks).map(toPersistedUploadTask)
 	const payload: PersistedTransfers = {
 		version: 1,
 		savedAtMs: Date.now(),
@@ -104,8 +126,17 @@ const persistTransfers = (downloadTasks: DownloadTask[], uploadTasks: UploadTask
 	}
 	try {
 		window.sessionStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
+		return 'full'
 	} catch {
-		// ignore
+		// Do not sacrifice live server jobs to make room for completed history.
+		try {
+			payload.downloads = payload.downloads.filter((task) => !isTransferFinished(task.status))
+			payload.uploads = payload.uploads.filter((task) => !isTransferFinished(task.status))
+			window.sessionStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
+			return 'active_only'
+		} catch {
+			return 'failed'
+		}
 	}
 }
 
@@ -142,6 +173,7 @@ type UseTransfersPersistenceArgs = {
 	uploadTasks: UploadTask[]
 	setDownloadTasks: Dispatch<SetStateAction<DownloadTask[]>>
 	setUploadTasks: Dispatch<SetStateAction<UploadTask[]>>
+	onPersistenceWarning?: (message: string) => void
 }
 
 export function useTransfersPersistence({
@@ -149,10 +181,13 @@ export function useTransfersPersistence({
 	uploadTasks,
 	setDownloadTasks,
 	setUploadTasks,
+	onPersistenceWarning,
 }: UseTransfersPersistenceArgs) {
 	const hasLoadedPersistedRef = useRef(false)
 	const latestTransfersRef = useRef({ downloadTasks, uploadTasks })
 	const persistenceDirtyRef = useRef(true)
+	const warningRef = useRef(onPersistenceWarning)
+	const lastWarningRef = useRef<string | null>(null)
 
 	useEffect(() => {
 		if (hasLoadedPersistedRef.current) return
@@ -164,10 +199,11 @@ export function useTransfersPersistence({
 		setUploadTasks(persisted.uploads.map((task) => normalizeUploadTask(task, now)))
 	}, [setDownloadTasks, setUploadTasks])
 
-	useEffect(() => {
+	useLayoutEffect(() => {
+		warningRef.current = onPersistenceWarning
 		latestTransfersRef.current = { downloadTasks, uploadTasks }
 		persistenceDirtyRef.current = true
-	}, [downloadTasks, uploadTasks])
+	}, [downloadTasks, uploadTasks, onPersistenceWarning])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -175,14 +211,23 @@ export function useTransfersPersistence({
 			if (!persistenceDirtyRef.current) return
 			persistenceDirtyRef.current = false
 			const { downloadTasks: latestDownloads, uploadTasks: latestUploads } = latestTransfersRef.current
-			persistTransfers(latestDownloads, latestUploads)
+			const result = persistTransfers(latestDownloads, latestUploads)
+			// Retry failed persistence on the next lifecycle/interval, not just a state change.
+			persistenceDirtyRef.current = result === 'failed'
+			if (result === 'full') lastWarningRef.current = null
+			else if (lastWarningRef.current !== result) {
+				lastWarningRef.current = result
+				warningRef.current?.(result === 'active_only'
+					? 'Storage is full. Active transfers were saved, but completed history was omitted.'
+					: 'Transfer history could not be saved. Keep this page open; recovery after refresh is not guaranteed.')
+			}
 		}
 		flush()
 		const intervalId = window.setInterval(flush, PERSIST_INTERVAL_MS)
-		window.addEventListener('pagehide', flush)
+		const unsubscribe = subscribePageLifecycle({ onHidden: flush })
 		return () => {
 			window.clearInterval(intervalId)
-			window.removeEventListener('pagehide', flush)
+			unsubscribe()
 			flush()
 		}
 	}, [])

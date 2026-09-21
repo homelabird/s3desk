@@ -1,0 +1,5 @@
+# Persist bucket/object metadata alongside the volume data. Keeping only the
+# volume files would lose the S3 namespace when a container is recreated.
+[leveldb2]
+enabled = true
+dir = "/data/filerldb2"

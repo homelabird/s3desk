@@ -1,3 +1,5 @@
+import type { UploadPreparationProgress } from './uploadPreparation'
+import { fingerprintUploadFile, isUploadFingerprint } from './uploadFileIdentity'
 import { APIError, type APIClientShape, type UploadFileItem } from '../../api/client'
 import { normalizeRelPath, normalizeUploadPath, resolveUploadItemPath } from './uploadPaths'
 import type { ResumeFileInfo } from './uploadRuntimePlanning'
@@ -9,6 +11,7 @@ type ResolveExistingResumeChunksArgs = {
 	items: UploadFileItem[]
 	resumeFilesByPath: Map<string, ResumeFileInfo>
 	signal?: AbortSignal
+	onProgress?: (progress: UploadPreparationProgress) => void
 }
 
 type ExistingResumeChunksResult =
@@ -41,13 +44,37 @@ export async function resolveExistingResumeChunks(
 		})
 	}
 
+	// Verify the whole set before making a status request (which may assemble
+	// staged parts). Legacy descriptors safely start a NEW session.
+	if (requests.length === 0) return { ok: true, available: false }
+	const verificationItems = args.items.filter((item) => args.resumeFilesByPath.has(normalizeRelPath(resolveUploadItemPath(item))))
+	for (const [index, item] of verificationItems.entries()) {
+		const info = args.resumeFilesByPath.get(normalizeRelPath(resolveUploadItemPath(item)))
+		if (!info) continue
+		if (!isUploadFingerprint(info.fingerprint)) return { ok: true, available: false }
+		const fingerprint = await fingerprintUploadFile(item.file, args.signal, (progress) => args.onProgress?.({
+			...progress, fileName: resolveUploadItemPath(item), fileIndex: index + 1, fileCount: verificationItems.length,
+		}))
+		if (!fingerprint) return { ok: true, available: false }
+		if (fingerprint !== info.fingerprint) {
+			return { ok: false, error: 'Selected file content does not match the previous upload. Select the original file or create a new upload.' }
+		}
+	}
+
+	const validatePresent = (present: number[], total: number) => {
+		if (!Array.isArray(present) || present.some((part) => !Number.isInteger(part) || part < 0 || part >= total) || new Set(present).size !== present.length) {
+			throw new Error('Upload chunk status contains invalid part indices.')
+		}
+		return present
+	}
+
 	const loadSingles = async (): Promise<ExistingResumeChunksResult> => {
 		for (const request of requests) {
 			try {
 				const chunkState = await args.api.uploads.getUploadChunks(args.profileId, args.uploadId, request, args.signal)
-				existingChunksByPath[request.path] = chunkState.present
+				existingChunksByPath[request.path] = validatePresent(chunkState.present, request.total)
 			} catch (error) {
-				if (error instanceof APIError && error.status === 404) {
+				if (error instanceof APIError && (error.status === 404 || error.code === 'expired')) {
 					return { ok: true, available: false }
 				}
 				throw error
@@ -80,7 +107,7 @@ export async function resolveExistingResumeChunks(
 			if (!present) {
 				throw new Error('Upload chunk status batch response is missing a path.')
 			}
-			existingChunksByPath[request.path] = present
+			existingChunksByPath[request.path] = validatePresent(present, request.total)
 		}
 	}
 
@@ -104,10 +131,10 @@ export async function resolveExistingResumeChunks(
 			await loadBatch(batch)
 		}
 	} catch (error) {
-			if (error instanceof APIError && error.status === 404) {
-				return loadSingles()
-			}
-			throw error
+		if (error instanceof APIError && (error.status === 404 || error.code === 'expired')) {
+			return loadSingles()
+		}
+		throw error
 	}
 
 	return {

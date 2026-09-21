@@ -39,6 +39,7 @@ type rcloneProcess struct {
 	stdout io.ReadCloser
 	stderr rcloneProcessStderr
 	wait   func() error
+	abort  func()
 }
 
 type rcloneProcessStderr interface {
@@ -199,6 +200,14 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 		return nil, err
 	}
 
+	// Cancel a live child on downstream write failures as well as request cancellation.
+	ctx, cancel := context.WithCancel(ctx)
+	started := false
+	defer func() {
+		if !started {
+			cancel()
+		}
+	}()
 	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
 	cmd := exec.Command(rclonePath, fullArgs...)
 	jobs.ConfigureProcessGroup(cmd)
@@ -218,6 +227,7 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 		cleanup()
 		return nil, err
 	}
+	started = true
 	pid := 0
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
@@ -232,6 +242,7 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 	}()
 
 	wait := func() error {
+		defer cancel()
 		<-stderrDone
 		err := cmd.Wait()
 		if cancelErr := cancelWatcher(); cancelErr != nil && err == nil && ctx.Err() != nil {
@@ -245,6 +256,7 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 		stdout: stdout,
 		stderr: stderrBuf,
 		wait:   wait,
+		abort:  cancel,
 	}, nil
 }
 

@@ -78,6 +78,7 @@ export default defineConfig({
 		},
 		{
 			name: 'mobile-iphone-13',
+			metadata: { emulation: 'Chromium with iPhone viewport/UA; not iOS or WKWebView' },
 			use: {
 				...devices['iPhone 13'],
 				// Keep iPhone viewport/UA emulation, but run on Chromium for Linux host portability.
@@ -110,6 +111,10 @@ export default defineConfig({
 			: []),
 		...(includeWebkit
 			? [{
+					name: 'mobile-iphone-13-webkit',
+					use: { ...devices['iPhone 13'], browserName: 'webkit' as const },
+					testMatch: /(?:objects-mobile-responsive|uploads-mobile-responsive|jobs-mobile-responsive|settings-mobile-responsive|login-mobile-responsive|mobile-platform-standards)\.spec\.ts/,
+				}, {
 					name: 'webkit-reflow',
 					use: { ...devices['Desktop Safari'] },
 					testMatch: /wcag-reflow\.spec\.ts/,

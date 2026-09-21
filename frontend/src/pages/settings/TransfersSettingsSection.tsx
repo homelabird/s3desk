@@ -1,3 +1,5 @@
+import { useTransferSafety } from '../../components/transfers/useTransferSafety'
+import { sanitizeTransferSafetyMode } from '../../components/transfers/transferSafetyPolicy'
 import { Button, Collapse, Space, Typography } from 'antd'
 
 import { FormField } from '../../components/FormField'
@@ -25,6 +27,7 @@ function clampNumber(value: number | null, fallback: number, min: number, max: n
 }
 
 export function TransfersSettingsSection() {
+	const { mode, setMode, conservative } = useTransferSafety()
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useDownloadLinkProxyPreference()
 	const [downloadTaskConcurrencySetting, setDownloadTaskConcurrencySetting] = useLocalStorageState<number>(
 		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
@@ -70,8 +73,18 @@ export function TransfersSettingsSection() {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				Defaults work for most connections.
+				Mobile and constrained connections start conservatively. Large downloads are handed to your browser; keep this page open while uploading.
 			</Typography.Text>
+
+			<FormField label="Transfer safety" htmlFor="transfer-safety-mode" extra={conservative
+				? 'Conservative limits active: one upload/download task, one chunked file, up to two part requests per file. Limits apply to new transfers.'
+				: 'Desktop settings active. Auto rechecks available device/network hints. Measurements are not a speed guarantee.'}>
+				<select id="transfer-safety-mode" value={mode} onChange={(event) => setMode(sanitizeTransferSafetyMode(event.target.value))} className={styles.transferSafetySelect}>
+					<option value="auto">Auto — device and connection</option>
+					<option value="conservative">Conservative — mobile / limited connection</option>
+					<option value="unrestricted">Unrestricted — use advanced settings</option>
+				</select>
+			</FormField>
 
 			<Collapse
 				size="small"
@@ -96,7 +109,7 @@ export function TransfersSettingsSection() {
 								</FormField>
 								<FormField
 									label="Upload auto-tuning"
-									extra="Automatically adjusts batch/chunk settings based on file size."
+									extra="Adjusts batch/chunk settings by file size, subject to the Transfer safety limits above."
 								>
 									<ToggleSwitch
 										checked={uploadAutoTuneEnabled}
@@ -107,7 +120,7 @@ export function TransfersSettingsSection() {
 								<FormField
 									label="Download task concurrency"
 									htmlFor="transfers-download-task-concurrency"
-									extra="Number of downloads started in parallel. Higher values can improve throughput on fast networks, but use more browser bandwidth and memory."
+									extra="Limits in-page downloads and link preparation. Browser-managed downloads continue outside this queue; server stream limits apply separately."
 								>
 									<NumberField
 										id="transfers-download-task-concurrency"

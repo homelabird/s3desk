@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TransferDownloadRow } from '../TransferDownloadRow'
@@ -96,4 +96,13 @@ describe('TransferDownloadRow', () => {
 		)
 		expect(destination.closest('[class*="rowDestination"]')).toBeTruthy()
 	})
+ it('lets users explicitly prepare a fresh link after browser handoff', () => {
+  const retry = vi.fn()
+  render(<TransferDownloadRow task={{ ...buildDownloadTask(), status: 'handed_off' }} onRetry={retry} onCancel={vi.fn()} onRemove={vi.fn()} />)
+  const button = screen.getByRole('button', { name: 'Download again download Download job artifact' })
+  expect(button).toHaveAttribute('title', expect.stringMatching(/browser|duplicate/i))
+  fireEvent.click(button)
+  expect(retry).toHaveBeenCalledTimes(1)
+ })
+
 })

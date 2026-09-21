@@ -1,3 +1,4 @@
+import { useMobileBack } from '../../lib/useMobileBack'
 import { useCallback, useEffect, useMemo } from 'react'
 
 import type { Location, LocationTab } from './objectsPageConstants'
@@ -131,6 +132,8 @@ export function useObjectsLocationTabs({
 			return out
 		})
 	}, [activeTabId, setTabs])
+
+	useMobileBack(canGoBack, goBack, 100)
 
 	const goForward = useCallback(() => {
 		setTabs((prev) => {

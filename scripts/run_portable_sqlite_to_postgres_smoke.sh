@@ -37,10 +37,10 @@ trap cleanup EXIT
 
 echo "[portable-smoke] preparing stack"
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-compose up -d --build minio postgres source target
+compose up -d --build seaweedfs postgres source target
 
-echo "[portable-smoke] seeding MinIO"
-compose run --rm minio-seed
+echo "[portable-smoke] seeding SeaweedFS"
+compose run --rm seaweedfs-seed
 
 echo "[portable-smoke] seeding ${PORTABLE_SMOKE_SOURCE_DB_BACKEND} source fixture"
 compose run --rm source-seed

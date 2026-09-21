@@ -7,14 +7,8 @@
 }
 
 .gridCardPreviewFrame {
-  min-height: var(--objects-grid-preview-min-height);
-}
-
-.gridCardBodyActions {
-  margin-top: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  height: 100%;
+  min-height: 0;
 }
 
 .gridCardKindLabel {
@@ -24,10 +18,8 @@
 }
 
 .gridContent {
-  --objects-grid-media-min-height: 164px;
-  --objects-grid-preview-min-height: 148px;
   position: relative;
-  padding: 12px;
+  padding: var(--objects-grid-padding, 6px);
 }
 
 .gridVirtualCanvas {
@@ -68,13 +60,15 @@
 }
 
 .gridCard {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-height: 100%;
-  padding: 12px;
+  gap: 4px;
+  height: 100%;
+  min-height: 0;
+  padding: 6px;
   border: 1px solid var(--s3d-color-border);
-  border-radius: 14px;
+  border-radius: 9px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-bg-elevated) 94%, var(--s3d-color-primary) 6%) 0%, var(--s3d-color-bg-elevated) 100%);
   box-shadow: var(--s3d-shadow-sm);
@@ -118,19 +112,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px;
+  min-height: var(--s3d-control-size-xs);
 }
 
 .gridCardTopActions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   min-width: 0;
 }
 
 .gridCardIconButton {
-  min-width: var(--s3d-control-size-sm);
-  min-height: var(--s3d-control-size-sm);
+  width: var(--s3d-control-size-xs);
+  height: var(--s3d-control-size-xs);
+  min-width: var(--s3d-control-size-xs);
+  min-height: var(--s3d-control-size-xs);
   padding: 0 !important;
   flex: 0 0 auto;
 }
@@ -145,9 +142,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: var(--objects-grid-media-min-height);
-  padding: 8px;
-  border-radius: 12px;
+  height: 64px;
+  min-height: 64px;
+  padding: 4px;
+  border-radius: 6px;
   border: 1px solid var(--s3d-color-border);
   background:
     radial-gradient(circle at top, color-mix(in srgb, var(--s3d-color-primary-light) 38%, transparent 62%) 0%, transparent 62%),
@@ -162,15 +160,15 @@
 }
 
 .gridCardMediaPlaceholder {
-  min-height: var(--objects-grid-preview-min-height);
+  height: 100%;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
   color: var(--s3d-color-text-secondary);
 }
 
 .gridCardFolderIcon,
 .gridCardFileIcon {
-  font-size: var(--s3d-icon-size-xl);
+  font-size: var(--s3d-icon-size-lg);
 }
 
 .gridCardFolderIcon {
@@ -181,7 +179,7 @@
 .gridCardBodyButton {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -203,10 +201,12 @@
 
 .gridCardTitle {
   min-width: 0;
+  min-height: 2.5em;
+  font-size: var(--s3d-font-size-sm);
+  line-height: 1.25;
   font-weight: 600;
-  line-height: 1.35;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -214,93 +214,149 @@
 
 .gridCardMetaLine {
   display: block;
-  font-size: var(--s3d-font-size-sm);
-  line-height: 1.35;
+  max-width: 100%;
+  font-size: var(--s3d-font-size-xs);
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .gridCardPreviewActionButton {
-  min-height: var(--s3d-control-size-sm);
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: zoom-in;
 }
 
-@media (max-width: 768px) {
-  .gridContent {
-    --objects-grid-media-min-height: 126px;
-    padding: 8px;
-  }
-
-  .gridCard {
-    gap: 8px;
-    padding: 9px;
-  }
-
-  .gridCardIconButton,
-  .gridCardPreviewActionButton {
-    min-width: var(--s3d-control-size-touch);
-    min-height: var(--s3d-control-size-touch);
-    padding-inline: 8px !important;
-  }
+.gridCardPreviewActionButton:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 1px;
 }
 
-@media (max-width: 480px) {
-  .gridContent {
-    --objects-grid-media-min-height: 0;
-    --objects-grid-preview-min-height: 0;
-    padding: 4px;
-  }
+.gridCardPreviewFrame :global(img),
+.gridCardPreviewFrame :global([role='img']) {
+  max-width: 100%;
+  max-height: 100%;
+}
 
-  .gridCard {
-    position: relative;
-    gap: 4px;
-    padding: 4px;
-    border-radius: 9px;
-  }
+.gridCardPreviewFrame :global([role='img']) {
+  padding: 2px;
+}
 
-  .gridCardTopRow {
-    justify-content: flex-end;
-  }
+/* The data attribute comes from the same container measurement as columns.
+   This also works with a resized tree/details pane and with a hidden sidebar. */
+.gridContent[data-grid-density='compact'] .gridCardMedia {
+  height: 56px;
+  min-height: 56px;
+}
 
-  .gridCardCheckboxWrap,
-  .gridCardKindLabel,
-  .gridCardIconButton[data-grid-favorite-action='true'] {
+.gridContent[data-grid-density='narrow'] .gridCard {
+  gap: 2px;
+  padding: 4px;
+}
+
+.gridContent[data-grid-density='narrow'] .gridCardTopRow {
+  justify-content: flex-end;
+}
+
+.gridContent[data-grid-density='narrow'] .gridCardCheckboxWrap,
+.gridContent[data-grid-density='narrow'] .gridCardKindLabel,
+.gridContent[data-grid-density='narrow'] .gridCardIconButton[data-grid-favorite-action='true'],
+.gridContent[data-grid-density='narrow'] .gridCardModified,
+.gridContent[data-grid-density='narrow'] .gridCardMediaPlaceholder > :global(.ant-typography) {
+  display: none;
+}
+
+.gridContent[data-grid-density='narrow'] .gridCardMedia {
+  height: var(--s3d-control-size-touch);
+  min-height: var(--s3d-control-size-touch);
+  padding: 0;
+  border: 0;
+}
+
+.gridContent[data-grid-density='narrow'] .gridCardPreviewFrame :global(img),
+.gridContent[data-grid-density='narrow'] .gridCardPreviewFrame :global([role='img']) {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* Keep actions reachable without expanding every tile to fit three buttons.
+   Selection remains on the full filename/size button (aria-pressed), and
+   Favorite is also present in the object's action menu. */
+@media (max-width: 991px), (pointer: coarse) {
+  .gridContent .gridCardCheckboxWrap,
+  .gridContent .gridCardIconButton[data-grid-favorite-action='true'] {
     display: none;
   }
 
-  .gridCardMedia {
-    aspect-ratio: 1;
-    padding: 3px;
-    border-radius: 7px;
+  .gridContent .gridCardIconButton {
+    width: var(--s3d-control-size-touch);
+    height: var(--s3d-control-size-touch);
+    min-width: var(--s3d-control-size-touch) !important;
+    min-height: var(--s3d-control-size-touch) !important;
   }
 
-  .gridCardPreviewFrame,
-  .gridCardMediaPlaceholder {
-    height: 100%;
+  .gridContent .gridCardTopRow {
+    min-height: var(--s3d-control-size-touch) !important;
   }
 
-  .gridCardPreviewFrame :global(img),
-  .gridCardPreviewFrame :global([role='img']) {
-    width: 100% !important;
-    height: 100% !important;
-  }
-
-  .gridCardFolderIcon,
-  .gridCardFileIcon {
-    font-size: var(--s3d-icon-size-lg);
-  }
-
-  .gridCardBody {
-    gap: 0;
-  }
-
-  .gridCardTitle {
-    font-size: var(--s3d-font-size-md);
-    line-height: 1.35;
-  }
-
-  .gridCardMetaLine,
-  .gridCardBodyActions {
-    display: none;
+  .gridContent .gridCardBodyButton,
+  .gridContent .gridCardPreviewActionButton {
+    min-width: var(--s3d-control-size-touch) !important;
+    min-height: var(--s3d-control-size-touch) !important;
+    width: 100%;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .gridCard {
+    transition: none;
+  }
+
+  .gridCard:hover {
+    transform: none;
+  }
+}
+
+/* Mobile object tools live in the selection bar: no invisible overlapping hit targets.
+   Folder cards retain their own menu because opening a folder is not selection. */
+.gridCardCompactName { display: none; }
+.gridCardSelectionMark {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-start: 4px;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  background: var(--s3d-color-primary);
+  color: var(--s3d-color-bg-elevated);
+}
+.gridContent[data-grid-density='narrow'] .gridCardFullName { display: none; }
+.gridContent[data-grid-density='narrow'] .gridCardCompactName { display: inline; }
+@media (max-width: 991px), (pointer: coarse) {
+  .gridContent .gridCard[data-object-key] .gridCardTopRow { display: none; }
+  .gridCard:hover { transform: none; }
+}
+
+.gridCardCompactFolderIcon { display: none; }
+@media (max-width: 991px), (pointer: coarse) {
+  .gridCardCompactFolderIcon { display: inline-flex; font-size: 16px; }
+  .gridCardDropTarget .gridCardMediaFolder { display: none; }
+  .gridContent[data-grid-density='narrow'] .gridCardDropTarget .gridCardTopRow { justify-content: space-between; }
+}
+
+.gridCardNameHead, .gridCardNameTail {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+.gridCardNameTail { text-align: left; }

@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Button, Checkbox, Typography } from 'antd'
-import { EllipsisOutlined, ExpandOutlined, FileOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { EllipsisOutlined, FileOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import type { ObjectItem } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
@@ -15,6 +15,7 @@ import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
 import { GRID_CARD_THUMBNAIL_PX } from './objectsPageConstants'
 import { displayNameForKey, isThumbnailKey } from './objectsListUtils'
 import { extensionLabel } from './objectsGridRendererUtils'
+import { compactObjectName } from './compactObjectName'
 
 type UseObjectsObjectGridRendererArgs = Pick<
 	UseObjectsGridRenderersArgs,
@@ -87,6 +88,8 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 		(object: ObjectItem) => {
 			const key = object.key
 			const displayName = displayNameForKey(key, prefix)
+			const compactName = compactObjectName(displayName)
+			const compactSplit = compactName === displayName ? -1 : compactName.indexOf('…')
 			const sizeLabel = formatBytes(object.size)
 			const timeLabel = formatDateTime(object.lastModified, { showSeconds: false })
 			const metaLabel = `${sizeLabel} \u00b7 ${timeLabel}`
@@ -107,7 +110,6 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 				isAdvanced,
 			))
 			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key)
-			const canOpenPreview = canShowThumbnail
 			const buttonMenuOpen =
 				contextMenuState.open &&
 				contextMenuState.kind === 'object' &&
@@ -188,9 +190,19 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 							</div>
 						</div>
 
+						{isSelected ? <span className={gridStyles.gridCardSelectionMark} aria-hidden="true">✓</span> : null}
 						<div className={gridStyles.gridCardMedia}>
 							{canShowThumbnail ? (
-								<div className={gridStyles.gridCardPreviewFrame}>
+								<button
+									type="button"
+									className={`${gridStyles.gridCardPreviewFrame} ${gridStyles.gridCardPreviewActionButton}`}
+									aria-label={`Open large preview for ${key}`}
+									title={`Open large preview for ${displayName}`}
+									onClick={(event) => {
+										event.stopPropagation()
+										onOpenLargePreviewForKey(key)
+									}}
+								>
 									<LazyObjectThumbnail
 										api={api}
 										apiToken={apiToken}
@@ -204,7 +216,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 										etag={object.etag || undefined}
 										lastModified={object.lastModified || undefined}
 									/>
-								</div>
+								</button>
 							) : (
 								<div className={gridStyles.gridCardMediaPlaceholder}>
 									<FileOutlined className={gridStyles.gridCardFileIcon} />
@@ -221,34 +233,25 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 								aria-pressed={isSelected}
 								onClick={(event) => {
 									event.stopPropagation()
-									selectObjectFromPointerEvent(event as unknown as ReactMouseEvent, key)
+									selectObjectFromCheckboxEvent(event as unknown as ReactMouseEvent, key)
 								}}
 							>
 								<Typography.Text className={gridStyles.gridCardTitle} title={key}>
-									{highlightText(displayName)}
+									<span className={gridStyles.gridCardFullName}>{highlightText(displayName)}</span>
+									<span className={gridStyles.gridCardCompactName} aria-hidden="true">
+										{compactSplit < 0 ? highlightText(displayName) : <>
+											<span className={gridStyles.gridCardNameHead}>{highlightText(compactName.slice(0, compactSplit))}</span>
+											<span className={gridStyles.gridCardNameTail} dir="rtl"><bdi dir="auto">…{highlightText(compactName.slice(compactSplit + 1))}</bdi></span>
+										</>}
+									</span>
 								</Typography.Text>
 								<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine} title={metaLabel}>
-									{metaLabel}
+									{sizeLabel}
+								</Typography.Text>
+								<Typography.Text type="secondary" className={`${gridStyles.gridCardMetaLine} ${gridStyles.gridCardModified}`} title={timeLabel}>
+									{timeLabel}
 								</Typography.Text>
 							</button>
-							{canOpenPreview ? (
-								<div className={gridStyles.gridCardBodyActions}>
-									<Button
-										size="small"
-										type="text"
-										className={gridStyles.gridCardPreviewActionButton}
-										icon={<ExpandOutlined />}
-										onClick={(event) => {
-											event.preventDefault()
-											event.stopPropagation()
-											onOpenLargePreviewForKey(key)
-										}}
-										aria-label={`Open large preview for ${key}`}
-									>
-										Preview
-									</Button>
-								</div>
-							) : null}
 						</div>
 					</div>
 				</div>

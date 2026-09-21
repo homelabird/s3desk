@@ -101,3 +101,19 @@ func TestApplyEnvConfigOverridesIgnoresEnvWhenFlagWasSet(t *testing.T) {
 		t.Fatalf("JobConcurrency = %d, want 5", cfg.JobConcurrency)
 	}
 }
+
+func TestS3NativeListConfigurationRollbackAndFlagPrecedence(t *testing.T) {
+	t.Setenv("S3_NATIVE_LIST", "false")
+	cfg := config.Config{S3NativeList: true}
+	if err := applyEnvConfigOverrides(&cfg, nil); err != nil || cfg.S3NativeList {
+		t.Fatalf("environment rollback: native=%v err=%v", cfg.S3NativeList, err)
+	}
+	cfg.S3NativeList = true
+	if err := applyEnvConfigOverrides(&cfg, map[string]struct{}{"s3-native-list": {}}); err != nil || !cfg.S3NativeList {
+		t.Fatalf("explicit flag must win: native=%v err=%v", cfg.S3NativeList, err)
+	}
+	t.Setenv("S3_NATIVE_LIST", "invalid")
+	if err := applyEnvConfigOverrides(&cfg, nil); err == nil || !strings.Contains(err.Error(), "S3_NATIVE_LIST") {
+		t.Fatalf("invalid setting must fail: %v", err)
+	}
+}

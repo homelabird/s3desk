@@ -73,6 +73,10 @@ export function useObjectsListVirtualizer({
 		scrollMargin,
 	})
 
+	useLayoutEffect(() => {
+		rowVirtualizer.measure()
+	}, [rowVirtualizer, isCompactList, rowHeightCompactPx, rowHeightWidePx])
+
 	const virtualItems = rowVirtualizer.getVirtualItems()
 	// Convert outer-scroll coordinates to list-local row positions for rendering.
 	const virtualItemsForRender = useMemo(

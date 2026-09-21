@@ -1,3 +1,6 @@
+import { waitForNetworkRetry } from '../../lib/networkRecovery'
+import { planPresignedMultipart, type PresignedMultipartPlan } from './presignedMultipartPlan'
+export { planPresignedMultipart } from './presignedMultipartPlan'
 import { clearNetworkStatus, publishNetworkStatus } from '../../lib/networkStatus'
 import {
 	RequestAbortedError,
@@ -8,8 +11,6 @@ import {
 
 import { normalizeUploadPath, resolveUploadItemPath } from './uploadPaths'
 
-const PRESIGNED_MIN_PART_BYTES = 5 * 1024 * 1024
-const PRESIGNED_MAX_PARTS = 10_000
 const PRESIGNED_UNSAFE_HEADERS = new Set(['accept-encoding', 'connection', 'content-length', 'host', 'user-agent'])
 
 export class PresignedUploadNetworkError extends Error {
@@ -27,33 +28,6 @@ type PresignedUploadItem = {
 	index: number
 }
 
-export type PresignedMultipartPlan = {
-	partSizeBytes: number
-	partCount: number
-}
-
-export const planPresignedMultipart = (args: {
-	fileSize: number
-	partSizeBytes: number
-	thresholdBytes: number
-}): PresignedMultipartPlan | null => {
-	if (!Number.isFinite(args.fileSize) || args.fileSize <= 0) return null
-	if (args.fileSize < args.thresholdBytes) return null
-
-	let partSizeBytes = Math.max(PRESIGNED_MIN_PART_BYTES, Math.ceil(args.partSizeBytes))
-	let partCount = Math.ceil(args.fileSize / partSizeBytes)
-	if (partCount > PRESIGNED_MAX_PARTS) {
-		partSizeBytes = Math.ceil(args.fileSize / PRESIGNED_MAX_PARTS)
-		if (partSizeBytes < PRESIGNED_MIN_PART_BYTES) {
-			partSizeBytes = PRESIGNED_MIN_PART_BYTES
-		}
-		partCount = Math.ceil(args.fileSize / partSizeBytes)
-	}
-
-	if (partCount < 2) return null
-	return { partSizeBytes, partCount }
-}
-
 const applyPresignedHeaders = (xhr: XMLHttpRequest, headers?: Record<string, string>) => {
 	if (!headers) return
 	for (const [key, value] of Object.entries(headers)) {
@@ -63,56 +37,116 @@ const applyPresignedHeaders = (xhr: XMLHttpRequest, headers?: Record<string, str
 	}
 }
 
+// A stall deadline, not a whole-file deadline: long uploads keep running as
+// long as bytes or response progress are observed.
+const PRESIGNED_STALL_TIMEOUT_MS = 120_000
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
+
+class PresignedUploadHTTPError extends Error {
+	readonly status: number
+	readonly retryAfterMs: number
+	constructor(status: number, retryAfterMs: number) {
+		super(`Upload failed (HTTP ${status}). Retry to request a fresh upload link.`)
+		this.name = 'PresignedUploadHTTPError'
+		this.status = status
+		this.retryAfterMs = retryAfterMs
+	}
+}
+
+function retryDelay(value: string | null): number {
+	if (!value) return 500
+	const seconds = /^\d+$/.test(value.trim()) ? Number(value) : Number.NaN
+	const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now()
+	return Number.isFinite(ms) ? Math.min(10_000, Math.max(500, ms)) : 500
+}
+
 const uploadPresignedBlob = (args: {
 	url: string
 	method?: string
 	headers?: Record<string, string>
 	body: Blob
 	onProgress?: (loadedBytes: number) => void
+	stallTimeoutMs?: number
 }): { promise: Promise<{ etag?: string }>; abort: () => void } => {
 	const xhr = new XMLHttpRequest()
-	xhr.open(args.method ?? 'PUT', args.url)
-	applyPresignedHeaders(xhr, args.headers)
-
-	if (args.onProgress) {
-		xhr.upload.onprogress = (e) => {
-			args.onProgress?.(e.loaded)
-		}
+	let settled = false
+	let timer: ReturnType<typeof setTimeout> | undefined
+	let rejectRequest!: (error: Error) => void
+	const clear = () => {
+		if (timer !== undefined) clearTimeout(timer)
+		timer = undefined
+		xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = xhr.onprogress = null
+		xhr.upload.onprogress = null
 	}
-
 	const promise = new Promise<{ etag?: string }>((resolve, reject) => {
-		xhr.onload = () => {
-			if (xhr.status >= 200 && xhr.status < 300) {
-				clearNetworkStatus()
-				resolve({ etag: xhr.getResponseHeader('etag') ?? xhr.getResponseHeader('ETag') ?? undefined })
-				return
+		rejectRequest = (error) => {
+			if (settled) return
+			settled = true
+			clear()
+			reject(error)
+		}
+		const armDeadline = () => {
+			if (settled) return
+			if (timer !== undefined) clearTimeout(timer)
+			timer = setTimeout(() => {
+				rejectRequest(new PresignedUploadNetworkError('Upload stalled. Check your connection and retry.'))
+				xhr.abort()
+			}, args.stallTimeoutMs ?? PRESIGNED_STALL_TIMEOUT_MS)
+		}
+		try {
+			xhr.open(args.method ?? 'PUT', args.url)
+			applyPresignedHeaders(xhr, args.headers)
+			xhr.upload.onprogress = (event) => {
+				if (settled) return
+				armDeadline()
+				args.onProgress?.(Math.min(args.body.size, Math.max(0, event.loaded)))
 			}
-			if (xhr.status === 0) {
+			xhr.onprogress = armDeadline
+			xhr.onload = () => {
+				if (settled) return
+				if (xhr.status >= 200 && xhr.status < 300) {
+					const etag = xhr.getResponseHeader('etag') ?? undefined
+					settled = true
+					clear()
+					clearNetworkStatus()
+					resolve({ etag })
+					return
+				}
+				if (xhr.status === 0) {
+					rejectRequest(new PresignedUploadNetworkError())
+					return
+				}
+				if (RETRYABLE_STATUS.has(xhr.status)) {
+					publishNetworkStatus({ kind: 'unstable', message: `Upload temporarily unavailable (HTTP ${xhr.status}).` })
+				}
+				// Do not display raw provider XML/HTML: it can contain bearer URLs.
+				rejectRequest(new PresignedUploadHTTPError(xhr.status, retryDelay(xhr.getResponseHeader('Retry-After'))))
+			}
+			xhr.onerror = () => {
 				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
-				reject(new PresignedUploadNetworkError())
-				return
+				rejectRequest(new PresignedUploadNetworkError())
 			}
-			if (xhr.status >= 500 || xhr.status === 0) {
-				publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
-			}
-			reject(new Error(xhr.responseText ? `upload failed: ${xhr.responseText}` : `upload failed (HTTP ${xhr.status || '0'})`))
+			xhr.onabort = () => rejectRequest(new RequestAbortedError())
+			xhr.ontimeout = () => rejectRequest(new PresignedUploadNetworkError('Upload request timed out.'))
+			armDeadline()
+			xhr.send(args.body)
+		} catch (error) {
+			rejectRequest(error instanceof Error ? error : new Error('Unable to start upload'))
 		}
-		xhr.onerror = () => {
-			publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
-			reject(new PresignedUploadNetworkError())
-		}
-		xhr.onabort = () => reject(new RequestAbortedError())
 	})
-
-	xhr.send(args.body)
-	return { promise, abort: () => xhr.abort() }
+	return { promise, abort: () => {
+		if (settled) return
+		rejectRequest(new RequestAbortedError())
+		xhr.abort()
+	} }
 }
 
 const uploadPresignedBlobWithRetry = (
 	args: Parameters<typeof uploadPresignedBlob>[0],
-	maxNetworkRetries = 1,
+	maxRetries = 1,
 ): ReturnType<typeof uploadPresignedBlob> => {
 	let active: ReturnType<typeof uploadPresignedBlob> | undefined
+	const retryController = new AbortController()
 	let aborted = false
 	const promise = (async () => {
 		for (let attempt = 0; ; attempt += 1) {
@@ -121,16 +155,29 @@ const uploadPresignedBlobWithRetry = (
 			try {
 				return await active.promise
 			} catch (error) {
-				if (!(error instanceof PresignedUploadNetworkError) || attempt >= maxNetworkRetries) throw error
+				if (aborted) throw new RequestAbortedError()
+				const transient = error instanceof PresignedUploadNetworkError ||
+					(error instanceof PresignedUploadHTTPError && RETRYABLE_STATUS.has(error.status))
+				if (!transient || attempt >= maxRetries) throw error
+				const delayMs = error instanceof PresignedUploadHTTPError ? error.retryAfterMs : Math.min(8000, 500 * 2 ** attempt)
+				if (error instanceof PresignedUploadNetworkError) {
+					await waitForNetworkRetry(delayMs, retryController.signal)
+				} else {
+					await new Promise<void>((resolve, reject) => {
+						const abort = () => { clearTimeout(timer); reject(new RequestAbortedError()) }
+						const timer = setTimeout(() => { retryController.signal.removeEventListener('abort', abort); resolve() }, delayMs)
+						retryController.signal.addEventListener('abort', abort, { once: true })
+						if (retryController.signal.aborted) abort()
+					})
+				}
+			} finally {
+				active = undefined
 			}
 		}
 	})()
 	return {
 		promise,
-		abort: () => {
-			aborted = true
-			active?.abort()
-		},
+		abort: () => { aborted = true; active?.abort(); retryController.abort() },
 	}
 }
 
@@ -145,6 +192,12 @@ export const uploadPresignedFilesWithProgress = (args: {
 	partConcurrency: number
 	chunkThresholdBytes: number
 	chunkSizeBytes: number
+	chunkSizeBytesByPath?: Record<string, number>
+	existingChunksByPath?: Record<string, number[]>
+	preserveSessionOnFailure?: boolean
+	networkRetries?: number
+	/** Test/host override; omitted in application calls. */
+	stallTimeoutMs?: number
 }): { promise: Promise<UploadFilesResult>; abort: () => void } => {
 	const totalBytes = args.items.reduce((acc, item) => acc + (item.file?.size ?? 0), 0)
 	if (args.items.length === 0) {
@@ -195,10 +248,12 @@ export const uploadPresignedFilesWithProgress = (args: {
 	const singleItems: PresignedUploadItem[] = []
 	const multipartItems: Array<{ info: PresignedUploadItem; plan: PresignedMultipartPlan }> = []
 	for (const info of validItems) {
+		const rawPath = resolveUploadItemPath(info.item)
+		const hasExistingState = args.existingChunksByPath?.[rawPath] !== undefined
 		const plan = planPresignedMultipart({
 			fileSize: info.size,
-			partSizeBytes: args.chunkSizeBytes,
-			thresholdBytes: args.chunkThresholdBytes,
+			partSizeBytes: args.chunkSizeBytesByPath?.[rawPath] ?? args.chunkSizeBytes,
+			thresholdBytes: hasExistingState ? 1 : args.chunkThresholdBytes,
 		})
 		if (plan) multipartItems.push({ info, plan })
 		else singleItems.push(info)
@@ -207,15 +262,29 @@ export const uploadPresignedFilesWithProgress = (args: {
 	const singleConcurrency = Math.max(1, args.singleConcurrency)
 	const multipartConcurrency = Math.max(1, args.multipartFileConcurrency)
 	const partConcurrency = Math.max(1, args.partConcurrency)
-	const aborters: Array<() => void> = []
+	const aborters = new Set<() => void>()
+	const control = new AbortController()
 	let aborted = false
+	let firstFailure: { error: unknown } | undefined
+	const stop = (error?: unknown) => {
+		if (error !== undefined && !firstFailure) firstFailure = { error }
+		aborted = true
+		control.abort()
+		for (const abort of aborters) abort()
+	}
+	const awaitActive = async (handle: ReturnType<typeof uploadPresignedBlobWithRetry>) => {
+		aborters.add(handle.abort)
+		if (aborted) handle.abort()
+		try { return await handle.promise } finally { aborters.delete(handle.abort) }
+	}
 
 	const uploadSingleItem = async (info: PresignedUploadItem) => {
 		const presigned = await args.api.uploads.presignUpload(args.profileId, args.uploadId, {
 			path: info.path,
 			contentType: info.contentType,
 			size: info.size,
-		})
+		}, control.signal)
+		if (aborted) throw new RequestAbortedError()
 		if (presigned.mode !== 'single' || !presigned.url) {
 			throw new Error('unexpected presigned response for single upload')
 		}
@@ -225,17 +294,12 @@ export const uploadPresignedFilesWithProgress = (args: {
 			method: presigned.method,
 			headers: presigned.headers,
 			body: info.item.file,
-			onProgress: (loaded) => updateLoaded(key, loaded),
-		})
-		aborters.push(handle.abort)
-		try {
-			await handle.promise
-		} catch (error) {
-			// A single PUT can have reached object storage even when its browser response
-			// is lost. Let commit's HEAD/size verification decide instead of re-uploading
-			// the file through the web server.
-			if (!(error instanceof PresignedUploadNetworkError)) throw error
-		}
+			onProgress: (loaded) => { if (!aborted) updateLoaded(key, loaded) },
+			stallTimeoutMs: args.stallTimeoutMs,
+		}, Math.min(4, Math.max(0, args.networkRetries ?? 1)))
+		// A failed/lost PUT response is not evidence that this upload succeeded.
+		// HEAD size can match an older object; never commit on that assumption.
+		await awaitActive(handle)
 		updateLoaded(key, info.size)
 	}
 
@@ -248,13 +312,21 @@ export const uploadPresignedFilesWithProgress = (args: {
 				fileSize: info.size,
 				partSizeBytes: plan.partSizeBytes,
 			},
-		})
+		}, control.signal)
+		if (aborted) throw new RequestAbortedError()
 		if (presigned.mode !== 'multipart' || !presigned.multipart) {
 			throw new Error('unexpected presigned response for multipart upload')
 		}
 		try {
 			const partSizeBytes = presigned.multipart.partSizeBytes
 			const partCount = presigned.multipart.partCount
+			if (partSizeBytes !== plan.partSizeBytes || partCount !== plan.partCount) throw new Error('Multipart geometry changed; start a new upload.')
+			const existing = new Set(args.existingChunksByPath?.[resolveUploadItemPath(info.item)] ?? [])
+			for (const part of existing) {
+				if (!Number.isInteger(part) || part < 0 || part >= partCount) throw new Error('Invalid resumable part index')
+				const start = part * partSizeBytes
+				updateLoaded(`multi:${info.index}:${part + 1}`, Math.min(partSizeBytes, info.size - start))
+			}
 			const parts = presigned.multipart.parts ?? []
 			if (parts.length === 0) {
 				throw new Error('multipart presign returned no parts')
@@ -280,10 +352,10 @@ export const uploadPresignedFilesWithProgress = (args: {
 					method: part.method,
 					headers: part.headers,
 					body: blob,
-					onProgress: (loaded) => updateLoaded(key, loaded),
-				})
-				aborters.push(handle.abort)
-				const res = await handle.promise
+					onProgress: (loaded) => { if (!aborted) updateLoaded(key, loaded) },
+					stallTimeoutMs: args.stallTimeoutMs,
+				}, Math.min(4, Math.max(0, args.networkRetries ?? 1)))
+				const res = await awaitActive(handle)
 				const etag = res.etag?.trim()
 				if (!etag) {
 					throw new Error(`missing etag for part ${partNumber}`)
@@ -298,19 +370,31 @@ export const uploadPresignedFilesWithProgress = (args: {
 					const current = nextPart
 					if (current > partCount) return
 					nextPart += 1
-					const partResult = await uploadPart(current)
-					completed.push(partResult)
+					if (existing.has(current - 1)) continue
+					try {
+						const partResult = await uploadPart(current)
+						completed.push(partResult)
+					} catch (error) {
+						// Stop siblings immediately, before allSettled waits for them.
+						stop(error)
+						throw error
+					}
 				}
 			}
 
 			const workers = Array.from({ length: Math.min(partConcurrency, partCount) }, () => partWorker())
-			await Promise.all(workers)
+			// Drain siblings before exposing failure; no late writes into a retried session.
+			const settled = await Promise.allSettled(workers)
+			const rejected = settled.find((entry): entry is PromiseRejectedResult => entry.status === 'rejected')
+			if (rejected) throw rejected.reason
+			if (aborted) throw new RequestAbortedError()
 			await args.api.uploads.completeMultipartUpload(args.profileId, args.uploadId, {
 				path: info.path,
-				parts: completed,
-			})
+				// Empty means server-authoritative ListParts (no stale client ETags).
+				parts: existing.size > 0 ? [] : completed,
+			}, control.signal)
 		} catch (err) {
-			await args.api.uploads.abortMultipartUpload(args.profileId, args.uploadId, { path: info.path }).catch(() => {})
+			if (!args.preserveSessionOnFailure) await args.api.uploads.abortMultipartUpload(args.profileId, args.uploadId, { path: info.path }).catch(() => {})
 			throw err
 		}
 	}
@@ -327,16 +411,15 @@ export const uploadPresignedFilesWithProgress = (args: {
 				try {
 					await uploadSingleItem(singleItems[currentIndex])
 				} catch (err) {
-					if (!aborted) {
-						aborted = true
-						for (const abort of aborters) abort()
-					}
+					stop(err)
 					throw err
 				}
 			}
 		}
 		const workers = Array.from({ length: Math.min(singleConcurrency, singleItems.length) }, () => worker())
-		await Promise.all(workers)
+		const settled = await Promise.allSettled(workers)
+		const rejected = settled.find((entry): entry is PromiseRejectedResult => entry.status === 'rejected')
+		if (rejected) throw rejected.reason
 	}
 
 	const runMultiparts = async () => {
@@ -352,28 +435,28 @@ export const uploadPresignedFilesWithProgress = (args: {
 				try {
 					await uploadMultipartItem(entry.info, entry.plan)
 				} catch (err) {
-					if (!aborted) {
-						aborted = true
-						for (const abort of aborters) abort()
-					}
+					stop(err)
 					throw err
 				}
 			}
 		}
 		const workers = Array.from({ length: Math.min(multipartConcurrency, multipartItems.length) }, () => worker())
-		await Promise.all(workers)
+		const settled = await Promise.allSettled(workers)
+		const rejected = settled.find((entry): entry is PromiseRejectedResult => entry.status === 'rejected')
+		if (rejected) throw rejected.reason
 	}
 
 	const promise = (async () => {
-		await Promise.all([runSingles(), runMultiparts()])
+		const settled = await Promise.allSettled([runSingles(), runMultiparts()])
+		if (firstFailure) throw firstFailure.error
+		const rejected = settled.find((entry): entry is PromiseRejectedResult => entry.status === 'rejected')
+		if (rejected) throw rejected.reason
+		if (aborted) throw new RequestAbortedError()
 		return { skipped }
 	})()
 
 	return {
 		promise,
-		abort: () => {
-			aborted = true
-			for (const abort of aborters) abort()
-		},
+		abort: () => stop(),
 	}
 }

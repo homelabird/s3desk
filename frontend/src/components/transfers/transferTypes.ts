@@ -1,10 +1,11 @@
+import type { PendingUploadCommit } from './uploadCommitRecovery'
 export type TransfersTab = 'downloads' | 'uploads'
 
-export type DownloadTaskStatus = 'queued' | 'waiting' | 'running' | 'succeeded' | 'failed' | 'canceled'
+export type DownloadTaskStatus = 'queued' | 'waiting' | 'running' | 'ready' | 'handed_off' | 'succeeded' | 'failed' | 'canceled'
 export type UploadTaskStatus = 'queued' | 'staging' | 'commit' | 'waiting_job' | 'succeeded' | 'failed' | 'canceled'
 
 export function isTransferFinished(status: DownloadTaskStatus | UploadTaskStatus): boolean {
-	return status === 'succeeded' || status === 'failed' || status === 'canceled'
+	return status === 'handed_off' || status === 'succeeded' || status === 'failed' || status === 'canceled'
 }
 
 export type DownloadTaskBase = {
@@ -21,6 +22,9 @@ export type DownloadTaskBase = {
 	etaSeconds: number
 	error?: string
 	filenameHint?: string
+	/** In-memory only; never serialize signed bearer URLs. */
+	nativeDownloadUrl?: string
+	nativeDownloadExpiresAtMs?: number
 }
 
 export type ObjectDownloadTask = DownloadTaskBase & {
@@ -54,7 +58,17 @@ export type UploadTaskPreview = {
 	height: number
 }
 
+export type UploadPreparation = {
+	phase: 'fingerprinting' | 'verifying'
+	fileName: string
+	fileIndex: number
+	fileCount: number
+	loadedBytes: number
+	totalBytes: number
+}
+
 export type UploadTask = {
+	pendingCommit?: PendingUploadCommit
 	id: string
 	profileId: string
 	bucket: string
@@ -79,6 +93,8 @@ export type UploadTask = {
 	retryFileHandleState?: 'remembered' | 'selection_required'
 	resumeChunkSizeBytes?: number
 	resumeFileSize?: number
-	resumeFiles?: Array<{ path: string; size: number; chunkSizeBytes: number }>
+	resumeFiles?: Array<{ path: string; size: number; chunkSizeBytes: number; fingerprint?: string }>
 	preview?: UploadTaskPreview
+	/** Local read progress, not uploaded bytes; never restored as live progress. */
+	preparation?: UploadPreparation
 }

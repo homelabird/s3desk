@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Improvements
+
+- Replace the default MinIO demo with a pinned, authenticated SeaweedFS S3 stack,
+  persistent filer metadata, browser-reachable endpoints, and ordered readiness.
+- Seed sample objects without overwriting existing objects; keep existing MinIO
+  data/profiles separate without retaining a MinIO demo or smoke service.
+- Unify provider-E2E, local live harness, portable backup/restore smoke, GitHub,
+  and GitLab local S3 fixtures on SeaweedFS; remove the obsolete MinIO seeder.
+- Reuse bounded per-profile HTTP pools while preserving endpoint and TLS guards.
+- List S3 objects through native provider cursors instead of replaying rclone
+  listings for each page; retain a configurable legacy path for compatibility.
+- Narrow direct/presigned multipart initialization locks to the individual file.
+- Follow empty filtered pages with valid cursors in the object list and tree.
+- Add focused migration, pooling, contention, cursor and frontend regressions;
+  document synthetic measurements separately from unverified live acceptance.
+
 ## `0.21v-rc4` - 2026-08-21
 
 ### New Features

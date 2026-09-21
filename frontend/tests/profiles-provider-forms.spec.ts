@@ -61,9 +61,9 @@ test('profile edit drawer keeps saved-credential guidance visible', async ({ pag
 	await setupApiMocks(page, [
 		{
 			id: 'existing-profile',
-			name: 'Existing MinIO',
+			name: 'Existing SeaweedFS',
 			provider: 's3_compatible',
-			endpoint: 'http://127.0.0.1:9000',
+			endpoint: 'http://127.0.0.1:8333',
 			region: 'us-east-1',
 			forcePathStyle: true,
 			preserveLeadingSlash: false,
@@ -74,7 +74,7 @@ test('profile edit drawer keeps saved-credential guidance visible', async ({ pag
 	])
 
 	await page.goto('/profiles?advanced=1')
-	await page.getByRole('button', { name: 'Profile tools for Existing MinIO' }).click()
+	await page.getByRole('button', { name: 'Profile tools for Existing SeaweedFS' }).click()
 	await page.getByRole('menuitem', { name: 'Edit' }).click()
 
 	const drawer = page.getByRole('dialog', { name: 'Edit Profile' })

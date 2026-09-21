@@ -324,7 +324,7 @@ describe('useTransfersDownloadQueue', () => {
 		})
 
 		act(() => {
-			result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf' })
+			result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf', expectedBytes: 8 })
 		})
 		await waitFor(() => expect(getObjectDownloadURL).toHaveBeenCalledTimes(1))
 		const taskId = result.current.downloadTasks[0]!.id
@@ -369,7 +369,7 @@ describe('useTransfersDownloadQueue', () => {
 			})
 			return { downloadTasks, downloadAbortByTaskIdRef, ...actions, ...queue }
 		})
-		act(() => result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf' }))
+		act(() => result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf', expectedBytes: 8 }))
 		await waitFor(() => expect(getObjectDownloadURL).toHaveBeenCalledTimes(1))
 		const taskId = result.current.downloadTasks[0]!.id
 		act(() => result.current.cancelDownloadTask(taskId))
@@ -381,12 +381,12 @@ describe('useTransfersDownloadQueue', () => {
 		expect(result.current.downloadAbortByTaskIdRef.current[taskId]).toBe(retryAbort)
 		expect(downloadURLWithProgressMock).not.toHaveBeenCalled()
 		await act(async () => resolveSecond({ url: 'https://example.com/new' }))
-		await waitFor(() => expect(result.current.downloadTasks[0]?.status).toBe('succeeded'))
+		await waitFor(() => expect(result.current.downloadTasks[0]?.status).toBe('handed_off'))
 		expect(saveBlobMock).toHaveBeenCalledTimes(1)
 		expect(downloadURLWithProgressMock).toHaveBeenCalledWith('https://example.com/new', expect.any(Object))
 	})
 
-	it.each(['object', 'job_artifact', 'object_device'] as const)(
+	it.each(['object', 'object_device'] as const)(
 		'ignores late progress and completion of a canceled %s attempt during retry', async (kind) => {
 			let resolveFirst!: (value: { blob: Blob; contentDisposition: null; contentType: null }) => void
 			let resolveSecond!: (value: { blob: Blob; contentDisposition: null; contentType: null }) => void
@@ -420,9 +420,9 @@ describe('useTransfersDownloadQueue', () => {
 				return { downloadTasks, downloadAbortByTaskIdRef, ...actions, ...queue }
 			})
 			act(() => {
-				if (kind === 'object') result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf' })
-				else if (kind === 'job_artifact') result.current.queueDownloadJobArtifact({ profileId: 'profile-1', jobId: 'job-1' })
-				else result.current.queueDownloadObjectsToDevice({ profileId: 'profile-1', bucket: 'bucket-a', items: [{ key: 'report.pdf' }], targetDirHandle: createDirectoryHandle('downloads') })
+				if (kind === 'object') result.current.queueDownloadObject({ profileId: 'profile-1', bucket: 'bucket-a', key: 'report.pdf', expectedBytes: 8 })
+
+				else result.current.queueDownloadObjectsToDevice({ profileId: 'profile-1', bucket: 'bucket-a', items: [{ key: 'report.pdf', size: 8 }], targetDirHandle: createDirectoryHandle('downloads') })
 			})
 			await waitFor(() => expect(progress).toHaveLength(1))
 			const taskId = result.current.downloadTasks[0]!.id
@@ -439,12 +439,50 @@ describe('useTransfersDownloadQueue', () => {
 			expect(messageSuccessMock).not.toHaveBeenCalled()
 			act(() => progress[1]!({ loadedBytes: 10, totalBytes: 10 }))
 			await act(async () => resolveSecond({ blob: new Blob(['new']), contentDisposition: null, contentType: null }))
-			await waitFor(() => expect(result.current.downloadTasks[0]?.status).toBe('succeeded'))
+			await waitFor(() => expect(result.current.downloadTasks[0]?.status).toBe(kind === 'object_device' ? 'succeeded' : 'handed_off'))
 			expect(result.current.downloadTasks[0]?.loadedBytes).toBe(10)
 			expect(saveBlobMock).toHaveBeenCalledTimes(kind === 'object_device' ? 0 : 1)
-			expect(messageSuccessMock).toHaveBeenCalledTimes(1)
+			expect(messageSuccessMock).toHaveBeenCalledTimes(kind === 'object_device' ? 1 : 0)
 		},
 	)
+
+	it.each([
+		{ label: 'small mobile object', kind: 'object', bytes: 8, conservative: true },
+		{ label: 'large desktop object', kind: 'object', bytes: 1024 ** 3, conservative: false },
+		{ label: 'unknown-size object', kind: 'object', bytes: undefined, conservative: false },
+		{ label: 'ZIP artifact', kind: 'job_artifact', bytes: 8, conservative: false },
+	] as const)('prepares $label without buffering and distinguishes handoff from saving', async ({ kind, bytes, conservative }) => {
+		const prepare = vi.fn().mockResolvedValue({ url: 'https://example.com/download-proxy?sig=scoped', expiresAt: new Date(Date.now() + 300_000).toISOString() })
+		const api = createMockApiClient({ objects: { getObjectDownloadURL: prepare }, jobs: { getJobArtifactURL: prepare } })
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
+			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
+			const downloadEstimatorByTaskIdRef = useRef({})
+			const actions = useTransfersTaskActions({
+				setDownloadTasks, setUploadTasks: vi.fn(), downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef,
+				uploadAbortByTaskIdRef: useRef({}), uploadEstimatorByTaskIdRef: useRef({}), uploadItemsByTaskIdRef: useRef({}),
+			})
+			const queue = useTransfersDownloadQueue({
+				api, downloadLinkProxyEnabled: false, downloadConcurrency: 1, conservativeTransfers: conservative,
+				downloadTasks, setDownloadTasks, downloadAbortByTaskIdRef, downloadEstimatorByTaskIdRef,
+				updateDownloadTask: actions.updateDownloadTask, openTransfers: vi.fn(),
+			})
+			return { downloadTasks, ...actions, ...queue }
+		})
+		act(() => {
+			if (kind === 'object') result.current.queueDownloadObject({ profileId: 'p', bucket: 'b', key: 'test.zip', expectedBytes: bytes })
+			else result.current.queueDownloadJobArtifact({ profileId: 'p', jobId: 'j', waitForJob: false })
+		})
+		await waitFor(() => expect(result.current.downloadTasks[0]?.status).toBe('ready'))
+		expect(downloadURLWithProgressMock).not.toHaveBeenCalled()
+		expect(saveBlobMock).not.toHaveBeenCalled()
+		expect(messageSuccessMock).not.toHaveBeenCalled()
+		const id = result.current.downloadTasks[0]!.id
+		act(() => result.current.handOffDownloadTask(id))
+		expect(result.current.downloadTasks[0]?.status).toBe('handed_off')
+		expect(result.current.downloadTasks[0]?.nativeDownloadUrl).toBeUndefined()
+		expect(messageSuccessMock).not.toHaveBeenCalled()
+	})
 
 	it('batches waiting jobs, preserves canceled tasks, and aborts polling on unmount', async () => {
 		vi.useFakeTimers()

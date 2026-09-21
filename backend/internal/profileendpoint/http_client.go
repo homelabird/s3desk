@@ -19,6 +19,9 @@ type HTTPClientOptions struct {
 func NewHTTPClient(opts HTTPClientOptions) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
+	// Preserve useful per-host concurrency instead of the default two idle sockets.
+	transport.MaxIdleConns = 64
+	transport.MaxIdleConnsPerHost = 16
 	transport.DialContext = GuardedDialContext(opts.AllowRemote)
 	if opts.TLSConfig != nil {
 		transport.TLSClientConfig = opts.TLSConfig
@@ -133,5 +136,13 @@ func ipMatchesNetwork(ip net.IP, network string) bool {
 		return ip.To4() == nil
 	default:
 		return true
+	}
+}
+
+// CloseIdleConnections must cross the wrapper so cache eviction and shutdown
+// actually release the underlying transport's idle sockets.
+func (rt guardedRoundTripper) CloseIdleConnections() {
+	if closer, ok := rt.base.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
 	}
 }

@@ -69,10 +69,20 @@ func (s *server) streamRcloneDownload(
 	ctx rcloneAPIErrorContext,
 	details map[string]any,
 ) {
+	abort := func() {
+		if proc.abort != nil {
+			proc.abort()
+		}
+		_ = proc.stdout.Close()
+	}
+	defer abort()
 	buf := make([]byte, downloadStreamProbeBytes)
 	n, readErr := proc.stdout.Read(buf)
 
 	if n == 0 {
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			abort()
+		}
 		waitErr := proc.wait()
 		stderr := strings.TrimSpace(proc.stderr.String())
 		switch {
@@ -106,6 +116,7 @@ func (s *server) streamRcloneDownload(
 	}
 
 	if readErr != nil {
+		abort()
 		_ = proc.wait()
 		writeError(w, http.StatusBadGateway, ctx.DefaultCode, ctx.DefaultMessage, detailsWithError(details, readErr))
 		return
@@ -114,11 +125,15 @@ func (s *server) streamRcloneDownload(
 	applyDownloadHeaders(w.Header(), entry, key)
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(buf[:n]); err != nil {
+		abort()
 		_ = proc.wait()
-		return
+		panic(http.ErrAbortHandler)
 	}
 
 	_, copyErr := copyWithTransferBuffer(w, proc.stdout)
+	if copyErr != nil {
+		abort()
+	}
 	waitErr := proc.wait()
 	stderr := strings.TrimSpace(proc.stderr.String())
 	if copyErr == nil && waitErr == nil {
@@ -141,4 +156,5 @@ func (s *server) streamRcloneDownload(
 		fields["stderr"] = redactRcloneDiagnostic(stderr)
 	}
 	logging.WarnFields("download stream ended early", fields)
+	panic(http.ErrAbortHandler)
 }

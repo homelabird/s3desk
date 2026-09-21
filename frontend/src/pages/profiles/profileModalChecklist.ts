@@ -145,7 +145,7 @@ function buildS3Items(args: BuildProfileProviderChecklistArgs): ProfileChecklist
 					section: 'advanced',
 					configured: values.forcePathStyle || values.preserveLeadingSlash,
 					complete: true,
-					optionalDetail: 'Use for MinIO, Ceph, strict key semantics, or custom S3 gateways.',
+					optionalDetail: 'Use for SeaweedFS, Ceph, strict key semantics, or custom S3 gateways.',
 					configuredDetail: 'One or more compatibility toggles are enabled.',
 					errors,
 				}),

@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
 )
 
 type objectDownloadHTTPError struct {
@@ -81,9 +82,25 @@ func (svc objectDownloadHTTPService) executeGet(r *http.Request) (*rcloneProcess
 }
 
 func (svc objectDownloadHTTPService) handleDownloadObject(w http.ResponseWriter, r *http.Request) {
+	secrets, bucket, objectKey, _, prepareErr := svc.prepareDownloadObject(r)
+	if prepareErr == nil {
+		release, ok := svc.server.acquireDownloadSlot(w, r, secrets.ID)
+		if !ok {
+			return
+		}
+		defer release()
+		if svc.server.cfg.S3NativeDownload && rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+			svc.server.serveS3Download(w, r, secrets, bucket, objectKey)
+			return
+		}
+	}
 	proc, entry, key, streamCtx, streamDetails, rcloneErr, stderr, rcloneCtx, rcloneDetails, err := svc.executeGet(r)
 	switch {
 	case proc != nil && entry != nil:
+		entry.Size = -1
+		entry.Hashes = nil
+		entry.ModTime = ""
+		w.Header().Set("Accept-Ranges", "none")
 		svc.server.streamRcloneDownload(w, proc, *entry, key, streamCtx, streamDetails)
 		return
 	case rcloneErr != nil:

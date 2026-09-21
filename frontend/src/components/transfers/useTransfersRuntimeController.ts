@@ -46,6 +46,7 @@ export type TransfersRuntimeUiActions = {
 	clearFinishedTransfers: () => void
 	cancelDownloadTask: (taskId: string) => void
 	retryDownloadTask: (taskId: string) => void
+	handOffDownloadTask: (taskId: string) => void
 	removeDownloadTask: (taskId: string) => void
 	cancelUploadTask: (taskId: string) => void
 	retryUploadTask: (taskId: string) => void
@@ -83,6 +84,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 	const {
 		downloadLinkProxyEnabled,
 		downloadTaskConcurrency,
+		conservativeTransfers,
 		uploadChunkFileConcurrency,
 		uploadTaskConcurrency,
 		uploadResumeConversionEnabled,
@@ -94,6 +96,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		uploadTasks,
 		setDownloadTasks,
 		setUploadTasks,
+		onPersistenceWarning: args.notifications.warning,
 	})
 
 	useEffect(() => {
@@ -134,6 +137,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		updateDownloadTask,
 		cancelDownloadTask,
 		retryDownloadTask,
+		handOffDownloadTask,
 		removeDownloadTask,
 		clearCompletedDownloads,
 		updateUploadTask,
@@ -195,6 +199,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		api,
 		downloadLinkProxyEnabled,
 		downloadConcurrency: downloadTaskConcurrency,
+		conservativeTransfers,
 		downloadTasks,
 		setDownloadTasks,
 		downloadAbortByTaskIdRef,
@@ -275,6 +280,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 			clearFinishedTransfers,
 			cancelDownloadTask,
 			retryDownloadTask,
+		handOffDownloadTask,
 			removeDownloadTask,
 			cancelUploadTask,
 			retryUploadTask,
@@ -290,6 +296,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 			removeDownloadTask,
 			removeUploadTask,
 			retryDownloadTask,
+		handOffDownloadTask,
 			retryUploadTask,
 			setTab,
 		],

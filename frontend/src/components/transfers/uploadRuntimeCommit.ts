@@ -1,3 +1,4 @@
+import { pendingCommitRequest } from './uploadCommitRecovery'
 import type { QueryClient } from '@tanstack/react-query'
 import type { APIClientShape, UploadFileItem } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
@@ -28,7 +29,8 @@ type CommitUploadAndTrackJobArgs = {
 }
 
 export async function commitUploadAndTrackJob(args: CommitUploadAndTrackJobArgs) {
-	const commitReq = buildUploadCommitRequest(args.task, args.items)
+	const commitReq = args.task.pendingCommit ? pendingCommitRequest(args.task.pendingCommit) : buildUploadCommitRequest(args.task, args.items)
+	args.updateUploadTask(args.taskId, task => ({ ...task, pendingCommit: { uploadId: args.uploadId, body: JSON.stringify(commitReq) ?? '' } }))
 	const response = await withJobQueueRetry(() =>
 		args.api.uploads.commitUpload(args.task.profileId, args.uploadId, commitReq),
 	)
@@ -37,6 +39,7 @@ export async function commitUploadAndTrackJob(args: CommitUploadAndTrackJobArgs)
 	args.updateUploadTask(args.taskId, (task) => ({
 		...task,
 		status: 'waiting_job',
+		pendingCommit: undefined,
 		finishedAtMs: undefined,
 		jobId: response.jobId,
 		loadedBytes: 0,

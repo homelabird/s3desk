@@ -20,6 +20,8 @@ type UseFullAppShellViewModelArgs = {
 	shellScopeKey: string
 	selectedKey: string
 	navOpen: boolean
+	sidebarCollapsed: boolean
+	toggleSidebar: () => void
 	openNav: () => void
 	closeNav: () => void
 	openSettings: () => void
@@ -42,6 +44,8 @@ export function useFullAppShellViewModel({
 	shellScopeKey,
 	selectedKey,
 	navOpen,
+	sidebarCollapsed,
+	toggleSidebar,
 	openNav,
 	closeNav,
 	openSettings,
@@ -61,6 +65,8 @@ export function useFullAppShellViewModel({
 			shellScopeKey,
 			selectedKey,
 			navOpen,
+			sidebarCollapsed,
+			toggleSidebar,
 			settingsOpen,
 			openNav,
 			closeNav,
@@ -75,6 +81,8 @@ export function useFullAppShellViewModel({
 			shellScopeKey,
 			selectedKey,
 			navOpen,
+			sidebarCollapsed,
+			toggleSidebar,
 			settingsOpen,
 			openNav,
 			closeNav,

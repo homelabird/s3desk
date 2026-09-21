@@ -35,8 +35,11 @@ func (s *server) directMultipartState(
 	chunkIndex, chunkTotal int,
 	fileSize, chunkSize int64,
 ) (store.MultipartUpload, *uploadHTTPError) {
-	s.multipartStateMu.Lock()
-	defer s.multipartStateMu.Unlock()
+	unlock, lockErr := s.multipartStateMu.Lock(r.Context(), multipartStateKey{profileID, uploadID, relPath})
+	if lockErr != nil {
+		return store.MultipartUpload{}, &uploadHTTPError{status: http.StatusRequestTimeout, code: "request_timeout", message: "multipart request canceled while waiting for the object"}
+	}
+	defer unlock()
 
 	meta, found, err := s.store.GetMultipartUpload(r.Context(), profileID, uploadID, relPath)
 	if err != nil {

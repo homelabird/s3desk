@@ -69,7 +69,7 @@ func buildMetaCapabilities(cfg cfgpkg.Config, dbBackend db.Backend) models.MetaC
 			Export:         serverBackupExport,
 			RestoreStaging: serverBackupRestoreStaging,
 		},
-		Providers: providerCapabilityMatrix(cfg.UploadDirectStream),
+		Providers: providerCapabilityMatrix(cfg.UploadDirectStream, cfg.UploadProxyOnly),
 	}
 }
 

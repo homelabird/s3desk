@@ -1,3 +1,4 @@
+import { subscribePageLifecycle } from '../../lib/pageLifecycle'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 
@@ -148,6 +149,15 @@ export function useTransfersUploadJobEvents({
 			refreshSignalRef.current = null
 		}
 	}, [])
+
+	useEffect(() => {
+		if (!hasPendingUploadJobs) return
+		const controller = new AbortController()
+		const unsubscribe = subscribePageLifecycle({ onForeground: () => {
+			void refreshWaitingJobs(() => controller.signal.aborted, controller.signal, true)
+		} })
+		return () => { controller.abort(); unsubscribe() }
+	}, [hasPendingUploadJobs, refreshWaitingJobs])
 
 	useEffect(() => {
 		if (!hasPendingUploadJobs) {

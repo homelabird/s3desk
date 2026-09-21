@@ -47,7 +47,7 @@ describe('JobsToolbar', () => {
 		render(
 			<JobsToolbar
 				scopeKey="token-a:profile-1"
-				activeProfileName="MinIO Demo"
+				activeProfileName="SeaweedFS Demo"
 				isOffline={false}
 				uploadSupported
 				uploadDisabledReason={null}
@@ -137,7 +137,7 @@ describe('JobsToolbar', () => {
 		render(
 			<JobsToolbar
 				scopeKey="token-a:profile-1"
-				activeProfileName="MinIO Demo"
+				activeProfileName="SeaweedFS Demo"
 				isOffline={false}
 				uploadSupported
 				uploadDisabledReason={null}
@@ -203,7 +203,7 @@ describe('JobsToolbar', () => {
 		const { rerender } = render(
 			<JobsToolbar
 				scopeKey="token-a:profile-1"
-				activeProfileName="MinIO Demo"
+				activeProfileName="SeaweedFS Demo"
 				isOffline={false}
 				uploadSupported
 				uploadDisabledReason={null}
@@ -255,7 +255,7 @@ describe('JobsToolbar', () => {
 		rerender(
 			<JobsToolbar
 				scopeKey="token-b:profile-1"
-				activeProfileName="MinIO Demo"
+				activeProfileName="SeaweedFS Demo"
 				isOffline={false}
 				uploadSupported
 				uploadDisabledReason={null}
@@ -306,7 +306,7 @@ describe('JobsToolbar', () => {
 		render(
 			<JobsToolbar
 				scopeKey="token-a:profile-1"
-				activeProfileName="MinIO Demo"
+				activeProfileName="SeaweedFS Demo"
 				isOffline={false}
 				uploadSupported
 				uploadDisabledReason={null}

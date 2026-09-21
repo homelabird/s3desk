@@ -112,17 +112,10 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 					}
 					const commonPrefixes = Array.isArray(resp.commonPrefixes) ? resp.commonPrefixes : []
 					for (const p of commonPrefixes) prefixesSet.add(p)
-					const pageEmpty = commonPrefixes.length === 0 && resp.items.length === 0
 					if (!resp.isTruncated) break
 					const nextToken = resp.nextContinuationToken ?? undefined
-					if (pageEmpty) {
-						log(debugEnabled, 'warn', 'Tree listing returned empty page; stopping pagination', {
-							bucket,
-							prefix: nodeKey,
-							nextToken,
-						})
-						break
-					}
+					// A filtered S3 page may be empty but have a valid continuation token.
+					// Keep the existing cycle and total-page guards, not an item-count guard.
 					if (!nextToken) {
 						log(debugEnabled, 'warn', 'Tree listing missing continuation token; stopping pagination', {
 							bucket,

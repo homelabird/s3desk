@@ -33,7 +33,7 @@ describe('planPresignedMultipart', () => {
 })
 
 describe('uploadPresignedFilesWithProgress', () => {
-	it('does not proxy-fallback a single PUT whose response remains ambiguous', async () => {
+	it('rejects a single PUT whose response remains ambiguous instead of trusting a same-size old object', async () => {
 		const originalXMLHttpRequest = globalThis.XMLHttpRequest
 		let attempts = 0
 		class NetworkErrorXMLHttpRequest {
@@ -69,7 +69,7 @@ describe('uploadPresignedFilesWithProgress', () => {
 				chunkSizeBytes: 512,
 			})
 
-			await expect(handle.promise).resolves.toEqual({ skipped: 0 })
+			await expect(handle.promise).rejects.toMatchObject({ name: 'PresignedUploadNetworkError' })
 			expect(attempts).toBe(2)
 			expect(presignUpload).toHaveBeenCalledTimes(1)
 		} finally {
@@ -144,7 +144,7 @@ describe('uploadPresignedFilesWithProgress', () => {
 					{ number: 1, etag: '"etag"' },
 					{ number: 2, etag: '"etag"' },
 				],
-			})
+			}, expect.any(AbortSignal))
 		} finally {
 			globalThis.XMLHttpRequest = originalXMLHttpRequest
 		}

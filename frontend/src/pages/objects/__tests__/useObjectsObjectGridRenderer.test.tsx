@@ -90,6 +90,8 @@ describe('useObjectsObjectGridRenderer', () => {
 		expect(favoriteButton.className).toContain(styles.gridCardIconButton)
 		expect(objectActionsButton.className).toContain(styles.gridCardIconButton)
 		expect(previewButton.className).toContain(styles.gridCardPreviewActionButton)
+		expect(screen.getByTestId('grid-thumbnail').closest('button')).toBe(previewButton)
+		expect(screen.queryByRole('button', { name: 'Preview', exact: true })).not.toBeInTheDocument()
 
 		fireEvent.click(selectButton)
 		expect(onSelect).toHaveBeenCalledWith('preview.png')

@@ -30,6 +30,7 @@ export function TransfersRuntimeUiHost({ uiState, uiActions }: TransfersRuntimeU
 		onClearFinished: uiActions.clearFinishedTransfers,
 		onCancelDownload: uiActions.cancelDownloadTask,
 		onRetryDownload: uiActions.retryDownloadTask,
+		onHandOffDownload: uiActions.handOffDownloadTask,
 		onRemoveDownload: uiActions.removeDownloadTask,
 		onCancelUpload: uiActions.cancelUploadTask,
 		onRetryUpload: uiActions.retryUploadTask,

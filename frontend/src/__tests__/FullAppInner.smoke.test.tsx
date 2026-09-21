@@ -199,6 +199,24 @@ describe('FullAppInner header', () => {
 		expect(screen.getByRole('button', { name: 'App menu' })).toBeInTheDocument()
 	})
 
+	it('collapses and reopens desktop navigation from a persistent header control', async () => {
+		mockViewportWidth(1280)
+		mockShellApi()
+		renderShell()
+		const toggle = await screen.findByRole('button', { name: 'Close navigation' })
+		expect(toggle).toHaveAttribute('aria-controls', 'app-navigation-sidebar')
+		expect(toggle).not.toHaveAttribute('aria-haspopup')
+		expect(toggle).toHaveAttribute('aria-expanded', 'true')
+		await act(async () => { fireEvent.click(toggle) })
+		expect(toggle).toHaveAttribute('aria-label', 'Open navigation')
+		expect(toggle).toHaveAttribute('aria-expanded', 'false')
+		expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument()
+		expect(window.localStorage.getItem('appSidebarCollapsed')).toBe('true')
+		await act(async () => { fireEvent.click(toggle) })
+		expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument()
+		expect(toggle).toHaveAttribute('aria-expanded', 'true')
+	})
+
 	it('keeps low-frequency settings and logout actions in the desktop app menu', async () => {
 		mockViewportWidth(1280)
 		mockShellApi()

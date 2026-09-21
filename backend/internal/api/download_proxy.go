@@ -216,9 +216,8 @@ func requestScheme(r *http.Request) string {
 }
 
 func (s *server) resolveDownloadProxyEntry(ctx context.Context, secrets models.ProfileSecrets, token downloadProxyToken, bucket, key string) (rcloneListEntry, bool, string, error) {
-	if entry, ok := downloadProxyEntryFromToken(token); ok {
-		return entry, true, "", nil
-	}
+	// Signed UI hints are never authoritative representation metadata.
+	_ = token
 	entry, stderr, err := s.rcloneStat(ctx, secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "download-proxy-stat")
 	if err != nil {
 		return rcloneListEntry{}, false, stderr, err

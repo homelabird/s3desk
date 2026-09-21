@@ -340,7 +340,7 @@ func normalizeRuntimeRoute(method string, route string) (string, bool) {
 		route = strings.TrimSuffix(route, "/")
 	}
 	switch {
-	case route == "/download-proxy":
+	case route == "/download-proxy" || route == "/artifact-download-proxy":
 		return method + " " + route, true
 	case strings.HasPrefix(route, "/api/v1"):
 		trimmed := strings.TrimPrefix(route, "/api/v1")

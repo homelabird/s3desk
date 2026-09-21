@@ -1,5 +1,5 @@
 import type { RequestOptions } from '../retryTransport'
-import type { Job, JobCreateRequest, JobsListResponse } from '../types'
+import type { Job, JobCreateRequest, JobsListResponse, PresignedURLResponse } from '../types'
 
 type RequestFn = <T>(path: string, init: RequestInit, options?: RequestOptions) => Promise<T>
 type FetchResponseFn = (path: string, init: RequestInit, options?: RequestOptions) => Promise<Response>
@@ -98,4 +98,8 @@ export function cancelJob(request: RequestFn, profileId: string, jobId: string):
 
 export function retryJob(request: RequestFn, profileId: string, jobId: string): Promise<Job> {
 	return request(`/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' }, { profileId })
+}
+
+export function getJobArtifactURL(request: RequestFn, args: { profileId: string; jobId: string; signal?: AbortSignal }): Promise<PresignedURLResponse> {
+	return request(`/jobs/${encodeURIComponent(args.jobId)}/artifact-url`, { method: 'GET', signal: args.signal }, { profileId: args.profileId })
 }

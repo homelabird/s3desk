@@ -1,5 +1,7 @@
 import { useCallback, type MouseEvent } from 'react'
 
+import { isTouchSelectionEvent } from '../../lib/mobileInput'
+
 type UseObjectsSelectionHandlersArgs = {
 	orderedVisibleObjectKeys: string[]
 	lastSelectedObjectKey: string | null
@@ -26,7 +28,7 @@ export function useObjectsSelectionHandlers({
 	const selectObjectFromPointerEvent = useCallback(
 		(event: MouseEvent, key: string) => {
 			const isRange = event.shiftKey && !!lastSelectedObjectKey
-			const isToggle = event.metaKey || event.ctrlKey
+			const isToggle = event.metaKey || event.ctrlKey || isTouchSelectionEvent(event)
 
 			if (isRange && lastSelectedObjectKey) {
 				const range = buildKeyRange(orderedVisibleObjectKeys, lastSelectedObjectKey, key)

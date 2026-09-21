@@ -11,7 +11,7 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/profileendpoint"
-	"s3desk/internal/profiletls"
+	"s3desk/internal/profilehttp"
 )
 
 type ProfileOptions struct {
@@ -59,11 +59,11 @@ func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string, opt
 		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(secrets.AccessKeyID, secrets.SecretAccessKey, derefString(secrets.SessionToken))),
 	}
 
-	tlsCfg, err := profiletls.BuildConfig(secrets)
+	httpClient, err := profilehttp.Client(secrets, opts.AllowRemote)
 	if err != nil {
 		return nil, err
 	}
-	cfg.HTTPClient = newHTTPClient(tlsCfg, opts.AllowRemote)
+	cfg.HTTPClient = httpClient
 
 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = secrets.ForcePathStyle

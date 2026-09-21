@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestValidateRequestURLAllowsQueryString(t *testing.T) {
@@ -348,5 +350,31 @@ func TestNewHTTPClientRejectsRedirectToResolvedMetadataAddress(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "blocked metadata host") {
 		t.Fatalf("client.Get() error=%v, want blocked metadata host", err)
+	}
+}
+
+func TestGuardedClientCloseIdleConnectionsReachesTransport(t *testing.T) {
+	var closed atomic.Int32
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	srv.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateClosed {
+			closed.Add(1)
+		}
+	}
+	srv.Start()
+	defer srv.Close()
+	client := NewHTTPClient(HTTPClientOptions{})
+	resp, err := client.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	client.CloseIdleConnections()
+	deadline := time.Now().Add(time.Second)
+	for closed.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if closed.Load() == 0 {
+		t.Fatal("guarded wrapper swallowed CloseIdleConnections")
 	}
 }

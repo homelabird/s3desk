@@ -107,7 +107,7 @@ describe('profileModalValidation', () => {
 
 	it('requires https endpoints when TLS insecure skip verify is enabled', async () => {
 		const values = buildValues({
-			endpoint: 'http://minio.internal:9000',
+			endpoint: 'http://seaweedfs.internal:9000',
 			tlsInsecureSkipVerify: true,
 		})
 		const viewState = buildProfileModalViewState({ values })

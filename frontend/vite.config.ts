@@ -152,6 +152,9 @@ export default defineConfig(({ mode }) => {
 		},
 		server: {
 			proxy: {
+				// Signed browser links are root-level routes, not API-token calls.
+				'/download-proxy': { target: devProxyTarget, changeOrigin: false },
+				'/artifact-download-proxy': { target: devProxyTarget, changeOrigin: false },
 				'/api': {
 					target: devProxyTarget,
 					changeOrigin: false,

@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3listing"
 )
 
 type objectListHTTPError struct {
@@ -88,6 +90,15 @@ func (svc objectListHTTPService) executePrepared(metric *storageMetric, r *http.
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectListHTTPError(http.StatusBadRequest, "invalid_request", "prefixesOnly requires delimiter '/'", nil)
 	}
 
+	// Keep legacy o:/p: cursors on their original route during a rolling refresh.
+	// New S3 listings use true provider pagination; other clouds still use rclone.
+	if svc.server.cfg.S3NativeList && rcloneconfig.IsS3LikeProvider(secrets.Provider) && delimiter == "/" && (token == "" || s3listing.IsToken(token)) {
+		resp, err := svc.executeS3(metric, r, secrets, bucket, prefix, delimiter, token, maxKeys, prefixesOnly)
+		return resp, nil, "", rcloneAPIErrorContext{}, nil, err
+	}
+	if s3listing.IsToken(token) {
+		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectListHTTPError(http.StatusBadRequest, "invalid_request", "listing mode changed; refresh the listing", nil)
+	}
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
@@ -227,8 +238,7 @@ func (svc objectListHTTPService) handleListObjects(w http.ResponseWriter, r *htt
 		return
 	}
 	if httpErr, ok := err.(*objectListHTTPError); ok {
-		respErr := buildAPIErrorResponse(httpErr.code, httpErr.message, httpErr.details)
-		writeJSON(w, httpErr.status, respErr)
+		writeError(w, httpErr.status, httpErr.code, httpErr.message, httpErr.details)
 		return
 	}
 	respErr := buildAPIErrorResponse("internal_error", "failed to list objects", nil)

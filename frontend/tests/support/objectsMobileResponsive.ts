@@ -144,7 +144,7 @@ export async function installObjectsMobileResponsiveFixtures(page: Page) {
 				return {
 					json: {
 						url: downloadUrl,
-						expiresAt: '2024-01-01T01:00:00Z',
+						expiresAt: new Date(Date.now() + 300_000).toISOString(),
 					},
 				}
 			},

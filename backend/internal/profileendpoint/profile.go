@@ -12,7 +12,7 @@ func ValidateProfileSecretsEndpoints(secrets models.ProfileSecrets, allowRemote 
 		if err := validateProfileEndpointField("endpoint", secrets.Endpoint, allowRemote); err != nil {
 			return err
 		}
-		if err := validateProfileEndpointField("publicEndpoint", secrets.PublicEndpoint, allowRemote); err != nil {
+		if err := ValidatePublicURL("publicEndpoint", &secrets.PublicEndpoint, allowRemote); err != nil {
 			return err
 		}
 		if secrets.TLSInsecureSkipVerify {

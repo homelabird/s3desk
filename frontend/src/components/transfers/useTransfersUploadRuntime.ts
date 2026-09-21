@@ -59,7 +59,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			if (!current) return
 
 			let items = getUploadItems(args.uploadItemsByTaskIdRef, taskId)
-			if (!items || items.length === 0) {
+			if (!items || items.length === 0 || current.retryFileHandleState === 'selection_required') {
 				args.updateUploadTask(taskId, (t) => ({
 					...t,
 					retryFileHandleState: 'selection_required',
@@ -104,7 +104,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			if (!current || current.status !== 'queued') return
 
 			const items = getUploadItems(args.uploadItemsByTaskIdRef, taskId)
-			if (!items || items.length === 0) {
+			if ((!items || items.length === 0) && !task.pendingCommit) {
 				args.updateUploadTask(taskId, (t) => ({
 					...t,
 					status: 'failed',
@@ -122,7 +122,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				notifications: args.notifications,
 				taskId,
 				task: current,
-				items,
+				items: items ?? [],
 				uploadCapabilityByProfileId: args.uploadCapabilityByProfileId,
 				uploadDirectStream: args.uploadDirectStream,
 				uploadChunkFileConcurrency: args.uploadChunkFileConcurrency,

@@ -13,7 +13,7 @@ API_BASE_URL = os.environ.get("API_BASE_URL", "").rstrip("/")
 if not API_BASE_URL:
     API_BASE_URL = BASE_URL if BASE_URL.endswith("/api/v1") else f"{BASE_URL}/api/v1"
 API_TOKEN = os.environ.get("API_TOKEN", "change-me")
-MINIO_ENDPOINT = os.environ.get("E2E_MINIO_ENDPOINT", "http://minio:9000")
+S3_ENDPOINT = os.environ.get("E2E_S3_ENDPOINT", "http://seaweedfs:8333")
 AZURITE_ENDPOINT = os.environ.get("E2E_AZURITE_ENDPOINT", "http://azurite:10000/devstoreaccount1")
 # rclone's GCS endpoint handling drops /storage/v1; add a second v1 to keep /storage/v1/b.
 GCS_ENDPOINT = os.environ.get("E2E_GCS_ENDPOINT", "http://fake-gcs-server:4443/storage/v1/v1")
@@ -568,22 +568,22 @@ def run_scenario(name: str, create_profile_payload: dict, bucket: str, endpoint_
 def main() -> int:
     wait_for_server()
 
-    # MinIO (S3 compatible)
+    # SeaweedFS (S3 compatible)
     run_scenario(
-        "minio",
+        "seaweedfs",
         {
             "provider": "s3_compatible",
-            "name": "e2e-minio",
-            "endpoint": MINIO_ENDPOINT,
+            "name": "e2e-seaweedfs",
+            "endpoint": S3_ENDPOINT,
             "region": "us-east-1",
-            "accessKeyId": "minioadmin",
-            "secretAccessKey": "minioadmin",
+            "accessKeyId": os.environ.get("E2E_S3_ACCESS_KEY", "demo-seaweedfs"),
+            "secretAccessKey": os.environ.get("E2E_S3_SECRET_KEY", "demo-seaweedfs-secret"),
             "forcePathStyle": True,
             "preserveLeadingSlash": False,
             "tlsInsecureSkipVerify": False,
         },
-        bucket="e2e-minio",
-        endpoint_note=MINIO_ENDPOINT,
+        bucket="e2e-seaweedfs",
+        endpoint_note=S3_ENDPOINT,
     )
 
     # Azurite (Azure Blob)

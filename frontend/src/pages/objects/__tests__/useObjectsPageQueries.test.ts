@@ -69,7 +69,7 @@ function buildProfile(overrides: Partial<Profile> = {}): Profile {
 		id: 'profile-1',
 		name: 'Primary Profile',
 		provider: 's3_compatible',
-		endpoint: 'http://127.0.0.1:9000',
+		endpoint: 'http://127.0.0.1:8333',
 		region: 'us-east-1',
 		forcePathStyle: false,
 		preserveLeadingSlash: false,
@@ -118,7 +118,7 @@ describe('getNextObjectsContinuationToken', () => {
 		})
 	})
 
-	it('stops pagination when a truncated page returns no objects or prefixes', () => {
+	it('continues after an empty filtered page with a valid continuation token', () => {
 		const onWarn = vi.fn()
 
 		const nextToken = getNextObjectsContinuationToken({
@@ -135,12 +135,8 @@ describe('getNextObjectsContinuationToken', () => {
 			onWarn,
 		})
 
-		expect(nextToken).toBeUndefined()
-		expect(onWarn).toHaveBeenCalledWith('List objects returned empty page; stopping pagination', {
-			bucket: 'bucket-a',
-			prefix: 'photos/',
-			nextToken: 'page-2',
-		})
+		expect(nextToken).toBe('page-2')
+		expect(onWarn).not.toHaveBeenCalled()
 	})
 
 	it('stops pagination when the next token repeats the current page token', () => {

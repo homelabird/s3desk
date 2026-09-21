@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DownloadTask, UploadTask } from '../transferTypes'
 import { clearPersistedTransfersStorage, useTransfersPersistence } from '../useTransfersPersistence'
 
-const INTERRUPTED_MESSAGE = 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.'
+const DOWNLOAD_INTERRUPTED = 'Download interrupted. Retry requests a new download; check the browser download manager first.'
+const UPLOAD_INTERRUPTED = 'Upload interrupted. Select the same file(s) and Retry; confirmed chunks are reused when available.'
 
 function buildObjectDownloadTask(id: string, status: DownloadTask['status']): DownloadTask {
 	return {
@@ -113,9 +114,9 @@ describe('useTransfersPersistence', () => {
 		})
 
 		expect(result.current.downloadTasks[0]?.status).toBe('canceled')
-		expect(result.current.downloadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
+		expect(result.current.downloadTasks[0]?.error).toBe(DOWNLOAD_INTERRUPTED)
 		expect(result.current.uploadTasks[0]?.status).toBe('canceled')
-		expect(result.current.uploadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
+		expect(result.current.uploadTasks[0]?.error).toBe(UPLOAD_INTERRUPTED)
 		expect(result.current.uploadTasks[0]?.retryFileHandleState).toBe('selection_required')
 		expect(result.current.downloadTasks[0]?.finishedAtMs).toBeTypeOf('number')
 		expect(result.current.uploadTasks[0]?.finishedAtMs).toBeTypeOf('number')

@@ -140,10 +140,6 @@ func (svc uploadMultipartHTTPService) prepareComplete(r *http.Request) uploadMul
 		prepared.err = uploadMultipartInvalidPathError()
 		return prepared
 	}
-	if len(req.Parts) == 0 {
-		prepared.err = uploadMultipartInvalidPartsError()
-		return prepared
-	}
 
 	meta, uploadErr := svc.server.loadMultipartUploadMeta(r.Context(), session.profileID, session.uploadID, relPath)
 	if uploadErr != nil {
@@ -155,12 +151,35 @@ func (svc uploadMultipartHTTPService) prepareComplete(r *http.Request) uploadMul
 		prepared.err = uploadErr
 		return prepared
 	}
+	if len(req.Parts) == 0 {
+		parts, err := svc.server.listMultipartParts(r.Context(), client, meta)
+		if err != nil {
+			prepared.err = newUploadProviderError("failed to verify multipart parts", err, nil)
+			return prepared
+		}
+		req.Parts, uploadErr = verifiedRemoteCompletionParts(parts, meta)
+		if uploadErr != nil {
+			prepared.err = uploadErr
+			return prepared
+		}
+	}
 	completed, uploadErr := buildMultipartCompletionParts(req.Parts)
 	if uploadErr != nil {
 		prepared.err = uploadErr
 		return prepared
 	}
 
+	expectedCount, countErr := expectedMultipartPartCount(meta.FileSize, meta.ChunkSize)
+	if countErr != nil || len(completed) != expectedCount {
+		prepared.err = uploadMultipartInvalidPartsError()
+		return prepared
+	}
+	for index, part := range completed {
+		if part.PartNumber == nil || int(*part.PartNumber) != index+1 {
+			prepared.err = uploadMultipartInvalidPartsError()
+			return prepared
+		}
+	}
 	prepared.meta = meta
 	prepared.client = client
 	prepared.completed = completed

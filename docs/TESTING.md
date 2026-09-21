@@ -727,7 +727,7 @@ cd frontend
 E2E_LIVE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 E2E_API_TOKEN=s3desk-e2e-token-0123456789abcdef012345 npm run test:e2e
 ```
 
-Live Playwright runs do not start the managed mock Vite server. Set `PLAYWRIGHT_BASE_URL` or `BASE_URL` to the already-running S3Desk UI URL, or run `scripts/run_live_e2e_local.sh` from the repository root to rebuild the frontend and start the local backend/MinIO harness automatically.
+Live Playwright runs do not start the managed mock Vite server. Set `PLAYWRIGHT_BASE_URL` or `BASE_URL` to the already-running S3Desk UI URL, or run `scripts/run_live_e2e_local.sh` from the repository root to rebuild the frontend and start the local backend/SeaweedFS harness automatically.
 Use `docs/ci/e2e_live.env.example` as the starting point for live Playwright environment variables.
 Use `docs/ci/provider_live_validation.env.example` as the starting point for backend live-provider smoke variables.
 
@@ -771,3 +771,28 @@ by port, including wildcard and IPv6 bindings, and fails before starting the
 backend if another process owns that port.
 Set `UPLOAD_DIRECT_STREAM=false` when a live fallback test must exercise the
 staging-only capability matrix; it defaults to `true` to match normal runtime.
+
+
+## SeaweedFS and backend I/O regression checks
+
+All local S3 demo, provider-E2E, portable smoke and live-harness environments use
+SeaweedFS. The migration guard prevents reintroducing local MinIO services,
+images, credentials and the obsolete seed script.
+
+```bash
+python3 scripts/check_demo_seaweedfs_test.py
+python3 scripts/check_seaweedfs_unified_test.py
+./scripts/check_backend_performance_offline.sh test
+./scripts/check_backend_performance_offline.sh bench
+node --experimental-strip-types --test scripts/frontend_pagination_offline.test.mjs
+(cd backend && go test -race ./internal/profilehttp ./internal/profileendpoint ./internal/keyedmutex ./internal/s3listing ./internal/s3client ./internal/api ./cmd/server)
+(cd frontend && npm run test:unit -- src/pages/objects/__tests__/useObjectsPageQueries.test.ts src/pages/objects/__tests__/useObjectsTree.test.tsx)
+```
+
+The offline Go script copies the actual dependency-free packages into a temporary
+Go 1.23 module; it does not change the project's Go 1.25.13 toolchain or validate
+AWS SDK/API integration. The Node check requires Node 22.6+ and exercises the
+actual pure TypeScript pagination helper, not React hooks or browser behavior.
+Benchmark delays model a handshake and slow provider initialization: they are
+not SeaweedFS throughput measurements. See
+[the investigation](SEAWEEDFS_BACKEND_INVESTIGATION.md) for results and live checks.

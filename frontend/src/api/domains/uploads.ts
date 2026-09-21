@@ -40,19 +40,21 @@ export function createUpload(
 	}, { profileId, timeoutMs: DEFAULT_TIMEOUT_MS })
 }
 
-export function presignUpload(request: RequestFn, profileId: string, uploadId: string, req: UploadPresignRequest): Promise<UploadPresignResponse> {
+export function presignUpload(request: RequestFn, profileId: string, uploadId: string, req: UploadPresignRequest, signal?: AbortSignal): Promise<UploadPresignResponse> {
 	return request(`/uploads/${encodeURIComponent(uploadId)}/presign`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(req),
+		signal,
 	}, { profileId })
 }
 
-export function completeMultipartUpload(request: RequestFn, profileId: string, uploadId: string, req: UploadMultipartCompleteRequest): Promise<void> {
+export function completeMultipartUpload(request: RequestFn, profileId: string, uploadId: string, req: UploadMultipartCompleteRequest, signal?: AbortSignal): Promise<void> {
 	return request(`/uploads/${encodeURIComponent(uploadId)}/multipart/complete`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(req),
+		signal,
 	}, { profileId })
 }
 

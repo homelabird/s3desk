@@ -225,7 +225,7 @@
 	flex: 0 0 auto;
 }
 
-@media (max-width: 480px) and (max-height: 640px) {
+@media (max-width: 575px) {
 	.headerStacked {
 		flex-direction: row;
 		align-items: center;
@@ -361,4 +361,21 @@
 		padding-right: max(8px, env(safe-area-inset-right));
 		padding-left: max(8px, env(safe-area-inset-left));
 	}
+}
+
+.desktopSiderCollapsed {
+	border-right: 0;
+	overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.desktopSider {
+		transition: none !important;
+	}
+}
+
+@media (max-width: 575px) {
+  .headerStacked .headerLeading { flex: 0 0 auto; }
+  .headerStacked .headerProfileRow { min-width: 0; }
+  .headerStacked .headerProfileSelect { width: 0; flex: 1 1 0; }
 }

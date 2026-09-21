@@ -12,10 +12,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"crypto/sha256"
+	"encoding/hex"
 	"s3desk/internal/bucketgov"
 	"s3desk/internal/config"
 	"s3desk/internal/jobs"
 	"s3desk/internal/metrics"
+	"s3desk/internal/operationreceipt"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -58,9 +61,30 @@ func New(dep Dependencies) http.Handler {
 	r.Use(api.allowOnlySafeMethods)
 	r.Use(api.requestLogger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Compress(5))
+	r.Use(func(next http.Handler) http.Handler {
+		compressed := middleware.Compress(5)(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p := r.URL.Path
+			if p == "/download-proxy" || p == "/artifact-download-proxy" || strings.HasSuffix(p, "/objects/download") || strings.HasSuffix(p, "/artifact") {
+				next.ServeHTTP(w, r)
+			} else {
+				compressed.ServeHTTP(w, r)
+			}
+		})
+	})
 	r.Use(securityHeaders)
 
+	receiptDir := ""
+	if dep.Config.DataDir != "" {
+		receiptDir = filepath.Join(dep.Config.DataDir, "operation-receipts")
+	}
+	receipts := operationreceipt.New(receiptDir, dep.ShutdownContext)
+	protectOperation := func(next http.Handler) http.Handler {
+		return receipts.Wrap(func(r *http.Request) string {
+			scope := sha256.Sum256([]byte(dep.Config.APIToken + "\x00" + r.Header.Get("X-Profile-Id")))
+			return hex.EncodeToString(scope[:])
+		}, next)
+	}
 	apiRouter := chi.NewRouter()
 	apiRouter.Use(api.requireLocalHost)
 	apiRouter.Use(api.cors)
@@ -71,6 +95,10 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.Post("/realtime-ticket", api.handleCreateRealtimeTicket)
 	apiRouter.Get("/bootstrap", api.handleGetBootstrap)
 	apiRouter.Get("/meta", api.handleGetMeta)
+	apiRouter.Get("/operations/capabilities", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, map[string]any{"version": 1, "durable": receiptDir != "", "retentionSeconds": int(operationreceipt.TTL.Seconds())})
+	})
 	apiRouter.Get("/server/backup", api.handleGetServerBackup)
 	apiRouter.Post("/server/backup/transfer", api.handleTransferServerBackup)
 	apiRouter.Post("/server/restore", api.handleRestoreServerBackup)
@@ -83,6 +111,7 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.With(api.requireStoredProfile).Get("/jobs", api.handleListJobs)
 	apiRouter.With(api.requireStoredProfile).Get("/jobs/{jobId}", api.handleGetJob)
 	apiRouter.With(api.requireStoredProfile).Get("/jobs/{jobId}/artifact", api.handleGetJobArtifact)
+	apiRouter.With(api.requireStoredProfile).Get("/jobs/{jobId}/artifact-url", api.handleGetJobArtifactURL)
 	apiRouter.With(api.requireStoredProfile).Get("/buckets/{bucket}/objects/search", api.handleSearchObjects)
 	apiRouter.With(api.requireStoredProfile).Get("/buckets/{bucket}/objects/index-summary", api.handleGetObjectIndexSummary)
 	apiRouter.With(api.requireStoredProfile).Post("/buckets/{bucket}/objects/favorites", api.handleCreateObjectFavorite)
@@ -162,29 +191,29 @@ func New(dep Dependencies) http.Handler {
 
 		r.Route("/buckets/{bucket}/objects", func(r chi.Router) {
 			r.Get("/", api.handleListObjects)
-			r.Delete("/", api.handleDeleteObjects)
+			r.With(protectOperation).Delete("/", api.handleDeleteObjects)
 		})
 		r.Get("/buckets/{bucket}/objects/meta", api.handleGetObjectMeta)
-		r.Post("/buckets/{bucket}/objects/folder", api.handleCreateObjectFolder)
+		r.With(protectOperation).Post("/buckets/{bucket}/objects/folder", api.handleCreateObjectFolder)
 		r.Get("/buckets/{bucket}/objects/download", api.handleDownloadObject)
 		r.Get("/buckets/{bucket}/objects/download-url", api.handleGetObjectDownloadURL)
 		r.Get("/buckets/{bucket}/objects/favorites", api.handleListObjectFavorites)
 		r.Get("/buckets/{bucket}/objects/thumbnail", api.handleGetObjectThumbnail)
 
 		r.Route("/uploads", func(r chi.Router) {
-			r.Post("/", api.handleCreateUploadSession)
+			r.With(protectOperation).Post("/", api.handleCreateUploadSession)
 			r.Post("/{uploadId}/presign", api.handlePresignUpload)
-			r.Post("/{uploadId}/multipart/complete", api.handleCompleteMultipartUpload)
+			r.With(protectOperation).Post("/{uploadId}/multipart/complete", api.handleCompleteMultipartUpload)
 			r.Post("/{uploadId}/multipart/abort", api.handleAbortMultipartUpload)
 			r.Get("/{uploadId}/chunks", api.handleGetUploadChunks)
 			r.Post("/{uploadId}/chunks/batch", api.handleGetUploadChunksBatch)
-			r.Post("/{uploadId}/commit", api.handleCommitUpload)
+			r.With(protectOperation).Post("/{uploadId}/commit", api.handleCommitUpload)
 			r.Delete("/{uploadId}", api.handleDeleteUploadSession)
 		})
 
-		r.Post("/jobs", api.handleCreateJob)
+		r.With(protectOperation).Post("/jobs", api.handleCreateJob)
 		r.Delete("/jobs/{jobId}", api.handleDeleteJob)
-		r.Post("/jobs/{jobId}/retry", api.handleRetryJob)
+		r.With(protectOperation).Post("/jobs/{jobId}/retry", api.handleRetryJob)
 		r.Post("/jobs/{jobId}/cancel", api.handleCancelJob)
 	})
 
@@ -192,6 +221,8 @@ func New(dep Dependencies) http.Handler {
 
 	r.With(api.requireLocalHost).Get("/download-proxy", api.handleDownloadProxy)
 	r.With(api.requireLocalHost).Head("/download-proxy", api.handleDownloadProxy)
+	r.With(api.requireLocalHost).Get("/artifact-download-proxy", api.handleJobArtifactDownloadProxy)
+	r.With(api.requireLocalHost).Head("/artifact-download-proxy", api.handleJobArtifactDownloadProxy)
 
 	r.With(api.requireLocalHost).Get("/openapi.yml", func(w http.ResponseWriter, r *http.Request) {
 		specPath, ok := findOpenAPISpecPath(dep.Config.StaticDir)

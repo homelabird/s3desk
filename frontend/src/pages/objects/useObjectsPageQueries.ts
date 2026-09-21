@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { queryKeys } from '../../api/queryKeys'
-import type { Bucket, ListObjectsResponse } from '../../api/types'
+import type { Bucket } from '../../api/types'
 import type { ObjectsPageQueriesAPI } from '../../lib/pageApiScopes'
 import { buildProfileCapabilityContext } from '../../lib/profileCapabilityContext'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
@@ -14,6 +14,9 @@ import {
 	OBJECTS_LIST_PAGE_SIZE,
 } from './objectsPageConstants'
 import { logObjectsDebug } from './objectsPageDebug'
+import { getNextObjectsContinuationToken } from './objectsContinuation'
+export { getNextObjectsContinuationToken } from './objectsContinuation'
+
 import { uniquePrefixes } from './objectsListUtils'
 
 type UseObjectsPageQueriesArgs = {
@@ -27,59 +30,9 @@ type UseObjectsPageQueriesArgs = {
 	favoritesOnly: boolean
 }
 
-type GetNextObjectsContinuationTokenArgs = {
-	lastPage: ListObjectsResponse
-	lastPageParam: string | undefined
-	allPageParams: Array<string | undefined>
-	bucket: string
-	prefix: string
-	onWarn?: (message: string, context: Record<string, unknown>) => void
-}
-
 type ObjectsPageParam = {
 	continuationToken: string
 	maxKeys: number
-}
-
-export function getNextObjectsContinuationToken({
-	lastPage,
-	lastPageParam,
-	allPageParams,
-	bucket,
-	prefix,
-	onWarn,
-}: GetNextObjectsContinuationTokenArgs): string | undefined {
-	if (!lastPage.isTruncated) return undefined
-
-	const warnContext = { bucket, prefix }
-	const nextToken = lastPage.nextContinuationToken ?? undefined
-	if (!nextToken) {
-		onWarn?.('List objects missing continuation token; stopping pagination', warnContext)
-		return undefined
-	}
-
-	const lastCommonPrefixes = Array.isArray(lastPage.commonPrefixes) ? lastPage.commonPrefixes : []
-	const pageEmpty = lastPage.items.length === 0 && lastCommonPrefixes.length === 0
-	if (pageEmpty) {
-		onWarn?.('List objects returned empty page; stopping pagination', { ...warnContext, nextToken })
-		return undefined
-	}
-
-	if (typeof lastPageParam === 'string' && lastPageParam && nextToken === lastPageParam) {
-		onWarn?.('List objects repeated continuation token; stopping pagination', { ...warnContext, nextToken })
-		return undefined
-	}
-
-	const seen = new Set<string>()
-	for (const param of allPageParams) {
-		if (typeof param === 'string' && param) seen.add(param)
-	}
-	if (seen.has(nextToken)) {
-		onWarn?.('List objects hit previously seen continuation token; stopping pagination', { ...warnContext, nextToken })
-		return undefined
-	}
-
-	return nextToken
 }
 
 export function useObjectsPageQueries({

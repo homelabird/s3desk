@@ -32,6 +32,9 @@ type Metrics struct {
 	storageOperationDurationMs *prometheus.HistogramVec
 	thumbnailCacheHitsTotal    *prometheus.CounterVec
 	downloadProxyModeTotal     *prometheus.CounterVec
+	downloadActive             prometheus.Gauge
+	downloadRejected           prometheus.Counter
+	downloadDuration           prometheus.Histogram
 
 	eventsConnections       prometheus.Gauge
 	eventsReconnectsTotal   prometheus.Counter
@@ -109,6 +112,9 @@ func New() *Metrics {
 		Help: "Total number of download proxy requests by metadata mode.",
 	}, []string{"mode"})
 
+	m.downloadActive = prometheus.NewGauge(prometheus.GaugeOpts{Name: "download_streams_active", Help: "Active admitted download streams."})
+	m.downloadRejected = prometheus.NewCounter(prometheus.CounterOpts{Name: "download_streams_rejected_total", Help: "Downloads rejected by the stream concurrency limits."})
+	m.downloadDuration = prometheus.NewHistogram(prometheus.HistogramOpts{Name: "download_stream_duration_seconds", Help: "Admitted stream duration including failed or canceled streams.", Buckets: prometheus.ExponentialBuckets(0.5, 2, 16)})
 	m.eventsConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "events_connections",
 		Help: "Number of active realtime connections.",
@@ -145,6 +151,7 @@ func New() *Metrics {
 		m.storageOperationDurationMs,
 		m.thumbnailCacheHitsTotal,
 		m.downloadProxyModeTotal,
+		m.downloadActive, m.downloadRejected, m.downloadDuration,
 		m.eventsConnections,
 		m.eventsReconnectsTotal,
 		m.maintenanceCleanupTotal,
@@ -357,4 +364,22 @@ func (m *Metrics) ObserveMaintenanceCycle(duration time.Duration) {
 		ms = 0
 	}
 	m.maintenanceCycleMs.Observe(ms)
+}
+
+func (m *Metrics) ObserveDownloadAdmission(admitted bool) {
+	if m == nil {
+		return
+	}
+	if admitted {
+		m.downloadActive.Inc()
+	} else {
+		m.downloadRejected.Inc()
+	}
+}
+func (m *Metrics) FinishDownloadStream(duration time.Duration) {
+	if m == nil {
+		return
+	}
+	m.downloadActive.Dec()
+	m.downloadDuration.Observe(duration.Seconds())
 }

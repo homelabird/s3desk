@@ -92,3 +92,24 @@ describe('useObjectsSelectionHandlers', () => {
 		expect(lastSelectedObjectKey).toBe('docs/b.txt')
 	})
 })
+
+// Touch users have no Ctrl/Command modifier. Keep mouse single-click semantics.
+describe('touch selection', () => {
+	it('toggles A, then B, then B back off while preserving A', () => {
+		let selection = new Set<string>()
+		const { result } = renderHook(() => useObjectsSelectionHandlers({
+			orderedVisibleObjectKeys: ['A', 'B'], lastSelectedObjectKey: null,
+			setSelectedKeys: (next) => { selection = typeof next === 'function' ? next(selection) : next },
+			setLastSelectedObjectKey: vi.fn(),
+		}))
+		const tap = { ...createPointerEvent(), nativeEvent: { pointerType: 'touch' } } as unknown as React.MouseEvent
+		act(() => result.current.selectObjectFromPointerEvent(tap, 'A'))
+		expect([...selection]).toEqual(['A'])
+		act(() => result.current.selectObjectFromPointerEvent(tap, 'B'))
+		expect([...selection]).toEqual(['A', 'B'])
+		act(() => result.current.selectObjectFromPointerEvent(tap, 'B'))
+		expect([...selection]).toEqual(['A'])
+		act(() => result.current.selectObjectFromCheckboxEvent(tap, 'A'))
+		expect(selection.size).toBe(0)
+	})
+})

@@ -19,7 +19,7 @@ func (svc profileListHTTPService) executeList(r *http.Request) ([]models.Profile
 	if err != nil {
 		return nil, err
 	}
-	return decorateProfiles(profiles, svc.server.cfg.UploadDirectStream), nil
+	return decorateProfiles(profiles, svc.server.cfg.UploadDirectStream, svc.server.cfg.UploadProxyOnly), nil
 }
 
 func (svc profileListHTTPService) handleListProfiles(w http.ResponseWriter, r *http.Request) {

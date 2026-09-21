@@ -196,7 +196,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		expect(downloadUrl.pathname).toBe('/download-proxy')
 	})
 
-	test('separates thumbnail selection, action menus, and folder taps in the four-column grid', async ({ page }) => {
+	test('separates filename selection, thumbnail preview, action menus, and folder taps in the four-column grid', async ({ page }) => {
 		for (const width of [320, 360, 390, 412]) {
 			await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
 			await openObjectsMobilePage(page)
@@ -208,13 +208,20 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 			const card = objectsListRow(page, 'preview.png')
 			await expect(card).toBeVisible()
-			await card.locator('[class*="gridCardPreviewFrame"]').tap()
+			await card.getByRole('button', { name: 'Select object preview.png' }).tap()
 			await expect(card.getByRole('button', { name: 'Select object preview.png' })).toHaveAttribute('aria-pressed', 'true')
-			const actions = card.getByRole('button', { name: 'Object actions for preview.png' })
+			const actions = page.getByTestId('objects-selection-bar').getByRole('button', { name: 'Selection tools' })
 			await expect(actions).toHaveAttribute('aria-expanded', 'false')
 			await expectMinTouchTarget(actions)
 			const selectionBar = page.getByTestId('objects-selection-bar')
 			await expect(selectionBar.getByText('preview.png', { exact: true })).toBeVisible()
+			const preview = card.getByRole('button', { name: 'Open large preview for preview.png' })
+			await expectMinTouchTarget(preview)
+			await preview.tap()
+			const thumbnailModal = page.getByTestId('objects-image-viewer-modal')
+			await expect(thumbnailModal).toBeVisible()
+			await thumbnailModal.getByRole('button', { name: 'Close' }).click()
+			await expect(card.getByRole('button', { name: 'Select object preview.png' })).toHaveAttribute('aria-pressed', 'true')
 			await actions.tap()
 			const cardMenu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Open large preview' }) }).last()
 			await expect(cardMenu.getByRole('menuitem', { name: 'Add favorite for preview.png' })).toBeVisible()
@@ -226,9 +233,49 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 			await modal.getByRole('button', { name: 'Close' }).click()
 			await expect(modal).toHaveCount(0)
 			await selectionBar.getByRole('button', { name: 'Clear' }).click()
-			await page.getByRole('group', { name: 'Folder reports/' }).locator('[class*="gridCardMedia"]').tap()
+			await page.getByRole('group', { name: 'Folder reports/' }).getByRole('button', { name: 'Open folder reports/' }).tap()
 			await expect(page.getByRole('navigation', { name: 'Location breadcrumb' })).toContainText('reports')
 		}
+	})
+
+    test('toggles separate grid files and uses browser Back to close selection before leaving', async ({ page }) => {
+        await openObjectsMobilePage(page)
+        await page.getByRole('button', { name: /Grid/i }).click()
+        const a = objectsListRow(page, 'alpha.txt').getByRole('button', { name: 'Select object alpha.txt' })
+        const b = objectsListRow(page, 'preview.png').getByRole('button', { name: 'Select object preview.png' })
+        await a.tap()
+        await b.tap()
+        await expect(page.getByRole('status', { name: '2 selected' })).toBeVisible()
+        await b.tap()
+        await expect(a).toHaveAttribute('aria-pressed', 'true')
+        await expect(b).toHaveAttribute('aria-pressed', 'false')
+        await expect(page.getByRole('status', { name: '1 selected' })).toBeVisible()
+        await page.getByRole('button', { name: 'Open navigation' }).tap()
+        await expect(page.getByRole('dialog', { name: 'Navigation' })).toBeVisible()
+        await page.goBack()
+        await expect(page.getByRole('dialog', { name: 'Navigation' })).toHaveCount(0)
+        await expect(a).toHaveAttribute('aria-pressed', 'true')
+        await page.goBack()
+        await expect(a).toHaveAttribute('aria-pressed', 'false')
+        await expect(page.getByTestId('objects-list-controls-root')).toBeVisible()
+    })
+
+	test('keeps compact list rows and restores navigation focus without changing desktop preferences', async ({ page }) => {
+		await openObjectsMobilePage(page)
+		const row = objectsListRow(page, 'alpha.txt')
+		await expectMinTouchTarget(row.getByRole('button', { name: 'Object actions for alpha.txt' }))
+		const height = await row.locator('..').evaluate((element) => element.getBoundingClientRect().height) // e2e-geometry-allow explicit compact object row density budget
+		expect(height).toBeLessThanOrEqual(54)
+		const toggle = page.getByTestId('app-navigation-toggle')
+		await expectMinTouchTarget(toggle)
+		await toggle.tap()
+		const nav = page.getByRole('dialog', { name: 'Navigation' })
+		await expect(nav).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(nav).not.toBeVisible()
+		await expect(toggle).toBeFocused()
+		await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+		await expect.poll(() => page.evaluate(() => window.localStorage.getItem('appSidebarCollapsed'))).toBe('false')
 	})
 
 	test('shows selection actions and clears selected objects on mobile', async ({ page }) => {

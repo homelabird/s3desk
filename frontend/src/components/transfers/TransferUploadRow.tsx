@@ -17,9 +17,12 @@ type TransferUploadRowProps = {
 
 export const TransferUploadRow = memo(function TransferUploadRow(props: TransferUploadRowProps) {
 	const t = props.task
+	const preparation = t.status === 'staging' ? t.preparation : undefined
 	const preview = t.preview
 	const percent = t.totalBytes > 0 ? Math.floor((t.loadedBytes / t.totalBytes) * 100) : 0
-	const progressPercent = t.status === 'queued' ? 0 : percent
+	const progressPercent = t.status === 'queued' ? 0 : preparation
+		? Math.min(100, Math.floor((preparation.loadedBytes / Math.max(1, preparation.totalBytes)) * 100))
+		: percent
 	const status =
 		t.status === 'failed'
 			? 'exception'
@@ -42,7 +45,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 		t.status === 'queued'
 			? 'Queued'
 			: t.status === 'staging'
-				? 'Uploading'
+				? preparation ? 'Checking files' : 'Uploading'
 				: t.status === 'commit'
 				? 'Committing'
 				: t.status === 'waiting_job'
@@ -56,8 +59,9 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 		t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'
 	}`
 	const hasTransferMetrics = t.totalBytes > 0 || t.loadedBytes > 0 || t.speedBps > 0 || t.etaSeconds > 0
-	const progressText =
-		t.status === 'staging'
+	const progressText = preparation
+		? `${preparation.phase === 'verifying' ? 'Verifying original file' : 'Preparing resumable upload'} ${preparation.fileIndex}/${preparation.fileCount}: ${preparation.fileName} · ${formatBytes(preparation.loadedBytes)}/${formatBytes(preparation.totalBytes)} read locally (not uploaded)`
+		: t.status === 'staging'
 			? transferMetricsText
 				: t.status === 'commit'
 					? 'Committing…'
@@ -186,7 +190,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 
 			<div className={styles.rowProgress}>
 				<Progress
-					aria-label={`Upload progress for ${t.label}`}
+					aria-label={`${preparation ? 'File verification' : 'Upload'} progress for ${t.label}`}
 					percent={progressPercent}
 					status={status}
 					showInfo={t.status !== 'queued'}

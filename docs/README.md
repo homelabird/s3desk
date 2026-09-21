@@ -3,6 +3,7 @@
 Keep this folder small. The retained docs are the operator and release references
 that need to stay close to the codebase.
 
+- [SEAWEEDFS_DEMO.md](SEAWEEDFS_DEMO.md): authenticated SeaweedFS demo, seed lifecycle, LAN endpoints, and migration from the old MinIO demo
 - [RUNBOOK.md](RUNBOOK.md): deployment, backup, restore, reverse-proxy, provider egress, and incident operations
 - [TESTING.md](TESTING.md): local checks, focused reproduction script usage (`./scripts/repro_backend_focus.sh`), the minimal CI pair wrapper (`./scripts/check_ci_pair.sh`) including workflow lint but excluding bundle-budget and Playwright lanes, explicit bundle-budget guidance, browser-test lane split and geometry-guard rules, reviewer quick-check guidance, repo-local `actionlint` installation plus workflow lint, and CI-facing test commands
 - [BACKEND_ARCHITECTURE.md](BACKEND_ARCHITECTURE.md): backend package boundaries, handler rules, and extension checklist for job/provider work
@@ -13,6 +14,7 @@ that need to stay close to the codebase.
 - [PROVIDERS.md](PROVIDERS.md): provider support matrix and operator-facing capability notes
 - [PORTABLE_BACKUP.md](PORTABLE_BACKUP.md): portable backup/import scope, workflow, validation, and limits
 - [BUCKET_GOVERNANCE.md](BUCKET_GOVERNANCE.md): shipped governance scope, live validation workflow, and remaining gaps
+- [OBJECTS_DENSITY.md](OBJECTS_DENSITY.md): dense object grid/list geometry, desktop sidebar toggle, mobile touch targets, and validation boundaries
 - [MOBILE_UX_AUDIT.md](MOBILE_UX_AUDIT.md): prioritized mobile-friendly UI/UX audit findings and follow-up focus areas
 - [WEBVIEW_COMPATIBILITY.md](WEBVIEW_COMPATIBILITY.md): browser and embedded-webview support boundaries plus operator validation guidance
 - [WEBVIEW_QA_TEST_CASES.md](WEBVIEW_QA_TEST_CASES.md): operator-facing QA cases for exact webview host-shell validation

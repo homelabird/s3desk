@@ -74,6 +74,9 @@ func (svc uploadSessionHTTPService) prepareCreateUploadSession(r *http.Request) 
 	if mode == uploadModeDirect && !svc.server.cfg.UploadDirectStream {
 		return uploadSessionCreatePreparedRequest{err: newUploadNotSupportedError("direct streaming uploads are disabled", nil)}
 	}
+	if mode == uploadModePresigned && svc.server.cfg.UploadProxyOnly {
+		return uploadSessionCreatePreparedRequest{err: newUploadNotSupportedError("browser-to-storage uploads are disabled; use direct or staging mode", nil)}
+	}
 	if mode == uploadModePresigned {
 		secrets, ok := profileFromContext(r.Context())
 		if !ok {

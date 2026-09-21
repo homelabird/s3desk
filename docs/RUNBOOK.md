@@ -361,3 +361,12 @@ Use these operational thresholds:
 3. Check recent job logs from the `Jobs` page
 4. Verify free disk space and provider credentials
 5. Retry or requeue failed work only after the root cause is understood
+
+## Local demo browser endpoints
+
+The SeaweedFS demo and migration boundaries are documented in
+[SEAWEEDFS_DEMO.md](SEAWEEDFS_DEMO.md). Only that Compose stack sets
+`S3DESK_ALLOWED_LOOPBACK_PUBLIC_ENDPOINT` to one exact browser-facing S3 URL.
+This allows that loopback `publicEndpoint` for local presigning; internal
+endpoints and outbound HTTP requests retain their existing SSRF checks.
+The setting is absent from ordinary remote templates.

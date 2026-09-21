@@ -15,6 +15,7 @@ import type { ObjectItem } from "../../api/types";
 import { logReactRender, measurePerf } from "../../lib/perf";
 import type { ObjectRow } from "./objectsListUtils";
 import type { ObjectsViewMode } from "./objectsTypes";
+import { getObjectsGridLayout } from "./objectsGridLayout";
 import gridStyles from "./ObjectsGridCards.module.css";
 import listStyles from "./ObjectsListView.module.css";
 
@@ -89,21 +90,11 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
     return () => observer.disconnect();
   }, [gridElement]);
 
-  const compactGrid = typeof window !== "undefined" && window.innerWidth <= 768;
-  const narrowGrid = typeof window !== "undefined" && window.innerWidth <= 480;
-  const gridPadding = narrowGrid ? 4 : compactGrid ? 8 : 12;
-  const gridGap = narrowGrid ? 4 : compactGrid ? 10 : 14;
-  const gridMinCardWidth = narrowGrid ? 144 : compactGrid ? 152 : 210;
-  const responsiveGridColumnCount = Math.max(
-    1,
-    Math.floor(
-      (Math.max(0, gridWidth - gridPadding * 2) + gridGap) /
-        (gridMinCardWidth + gridGap),
-    ),
-  );
-  const gridColumnCount = compactGrid ? Math.max(4, responsiveGridColumnCount) : responsiveGridColumnCount;
+  const gridLayout = getObjectsGridLayout(gridWidth);
+  const gridColumnCount = gridLayout.columns;
+  const gridGap = gridLayout.gap;
   const gridRowCount = Math.ceil(props.rows.length / gridColumnCount);
-  const estimatedGridRowHeight = narrowGrid ? 156 : compactGrid ? 300 : 360;
+  const estimatedGridRowHeight = gridLayout.estimatedRowHeight;
   const gridVirtualizer = useVirtualizer({
     count: props.viewMode === "grid" ? gridRowCount : 0,
     getScrollElement: () => gridScrollContainerRef.current,
@@ -111,6 +102,12 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
     overscan: 2,
     scrollMargin: gridScrollMargin,
   });
+  // Column changes regroup objects into different rows. Discard measurements
+  // from the old grouping instead of reusing tall preview-card row heights.
+  useLayoutEffect(() => {
+    gridVirtualizer.measure();
+  }, [gridVirtualizer, gridColumnCount, estimatedGridRowHeight]);
+
   const measuredGridRows = gridVirtualizer.getVirtualItems();
   const virtualGridRows = useMemo(
     () =>
@@ -119,12 +116,12 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
         : Array.from({ length: Math.min(gridRowCount, 4) }, (_, index) => ({
             index,
             key: index,
-            start: index * estimatedGridRowHeight,
+            start: gridScrollMargin + index * estimatedGridRowHeight,
             size: estimatedGridRowHeight,
-            end: (index + 1) * estimatedGridRowHeight,
+            end: gridScrollMargin + (index + 1) * estimatedGridRowHeight,
             lane: 0,
           })),
-    [estimatedGridRowHeight, gridRowCount, measuredGridRows],
+    [estimatedGridRowHeight, gridRowCount, gridScrollMargin, measuredGridRows],
   );
   const gridTotalSize =
     measuredGridRows.length > 0
@@ -133,6 +130,7 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
   const gridStyle = {
     "--objects-grid-columns": gridColumnCount,
     "--objects-grid-gap": `${gridGap}px`,
+    "--objects-grid-padding": `${gridLayout.padding}px`,
   } as CSSProperties;
   const loadMoreButton =
     props.showLoadMore && props.onLoadMore ? (
@@ -249,6 +247,7 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
         className={gridStyles.gridContent}
         style={gridStyle}
         data-testid="objects-grid-content"
+        data-grid-density={gridLayout.density}
         role="list"
         aria-label="Objects card list"
       >

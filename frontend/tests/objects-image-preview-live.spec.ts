@@ -6,10 +6,10 @@ import { gotoObjectsBucketPage, objectsListRow } from './support/ui'
 const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
-const s3Endpoint = process.env.E2E_S3_ENDPOINT ?? 'http://minio:9000'
+const s3Endpoint = process.env.E2E_S3_ENDPOINT ?? 'http://seaweedfs:8333'
 const s3Region = process.env.E2E_S3_REGION ?? 'us-east-1'
-const s3AccessKey = process.env.E2E_S3_ACCESS_KEY ?? 'minioadmin'
-const s3SecretKey = process.env.E2E_S3_SECRET_KEY ?? 'minioadmin'
+const s3AccessKey = process.env.E2E_S3_ACCESS_KEY ?? 'demo-seaweedfs'
+const s3SecretKey = process.env.E2E_S3_SECRET_KEY ?? 'demo-seaweedfs-secret'
 const forcePathStyle = process.env.E2E_S3_FORCE_PATH_STYLE !== 'false'
 const tlsSkipVerify = process.env.E2E_S3_TLS_SKIP_VERIFY !== 'false'
 

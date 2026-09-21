@@ -1,3 +1,4 @@
+import { waitForNetworkRetry } from '../lib/networkRecovery'
 import { clearNetworkStatus, logNetworkEvent, publishNetworkStatus } from '../lib/networkStatus'
 import { DEFAULT_TIMEOUT_MS, MAX_RETRY_DELAY_MS, parseRetryAfterSeconds, readRetryDefaults } from './config'
 import { readNormalizedErrorFromResponse, RequestAbortedError, RequestTimeoutError } from './errors'
@@ -7,6 +8,8 @@ export type RequestOptions = {
 	timeoutMs?: number
 	retries?: number
 	retryDelayMs?: number
+	/** Only after server capability verification, for receipt-protected controls. */
+	operationReplay?: boolean
 }
 
 export function rejectedTransferHandle<T>(error: Error): { promise: Promise<T>; abort: () => void } {
@@ -17,7 +20,7 @@ export function rejectedTransferHandle<T>(error: Error): { promise: Promise<T>; 
 }
 
 function isIdempotentMethod(method?: string): boolean {
-	return !method || method.toUpperCase() === 'GET'
+	return !method || ['GET', 'HEAD'].includes(method.toUpperCase())
 }
 
 function shouldRetryStatus(status: number): boolean {
@@ -102,7 +105,8 @@ export async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs
 }
 
 export async function fetchWithRetry(url: string, init: RequestInit, options: RequestOptions): Promise<Response> {
-	const idempotent = isIdempotentMethod(init.method)
+	const protectedOperation = options.operationReplay === true && !!new Headers(init.headers).get('Idempotency-Key')
+	const idempotent = isIdempotentMethod(init.method) || protectedOperation
 	const retryDefaults = readRetryDefaults()
 	const retries = options.retries ?? (idempotent ? retryDefaults.retries : 0)
 	const timeoutMs = options.timeoutMs ?? (idempotent ? DEFAULT_TIMEOUT_MS : 0)
@@ -118,8 +122,15 @@ export async function fetchWithRetry(url: string, init: RequestInit, options: Re
 				if (!res.ok && idempotent && attempt < retries) {
 					const retryAfterSeconds = parseRetryAfterSeconds(res.headers.get('Retry-After'))
 					const normalizedError = await readNormalizedErrorFromResponse(res)
-					const retryDueToStatus = shouldRetryStatus(res.status)
-					const retryDueToNormalized = normalizedError?.retryable === true
+					const operationError = protectedOperation ? await res.clone().json().catch(() => null) : null
+					const unknown = operationError?.error?.code === 'operation_outcome_unknown'
+					// A completed receipt, including a provider error, is definitive.
+					// Gateway response loss can safely retry only the SAME operation key.
+					const retryDueToStatus = protectedOperation
+						? res.headers.get('Idempotency-Replayed') == null && !unknown && (
+							['operation_in_progress', 'operation_receipt_unavailable'].includes(operationError?.error?.code) || [502, 503, 504].includes(res.status))
+						: shouldRetryStatus(res.status)
+					const retryDueToNormalized = !protectedOperation && normalizedError?.retryable === true
 					if (retryDueToStatus || retryDueToNormalized) {
 						const delayMs =
 							retryAfterSeconds != null ? Math.min(retryAfterSeconds * 1000, MAX_RETRY_DELAY_MS) : retryDelayMs(baseDelayMs, attempt)
@@ -145,7 +156,7 @@ export async function fetchWithRetry(url: string, init: RequestInit, options: Re
 					const delayLabel = retryDelayLabel(delayMs)
 					logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} in ${delayLabel} (network error)` })
 					publishNetworkStatus({ kind: 'unstable', message: `Network unstable. Auto-retry in ${delayLabel}.` }, statusScope)
-					await sleep(delayMs, init.signal)
+					await waitForNetworkRetry(delayMs, init.signal)
 					publishNetworkStatus({ kind: 'unstable', message: 'Retrying request…' }, statusScope)
 					attempt += 1
 					continue

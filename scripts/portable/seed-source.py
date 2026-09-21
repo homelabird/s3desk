@@ -14,11 +14,11 @@ FIXTURE_OUT = os.environ.get("FIXTURE_OUT", "/artifacts/portable-fixture.json")
 PROFILE_NAME = os.environ.get("PROFILE_NAME", "Portable Smoke")
 DEMO_BUCKET = os.environ.get("DEMO_BUCKET", "portable-bucket")
 FAVORITE_KEY = os.environ.get("FAVORITE_KEY", "welcome.txt")
-MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "portable-minio")
-MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "portable-minio-secret")
-MINIO_REGION = os.environ.get("MINIO_REGION", "us-east-1")
-MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "http://minio:9000")
-MINIO_PUBLIC_ENDPOINT = os.environ.get("MINIO_PUBLIC_ENDPOINT", "http://minio:9000")
+SEAWEEDFS_ACCESS_KEY = os.environ.get("SEAWEEDFS_ACCESS_KEY", "demo-seaweedfs")
+SEAWEEDFS_SECRET_KEY = os.environ.get("SEAWEEDFS_SECRET_KEY", "demo-seaweedfs-secret")
+SEAWEEDFS_REGION = os.environ.get("SEAWEEDFS_REGION", "us-east-1")
+SEAWEEDFS_INTERNAL_ENDPOINT = os.environ.get("SEAWEEDFS_INTERNAL_ENDPOINT", "http://seaweedfs:8333")
+SEAWEEDFS_PUBLIC_ENDPOINT = os.environ.get("SEAWEEDFS_PUBLIC_ENDPOINT", "http://seaweedfs:8333")
 THUMBNAIL_NAME = os.environ.get("THUMBNAIL_NAME", "thumb.jpg")
 TLS_CERT_PEM = """-----BEGIN CERTIFICATE-----
 MIIDEzCCAfugAwIBAgIUTEJtDLQkCn3B8v0RkSi4+NeE74gwDQYJKoZIhvcNAQEL
@@ -119,11 +119,11 @@ def ensure_profile() -> dict:
     payload = {
         "provider": "s3_compatible",
         "name": PROFILE_NAME,
-        "endpoint": MINIO_ENDPOINT,
-        "publicEndpoint": MINIO_PUBLIC_ENDPOINT,
-        "region": MINIO_REGION,
-        "accessKeyId": MINIO_ROOT_USER,
-        "secretAccessKey": MINIO_ROOT_PASSWORD,
+        "endpoint": SEAWEEDFS_INTERNAL_ENDPOINT,
+        "publicEndpoint": SEAWEEDFS_PUBLIC_ENDPOINT,
+        "region": SEAWEEDFS_REGION,
+        "accessKeyId": SEAWEEDFS_ACCESS_KEY,
+        "secretAccessKey": SEAWEEDFS_SECRET_KEY,
         "forcePathStyle": True,
         "preserveLeadingSlash": False,
         "tlsInsecureSkipVerify": False,

@@ -183,7 +183,7 @@ func (svc profileWriteHTTPService) executeCreatePrepared(ctx context.Context, pr
 	if err != nil {
 		return nil, err
 	}
-	decorated := decorateProfile(profile, svc.server.cfg.UploadDirectStream)
+	decorated := decorateProfile(profile, svc.server.cfg.UploadDirectStream, svc.server.cfg.UploadProxyOnly)
 	return &decorated, nil
 }
 
@@ -200,7 +200,7 @@ func (svc profileWriteHTTPService) executeUpdatePrepared(ctx context.Context, pr
 			map[string]any{"profileId": prepared.profileID},
 		)
 	}
-	decorated := decorateProfile(profile, svc.server.cfg.UploadDirectStream)
+	decorated := decorateProfile(profile, svc.server.cfg.UploadDirectStream, svc.server.cfg.UploadProxyOnly)
 	return &decorated, nil
 }
 

@@ -1,3 +1,4 @@
+import { createUploadPreparationReporter } from './uploadPreparation'
 import type { QueryClient } from '@tanstack/react-query'
 import type { MutableRefObject } from 'react'
 
@@ -21,7 +22,7 @@ import { createUploadSessionWithFallback } from './uploadRuntimeSession'
 import { executeUploadAttempt } from './uploadRuntimeAttempt'
 
 function getRetryFileHandleStateForFailure(message: string): UploadTask['retryFileHandleState'] {
-	if (/missing files|select the same|file size does not match|interrupted by refresh/i.test(message)) {
+	if (/missing files|select the same|does not match the previous upload|interrupted by refresh/i.test(message)) {
 		return 'selection_required'
 	}
 	return 'remembered'
@@ -60,6 +61,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 	args.updateUploadTask(taskId, (current) => ({
 		...current,
 		status: 'staging',
+		preparation: undefined,
 		startedAtMs: estimator.getStartedAtMs(),
 		finishedAtMs: undefined,
 		loadedBytes: 0,
@@ -82,10 +84,31 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		args.notifications.error(message)
 	}
 
+	const preparation = createUploadPreparationReporter({
+		taskId, phase: 'verifying', signal: taskController.signal,
+		isCurrent: () => args.uploadAbortByTaskIdRef.current[taskId] === abortTask,
+		updateTask: args.updateUploadTask,
+	})
 	let committed = false
 	let uploadId = ''
+	let retainSession = false
 	let existingChunksByPath: Record<string, number[]> | undefined
 	try {
+		// Recover the accepted commit BEFORE reading local files or creating a new
+		// session. A lost response must not turn into a fresh object upload.
+		if (task.pendingCommit) {
+			uploadId = task.pendingCommit.uploadId
+			retainSession = true
+			args.updateUploadTask(taskId, current => ({ ...current, status: 'commit' }))
+			await commitUploadAndTrackJob({
+				api: args.api, apiToken: args.apiToken, queryClient: args.queryClient,
+				notifications: args.notifications, taskId, task, uploadId, items: [],
+				uploadItemsByTaskIdRef: args.uploadItemsByTaskIdRef,
+				updateUploadTask: args.updateUploadTask, handleUploadJobUpdate: args.handleUploadJobUpdate,
+				onCommitted: () => { committed = true },
+			})
+			return
+		}
 		const maxFileBytes = items.length > 0 ? Math.max(...items.map((entry) => entry.file?.size ?? 0)) : task.totalBytes
 		const tuning = args.pickUploadTuning(task.totalBytes, Number.isFinite(maxFileBytes) ? maxFileBytes : null)
 		const uploadCapability = args.uploadCapabilityByProfileId?.[task.profileId]
@@ -95,7 +118,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		})
 		const { canUsePresigned, canUseDirectMultipart, fallbackMode, preferredMode } = uploadModePlan
 
-		const allowResume = task.uploadMode !== 'presigned'
+		const allowResume = true
 		const resumeFilesByPath = buildResumeFilesByPath({ task, items, allowResume })
 
 		const resumeChunkSettings = planResumeChunkSettings({
@@ -116,7 +139,9 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				items,
 				resumeFilesByPath,
 				signal: taskController.signal,
+				onProgress: preparation.report,
 			})
+			preparation.clear()
 			if (taskController.signal.aborted) throw new RequestAbortedError()
 			if (!resumeChunks.ok) {
 				failBeforeUpload(resumeChunks.error)
@@ -125,6 +150,9 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			if (resumeChunks.available) {
 				uploadId = resumeChunks.uploadId
 				existingChunksByPath = resumeChunks.existingChunksByPath
+				// This existing session already passed content verification. A cancel
+				// between status loading and starting the next part must not delete it.
+				retainSession = true
 			}
 		}
 
@@ -178,6 +206,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				uploadChunkFileConcurrency: args.uploadChunkFileConcurrency,
 				signal: taskController.signal,
 				uploadEstimatorByTaskIdRef: args.uploadEstimatorByTaskIdRef,
+				onResumableSession: () => { retainSession = true },
 				updateUploadTask: args.updateUploadTask,
 			})
 
@@ -193,6 +222,8 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			speedBps: 0,
 			etaSeconds: 0,
 		}))
+
+		retainSession = true // never delete a session with an uncertain commit outcome
 
 		await commitUploadAndTrackJob({
 			api: args.api,
@@ -212,7 +243,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		})
 	} catch (error) {
 		if (args.uploadAbortByTaskIdRef.current[taskId] !== abortTask) return
-		if (error instanceof RequestAbortedError) {
+		if (error instanceof RequestAbortedError || taskController.signal.aborted) {
 			args.updateUploadTask(taskId, (current) => ({
 				...current,
 				status: 'canceled',
@@ -233,13 +264,14 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		}))
 		args.notifications.error(message)
 	} finally {
+		preparation.clear()
 		if (args.uploadAbortByTaskIdRef.current[taskId] === abortTask) {
 			delete args.uploadAbortByTaskIdRef.current[taskId]
 		}
 		if (args.uploadEstimatorByTaskIdRef.current[taskId] === estimator) {
 			delete args.uploadEstimatorByTaskIdRef.current[taskId]
 		}
-		if (!committed && uploadId) {
+		if (!committed && uploadId && !retainSession) {
 			await args.api.uploads.deleteUpload(task.profileId, uploadId).catch(() => {})
 		}
 	}

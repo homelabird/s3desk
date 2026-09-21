@@ -522,3 +522,38 @@ func TestRequireAPITokenAcceptsWebSocketRealtimeTicketForAllowlistedIPv6ULAOrigi
 		t.Fatalf("status=%d, want %d body=%s", rr.Code, http.StatusNoContent, rr.Body.String())
 	}
 }
+
+func TestValidCredentialsSurviveLockedNewClientIP(t *testing.T) {
+	for _, address := range []string{"192.0.2.8:3000", "198.51.100.9:4000", "[2001:db8::9]:5000"} {
+		t.Run(address, func(t *testing.T) {
+			api := &Server{cfg: config.Config{APIToken: "correct-token"}, authLimit: newAuthAttemptLimiter(), realtimeTickets: newRealtimeTicketStore()}
+			r := httptest.NewRequest(http.MethodGet, "/api/v1/buckets", nil)
+			r.RemoteAddr = address
+			key := authClientKey(r)
+			now := time.Now()
+			for i := 0; i < authFailuresPerWindow; i++ {
+				api.authLimit.fail(key, now)
+			}
+			r.Header.Set("X-Api-Token", "correct-token")
+			allowed, _, err := newAPITokenAuthService(api).authorize(httptest.NewRecorder(), r)
+			if !allowed || err != nil {
+				t.Fatalf("valid credentials blocked after IP change: allowed=%v err=%+v", allowed, err)
+			}
+			// A valid user must not erase the other client's attack history.
+			r.Header.Set("X-Api-Token", "bad-token")
+			if _, _, err = newAPITokenAuthService(api).authorize(httptest.NewRecorder(), r); err == nil || err.Status != http.StatusTooManyRequests {
+				t.Fatalf("invalid credentials no longer limited: %+v", err)
+			}
+			token, _ := api.realtimeTickets.New("authorized-session", time.Minute)
+			ticketRequest := httptest.NewRequest(http.MethodGet, "/api/v1/ws?realtimeTicket="+token, nil)
+			ticketRequest.RemoteAddr = address
+			allowed, _, err = newAPITokenAuthService(api).authorize(httptest.NewRecorder(), ticketRequest)
+			if !allowed || err != nil {
+				t.Fatalf("valid single-use ticket blocked: %+v", err)
+			}
+			if allowed, _, _ = newAPITokenAuthService(api).authorize(httptest.NewRecorder(), ticketRequest); allowed {
+				t.Fatal("consumed ticket was reused")
+			}
+		})
+	}
+}

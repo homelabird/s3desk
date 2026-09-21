@@ -25,15 +25,32 @@ has a stable place to land.
 - The supported topology is one S3Desk replica owning one `DATA_DIR`. The job
   queue, realtime state, and direct-multipart creation state are process-local;
   the Helm chart rejects `replicaCount > 1`.
-- Direct multipart creation is serialized by a process-local lock so concurrent
-  chunks share one provider upload. A durable cross-process claim is intentionally
-  not implemented until HA becomes a supported topology.
+- Direct multipart creation is serialized by a context-aware process-local lock
+  keyed by `(profileID, uploadID, path)`, so chunks of one file share one provider
+  upload without blocking other files. Unused lock entries are reference-counted
+  away. A durable cross-process claim is intentionally not implemented until HA
+  becomes a supported topology.
 - The HTTP server leaves the total `ReadTimeout` unset for streaming uploads;
   API middleware applies route-specific body-idle deadlines instead.
 - Shutdown first drains the HTTP server, then cancels the manager context and
   waits up to ten seconds for registered job-manager lifecycles. A timeout is
   logged as a warning; it is not proof that an external provider operation
   completed.
+
+## S3 Interactive I/O
+
+- `internal/profilehttp` owns a bounded transport cache (32 clients, 5-minute
+  lifetime, lazy eviction). Profile/endpoint/TLS identity and remote policy
+  isolate pools. S3 credentials and listing responses are not cached here.
+- `internal/profileendpoint` validates every request and new connection, including
+  redirects/DNS, and forwards idle-connection cleanup to the real transport.
+- `internal/s3listing` owns bounded cursor pagination and response normalization;
+  `internal/s3client/ListPage` owns the AWS SDK adapter. Native S3 listing is the
+  process default; `S3_NATIVE_LIST=false` retains the legacy rclone route.
+- Provider tokens are opaque, bound to profile/bucket/query scope, and must not be
+  decoded/replaced by the browser. Empty filtered pages can have a next token.
+- Other cloud providers, jobs, searches/index maintenance and legacy cursors keep
+  their existing rclone paths. This change does not remove rclone from S3Desk.
 
 ## Handler Rules
 

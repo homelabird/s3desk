@@ -10,9 +10,9 @@ import {
 import type { MenuProps } from 'antd'
 import { Button, Layout } from 'antd'
 import { Link } from 'react-router'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 
-import { APP_NAVIGATION_DRAWER_ID } from './appShellIds'
+import { APP_NAVIGATION_DRAWER_ID, APP_NAVIGATION_SIDEBAR_ID } from './appShellIds'
 import { BrandLockup } from './components/BrandLockup'
 import { MenuPopover } from './components/MenuPopover'
 import { OverlaySheet } from './components/OverlaySheet'
@@ -45,6 +45,8 @@ export type FullAppShellChromeSession = {
 	shellScopeKey: string
 	selectedKey: string
 	navOpen: boolean
+	sidebarCollapsed: boolean
+	toggleSidebar: () => void
 	settingsOpen: boolean
 	openNav: () => void
 	closeNav: () => void
@@ -107,12 +109,20 @@ export function FullAppShellChrome({
 		shellScopeKey,
 		selectedKey,
 		navOpen,
+		sidebarCollapsed,
+		toggleSidebar,
 		openNav,
 		closeNav,
 		compactHeaderMenu,
 	} = session
 	const { isDesktop, isStackedHeader, usesCompactHeader, hasMediumBreakpoint } =
 		viewport
+	// Do not resurrect a mobile overlay after rotating through desktop width.
+	useEffect(() => {
+		if (isDesktop) closeNav()
+	}, [closeNav, isDesktop])
+	const navigationOpen = isDesktop ? !sidebarCollapsed : navOpen
+	const navigationLabel = navigationOpen ? 'Close navigation' : 'Open navigation'
 	const contentClassName = `${styles.content} ${hasMediumBreakpoint ? styles.contentPadMd : styles.contentPadSm}`
 	const shellClassName = `${styles.appLayout} ${styles.appShell}`
 	const headerClassName = [
@@ -130,20 +140,32 @@ export function FullAppShellChrome({
 				Skip to content
 			</a>
 			{isDesktop ? (
-				<Sider width={192} theme={theme.mode} className={styles.desktopSider}>
-					<div className={styles.brandBlock}>
-						<Link
-							to={profileId ? '/objects' : '/profiles'}
-							className={styles.desktopBrandButton}
-							aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
-							title={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
-						>
-							<BrandLockup variant="sidebar" />
-						</Link>
-					</div>
-					<AppNavigation
-						selectedKey={selectedKey}
-					/>
+				<Sider
+					id={APP_NAVIGATION_SIDEBAR_ID}
+					width={192}
+					collapsible
+					collapsed={sidebarCollapsed}
+					collapsedWidth={0}
+					trigger={null}
+					theme={theme.mode}
+					className={`${styles.desktopSider} ${sidebarCollapsed ? styles.desktopSiderCollapsed : ''}`}
+					aria-hidden={sidebarCollapsed}
+				>
+					{sidebarCollapsed ? null : (
+						<>
+							<div className={styles.brandBlock}>
+								<Link
+									to={profileId ? '/objects' : '/profiles'}
+									className={styles.desktopBrandButton}
+									aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
+									title={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
+								>
+									<BrandLockup variant="sidebar" />
+								</Link>
+							</div>
+							<AppNavigation selectedKey={selectedKey} />
+						</>
+					)}
 				</Sider>
 			) : null}
 
@@ -151,18 +173,18 @@ export function FullAppShellChrome({
 				<Header className={headerClassName} data-testid="app-header">
 					<div className={styles.headerTopRow}>
 						<div className={styles.headerLeading}>
-							{isDesktop ? null : (
-								<Button
-									type="text"
-									icon={<MenuOutlined />}
-									onClick={openNav}
-									aria-label="Open navigation"
-									aria-haspopup="dialog"
-									aria-expanded={!isDesktop && navOpen}
-									aria-controls={APP_NAVIGATION_DRAWER_ID}
-								/>
-							)}
-							{isDesktop ? null : (
+							<Button
+								type="text"
+								icon={<MenuOutlined />}
+								onClick={isDesktop ? toggleSidebar : navOpen ? closeNav : openNav}
+								aria-label={navigationLabel}
+								title={navigationLabel}
+								aria-haspopup={isDesktop ? undefined : 'dialog'}
+								aria-expanded={navigationOpen}
+								aria-controls={isDesktop ? APP_NAVIGATION_SIDEBAR_ID : APP_NAVIGATION_DRAWER_ID}
+								data-testid="app-navigation-toggle"
+							/>
+							{isDesktop && !sidebarCollapsed ? null : (
 								<Link
 									to={profileId ? '/objects' : '/profiles'}
 									className={styles.mobileBrandButton}

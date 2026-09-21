@@ -1,7 +1,7 @@
 import type { DownloadTask, UploadTask } from './transferTypes'
 
 export function getActiveDownloadCount(downloadTasks: DownloadTask[]): number {
-	return downloadTasks.filter((task) => task.status === 'queued' || task.status === 'waiting' || task.status === 'running').length
+	return downloadTasks.filter((task) => task.status === 'queued' || task.status === 'waiting' || task.status === 'running' || task.status === 'ready').length
 }
 
 export function getActiveUploadCount(uploadTasks: UploadTask[]): number {

@@ -1,67 +1,128 @@
+# Local S3 tests share the SeaweedFS demo server and signed readiness seeder.
 services:
-  minio:
-    image: "${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}"
-    command: server /data --console-address ":9001"
+  seaweedfs:
+    image: ${SEAWEEDFS_IMAGE:-docker.io/chrislusf/seaweedfs:4.47}
+    command:
+    - server
+    - -dir=/data
+    - -ip=127.0.0.1
+    - -ip.bind=127.0.0.1
+    - -master.port=9333
+    - -master.volumeSizeLimitMB=256
+    - -master.telemetry=false
+    - -volume.port=9340
+    - -volume.max=0
+    - -filer
+    - -filer.port=8888
+    - -s3
+    - -s3.ip.bind=0.0.0.0
+    - -s3.port=8333
+    - -s3.port.iceberg=0
+    - -s3.port.lance=0
+    - -s3.iam=false
+    - -s3.allowDeleteBucketNotEmpty=false
+    - -s3.autoCreateBucket=false
+    - -s3.allowedOrigins=${E2E_S3_ALLOWED_ORIGINS:-http://127.0.0.1:8080}
     environment:
-      MINIO_ROOT_USER: "minioadmin"
-      MINIO_ROOT_PASSWORD: "minioadmin"
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-demo-seaweedfs}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-demo-seaweedfs-secret}
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+    - 127.0.0.1:${SEAWEEDFS_API_PORT:-8333}:8333
     volumes:
-      - minio-data:/data
-
+    - seaweedfs-e2e-data:/data
+    - ../demo/filer.toml:/etc/seaweedfs/filer.toml:ro,z
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -q -T 3 -O /dev/null http://127.0.0.1:9333/cluster/status && wget -q -T 3 -O /dev/null http://127.0.0.1:8888/
+      interval: 3s
+      timeout: 8s
+      retries: 40
+      start_period: 10s
+    stop_grace_period: 30s
+  seaweedfs-seed:
+    image: docker.io/rclone/rclone:${RCLONE_VERSION:-1.72.0}
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    entrypoint:
+    - /bin/sh
+    - /seed-seaweedfs.sh
+    environment:
+      SEAWEEDFS_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY:-demo-seaweedfs}
+      SEAWEEDFS_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY:-demo-seaweedfs-secret}
+      SEAWEEDFS_REGION: ${SEAWEEDFS_REGION:-us-east-1}
+      SEAWEEDFS_INTERNAL_ENDPOINT: http://seaweedfs:8333
+      SEAWEEDFS_PUBLIC_ENDPOINT: http://seaweedfs:8333
+      DEMO_BUCKET: e2e-seed-bucket
+      DEMO_SEED_ATTEMPTS: ${DEMO_SEED_ATTEMPTS:-30}
+    volumes:
+    - ../../scripts/demo/seed-seaweedfs.sh:/seed-seaweedfs.sh:ro,z
+    restart: 'no'
   azurite:
-    image: "${AZURITE_IMAGE:-mcr.microsoft.com/azure-storage/azurite:3.33.0}"
+    image: ${AZURITE_IMAGE:-mcr.microsoft.com/azure-storage/azurite:3.33.0}
     command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --loose --skipApiVersionCheck
     ports:
-      - "127.0.0.1:10000:10000"
+    - 127.0.0.1:10000:10000
     volumes:
-      - azurite-data:/data
-
+    - azurite-data:/data
   fake-gcs-server:
-    image: "${FAKE_GCS_IMAGE:-fsouza/fake-gcs-server:1.47.7}"
-    command: ["-scheme", "http", "-port", "4443", "-backend", "memory"]
+    image: ${FAKE_GCS_IMAGE:-fsouza/fake-gcs-server:1.47.7}
+    command:
+    - -scheme
+    - http
+    - -port
+    - '4443'
+    - -backend
+    - memory
     ports:
-      - "127.0.0.1:4443:4443"
-
+    - 127.0.0.1:4443:4443
   s3desk:
-    image: "${S3DESK_IMAGE:-s3desk:dev}"
+    image: ${S3DESK_IMAGE:-s3desk:dev}
     ports:
-      - "127.0.0.1:8080:8080"
+    - 127.0.0.1:8080:8080
     environment:
-      ADDR: "0.0.0.0:8080"
-      ALLOW_REMOTE: "true"
-      API_TOKEN: "${E2E_API_TOKEN:-s3desk-e2e-token-0123456789abcdef012345}"
-      ENCRYPTION_KEY: "${E2E_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}"
-      ALLOWED_HOSTS: "s3desk"
-      ALLOWED_LOCAL_DIRS: "/data"
-      RCLONE_RETRY_ATTEMPTS: "3"
-      RCLONE_RETRY_BASE_DELAY: "800ms"
-      RCLONE_RETRY_MAX_DELAY: "8s"
-      RCLONE_RETRY_JITTER_RATIO: "0.2"
+      ADDR: 0.0.0.0:8080
+      ALLOW_REMOTE: 'true'
+      API_TOKEN: ${E2E_API_TOKEN:-s3desk-e2e-token-0123456789abcdef012345}
+      ENCRYPTION_KEY: ${E2E_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
+      ALLOWED_HOSTS: s3desk
+      ALLOWED_LOCAL_DIRS: /data
+      RCLONE_RETRY_ATTEMPTS: '3'
+      RCLONE_RETRY_BASE_DELAY: 800ms
+      RCLONE_RETRY_MAX_DELAY: 8s
+      RCLONE_RETRY_JITTER_RATIO: '0.2'
+      S3DESK_ALLOWED_LOOPBACK_PUBLIC_ENDPOINT: ${E2E_S3_PUBLIC_ENDPOINT:-http://127.0.0.1:${SEAWEEDFS_API_PORT:-8333}}
+      S3_NATIVE_LIST: ${S3_NATIVE_LIST:-true}
     volumes:
-      - s3desk-data:/data
+    - s3desk-data:/data
     depends_on:
-      - minio
-      - azurite
-      - fake-gcs-server
-
+      seaweedfs:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      fake-gcs-server:
+        condition: service_started
+      seaweedfs-seed:
+        condition: service_completed_successfully
   runner:
     build:
       context: ../../e2e/runner
       dockerfile: Dockerfile
     environment:
-      BASE_URL: "${E2E_BASE_URL:-http://s3desk:8080}"
-      API_TOKEN: "${E2E_API_TOKEN:-s3desk-e2e-token-0123456789abcdef012345}"
-      E2E_MINIO_ENDPOINT: "${E2E_MINIO_ENDPOINT:-http://minio:9000}"
-      E2E_AZURITE_ENDPOINT: "${E2E_AZURITE_ENDPOINT:-http://azurite:10000/devstoreaccount1}"
-      E2E_GCS_ENDPOINT: "${E2E_GCS_ENDPOINT:-http://fake-gcs-server:4443/storage/v1/v1}"
+      BASE_URL: ${E2E_BASE_URL:-http://s3desk:8080}
+      API_TOKEN: ${E2E_API_TOKEN:-s3desk-e2e-token-0123456789abcdef012345}
+      E2E_AZURITE_ENDPOINT: ${E2E_AZURITE_ENDPOINT:-http://azurite:10000/devstoreaccount1}
+      E2E_GCS_ENDPOINT: ${E2E_GCS_ENDPOINT:-http://fake-gcs-server:4443/storage/v1/v1}
+      E2E_S3_ENDPOINT: ${E2E_S3_ENDPOINT:-http://seaweedfs:8333}
+      E2E_S3_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY:-demo-seaweedfs}
+      E2E_S3_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY:-demo-seaweedfs-secret}
     depends_on:
-      - s3desk
-    command: ["python", "/app/runner.py"]
-
+    - s3desk
+    command:
+    - python
+    - /app/runner.py
 volumes:
-  minio-data:
-  azurite-data:
-  s3desk-data:
+  azurite-data: null
+  s3desk-data: null
+  seaweedfs-e2e-data: null

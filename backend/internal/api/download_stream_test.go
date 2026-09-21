@@ -346,11 +346,14 @@ func TestHandleDownloadProxy_ClassifiesStatProviderErrors(t *testing.T) {
 	}
 }
 
-func TestHandleDownloadProxy_SkipsStatWhenSignedMetadataIsEmbedded(t *testing.T) {
+func TestHandleDownloadProxy_DoesNotTrustSignedMetadataForFallbackBody(t *testing.T) {
 	lockTestEnv(t)
 	installDownloadStartRcloneHook(t, func(args []string) (*rcloneProcess, error) {
 		if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
-			t.Fatalf("stat should not be called")
+			return &rcloneProcess{
+				stdout: io.NopCloser(strings.NewReader("{\"Path\":\"report.txt\",\"Size\":5,\"MimeType\":\"text/plain\"}\n")),
+				stderr: &bytes.Buffer{}, wait: func() error { return nil },
+			}, nil
 		}
 		if len(args) >= 1 && args[0] == "cat" {
 			return &rcloneProcess{
@@ -375,7 +378,7 @@ func TestHandleDownloadProxy_SkipsStatWhenSignedMetadataIsEmbedded(t *testing.T)
 		Bucket:       "test-bucket",
 		Key:          "report.txt",
 		Expires:      time.Now().UTC().Add(time.Minute).Unix(),
-		Size:         5,
+		Size:         999,
 		ContentType:  "text/plain",
 		LastModified: "2024-01-01T00:00:00Z",
 	}
@@ -395,6 +398,9 @@ func TestHandleDownloadProxy_SkipsStatWhenSignedMetadataIsEmbedded(t *testing.T)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if rr.Header().Get("Content-Length") != "" || rr.Header().Get("Accept-Ranges") != "none" {
+		t.Fatal("fallback falsely advertised fixed size or range support")
 	}
 	if body := rr.Body.String(); body != "hello" {
 		t.Fatalf("body=%q, want %q", body, "hello")

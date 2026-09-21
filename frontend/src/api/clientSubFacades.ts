@@ -317,11 +317,11 @@ export function createUploadsSubFacade(deps: SubFacadeDeps) {
 		createUpload(profileId: string, req: UploadCreateRequest, signal?: AbortSignal): Promise<UploadCreateResponse> {
 			return uploadsDomain.createUpload(deps.requestFn, profileId, req, signal)
 		},
-		presignUpload(profileId: string, uploadId: string, req: UploadPresignRequest): Promise<UploadPresignResponse> {
-			return uploadsDomain.presignUpload(deps.requestFn, profileId, uploadId, req)
+		presignUpload(profileId: string, uploadId: string, req: UploadPresignRequest, signal?: AbortSignal): Promise<UploadPresignResponse> {
+			return uploadsDomain.presignUpload(deps.requestFn, profileId, uploadId, req, signal)
 		},
-		completeMultipartUpload(profileId: string, uploadId: string, req: UploadMultipartCompleteRequest): Promise<void> {
-			return uploadsDomain.completeMultipartUpload(deps.requestFn, profileId, uploadId, req)
+		completeMultipartUpload(profileId: string, uploadId: string, req: UploadMultipartCompleteRequest, signal?: AbortSignal): Promise<void> {
+			return uploadsDomain.completeMultipartUpload(deps.requestFn, profileId, uploadId, req, signal)
 		},
 		abortMultipartUpload(profileId: string, uploadId: string, req: UploadMultipartAbortRequest): Promise<void> {
 			return uploadsDomain.abortMultipartUpload(deps.requestFn, profileId, uploadId, req)
@@ -425,6 +425,9 @@ export function createJobsSubFacade(deps: SubFacadeDeps) {
 		},
 		retryJob(profileId: string, jobId: string): Promise<Job> {
 			return jobsDomain.retryJob(deps.requestFn, profileId, jobId)
+		},
+		getJobArtifactURL(args: { profileId: string; jobId: string; signal?: AbortSignal }): Promise<PresignedURLResponse> {
+			return jobsDomain.getJobArtifactURL(deps.requestFn, args)
 		},
 		downloadJobArtifact(
 			args: { profileId: string; jobId: string },

@@ -16,6 +16,7 @@ type UseTransfersDrawerPropsParams = {
 	onClearFinished: () => void
 	onCancelDownload: (taskId: string) => void
 	onRetryDownload: (taskId: string) => void
+	onHandOffDownload?: (taskId: string) => void
 	onRemoveDownload: (taskId: string) => void
 	onCancelUpload: (taskId: string) => void
 	onRetryUpload: (taskId: string) => void
@@ -36,6 +37,7 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 		onClearFinished,
 		onCancelDownload,
 		onRetryDownload,
+		onHandOffDownload,
 		onRemoveDownload,
 		onCancelUpload,
 		onRetryUpload,
@@ -44,7 +46,7 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 	} = params
 
 	const activeDownloadCount = useMemo(() => getActiveDownloadCount(downloadTasks), [downloadTasks])
-	const hasCompletedDownloads = useMemo(() => downloadTasks.some((t) => t.status === 'succeeded'), [downloadTasks])
+	const hasCompletedDownloads = useMemo(() => downloadTasks.some((t) => t.status === 'succeeded' || t.status === 'handed_off'), [downloadTasks])
 	const activeUploadCount = useMemo(() => getActiveUploadCount(uploadTasks), [uploadTasks])
 	const hasCompletedUploads = useMemo(() => uploadTasks.some((t) => t.status === 'succeeded'), [uploadTasks])
 	const activeTransferCount = useMemo(() => activeDownloadCount + activeUploadCount, [activeDownloadCount, activeUploadCount])
@@ -72,6 +74,7 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 			onClearFinished,
 			onCancelDownload,
 			onRetryDownload,
+		onHandOffDownload,
 			onRemoveDownload,
 			onCancelUpload,
 			onRetryUpload,
@@ -96,6 +99,7 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 			onRemoveDownload,
 			onRemoveUpload,
 			onRetryDownload,
+		onHandOffDownload,
 			onRetryUpload,
 			onTabChange,
 			open,
@@ -109,6 +113,8 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 function summarizeDownloadTasks(tasks: DownloadTask[]): string {
 	if (tasks.length === 0) return ''
 	const counts = {
+		ready: 0,
+		handedOff: 0,
 		queued: 0,
 		waiting: 0,
 		running: 0,
@@ -118,6 +124,8 @@ function summarizeDownloadTasks(tasks: DownloadTask[]): string {
 	}
 	for (const t of tasks) {
 		switch (t.status) {
+			case 'ready': counts.ready++; break
+			case 'handed_off': counts.handedOff++; break
 			case 'queued':
 				counts.queued++
 				break
@@ -139,6 +147,8 @@ function summarizeDownloadTasks(tasks: DownloadTask[]): string {
 		}
 	}
 	const parts: string[] = [`Total ${tasks.length}`]
+	if (counts.ready) parts.push(`Ready to save ${counts.ready}`)
+	if (counts.handedOff) parts.push(`Browser handoff ${counts.handedOff}`)
 	if (counts.queued) parts.push(`Queued ${counts.queued}`)
 	if (counts.waiting) parts.push(`Waiting ${counts.waiting}`)
 	if (counts.running) parts.push(`Running ${counts.running}`)

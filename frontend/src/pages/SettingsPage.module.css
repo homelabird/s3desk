@@ -116,3 +116,16 @@
 		padding: 10px;
 	}
 }
+
+.transferSafetySelect {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 8px;
+  background: var(--s3d-color-bg-elevated);
+  color: var(--s3d-color-text);
+  font: inherit;
+}
+.transferSafetySelect:focus-visible { outline: 2px solid var(--s3d-color-focus); }

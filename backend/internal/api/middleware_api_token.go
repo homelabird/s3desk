@@ -100,11 +100,6 @@ func (svc apiTokenAuthService) prepareAuthorization(r *http.Request) apiTokenAut
 		now:       svc.currentTime(),
 	}
 
-	if retryAfter, allowed := svc.server.authLimit.allow(prepared.clientKey, prepared.now); !allowed {
-		prepared.err = buildTooManyAttemptsAuthError(retryAfter)
-		return prepared
-	}
-
 	// Keep credentials out of URLs; query parameters are easier to leak through logs and history.
 	if queryAPIToken := strings.TrimSpace(r.URL.Query().Get("apiToken")); queryAPIToken != "" {
 		prepared.err = &apiTokenAuthError{
@@ -139,23 +134,28 @@ func (svc apiTokenAuthService) executePrepared(w http.ResponseWriter, r *http.Re
 		return false, false, prepared.err
 	}
 
+	// Credentials, not a shared or changing source address, establish identity.
+	// Keep invalid-attempt history intact when a legitimate user crosses a NAT.
+	if !prepared.tokenTooLong && prepared.token != "" && apiTokenEqual(prepared.token, svc.server.cfg.APIToken) {
+		return true, false, nil
+	}
 	if prepared.realtimeTicket != "" {
 		if svc.server.rejectInvalidRealtimeOrigin(w, r, "realtime requests require a trusted Origin") {
 			return false, true, nil
 		}
 		if svc.server.realtimeTickets != nil && svc.server.realtimeTickets.Consume(prepared.realtimeTicket, prepared.transport, prepared.now) {
-			svc.server.authLimit.reset(prepared.clientKey)
 			return true, false, nil
+		}
+		if retryAfter, allowed := svc.server.authLimit.allow(prepared.clientKey, prepared.now); !allowed {
+			return false, false, buildTooManyAttemptsAuthError(retryAfter)
 		}
 		return false, false, svc.invalidCredentialError(prepared.clientKey, prepared.now, "invalid realtime ticket")
 	}
-
+	if retryAfter, allowed := svc.server.authLimit.allow(prepared.clientKey, prepared.now); !allowed {
+		return false, false, buildTooManyAttemptsAuthError(retryAfter)
+	}
 	if prepared.tokenTooLong {
 		return false, false, svc.invalidCredentialError(prepared.clientKey, prepared.now, "invalid api token")
-	}
-	if apiTokenEqual(prepared.token, svc.server.cfg.APIToken) {
-		svc.server.authLimit.reset(prepared.clientKey)
-		return true, false, nil
 	}
 	return false, false, svc.invalidCredentialError(prepared.clientKey, prepared.now, "invalid api token")
 }

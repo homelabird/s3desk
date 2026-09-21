@@ -27,6 +27,11 @@ func (s *server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleGetJobArtifact(w http.ResponseWriter, r *http.Request) {
+	release, ok := s.acquireDownloadSlot(w, r, r.Header.Get("X-Profile-Id"))
+	if !ok {
+		return
+	}
+	defer release()
 	newJobReadHTTPService(s).handleGetJobArtifact(w, r)
 }
 

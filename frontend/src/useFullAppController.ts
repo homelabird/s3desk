@@ -73,6 +73,8 @@ export function useFullAppController({
 	const {
 		selectedKey,
 		navOpen,
+		sidebarCollapsed,
+		toggleSidebar,
 		settingsOpen,
 		openNav,
 		closeNav,
@@ -100,6 +102,8 @@ export function useFullAppController({
 		shellScopeKey,
 		selectedKey,
 		navOpen,
+		sidebarCollapsed,
+		toggleSidebar,
 		openNav,
 		closeNav,
 		openSettings,

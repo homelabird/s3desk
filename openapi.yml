@@ -18,6 +18,37 @@ tags:
   - name: Events
   - name: System
 paths:
+  /operations/capabilities:
+    get:
+      operationId: getOperationReplayCapabilities
+      summary: Check durable control-operation replay support
+      description: Requires the API token. A network reconnect never enables POST replay
+        without this capability. Bulk file bodies and signed-URL issuance are not receipt-cached.
+      security: []
+      responses:
+        '200':
+          description: Receipt protocol support for this server deployment.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - version
+                - durable
+                - retentionSeconds
+                properties:
+                  version:
+                    type: integer
+                    enum:
+                    - 1
+                  durable:
+                    type: boolean
+                  retentionSeconds:
+                    type: integer
+                    enum:
+                    - 86400
+        '401':
+          description: Invalid or missing API token.
   /ws:
     get:
       tags: [Events]
@@ -1185,6 +1216,19 @@ paths:
       summary: Delete objects (batch)
       description: For large batches, prefer using a Job.
       parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: "Opaque 16\u2013128 character [A-Za-z0-9_-] operation identity, scoped\
+            \ to the authenticated token and profile, never the client IP. Same key and exact\
+            \ request replays the recorded result for at least 24h. Conflicting intent or\
+            \ unknown outcome returns 409; do not resubmit with a new key before reconciliation.\
+            \ Supported only when /operations/capabilities reports durable=true."
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
         - $ref: "#/components/parameters/BucketName"
@@ -1327,6 +1371,19 @@ paths:
         Creates a zero-byte object whose key ends with `/` so the prefix shows up as a folder in list operations.
         If the object already exists, the server returns `409 already_exists`.
       parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: "Opaque 16\u2013128 character [A-Za-z0-9_-] operation identity, scoped\
+            \ to the authenticated token and profile, never the client IP. Same key and exact\
+            \ request replays the recorded result for at least 24h. Conflicting intent or\
+            \ unknown outcome returns 409; do not resubmit with a new key before reconciliation.\
+            \ Supported only when /operations/capabilities reports durable=true."
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
         - $ref: "#/components/parameters/BucketName"
@@ -1607,6 +1664,19 @@ paths:
       tags: [Uploads]
       summary: Create a staging upload session
       parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: "Opaque 16\u2013128 character [A-Za-z0-9_-] operation identity, scoped\
+            \ to the authenticated token and profile, never the client IP. Same key and exact\
+            \ request replays the recorded result for at least 24h. Conflicting intent or\
+            \ unknown outcome returns 409; do not resubmit with a new key before reconciliation.\
+            \ Supported only when /operations/capabilities reports durable=true."
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
       requestBody:
@@ -1794,6 +1864,19 @@ paths:
       tags: [Uploads]
       summary: Complete a multipart upload
       parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: "Opaque 16\u2013128 character [A-Za-z0-9_-] operation identity, scoped\
+            \ to the authenticated token and profile, never the client IP. Same key and exact\
+            \ request replays the recorded result for at least 24h. Conflicting intent or\
+            \ unknown outcome returns 409; do not resubmit with a new key before reconciliation.\
+            \ Supported only when /operations/capabilities reports durable=true."
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
         - $ref: "#/components/parameters/UploadId"
@@ -1838,6 +1921,19 @@ paths:
       tags: [Uploads]
       summary: Commit staged files to S3 (creates a Job)
       parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: "Opaque 16\u2013128 character [A-Za-z0-9_-] operation identity, scoped\
+            \ to the authenticated token and profile, never the client IP. Same key and exact\
+            \ request replays the recorded result for at least 24h. Conflicting intent or\
+            \ unknown outcome returns 409; do not resubmit with a new key before reconciliation.\
+            \ Supported only when /operations/capabilities reports durable=true."
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
         - $ref: "#/components/parameters/UploadId"
@@ -1916,6 +2012,19 @@ paths:
       tags: [Jobs]
       summary: Create job (bulk transfer/sync/etc.)
       parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: "Opaque 16\u2013128 character [A-Za-z0-9_-] operation identity, scoped\
+            \ to the authenticated token and profile, never the client IP. Same key and exact\
+            \ request replays the recorded result for at least 24h. Conflicting intent or\
+            \ unknown outcome returns 409; do not resubmit with a new key before reconciliation.\
+            \ Supported only when /operations/capabilities reports durable=true."
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
       requestBody:
@@ -1962,6 +2071,100 @@ paths:
       responses:
         "204":
           description: No Content
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}/artifact-url:
+    get:
+      tags: [Jobs]
+      summary: Create a five-minute browser artifact download link
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignedURLResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /artifact-download-proxy:
+    get:
+      tags: [Jobs]
+      summary: Stream an artifact using a scoped expiring signature
+      servers:
+        - url: http://127.0.0.1:8080
+          description: Default local server (no /api/v1 prefix)
+      parameters:
+        - name: profileId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: jobId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "206":
+          description: Partial artifact content
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+    head:
+      tags: [Jobs]
+      summary: Read signed artifact download headers
+      servers:
+        - url: http://127.0.0.1:8080
+          description: Default local server (no /api/v1 prefix)
+      parameters:
+        - name: profileId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: jobId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Artifact headers
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
         "404":
           $ref: "#/components/responses/ErrorResponse"
         "409":
@@ -2033,6 +2236,19 @@ paths:
       tags: [Jobs]
       summary: Retry job (creates a new queued job)
       parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: "Opaque 16\u2013128 character [A-Za-z0-9_-] operation identity, scoped\
+            \ to the authenticated token and profile, never the client IP. Same key and exact\
+            \ request replays the recorded result for at least 24h. Conflicting intent or\
+            \ unknown outcome returns 409; do not resubmit with a new key before reconciliation.\
+            \ Supported only when /operations/capabilities reports durable=true."
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]+$
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
         - $ref: "#/components/parameters/JobId"
@@ -3477,7 +3693,8 @@ components:
         path: { type: string }
         parts:
           type: array
-          minItems: 1
+          minItems: 0
+          # Empty array requests authenticated ListParts; all expected part sizes must match.
           items: { $ref: "#/components/schemas/UploadMultipartCompletePart" }
 
     UploadMultipartCompletePart:

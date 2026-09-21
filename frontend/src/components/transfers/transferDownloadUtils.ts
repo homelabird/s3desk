@@ -1,3 +1,4 @@
+import { MAX_BUFFERED_DOWNLOAD_BYTES } from './transferSafetyPolicy'
 import { APIError, RequestAbortedError, RequestTimeoutError } from '../../api/client'
 import { clearNetworkStatus, publishNetworkStatus } from '../../lib/networkStatus'
 
@@ -56,7 +57,16 @@ export function downloadURLWithProgress(
 	xhr.open('GET', url)
 	xhr.responseType = 'blob'
 
+	let tooLarge = false
+	xhr.onreadystatechange = () => {
+		if (xhr.readyState === 2 && Number(xhr.getResponseHeader('content-length')) > MAX_BUFFERED_DOWNLOAD_BYTES) {
+			tooLarge = true; xhr.abort()
+		}
+	}
 	xhr.onprogress = (e) => {
+		if (e.loaded > MAX_BUFFERED_DOWNLOAD_BYTES || (e.lengthComputable && e.total > MAX_BUFFERED_DOWNLOAD_BYTES)) {
+			tooLarge = true; xhr.abort(); return
+		}
 		if (!opts.onProgress) return
 		opts.onProgress({
 			loadedBytes: e.loaded,
@@ -68,6 +78,7 @@ export function downloadURLWithProgress(
 		(resolve, reject) => {
 			xhr.onload = async () => {
 				if (xhr.status >= 200 && xhr.status < 300) {
+					if (xhr.response?.size > MAX_BUFFERED_DOWNLOAD_BYTES) { reject(new Error('File exceeds buffered download limit. Enable conservative transfer safety and retry.')); return }
 					clearNetworkStatus()
 					resolve({
 						blob: xhr.response,
@@ -85,7 +96,7 @@ export function downloadURLWithProgress(
 			xhr.onerror = () => {
 				reject(new Error('Network error (possible CORS).'))
 			}
-			xhr.onabort = () => reject(new RequestAbortedError())
+			xhr.onabort = () => reject(tooLarge ? new Error('File exceeds buffered download limit. Enable conservative transfer safety and retry.') : new RequestAbortedError())
 		},
 	)
 
@@ -96,7 +107,7 @@ export function downloadURLWithProgress(
 async function blobToTextSafe(blob: Blob | null): Promise<string | null> {
 	if (!blob) return null
 	try {
-		return await blob.text()
+		return await blob.slice(0, 4096).text()
 	} catch {
 		return null
 	}
@@ -112,7 +123,7 @@ export function saveBlob(blob: Blob, filename: string) {
 	document.body.appendChild(a)
 	a.click()
 	a.remove()
-	setTimeout(() => URL.revokeObjectURL(url), 0)
+	setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 export function maybeReportNetworkError(err: unknown) {

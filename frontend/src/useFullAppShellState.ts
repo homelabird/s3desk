@@ -5,6 +5,7 @@ import { createElement, useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
 import { confirmDangerAction } from './lib/confirmDangerAction'
+import { useLocalStorageState } from './lib/useLocalStorageState'
 import type { ThemeMode } from './themeModeContext'
 
 type ScopedOverlayState = {
@@ -20,6 +21,10 @@ type UseFullAppShellStateArgs = {
 	setApiToken: (token: string) => void
 	themeMode: ThemeMode
 	toggleThemeMode: () => void
+}
+
+function sanitizeSidebarCollapsed(value: boolean): boolean {
+	return value === true
 }
 
 function getSelectedNavKey(pathname: string): string {
@@ -50,6 +55,13 @@ export function useFullAppShellState({
 		open: false,
 		scopeKey: null,
 	})
+
+	const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorageState<boolean>(
+		'appSidebarCollapsed', false, { sanitize: sanitizeSidebarCollapsed },
+	)
+	const toggleSidebar = useCallback(() => {
+		setSidebarCollapsed((collapsed) => !collapsed)
+	}, [setSidebarCollapsed])
 
 	const selectedKey = useMemo(() => getSelectedNavKey(pathname), [pathname])
 	const navOpen = navState.open && navState.scopeKey === shellScopeKey
@@ -139,6 +151,8 @@ export function useFullAppShellState({
 	return {
 		selectedKey,
 		navOpen,
+		sidebarCollapsed,
+		toggleSidebar,
 		settingsOpen,
 		openNav,
 		closeNav,

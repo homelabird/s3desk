@@ -8,6 +8,7 @@ import { gotoProfilesPage } from './support/ui'
 import { expectMinTouchTarget } from './support/geometry'
 
 const mobileDeviceContracts = {
+	'mobile-iphone-13-webkit': { width: 390, height: 664, deviceScaleFactor: 3 },
 	'mobile-iphone-13': { width: 390, height: 664, deviceScaleFactor: 3 },
 	'mobile-pixel-7': { width: 412, height: 839, deviceScaleFactor: 2.625 },
 } as const
@@ -37,12 +38,12 @@ test.describe('@mobile-responsive Apple and Google mobile web standards', () => 
 		await expect(page.getByRole('menuitem', { name: /Settings/ })).toBeVisible()
 	})
 
-	test('keeps the Chromium device contract, standards metadata, and user zoom enabled', async ({ browser, page }, testInfo) => {
+	test('keeps the declared browser engine, device contract, standards metadata, and user zoom enabled', async ({ browser, page }, testInfo) => {
 		await setupProfilesPage(page)
 
 		const expectedDevice = mobileDeviceContracts[testInfo.project.name as keyof typeof mobileDeviceContracts]
 		expect(expectedDevice).toBeDefined()
-		expect(browser.browserType().name()).toBe('chromium')
+		expect(browser.browserType().name()).toBe(testInfo.project.name.endsWith('-webkit') ? 'webkit' : 'chromium')
 		expect(
 			await page.evaluate(() => ({
 				width: window.innerWidth,
@@ -60,7 +61,8 @@ test.describe('@mobile-responsive Apple and Google mobile web standards', () => 
 		await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', /\S+/)
 	})
 
-	test('keeps primary chrome inside emulated display safe areas', async ({ page }) => {
+	test('keeps primary chrome inside emulated display safe areas', async ({ page, browserName }) => {
+		test.skip(browserName !== 'chromium', 'Safe-area override uses Chromium CDP; engine-neutral platform checks still run.')
 		const session = await page.context().newCDPSession(page)
 		await session.send('Emulation.setSafeAreaInsetsOverride', {
 			insets: {

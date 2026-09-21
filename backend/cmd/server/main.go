@@ -58,8 +58,13 @@ func main() {
 	flag.DurationVar(&cfg.UploadSessionTTL, "upload-ttl", 24*time.Hour, "upload session TTL")
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", 0, "max total bytes per upload session (0=unlimited)")
 	flag.Int64Var(&cfg.ServerRestoreMaxBytes, "server-restore-max-bytes", 4*1024*1024*1024, "max accepted backup restore bundle bytes before staging (0=unlimited)")
+	flag.BoolVar(&cfg.S3NativeList, "s3-native-list", true, "use native S3 pagination (set false for legacy rclone listing)")
+	flag.BoolVar(&cfg.S3NativeDownload, "s3-native-download", true, "stream S3 downloads with conditional range reads")
+	flag.BoolVar(&cfg.UploadProxyOnly, "upload-proxy-only", false, "send new uploads through S3Desk instead of browser-to-storage presigned URLs")
 	flag.BoolVar(&cfg.UploadDirectStream, "upload-direct-stream", true, "stream uploads directly to the provider (set false to use staging)")
 	flag.IntVar(&cfg.UploadMaxConcurrentRequests, "upload-max-concurrent-requests", 16, "max concurrent upload requests (0=unlimited)")
+	flag.IntVar(&cfg.DownloadMaxConcurrentRequests, "download-max-concurrent-requests", 8, "max active download streams per server (must be positive)")
+	flag.IntVar(&cfg.DownloadMaxConcurrentPerProfile, "download-max-concurrent-per-profile", 4, "max active download streams per profile (must be positive)")
 	flag.IntVar(&cfg.RcloneDownloadMultiThreadStreams, "rclone-download-multi-thread-streams", 16, "rclone --multi-thread-streams for API downloads (0=use rclone default)")
 	flag.IntVar(&cfg.RcloneDownloadMultiThreadCutoffMiB, "rclone-download-multi-thread-cutoff-mib", 4, "rclone --multi-thread-cutoff for API downloads, in MiB (0=use rclone default)")
 	flag.IntVar(&cfg.RcloneDownloadBufferSizeMiB, "rclone-download-buffer-size-mib", 128, "rclone --buffer-size for API downloads, in MiB (0=use rclone default)")
@@ -294,6 +299,21 @@ func applyEnvConfigOverrides(cfg *config.Config, setFlags map[string]struct{}) e
 		}
 		cfg.ServerRestoreMaxBytes = value
 	}
+
+	if !flagWasSet(setFlags, "s3-native-list") {
+		value, err := lookupEnvBool("S3_NATIVE_LIST", cfg.S3NativeList)
+		if err != nil {
+			return err
+		}
+		cfg.S3NativeList = value
+	}
+	if !flagWasSet(setFlags, "upload-proxy-only") {
+		value, err := lookupEnvBool("UPLOAD_PROXY_ONLY", cfg.UploadProxyOnly)
+		if err != nil {
+			return err
+		}
+		cfg.UploadProxyOnly = value
+	}
 	if !flagWasSet(setFlags, "upload-direct-stream") {
 		value, err := lookupEnvBool("UPLOAD_DIRECT_STREAM", cfg.UploadDirectStream)
 		if err != nil {
@@ -307,6 +327,36 @@ func applyEnvConfigOverrides(cfg *config.Config, setFlags map[string]struct{}) e
 			return err
 		}
 		cfg.UploadMaxConcurrentRequests = value
+	}
+	for _, option := range []struct {
+		flag, env    string
+		value        *int
+		defaultValue int
+	}{
+		{"download-max-concurrent-requests", "DOWNLOAD_MAX_CONCURRENT_REQUESTS", &cfg.DownloadMaxConcurrentRequests, 8},
+		{"download-max-concurrent-per-profile", "DOWNLOAD_MAX_CONCURRENT_PER_PROFILE", &cfg.DownloadMaxConcurrentPerProfile, 4},
+	} {
+		if !flagWasSet(setFlags, option.flag) {
+			fallback := *option.value
+			if fallback == 0 {
+				fallback = option.defaultValue
+			}
+			value, err := lookupEnvInt(option.env, fallback)
+			if err != nil {
+				return err
+			}
+			*option.value = value
+		}
+		if *option.value <= 0 {
+			return fmt.Errorf("%s must be positive", option.env)
+		}
+	}
+	if !flagWasSet(setFlags, "s3-native-download") {
+		value, err := lookupEnvBool("S3_NATIVE_DOWNLOAD", cfg.S3NativeDownload)
+		if err != nil {
+			return err
+		}
+		cfg.S3NativeDownload = value
 	}
 	if !flagWasSet(setFlags, "rclone-download-multi-thread-streams") {
 		value, err := lookupEnvInt("RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS", cfg.RcloneDownloadMultiThreadStreams)

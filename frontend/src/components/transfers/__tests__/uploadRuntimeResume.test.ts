@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { APIError, RequestAbortedError, type UploadFileItem } from '../../../api/client'
 import { resolveExistingResumeChunks } from '../uploadRuntimeResume'
+import { fingerprintUploadFile } from '../uploadFileIdentity'
 
 function uploadItem(name = 'folder/report.bin', size = 256): UploadFileItem {
 	return {
@@ -22,7 +23,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items: [uploadItem('__proto__')],
-			resumeFilesByPath: new Map([['__proto__', { size: 256, chunkSizeBytes: 64 }]]),
+			resumeFilesByPath: new Map([['__proto__', { size: 256, chunkSizeBytes: 64, fingerprint: await fingerprintUploadFile(uploadItem().file) }]]),
 		})
 		expect(result.ok && result.available && Object.entries(result.existingChunksByPath)).toEqual([['__proto__', [0, 2]]])
 	})
@@ -39,7 +40,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items: [item],
-			resumeFilesByPath: new Map([['folder/report.bin', { size: item.file.size, chunkSizeBytes: 64 }]]),
+			resumeFilesByPath: new Map([['folder/report.bin', { size: item.file.size, chunkSizeBytes: 64, fingerprint: await fingerprintUploadFile(item.file) }]]),
 		})
 
 		expect(getUploadChunksBatch).toHaveBeenCalledWith('profile-1', 'session-1', { items: [{
@@ -63,7 +64,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items: [uploadItem('folder/report.bin', 128)],
-			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64 }]]),
+			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64, fingerprint: await fingerprintUploadFile(uploadItem().file) }]]),
 		})
 
 		expect(getUploadChunks).not.toHaveBeenCalled()
@@ -89,7 +90,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items: [uploadItem()],
-			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64 }]]),
+			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64, fingerprint: await fingerprintUploadFile(uploadItem().file) }]]),
 		})
 
 		expect(getUploadChunks).toHaveBeenCalledWith('profile-1', 'session-1', {
@@ -113,7 +114,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items: [uploadItem()],
-			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64 }]]),
+			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64, fingerprint: await fingerprintUploadFile(uploadItem().file) }]]),
 		})
 
 		expect(result).toEqual({ ok: true, available: false })
@@ -121,7 +122,7 @@ describe('resolveExistingResumeChunks', () => {
 
 	it('scales status request count with bounded batches instead of file count', async () => {
 		const items = Array.from({ length: 205 }, (_, index) => uploadItem(`folder/file-${index}.bin`, 64))
-		const resumeFilesByPath = new Map(items.map((item) => [item.relPath!, { size: 64, chunkSizeBytes: 32 }]))
+		const resumeFilesByPath = new Map(await Promise.all(items.map(async (item) => [item.relPath!, { size: 64, chunkSizeBytes: 32, fingerprint: await fingerprintUploadFile(uploadItem("x", 64).file) }] as const)))
 		const getUploadChunks = vi.fn()
 		const getUploadChunksBatch = vi.fn().mockImplementation((_profileId, _uploadId, req) => Promise.resolve({
 			items: req.items.map((item: { path: string }) => ({ path: item.path, present: [0] })),
@@ -152,7 +153,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items,
-			resumeFilesByPath: new Map(items.map((item) => [item.relPath!, { size: 6000, chunkSizeBytes: 1 }])),
+			resumeFilesByPath: new Map(await Promise.all(items.map(async (item) => [item.relPath!, { size: 6000, chunkSizeBytes: 1, fingerprint: await fingerprintUploadFile(uploadItem("x", 6000).file) }] as const))),
 		})
 
 		expect(getUploadChunksBatch).toHaveBeenCalledTimes(2)
@@ -173,7 +174,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items,
-			resumeFilesByPath: new Map(items.map((item) => [item.relPath!, { size: 64, chunkSizeBytes: 32 }])),
+			resumeFilesByPath: new Map(await Promise.all(items.map(async (item) => [item.relPath!, { size: 64, chunkSizeBytes: 32, fingerprint: await fingerprintUploadFile(uploadItem("x", 64).file) }] as const))),
 		})
 
 		expect(result).toMatchObject({
@@ -194,7 +195,7 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items: [item],
-			resumeFilesByPath: new Map([['folder/report.bin', { size: 64, chunkSizeBytes: 32 }]]),
+			resumeFilesByPath: new Map([['folder/report.bin', { size: 64, chunkSizeBytes: 32, fingerprint: await fingerprintUploadFile(uploadItem("x", 64).file) }]]),
 		})
 
 		expect(result).toMatchObject({
@@ -207,6 +208,7 @@ describe('resolveExistingResumeChunks', () => {
 	it('shares the caller AbortSignal with the in-flight batch request', async () => {
 		const controller = new AbortController()
 		const getUploadChunksBatch = vi.fn((_profileId, _uploadId, _req, signal: AbortSignal) => new Promise((_resolve, reject) => {
+			if (signal.aborted) { reject(new RequestAbortedError()); return }
 			signal.addEventListener('abort', () => reject(new RequestAbortedError()), { once: true })
 		}))
 		const pending = resolveExistingResumeChunks({
@@ -214,10 +216,11 @@ describe('resolveExistingResumeChunks', () => {
 			profileId: 'profile-1',
 			uploadId: 'session-1',
 			items: [uploadItem()],
-			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64 }]]),
+			resumeFilesByPath: new Map([['folder/report.bin', { size: 256, chunkSizeBytes: 64, fingerprint: await fingerprintUploadFile(uploadItem().file) }]]),
 			signal: controller.signal,
 		})
 
+		await vi.waitFor(() => expect(getUploadChunksBatch).toHaveBeenCalled())
 		controller.abort()
 		await expect(pending).rejects.toBeInstanceOf(RequestAbortedError)
 		expect(getUploadChunksBatch).toHaveBeenCalledWith(

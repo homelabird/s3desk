@@ -1,4 +1,6 @@
 import { useCallback } from 'react'
+import { useTransferSafety, readTransferEnvironment } from './useTransferSafety'
+import { constrainUploadTuning, needsConservativeTransfers } from './transferSafetyPolicy'
 
 import { useDownloadLinkProxyPreference } from '../../lib/useDownloadLinkProxyPreference'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
@@ -20,6 +22,7 @@ export type UploadTuning = {
 }
 
 export function useTransfersUploadPreferences() {
+	const { mode, conservative } = useTransferSafety()
 	const [downloadLinkProxyEnabled] = useDownloadLinkProxyPreference()
 	const [downloadTaskConcurrency] = useLocalStorageState<number>(
 		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
@@ -60,55 +63,60 @@ export function useTransfersUploadPreferences() {
 
 	const pickUploadTuning = useCallback(
 		(totalBytes: number, maxFileBytes: number | null): UploadTuning => {
-			if (!uploadAutoTuneEnabled) {
-				return {
-					batchConcurrency: uploadBatchConcurrency,
-					batchBytes: uploadBatchBytes,
-					chunkSizeBytes: uploadChunkSizeBytes,
-					chunkConcurrency: uploadChunkConcurrency,
-					chunkThresholdBytes: uploadChunkThresholdBytes,
+			const baseTuning = (): UploadTuning => {
+				if (!uploadAutoTuneEnabled) {
+					return {
+						batchConcurrency: uploadBatchConcurrency,
+						batchBytes: uploadBatchBytes,
+						chunkSizeBytes: uploadChunkSizeBytes,
+						chunkConcurrency: uploadChunkConcurrency,
+						chunkThresholdBytes: uploadChunkThresholdBytes,
+					}
 				}
-			}
 
-			const size = Math.max(totalBytes, maxFileBytes ?? 0)
-			const mib = size / (1024 * 1024)
+				const size = Math.max(totalBytes, maxFileBytes ?? 0)
+				const mib = size / (1024 * 1024)
 
-			if (mib <= 256) {
-				return {
-					batchConcurrency: 8,
-					batchBytes: 32 * 1024 * 1024,
-					chunkSizeBytes: 64 * 1024 * 1024,
-					chunkConcurrency: 4,
-					chunkThresholdBytes: 128 * 1024 * 1024,
+				if (mib <= 256) {
+					return {
+						batchConcurrency: 8,
+						batchBytes: 32 * 1024 * 1024,
+						chunkSizeBytes: 64 * 1024 * 1024,
+						chunkConcurrency: 4,
+						chunkThresholdBytes: 128 * 1024 * 1024,
+					}
 				}
-			}
-			if (mib <= 2048) {
-				return {
-					batchConcurrency: 16,
-					batchBytes: 64 * 1024 * 1024,
-					chunkSizeBytes: 128 * 1024 * 1024,
-					chunkConcurrency: 8,
-					chunkThresholdBytes: 256 * 1024 * 1024,
+				if (mib <= 2048) {
+					return {
+						batchConcurrency: 16,
+						batchBytes: 64 * 1024 * 1024,
+						chunkSizeBytes: 128 * 1024 * 1024,
+						chunkConcurrency: 8,
+						chunkThresholdBytes: 256 * 1024 * 1024,
+					}
 				}
-			}
-			if (mib <= 8192) {
+				if (mib <= 8192) {
+					return {
+						batchConcurrency: 24,
+						batchBytes: 96 * 1024 * 1024,
+						chunkSizeBytes: 256 * 1024 * 1024,
+						chunkConcurrency: 12,
+						chunkThresholdBytes: 512 * 1024 * 1024,
+					}
+				}
 				return {
-					batchConcurrency: 24,
-					batchBytes: 96 * 1024 * 1024,
+					batchConcurrency: 32,
+					batchBytes: 128 * 1024 * 1024,
 					chunkSizeBytes: 256 * 1024 * 1024,
-					chunkConcurrency: 12,
+					chunkConcurrency: 16,
 					chunkThresholdBytes: 512 * 1024 * 1024,
 				}
 			}
-			return {
-				batchConcurrency: 32,
-				batchBytes: 128 * 1024 * 1024,
-				chunkSizeBytes: 256 * 1024 * 1024,
-				chunkConcurrency: 16,
-				chunkThresholdBytes: 512 * 1024 * 1024,
-			}
+			const env = readTransferEnvironment()
+			return constrainUploadTuning(baseTuning(), maxFileBytes, needsConservativeTransfers(mode, env), env.saveData)
 		},
 		[
+			mode,
 			uploadAutoTuneEnabled,
 			uploadBatchConcurrency,
 			uploadBatchBytes,
@@ -120,9 +128,10 @@ export function useTransfersUploadPreferences() {
 
 	return {
 		downloadLinkProxyEnabled,
-		downloadTaskConcurrency,
-		uploadChunkFileConcurrency,
-		uploadTaskConcurrency,
+		downloadTaskConcurrency: conservative ? 1 : downloadTaskConcurrency,
+		uploadChunkFileConcurrency: conservative ? 1 : uploadChunkFileConcurrency,
+		uploadTaskConcurrency: conservative ? 1 : uploadTaskConcurrency,
+		conservativeTransfers: conservative,
 		uploadResumeConversionEnabled,
 		pickUploadTuning,
 	}

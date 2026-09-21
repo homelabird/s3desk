@@ -196,7 +196,7 @@
   left: 0;
   width: 100%;
   min-height: var(--objects-row-min-height, auto);
-  padding: 8px 14px;
+  padding: 4px 10px;
   border-bottom: 1px solid var(--s3d-color-border-soft);
   transform: translateY(var(--objects-row-offset, 0px));
   transition: background var(--s3d-transition-fast);
@@ -260,6 +260,7 @@
   gap: 6px;
 }
 
+.listRowTextStack,
 .listRowObjectMain {
   min-width: 0;
   display: flex;
@@ -337,9 +338,9 @@
 
 .listRowFolderIconWrap,
 .listRowFileIconWrap {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -385,6 +386,11 @@
 }
 
 .listRowMetaCompact {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: var(--s3d-font-size-xs);
   line-height: 1.15;
 }
@@ -980,7 +986,7 @@
   }
 
   .listRowShell {
-    padding: 7px 8px;
+    padding: 3px 6px;
   }
 
   .listRowMetaCompact {
@@ -1062,4 +1068,43 @@
     justify-content: center;
   }
 
+}
+
+/* Density must not shrink the controls users touch. Apply to tablets and
+   landscape phones too, not only the <=480px portrait breakpoint. */
+@media (max-width: 991px), (pointer: coarse) {
+  .listGridCompact {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: 4px;
+  }
+
+  .listRowShell {
+    padding-block: 3px;
+  }
+
+  .listRowShell .listRowIconButton,
+  .listRowShell .listRowMenuButton,
+  .listRowShell .listRowFavoriteButton,
+  .listRowCheckboxCell :global(.ant-checkbox-wrapper) {
+    min-width: var(--s3d-control-size-touch) !important;
+    min-height: var(--s3d-control-size-touch) !important;
+    width: var(--s3d-control-size-touch);
+    height: var(--s3d-control-size-touch);
+  }
+
+  .listRowCheckboxCell :global(.ant-checkbox-wrapper) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .listRowShell .listRowBodyButton {
+    min-width: 0 !important;
+    min-height: var(--s3d-control-size-touch) !important;
+    flex: 1 1 auto;
+  }
+
+  .listGridCompact .listRowAuxActions {
+    display: none;
+  }
 }

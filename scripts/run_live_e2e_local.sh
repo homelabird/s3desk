@@ -3,11 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-MINIO_CONTAINER="${MINIO_CONTAINER:-s3desk-minio-e2e-local}"
-MINIO_IMAGE="${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}"
-MINIO_PORT="${MINIO_PORT:-9000}"
-MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
-MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
+SEAWEEDFS_CONTAINER="${SEAWEEDFS_CONTAINER:-s3desk-seaweedfs-e2e-local-$$}"
+SEAWEEDFS_IMAGE="${SEAWEEDFS_IMAGE:-docker.io/chrislusf/seaweedfs:4.47}"
+SEAWEEDFS_API_PORT="${SEAWEEDFS_API_PORT:-8333}"
+SEAWEEDFS_ACCESS_KEY="${SEAWEEDFS_ACCESS_KEY:-demo-seaweedfs}"
+SEAWEEDFS_SECRET_KEY="${SEAWEEDFS_SECRET_KEY:-demo-seaweedfs-secret}"
 RCLONE_IMAGE="${RCLONE_IMAGE:-docker.io/rclone/rclone:1.72.0}"
 
 API_TOKEN="${API_TOKEN:-change-me}"
@@ -19,14 +19,14 @@ RCLONE_PATH="${RCLONE_PATH:-}"
 PLAYWRIGHT_PROJECT="${PLAYWRIGHT_PROJECT:-chromium}"
 
 E2E_BASE_URL="${E2E_BASE_URL:-http://${BACKEND_ADDR}}"
-E2E_S3_ENDPOINT="${E2E_S3_ENDPOINT:-http://127.0.0.1:${MINIO_PORT}}"
+E2E_S3_ENDPOINT="${E2E_S3_ENDPOINT:-http://127.0.0.1:${SEAWEEDFS_API_PORT}}"
 E2E_S3_PUBLIC_ENDPOINT="${E2E_S3_PUBLIC_ENDPOINT:-${E2E_S3_ENDPOINT}}"
-E2E_S3_ACCESS_KEY="${E2E_S3_ACCESS_KEY:-${MINIO_ROOT_USER}}"
-E2E_S3_SECRET_KEY="${E2E_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}"
+E2E_S3_ACCESS_KEY="${E2E_S3_ACCESS_KEY:-${SEAWEEDFS_ACCESS_KEY}}"
+E2E_S3_SECRET_KEY="${E2E_S3_SECRET_KEY:-${SEAWEEDFS_SECRET_KEY}}"
 E2E_S3_REGION="${E2E_S3_REGION:-us-east-1}"
 E2E_S3_FORCE_PATH_STYLE="${E2E_S3_FORCE_PATH_STYLE:-true}"
 E2E_S3_TLS_SKIP_VERIFY="${E2E_S3_TLS_SKIP_VERIFY:-false}"
-E2E_GCS_ENDPOINT="${E2E_GCS_ENDPOINT:-http://127.0.0.1:${MINIO_PORT}}"
+E2E_GCS_ENDPOINT="${E2E_GCS_ENDPOINT:-http://127.0.0.1:${SEAWEEDFS_API_PORT}}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-${E2E_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}}"
 UPLOAD_DIRECT_STREAM="${UPLOAD_DIRECT_STREAM:-true}"
 
@@ -36,6 +36,8 @@ BACKEND_TEMP_DIR=""
 BACKEND_BIN=""
 RCLONE_TEMP_DIR=""
 RCLONE_CONTAINER=""
+SEAWEEDFS_STARTED=false
+SEAWEEDFS_TEMP_DIR=""
 
 if ! command -v podman >/dev/null 2>&1; then
 	echo "podman is required" >&2
@@ -153,22 +155,17 @@ else
 	esac
 fi
 
-echo "[live-e2e] starting MinIO (${MINIO_IMAGE}) on :${MINIO_PORT}"
-podman rm -f "${MINIO_CONTAINER}" >/dev/null 2>&1 || true
-podman run -d \
-	--name "${MINIO_CONTAINER}" \
-	-p "${MINIO_PORT}:9000" \
-	-e "MINIO_ROOT_USER=${MINIO_ROOT_USER}" \
-	-e "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}" \
-	"${MINIO_IMAGE}" \
-	server /data >/dev/null
-
 cleanup() {
 	if [ -n "${BACK_PID:-}" ]; then
 		kill "${BACK_PID}" >/dev/null 2>&1 || true
 		wait "${BACK_PID}" >/dev/null 2>&1 || true
 	fi
-	podman rm -f "${MINIO_CONTAINER}" >/dev/null 2>&1 || true
+	if [ "${SEAWEEDFS_STARTED}" = true ]; then
+		podman rm -f "${SEAWEEDFS_CONTAINER}" >/dev/null 2>&1 || true
+	fi
+	if [ -n "${SEAWEEDFS_TEMP_DIR}" ]; then
+		rm -rf "${SEAWEEDFS_TEMP_DIR}"
+	fi
 	if [ -n "${BACKEND_TEMP_DIR}" ]; then
 		rm -rf "${BACKEND_TEMP_DIR}" >/dev/null 2>&1 || true
 	fi
@@ -182,6 +179,48 @@ cleanup() {
 trap cleanup EXIT
 
 ensure_rclone
+# Unique container and data directory per run: never remove a user's storage.
+SEAWEEDFS_TEMP_DIR="$(mktemp -d /tmp/s3desk-seaweedfs-e2e.XXXXXX)"
+echo "[live-e2e] starting SeaweedFS (${SEAWEEDFS_IMAGE}) on 127.0.0.1:${SEAWEEDFS_API_PORT}"
+podman run -d \
+	--name "${SEAWEEDFS_CONTAINER}" \
+	-p "127.0.0.1:${SEAWEEDFS_API_PORT}:8333" \
+	-e "AWS_ACCESS_KEY_ID=${E2E_S3_ACCESS_KEY}" \
+	-e "AWS_SECRET_ACCESS_KEY=${E2E_S3_SECRET_KEY}" \
+	-v "${SEAWEEDFS_TEMP_DIR}:/data:Z" \
+	-v "${ROOT_DIR}/compose/demo/filer.toml:/etc/seaweedfs/filer.toml:ro,z" \
+	"${SEAWEEDFS_IMAGE}" server \
+	-dir=/data -ip=127.0.0.1 -ip.bind=127.0.0.1 \
+	-master.port=9333 -master.volumeSizeLimitMB=256 -master.telemetry=false \
+	-volume.port=9340 -volume.max=0 -filer -filer.port=8888 \
+	-s3 -s3.ip.bind=0.0.0.0 -s3.port=8333 \
+	-s3.port.iceberg=0 -s3.port.lance=0 -s3.iam=false \
+	-s3.allowDeleteBucketNotEmpty=false -s3.autoCreateBucket=false \
+	"-s3.allowedOrigins=${E2E_BASE_URL}" >/dev/null
+SEAWEEDFS_STARTED=true
+
+# Master/filer health alone is not S3 readiness. Verify signed requests through
+# the same S3 API used by the backend, with bounded attempts and I/O deadlines.
+storage_ready=false
+for _ in $(seq 1 40); do
+	if RCLONE_CONFIG=/dev/null RCLONE_CONFIG_E2E_TYPE=s3 \
+		RCLONE_CONFIG_E2E_PROVIDER=Other RCLONE_CONFIG_E2E_ENV_AUTH=false \
+		RCLONE_CONFIG_E2E_ENDPOINT="${E2E_S3_ENDPOINT}" \
+		RCLONE_CONFIG_E2E_REGION="${E2E_S3_REGION}" \
+		RCLONE_CONFIG_E2E_FORCE_PATH_STYLE=true \
+		RCLONE_CONFIG_E2E_ACCESS_KEY_ID="${E2E_S3_ACCESS_KEY}" \
+		RCLONE_CONFIG_E2E_SECRET_ACCESS_KEY="${E2E_S3_SECRET_KEY}" \
+		"${RCLONE_PATH}" --contimeout 3s --timeout 5s --max-duration 8s \
+		--retries 1 --low-level-retries 1 lsd e2e: >/dev/null 2>&1; then
+		storage_ready=true
+		break
+	fi
+	sleep 1
+done
+if [ "${storage_ready}" != true ]; then
+	echo "SeaweedFS did not become ready for authenticated S3 requests" >&2
+	exit 1
+fi
 stop_stale_backend
 
 echo "[live-e2e] building frontend"
@@ -192,26 +231,28 @@ echo "[live-e2e] building frontend"
 
 build_backend
 
-for _ in $(seq 1 40); do
-	if curl -fsS "http://127.0.0.1:${MINIO_PORT}/minio/health/live" >/dev/null 2>&1; then
-		break
-	fi
-	sleep 1
-done
-
 echo "[live-e2e] starting backend on ${BACKEND_ADDR}"
 (
 	cd "${ROOT_DIR}/backend"
-	API_TOKEN="${API_TOKEN}" ENCRYPTION_KEY="${ENCRYPTION_KEY}" UPLOAD_DIRECT_STREAM="${UPLOAD_DIRECT_STREAM}" ADDR="${BACKEND_ADDR}" RCLONE_PATH="${RCLONE_PATH}" exec "${BACKEND_BIN}" >"${BACKEND_LOG}" 2>&1
+	S3DESK_ALLOWED_LOOPBACK_PUBLIC_ENDPOINT="${E2E_S3_PUBLIC_ENDPOINT}" API_TOKEN="${API_TOKEN}" ENCRYPTION_KEY="${ENCRYPTION_KEY}" UPLOAD_DIRECT_STREAM="${UPLOAD_DIRECT_STREAM}" ADDR="${BACKEND_ADDR}" RCLONE_PATH="${RCLONE_PATH}" exec "${BACKEND_BIN}" >"${BACKEND_LOG}" 2>&1
 ) &
 BACK_PID=$!
 
+backend_ready=false
 for _ in $(seq 1 40); do
-	if curl -fsS "http://${BACKEND_HOST}:${BACKEND_PORT}/healthz" >/dev/null 2>&1; then
+	if curl --connect-timeout 2 --max-time 3 -fsS "http://${BACKEND_HOST}:${BACKEND_PORT}/healthz" >/dev/null 2>&1; then
+		backend_ready=true
+		break
+	fi
+	if ! kill -0 "${BACK_PID}" 2>/dev/null; then
 		break
 	fi
 	sleep 1
 done
+if [ "${backend_ready}" != true ]; then
+	echo "Backend did not become ready; inspect ${BACKEND_LOG}" >&2
+	exit 1
+fi
 
 echo "[live-e2e] running Playwright (${PLAYWRIGHT_PROJECT})"
 (

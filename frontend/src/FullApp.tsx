@@ -1,8 +1,9 @@
+import { subscribeNetworkRecovery } from './lib/networkRecovery'
 import { ConfigProvider } from 'antd'
 import 'antd/dist/reset.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router'
-import { Suspense, lazy, useMemo } from 'react'
+import { Suspense, lazy, useMemo, useEffect } from 'react'
 
 import { AntdToastAnnouncer } from './components/AntdToastAnnouncer'
 import FullAppInner from './FullAppInner'
@@ -30,6 +31,10 @@ const queryClient = new QueryClient({
 })
 
 export default function FullApp() {
+	useEffect(() => subscribeNetworkRecovery(() => {
+		// Refresh reads; never re-run mutations just because the network changed.
+		void queryClient.invalidateQueries({ refetchType: 'active' })
+	}), [])
 	const { mode } = useThemeMode()
 	const appTheme = useMemo(() => getAppTheme(mode), [mode])
 

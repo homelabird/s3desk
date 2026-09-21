@@ -79,7 +79,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"prod\",\n  \"endpoint\": \"http://minio:9000\",\n  \"region\": \"us-east-1\",\n  \"accessKeyId\": \"AKIA...\",\n  \"secretAccessKey\": \"...\",\n  \"forcePathStyle\": false,\n  \"preserveLeadingSlash\": false,\n  \"tlsInsecureSkipVerify\": false\n}"
+              "raw": "{\n  \"name\": \"prod\",\n  \"endpoint\": \"http://seaweedfs:8333\",\n  \"region\": \"us-east-1\",\n  \"accessKeyId\": \"AKIA...\",\n  \"secretAccessKey\": \"...\",\n  \"forcePathStyle\": false,\n  \"preserveLeadingSlash\": false,\n  \"tlsInsecureSkipVerify\": false\n}"
             },
             "url": "{{baseUrl}}/api/v1/profiles"
           }

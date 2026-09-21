@@ -3,22 +3,19 @@
 S3Desk is a self-hosted web interface for managing buckets, objects, transfers, and access settings across object-storage providers.<br>
 It supports AWS S3, S3-compatible storage, Azure Blob, Google Cloud Storage, and OCI Object Storage.
 
-![Basic demo flow](frontend/docs/assets/gifs/20260816-231756/objects-live-flow-demo.gif)
-
-_(Demo animation is intentionally slowed to 5x for clearer click-by-click walkthrough; initial wait-time is shortened by skipping the first 2 seconds of recording.)_
-
 ## Quick start
 
-Docker or Podman with Compose is required.
+Docker or Podman with Compose is required (including conditional `depends_on` support).
+All local S3 demo and integration-test environments use **SeaweedFS**; the demo creates a `SeaweedFS Demo` S3-compatible profile and a `demo-bucket` with sample objects.
 
 ```bash
-DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo up --build -d
+DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo up --build -d --remove-orphans
 ```
 
 Open <http://127.0.0.1:8080>. To expose the demo on a LAN, replace `127.0.0.1` with the host's LAN IP:
 
 ```bash
-DEMO_PUBLIC_HOST=192.168.0.227 ./scripts/compose.sh demo up --build -d
+DEMO_PUBLIC_HOST=192.168.0.227 ./scripts/compose.sh demo up --build -d --remove-orphans
 ```
 
 Stop the demo:
@@ -26,6 +23,20 @@ Stop the demo:
 ```bash
 DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo down
 ```
+
+The S3 API is published on port `8333`; the UI remains on `8080`. Select
+`SeaweedFS Demo` in the profile picker. Internal master, volume, and filer ports
+are not published. Known demo credentials are for local/trusted testing only.
+
+A normal `down` preserves data; **do not use `down -v`** to switch from MinIO.
+Existing MinIO volumes and profiles are left intact, but objects are **not**
+automatically migrated or reused by SeaweedFS. `--remove-orphans` removes old
+MinIO containers in the same Compose project without deleting their named volumes.
+See [SeaweedFS demo setup and migration](docs/SEAWEEDFS_DEMO.md) for credentials,
+custom ports, LAN/proxy access, readiness checks, and safe migration boundaries.
+See [backend I/O investigation and regression results](docs/SEAWEEDFS_BACKEND_INVESTIGATION.md)
+for native S3 pagination, connection reuse, multipart contention fixes, and the
+limits of offline validation.
 
 ## Remote deployment
 

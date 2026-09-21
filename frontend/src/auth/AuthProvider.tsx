@@ -1,3 +1,4 @@
+import { clearOperationRecovery } from '../api/operationRecovery'
 import { useCallback, useMemo, type ReactNode } from 'react'
 
 import { clearPersistedTransfersStorage } from '../components/transfers/useTransfersPersistence'
@@ -17,6 +18,7 @@ export function AuthProvider(props: { children: ReactNode }) {
 				if (apiToken) {
 					clearResettableUiState()
 					clearPersistedTransfersStorage()
+					clearOperationRecovery()
 				}
 			}
 			setStoredApiToken(next)

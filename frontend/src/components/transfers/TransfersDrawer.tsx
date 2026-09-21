@@ -28,6 +28,7 @@ export type TransfersDrawerProps = {
 	onClearFinished: () => void
 	onCancelDownload: (taskId: string) => void
 	onRetryDownload: (taskId: string) => void
+	onHandOffDownload?: (taskId: string) => void
 	onRemoveDownload: (taskId: string) => void
 	onCancelUpload: (taskId: string) => void
 	onRetryUpload: (taskId: string) => void
@@ -167,6 +168,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 													task={t}
 													onCancel={props.onCancelDownload}
 													onRetry={props.onRetryDownload}
+													onHandOff={props.onHandOffDownload}
 													onRemove={props.onRemoveDownload}
 													onOpenJobs={props.onOpenJobs}
 												/>

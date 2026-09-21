@@ -99,6 +99,7 @@ describe('useFullAppController', () => {
 		const refetch = vi.fn()
 		const openNav = vi.fn()
 		const closeNav = vi.fn()
+		const toggleSidebar = vi.fn()
 		const openSettings = vi.fn()
 		const closeSettings = vi.fn()
 		const logout = vi.fn()
@@ -155,6 +156,8 @@ describe('useFullAppController', () => {
 		shellStateRef.current = {
 			selectedKey: '/objects',
 			navOpen: true,
+			sidebarCollapsed: false,
+			toggleSidebar,
 			settingsOpen: true,
 			openNav,
 			closeNav,
@@ -207,6 +210,8 @@ describe('useFullAppController', () => {
 			shellScopeKey: 'token-a:profile-1',
 			selectedKey: '/objects',
 			navOpen: true,
+			sidebarCollapsed: false,
+			toggleSidebar,
 			openNav,
 			closeNav,
 			openSettings,
@@ -263,6 +268,8 @@ describe('useFullAppController', () => {
 			shellScopeKey: '__no_server__:__no_profile__',
 			selectedKey: '/profiles',
 			navOpen: false,
+			sidebarCollapsed: false,
+			toggleSidebar: vi.fn(),
 			settingsOpen: false,
 			openNav: vi.fn(),
 			closeNav: vi.fn(),
@@ -298,6 +305,8 @@ describe('useFullAppController', () => {
 		shellStateRef.current = {
 			selectedKey: '/profiles',
 			navOpen: false,
+			sidebarCollapsed: false,
+			toggleSidebar: vi.fn(),
 			settingsOpen: false,
 			openNav: vi.fn(),
 			closeNav: vi.fn(),

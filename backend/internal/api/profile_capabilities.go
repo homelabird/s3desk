@@ -22,7 +22,7 @@ const (
 	profileValidationIssueGcpProjectNumberRequired = "gcp_project_number_required"
 )
 
-func providerCapabilityMatrix(uploadDirectStream bool) map[models.ProfileProvider]models.ProviderCapability {
+func providerCapabilityMatrix(uploadDirectStream bool, proxyOnly ...bool) map[models.ProfileProvider]models.ProviderCapability {
 	newBase := func() models.ProviderCapability {
 		cap := models.ProviderCapability{
 			BucketCRUD:   true,
@@ -86,11 +86,19 @@ func providerCapabilityMatrix(uploadDirectStream bool) map[models.ProfileProvide
 		out[provider] = cap
 	}
 
+	if len(proxyOnly) > 0 && proxyOnly[0] {
+		for provider, cap := range out {
+			cap.PresignedUpload, cap.PresignedMultipartUpload = false, false
+			ensureCapabilityReasons(&cap).PresignedUpload = "New uploads use the server-to-storage path (UPLOAD_PROXY_ONLY=true)."
+			ensureCapabilityReasons(&cap).PresignedMultipartUpload = "New uploads use the server-to-storage path (UPLOAD_PROXY_ONLY=true)."
+			out[provider] = cap
+		}
+	}
 	return out
 }
 
-func decorateProfile(profile models.Profile, uploadDirectStream bool) models.Profile {
-	effective := effectiveProviderCapability(profile, uploadDirectStream)
+func decorateProfile(profile models.Profile, uploadDirectStream bool, proxyOnly ...bool) models.Profile {
+	effective := effectiveProviderCapability(profile, uploadDirectStream, proxyOnly...)
 	validation := validateProfile(profile)
 	profile.EffectiveCapabilities = &effective
 	if !validation.Valid {
@@ -99,16 +107,16 @@ func decorateProfile(profile models.Profile, uploadDirectStream bool) models.Pro
 	return profile
 }
 
-func decorateProfiles(profiles []models.Profile, uploadDirectStream bool) []models.Profile {
+func decorateProfiles(profiles []models.Profile, uploadDirectStream bool, proxyOnly ...bool) []models.Profile {
 	out := make([]models.Profile, len(profiles))
 	for i, profile := range profiles {
-		out[i] = decorateProfile(profile, uploadDirectStream)
+		out[i] = decorateProfile(profile, uploadDirectStream, proxyOnly...)
 	}
 	return out
 }
 
-func effectiveProviderCapability(profile models.Profile, uploadDirectStream bool) models.ProviderCapability {
-	base := providerCapabilityMatrix(uploadDirectStream)[profile.Provider]
+func effectiveProviderCapability(profile models.Profile, uploadDirectStream bool, proxyOnly ...bool) models.ProviderCapability {
+	base := providerCapabilityMatrix(uploadDirectStream, proxyOnly...)[profile.Provider]
 	out := cloneProviderCapability(base)
 
 	if profile.Provider != models.ProfileProviderGcpGcs {

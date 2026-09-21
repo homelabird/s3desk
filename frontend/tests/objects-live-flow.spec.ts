@@ -25,10 +25,10 @@ import { readServerScopedLocalStorage } from './support/storage'
 const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
-const s3Endpoint = process.env.E2E_S3_ENDPOINT ?? 'http://minio:9000'
+const s3Endpoint = process.env.E2E_S3_ENDPOINT ?? 'http://seaweedfs:8333'
 const s3Region = process.env.E2E_S3_REGION ?? 'us-east-1'
-const s3AccessKey = process.env.E2E_S3_ACCESS_KEY ?? 'minioadmin'
-const s3SecretKey = process.env.E2E_S3_SECRET_KEY ?? 'minioadmin'
+const s3AccessKey = process.env.E2E_S3_ACCESS_KEY ?? 'demo-seaweedfs'
+const s3SecretKey = process.env.E2E_S3_SECRET_KEY ?? 'demo-seaweedfs-secret'
 const forcePathStyle = process.env.E2E_S3_FORCE_PATH_STYLE !== 'false'
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
@@ -37,7 +37,7 @@ const uploadFilename = 'alpha.txt'
 
 const browserArgs = isLive
 	? [
-			'--host-resolver-rules=MAP minio 127.0.0.1',
+			'--host-resolver-rules=MAP seaweedfs 127.0.0.1',
 			'--disable-web-security',
 			'--disable-features=IsolateOrigins,site-per-process',
 		]

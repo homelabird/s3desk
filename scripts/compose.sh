@@ -14,7 +14,7 @@ Stacks:
   caddy            Remote/Postgres stack with Caddy
   caddy-syslog     Remote/Postgres/Caddy stack with Docker syslog forwarding
   dev              Local build stack
-  demo             Seeded demo stack
+  demo             SeaweedFS-backed seeded demo stack
   e2e              API/provider E2E stack
   portable-smoke   Portable backup/import smoke stack
 

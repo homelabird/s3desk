@@ -707,3 +707,49 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByText('reports/2024/summary.txt')).toBeVisible()
 	})
 })
+
+test.describe('Dense object grid and sidebar', () => {
+	for (const width of [1280, 1366, 1440, 1920]) {
+		for (const mode of ['simple', 'advanced'] as const) {
+			test(`keeps eight or more cards per row at ${width}px in ${mode} mode`, async ({ page }) => {
+				await page.setViewportSize({ width, height: 900 })
+				await stubObjectsAdaptiveApi(page, { rootObjects: { items: buildSearchCapItems(200) } })
+				await openObjectsPage(page, { objectsUIMode: mode, objectsDetailsOpen: true })
+				await page.getByRole('button', { name: /Grid$/ }).click()
+				const grid = page.getByTestId('objects-grid-content')
+				await expect.poll(() => grid.locator('[data-index="0"] > [role="listitem"]').count()).toBeGreaterThanOrEqual(8)
+				const geometry = await grid.locator('[data-index="0"] > [role="listitem"]').evaluateAll((items) => items.map((item) => {
+					const rect = item.getBoundingClientRect() // e2e-geometry-allow explicit eight-column density contract at 100% CSS viewport
+					return { top: Math.round(rect.top), right: rect.right }
+				}))
+				expect(new Set(geometry.map((rect) => rect.top)).size).toBe(1)
+				expect(Math.max(...geometry.map((rect) => rect.right))).toBeLessThanOrEqual(width)
+				// Virtualization remains enabled; density is not achieved by rendering all objects.
+				expect(await grid.getByRole('listitem').count()).toBeLessThan(200)
+			})
+		}
+	}
+
+	test('reflows, persists and restores desktop navigation without losing the object list', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+		await stubObjectsAdaptiveApi(page, { rootObjects: { items: buildSearchCapItems(200) } })
+		await openObjectsPage(page, { objectsUIMode: 'simple' })
+		await page.getByRole('button', { name: /Grid$/ }).click()
+		const grid = page.getByTestId('objects-grid-content')
+		const toggle = page.getByTestId('app-navigation-toggle')
+		await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+		const before = Number(await grid.evaluate((element) => getComputedStyle(element).getPropertyValue('--objects-grid-columns')))
+		await toggle.click()
+		await expect(toggle).toBeFocused()
+		await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+		await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(0)
+		await expect.poll(() => grid.evaluate((element) => Number(getComputedStyle(element).getPropertyValue('--objects-grid-columns')))).toBeGreaterThan(before)
+		await expect(page.getByRole('button', { name: 'Select object search-log-0001.txt' })).toBeVisible()
+		await page.reload()
+		await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+		await toggle.press('Enter')
+		await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+		await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
+		await expect(toggle).toBeFocused()
+	})
+})

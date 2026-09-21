@@ -86,6 +86,7 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 					>
 						<div className={styles.gridCardTopRow}>
 							<div className={styles.gridCardTopActions}>
+								<FolderOutlined className={styles.gridCardCompactFolderIcon} aria-hidden="true" />
 								<Typography.Text type="secondary" className={styles.gridCardKindLabel}>
 									Folder
 								</Typography.Text>

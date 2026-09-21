@@ -535,6 +535,8 @@ build_s3desk_image:
         - e2e/runner/**/*
         - openapi.yml
         - compose/test/e2e.yml
+        - compose/demo/filer.toml
+        - scripts/demo/**/*
         - scripts/ci_podman_compose.sh
     - when: never
   variables:
@@ -1180,6 +1182,8 @@ api_integration:
         - e2e/runner/**/*
         - openapi.yml
         - compose/test/e2e.yml
+        - compose/demo/filer.toml
+        - scripts/demo/**/*
         - scripts/ci_podman_compose.sh
     - when: never
   needs:
@@ -1194,7 +1198,8 @@ api_integration:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE: "${HARBOR_REGISTRY}/library/s3desk:${CI_COMMIT_SHA}"
     E2E_BASE_URL: "http://s3desk:8080"
-    E2E_MINIO_ENDPOINT: "http://minio:9000"
+    E2E_S3_ENDPOINT: "http://seaweedfs:8333"
+    SEAWEEDFS_IMAGE: "docker.io/chrislusf/seaweedfs:4.47"
     E2E_AZURITE_ENDPOINT: "http://azurite:10000/devstoreaccount1"
     E2E_GCS_ENDPOINT: "http://fake-gcs-server:4443/storage/v1/v1"
     COMPOSE_POD_NAME: "s3desk-e2e"
@@ -1209,14 +1214,14 @@ api_integration:
     - |
       for image in \
         "$S3DESK_IMAGE" \
-        "harbor.k8s.homelabird.com/library/minio/minio:RELEASE.2025-09-07T16-13-09Z" \
+        "$SEAWEEDFS_IMAGE" \
         "harbor.k8s.homelabird.com/library/azurite:3.33.0" \
         "harbor.k8s.homelabird.com/library/fsouza/fake-gcs-server:1.47.7"; do \
         if ! podman image exists "$image"; then \
           podman pull "$image"; \
         fi; \
       done
-    - COMPOSE_CMD="$(cat /tmp/compose_cmd)" COMPOSE_ARGS="$(cat /tmp/compose_args)" COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)" && $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/test/e2e.yml up --abort-on-container-exit --exit-code-from runner
+    - COMPOSE_CMD="$(cat /tmp/compose_cmd)" COMPOSE_ARGS="$(cat /tmp/compose_args)" COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)" && $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/test/e2e.yml up -d s3desk && $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/test/e2e.yml run --rm runner
   after_script:
     - |
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
@@ -1246,6 +1251,8 @@ portable_migration_smoke:
         - ansible/**/*
         - backend/**/*
         - compose/test/portable-smoke.yml
+        - compose/demo/filer.toml
+        - scripts/demo/**/*
         - scripts/compose.sh
         - scripts/portable/**/*
         - scripts/run_portable_*_smoke.sh

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/store"
 )
 
@@ -171,7 +172,22 @@ func (svc downloadProxyHTTPService) executeProxy(r *http.Request) (int, *rcloneL
 }
 
 func (svc downloadProxyHTTPService) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
-	statusOnly, entry, key, proc, rcloneErr, rcloneStderr, rcloneCtx, rcloneDetails, err := svc.executeProxy(r)
+	prepared := svc.prepareDownloadProxy(r)
+	if prepared.err == nil {
+		release, ok := svc.server.acquireDownloadSlot(w, r, prepared.profileID)
+		if !ok {
+			return
+		}
+		defer release()
+		if svc.server.store != nil {
+			secrets, found, loadErr := svc.server.store.GetProfileSecrets(r.Context(), prepared.profileID)
+			if loadErr == nil && found && svc.server.cfg.S3NativeDownload && rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+				svc.server.serveS3Download(w, r, secrets, prepared.bucket, prepared.key)
+				return
+			}
+		}
+	}
+	statusOnly, entry, key, proc, rcloneErr, rcloneStderr, rcloneCtx, rcloneDetails, err := svc.executePrepared(r, prepared)
 	switch {
 	case statusOnly != 0:
 		w.WriteHeader(statusOnly)
@@ -179,6 +195,12 @@ func (svc downloadProxyHTTPService) handleDownloadProxy(w http.ResponseWriter, r
 		applyDownloadHeaders(w.Header(), *entry, key)
 		w.WriteHeader(http.StatusOK)
 	case entry != nil && proc != nil:
+		// Generic rclone has no atomic stat+GET contract. Do not publish a stale
+		// Content-Length/validator or pretend that this fallback supports resumption.
+		entry.Size = -1
+		entry.Hashes = nil
+		entry.ModTime = ""
+		w.Header().Set("Accept-Ranges", "none")
 		svc.server.streamRcloneDownload(w, proc, *entry, key, rcloneCtx, rcloneDetails)
 	case rcloneErr != nil:
 		writeRcloneAPIError(w, rcloneErr, rcloneStderr, rcloneCtx, rcloneDetails)

@@ -1,3 +1,6 @@
+import { validateNativeDownloadLink } from './nativeDownloadLink'
+import { shouldUseNativeDownload } from './transferSafetyPolicy'
+import { subscribePageLifecycle } from '../../lib/pageLifecycle'
 import { useCallback, useEffect, useRef } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
@@ -21,12 +24,13 @@ import { downloadObjectToDevice } from './downloadObjectToDevice'
 import { planObjectDeviceDownloadTasks } from './deviceDownloadPlan'
 
 const isActiveDownloadStatus = (status: DownloadTask['status']) =>
-	status === 'queued' || status === 'waiting' || status === 'running'
+	status === 'queued' || status === 'waiting' || status === 'running' || status === 'ready'
 
 type UseTransfersDownloadQueueParams = {
 	api: APIClientShape
 	downloadLinkProxyEnabled: boolean
 	downloadConcurrency: number
+	conservativeTransfers?: boolean
 	downloadTasks: DownloadTask[]
 	setDownloadTasks: Dispatch<SetStateAction<DownloadTask[]>>
 	downloadAbortByTaskIdRef: MutableRefObject<Record<string, () => void>>
@@ -39,6 +43,7 @@ export function useTransfersDownloadQueue({
 	api,
 	downloadLinkProxyEnabled,
 	downloadConcurrency,
+	conservativeTransfers = false,
 	downloadTasks,
 	setDownloadTasks,
 	downloadAbortByTaskIdRef,
@@ -67,6 +72,8 @@ export function useTransfersDownloadQueue({
 				speedBps: 0,
 				etaSeconds: 0,
 				error: undefined,
+				nativeDownloadUrl: undefined,
+				nativeDownloadExpiresAtMs: undefined,
 			}))
 
 			const controller = new AbortController()
@@ -128,6 +135,37 @@ export function useTransfersDownloadQueue({
 				return
 			}
 
+
+			// A user-activated link lets the browser/native download manager
+			// stream large files without keeping a complete Blob in this page.
+			if (current.kind === 'job_artifact' || shouldUseNativeDownload(current.totalBytes, conservativeTransfers)) {
+				downloadAbortByTaskIdRef.current[taskId] = () => controller.abort()
+				try {
+					const response = current.kind === 'job_artifact'
+						? await api.jobs.getJobArtifactURL({ profileId: current.profileId, jobId: current.jobId, signal: controller.signal })
+						: await api.objects.getObjectDownloadURL({ profileId: current.profileId, bucket: current.bucket, key: current.key,
+							proxy: true, expiresSeconds: 300, size: current.totalBytes, signal: controller.signal })
+					controller.signal.throwIfAborted()
+					const link = validateNativeDownloadLink(response, window.location.origin)
+					updateRunningTask((task) => ({ ...task, status: 'ready', nativeDownloadUrl: link.url,
+						nativeDownloadExpiresAtMs: link.expiresAtMs, speedBps: 0, etaSeconds: 0 }))
+				} catch (error) {
+					if (!isCurrentAttempt()) return
+					if (controller.signal.aborted || error instanceof RequestAbortedError) {
+						updateRunningTask((task) => ({ ...task, status: 'canceled', finishedAtMs: Date.now() }))
+					} else {
+						// Do not fall back to an unbounded Blob when native link
+						// preparation fails. Retry obtains a new, scoped link.
+						updateRunningTask((task) => ({ ...task, status: 'failed', finishedAtMs: Date.now(), error: formatErr(error) }))
+					}
+				} finally {
+					if (isCurrentAttempt()) {
+						delete downloadAbortByTaskIdRef.current[taskId]
+						delete downloadEstimatorByTaskIdRef.current[taskId]
+					}
+				}
+				return
+			}
 			if (current.kind === 'object') {
 				let abortRawDownload = () => {}
 				downloadAbortByTaskIdRef.current[taskId] = () => {
@@ -186,12 +224,12 @@ export function useTransfersDownloadQueue({
 					saveBlob(resp.blob, filename)
 					updateRunningTask((t) => ({
 						...t,
-						status: 'succeeded',
+						status: 'handed_off',
 						finishedAtMs: Date.now(),
 						loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
 						filenameHint: filename,
 					}))
-					transfersFeedback.downloaded(filename)
+					transfersFeedback.info(`Sent ${filename} to the browser. Check its download manager to confirm saving.`)
 				} catch (err) {
 					if (!isCurrentAttempt()) return
 					if (controller.signal.aborted || err instanceof RequestAbortedError) {
@@ -211,62 +249,8 @@ export function useTransfersDownloadQueue({
 				return
 			}
 
-			const handle = api.jobs.downloadJobArtifact(
-				{ profileId: current.profileId, jobId: current.jobId },
-				{
-					onProgress: (p) => {
-						const e = downloadEstimatorByTaskIdRef.current[taskId]
-						if (e !== estimator) return
-						const stats = e.update(p.loadedBytes, p.totalBytes)
-						updateRunningTask((t) => ({
-							...t,
-							loadedBytes: stats.loadedBytes,
-							totalBytes: stats.totalBytes ?? t.totalBytes,
-							speedBps: stats.speedBps,
-							etaSeconds: stats.etaSeconds,
-						}))
-					},
-				},
-			)
-
-			downloadAbortByTaskIdRef.current[taskId] = () => {
-				controller.abort()
-				handle.abort()
-			}
-
-			try {
-				const resp = await handle.promise
-				const fallbackName = current.filenameHint?.trim() || `job-${current.jobId}.zip`
-				const filename = filenameFromContentDisposition(resp.contentDisposition) ?? fallbackName
-				if (!isCurrentAttempt()) return
-				controller.signal.throwIfAborted()
-				saveBlob(resp.blob, filename)
-				updateRunningTask((t) => ({
-					...t,
-					status: 'succeeded',
-					finishedAtMs: Date.now(),
-					loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
-					filenameHint: filename,
-				}))
-				transfersFeedback.downloaded(filename)
-			} catch (err) {
-				if (!isCurrentAttempt()) return
-				if (controller.signal.aborted || err instanceof RequestAbortedError) {
-					updateRunningTask((t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-					return
-				}
-				maybeReportNetworkError(err)
-				const msg = formatErr(err)
-				updateRunningTask((t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-				transfersFeedback.errorText(msg)
-			} finally {
-				if (isCurrentAttempt()) {
-					delete downloadAbortByTaskIdRef.current[taskId]
-					delete downloadEstimatorByTaskIdRef.current[taskId]
-				}
-			}
 		},
-		[api, downloadEstimatorByTaskIdRef, downloadAbortByTaskIdRef, downloadLinkProxyEnabled, updateDownloadTask],
+		[api, conservativeTransfers, downloadEstimatorByTaskIdRef, downloadAbortByTaskIdRef, downloadLinkProxyEnabled, updateDownloadTask],
 	)
 
 	useEffect(() => {
@@ -364,10 +348,12 @@ export function useTransfersDownloadQueue({
 
 		void tick()
 		const id = window.setInterval(() => void tick(), 1500)
+		const unsubscribe = subscribePageLifecycle({ onForeground: () => { void tick() } })
 		return () => {
 			stopped = true
 			controller.abort()
 			window.clearInterval(id)
+			unsubscribe()
 		}
 	}, [api, hasWaitingJobArtifactDownloads, updateDownloadTask])
 
@@ -379,7 +365,7 @@ export function useTransfersDownloadQueue({
 					t.profileId === args.profileId &&
 					t.bucket === args.bucket &&
 					t.key === args.key &&
-					(t.status === 'queued' || t.status === 'waiting' || t.status === 'running'),
+					isActiveDownloadStatus(t.status),
 			)
 			if (existing) {
 				openTransfers('downloads')
@@ -482,7 +468,7 @@ export function useTransfersDownloadQueue({
 					t.kind === 'job_artifact' &&
 					t.profileId === args.profileId &&
 					t.jobId === args.jobId &&
-					(t.status === 'queued' || t.status === 'waiting' || t.status === 'running'),
+					isActiveDownloadStatus(t.status),
 			)
 			if (existing) {
 				openTransfers('downloads')

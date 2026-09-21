@@ -10,7 +10,7 @@ export function buildAdvancedSection(args: ProfileModalSectionContentArgs) {
 				{viewState.isS3Provider
 					? args.renderSwitchCard({
 							title: 'Force Path Style',
-							description: 'For MinIO, Ceph, and most custom S3 gateways.',
+							description: 'For SeaweedFS, Ceph, and most custom S3 gateways.',
 							checked: values.forcePathStyle,
 							onChange: (checked) => setField('forcePathStyle', checked),
 							ariaLabel: 'Force Path Style',

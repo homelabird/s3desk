@@ -9,3 +9,7 @@ func validateProfileTLSSkipVerifyEndpoint(field string, raw *string, allowRemote
 func validateProfileEndpointURL(field string, raw *string, allowRemote bool) error {
 	return profileendpoint.ValidateURL(field, raw, allowRemote)
 }
+
+func validateProfilePublicEndpointURL(field string, raw *string, allowRemote bool) error {
+	return profileendpoint.ValidatePublicURL(field, raw, allowRemote)
+}

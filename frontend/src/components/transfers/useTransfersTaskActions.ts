@@ -30,7 +30,7 @@ export function useTransfersTaskActions({
 		(taskId: string) => {
 			const abort = downloadAbortByTaskIdRef.current[taskId]
 			if (abort) abort()
-			updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
+			updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', nativeDownloadUrl: undefined, nativeDownloadExpiresAtMs: undefined, finishedAtMs: Date.now() }))
 		},
 		[downloadAbortByTaskIdRef, updateDownloadTask],
 	)
@@ -46,10 +46,19 @@ export function useTransfersTaskActions({
 				speedBps: 0,
 				etaSeconds: 0,
 				error: undefined,
+				nativeDownloadUrl: undefined,
+				nativeDownloadExpiresAtMs: undefined,
 			}))
 		},
 		[updateDownloadTask],
 	)
+
+	const handOffDownloadTask = useCallback((taskId: string) => {
+		updateDownloadTask(taskId, (task) => task.status === 'ready' ? {
+			...task, status: 'handed_off', finishedAtMs: Date.now(), nativeDownloadUrl: undefined,
+			nativeDownloadExpiresAtMs: undefined, speedBps: 0, etaSeconds: 0,
+		} : task)
+	}, [updateDownloadTask])
 
 	const removeDownloadTask = useCallback(
 		(taskId: string) => {
@@ -65,7 +74,7 @@ export function useTransfersTaskActions({
 	)
 
 	const clearCompletedDownloads = useCallback(() => {
-		setDownloadTasks((prev) => prev.filter((t) => t.status !== 'succeeded'))
+		setDownloadTasks((prev) => prev.filter((t) => t.status !== 'succeeded' && t.status !== 'handed_off'))
 	}, [setDownloadTasks])
 
 	const updateUploadTask = useCallback((taskId: string, updater: (task: UploadTask) => UploadTask) => {
@@ -151,6 +160,7 @@ export function useTransfersTaskActions({
 		updateDownloadTask,
 		cancelDownloadTask,
 		retryDownloadTask,
+		handOffDownloadTask,
 		removeDownloadTask,
 		clearCompletedDownloads,
 		updateUploadTask,

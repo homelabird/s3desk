@@ -57,6 +57,21 @@ describe('useObjectsTree', () => {
 		expect(listObjects).toHaveBeenCalledTimes(4)
 	})
 
+	it('follows empty filtered pages to reach later folder prefixes', async () => {
+		const listObjects = vi.fn()
+			.mockResolvedValueOnce({ commonPrefixes: [], items: [], isTruncated: true, nextContinuationToken: 's3v2.next' })
+			.mockResolvedValueOnce({ commonPrefixes: ['later-folder/'], items: [], isTruncated: false })
+		const api = createMockApiClient({ objects: { listObjects } })
+		const { result } = renderHook(() => useObjectsTree({
+			api, apiToken: 'token', profileId: 'profile-1', bucket: 'bucket', prefix: '',
+			debugEnabled: false, log: vi.fn(),
+		}))
+		await act(async () => { await result.current.onTreeLoadData('/') })
+		expect(listObjects).toHaveBeenCalledTimes(2)
+		expect(listObjects).toHaveBeenLastCalledWith(expect.objectContaining({ continuationToken: 's3v2.next' }))
+		expect(getRootChildKeys(result.current.treeData)).toEqual(['later-folder/'])
+	})
+
 	it('reloads child folders after refreshing their parent', async () => {
 		const listObjects = vi.fn().mockImplementation(async ({ prefix }) => ({
 			commonPrefixes: prefix === 'docs/' ? ['docs/nested/'] : ['docs/'],

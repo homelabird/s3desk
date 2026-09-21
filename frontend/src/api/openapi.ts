@@ -3168,6 +3168,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{jobId}/artifact-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Create a five-minute browser artifact download link */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    jobId: components["parameters"]["JobId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PresignedURLResponse"];
+                    };
+                };
+                404: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/artifact-download-proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream an artifact using a scoped expiring signature */
+        get: {
+            parameters: {
+                query: {
+                    profileId: string;
+                    jobId: string;
+                    expires: number;
+                    sig: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                /** @description Partial artifact content */
+                206: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                403: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** Read signed artifact download headers */
+        head: {
+            parameters: {
+                query: {
+                    profileId: string;
+                    jobId: string;
+                    expires: number;
+                    sig: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Artifact headers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                403: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+            };
+        };
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{jobId}/artifact": {
         parameters: {
             query?: never;

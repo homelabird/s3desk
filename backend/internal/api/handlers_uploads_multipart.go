@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"s3desk/internal/models"
+	"s3desk/internal/multipartverify"
 	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/s3client"
 	"s3desk/internal/store"
@@ -278,4 +279,25 @@ func (s *server) rollbackMultipartUpload(ctx context.Context, client *s3.Client,
 		return fmt.Errorf("multipart upload aborted but metadata cleanup failed: %w", err)
 	}
 	return nil
+}
+
+// Build a complete ordered list only from the provider's live, authenticated
+// ListParts response. No missing, duplicate, unexpected or short part is accepted.
+func verifiedRemoteCompletionParts(parts []types.Part, meta store.MultipartUpload) ([]models.UploadMultipartCompletePart, *uploadHTTPError) {
+	inventory := make([]multipartverify.Part, 0, len(parts))
+	for _, part := range parts {
+		if part.PartNumber == nil || part.Size == nil || part.ETag == nil {
+			return nil, uploadMultipartInvalidPartsError()
+		}
+		inventory = append(inventory, multipartverify.Part{Number: int(*part.PartNumber), Size: *part.Size, ETag: *part.ETag})
+	}
+	verified, err := multipartverify.Complete(inventory, meta.FileSize, meta.ChunkSize)
+	if err != nil {
+		return nil, uploadMultipartInvalidPartsError()
+	}
+	result := make([]models.UploadMultipartCompletePart, len(verified))
+	for i, part := range verified {
+		result[i] = models.UploadMultipartCompletePart{Number: part.Number, ETag: part.ETag}
+	}
+	return result, nil
 }

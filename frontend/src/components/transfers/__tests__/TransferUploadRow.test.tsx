@@ -65,6 +65,29 @@ describe('TransferUploadRow', () => {
 		expect(screen.queryByRole('button', { name: 'Remove upload Upload: 2 file(s)' })).not.toBeInTheDocument()
 	})
 
+	it('distinguishes cancelable local verification from bytes uploaded', () => {
+		const onCancel = vi.fn()
+		const task: UploadTask = {
+			...buildUploadTask(),
+			status: 'staging',
+			preparation: {
+				phase: 'verifying', fileName: 'videos/clip.mp4', fileIndex: 1,
+				fileCount: 2, loadedBytes: 512, totalBytes: 1024,
+			},
+		}
+		const props = { onCancel, onRetry: vi.fn(), onRemove: vi.fn(), onOpenJobs: vi.fn() }
+		const { rerender } = render(<TransferUploadRow {...props} task={task} />)
+		expect(screen.getByText('Checking files')).toBeInTheDocument()
+		expect(screen.getByText(/Verifying original file 1\/2/)).toHaveTextContent('read locally (not uploaded)')
+		expect(screen.getByLabelText(`File verification progress for ${task.label}`)).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: `Cancel upload ${task.label}` }))
+		expect(onCancel).toHaveBeenCalledWith(task.id)
+		rerender(<TransferUploadRow {...props} task={{ ...task, preparation: undefined }} />)
+		expect(screen.queryByText('Checking files')).not.toBeInTheDocument()
+		expect(screen.getByText('Uploading')).toBeInTheDocument()
+		expect(screen.getByLabelText(`Upload progress for ${task.label}`)).toBeInTheDocument()
+	})
+
 	it('keeps cancel available while a handed-off upload job is still waiting', () => {
 		const onCancel = vi.fn()
 		const jobId = 'job-1234567890abcdef1234567890abcdef'

@@ -33,10 +33,10 @@ trap cleanup EXIT
 bring_up_and_seed() {
 	echo "[portable-failure] preparing ${PORTABLE_SMOKE_SOURCE_DB_BACKEND} -> ${PORTABLE_SMOKE_TARGET_DB_BACKEND} stack"
 	compose down -v --remove-orphans >/dev/null 2>&1 || true
-	compose up -d --build minio postgres source target
+	compose up -d --build seaweedfs postgres source target
 
-	echo "[portable-failure] seeding MinIO"
-	compose run --rm minio-seed
+	echo "[portable-failure] seeding SeaweedFS"
+	compose run --rm seaweedfs-seed
 
 	echo "[portable-failure] seeding ${PORTABLE_SMOKE_SOURCE_DB_BACKEND} source fixture"
 	compose run --rm source-seed

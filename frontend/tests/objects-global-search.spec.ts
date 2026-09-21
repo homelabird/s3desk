@@ -77,7 +77,7 @@ async function setupApiMocks(page: Page) {
 				id: defaultStorage.profileId,
 				name: 'Playwright',
 				provider: 's3_compatible',
-				endpoint: 'http://minio:9000',
+				endpoint: 'http://seaweedfs:8333',
 				region: 'us-east-1',
 				forcePathStyle: true,
 				tlsInsecureSkipVerify: true,
