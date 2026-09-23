@@ -34,6 +34,7 @@ services:
       API_TOKEN: "${API_TOKEN:?set API_TOKEN before running docker-compose.local-build.yml}"
       DB_BACKEND: "postgres"
       DATABASE_URL: "postgres://s3desk:s3desk@postgres:5432/s3desk?sslmode=disable"
+      THUMBNAIL_CACHE_TTL: "${THUMBNAIL_CACHE_TTL:-24h}"
       UPLOAD_PROXY_ONLY: "${UPLOAD_PROXY_ONLY:-false}"
       S3_NATIVE_DOWNLOAD: "${S3_NATIVE_DOWNLOAD:-true}"
       DOWNLOAD_MAX_CONCURRENT_REQUESTS: "${DOWNLOAD_MAX_CONCURRENT_REQUESTS:-8}"

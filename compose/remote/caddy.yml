@@ -34,6 +34,7 @@ services:
       ALLOWED_LOCAL_DIRS: "${ALLOWED_LOCAL_DIRS:?set ALLOWED_LOCAL_DIRS to one or more container paths S3Desk may access}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:?set ALLOWED_HOSTS to the public hostname served by Caddy}"
       EXTERNAL_BASE_URL: "${EXTERNAL_BASE_URL:?set EXTERNAL_BASE_URL to https://<public-hostname>}"
+      THUMBNAIL_CACHE_TTL: "${THUMBNAIL_CACHE_TTL:-24h}"
       DB_BACKEND: "postgres"
       DATABASE_URL: "postgres://${POSTGRES_USER:-s3desk}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD for remote deployment}@postgres:5432/${POSTGRES_DB:-s3desk}?sslmode=disable"
       JOB_QUEUE_CAPACITY: "20"

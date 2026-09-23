@@ -56,6 +56,7 @@ func main() {
 	flag.DurationVar(&cfg.JobRetention, "job-retention", 0, "delete finished jobs older than this duration (0=keep forever)")
 	flag.DurationVar(&cfg.JobLogRetention, "job-log-retention", 0, "delete job log files older than this duration (0=keep forever)")
 	flag.DurationVar(&cfg.UploadSessionTTL, "upload-ttl", 24*time.Hour, "upload session TTL")
+	flag.DurationVar(&cfg.ThumbnailCacheTTL, "thumbnail-cache-ttl", 24*time.Hour, "generated thumbnail cache TTL")
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", 0, "max total bytes per upload session (0=unlimited)")
 	flag.Int64Var(&cfg.ServerRestoreMaxBytes, "server-restore-max-bytes", 4*1024*1024*1024, "max accepted backup restore bundle bytes before staging (0=unlimited)")
 	flag.BoolVar(&cfg.S3NativeList, "s3-native-list", true, "use native S3 pagination (set false for legacy rclone listing)")
@@ -91,6 +92,9 @@ func main() {
 	flag.Parse()
 	if err := applyEnvConfigOverrides(&cfg, collectSetFlags(flag.CommandLine)); err != nil {
 		log.Fatalf("invalid environment configuration: %v", err)
+	}
+	if cfg.ThumbnailCacheTTL < time.Second {
+		log.Fatalf("invalid THUMBNAIL_CACHE_TTL: must be at least 1s")
 	}
 
 	logger, err := logging.Setup(cfg.LogFormat)
@@ -284,6 +288,16 @@ func applyEnvConfigOverrides(cfg *config.Config, setFlags map[string]struct{}) e
 			return err
 		}
 		cfg.UploadSessionTTL = value
+	}
+	if !flagWasSet(setFlags, "thumbnail-cache-ttl") {
+		value, err := lookupEnvDuration("THUMBNAIL_CACHE_TTL", cfg.ThumbnailCacheTTL)
+		if err != nil {
+			return err
+		}
+		if value < time.Second {
+			return fmt.Errorf("invalid THUMBNAIL_CACHE_TTL=%q: must be at least 1s", os.Getenv("THUMBNAIL_CACHE_TTL"))
+		}
+		cfg.ThumbnailCacheTTL = value
 	}
 	if !flagWasSet(setFlags, "upload-max-bytes") {
 		value, err := lookupEnvInt64("UPLOAD_MAX_BYTES", cfg.UploadMaxBytes)

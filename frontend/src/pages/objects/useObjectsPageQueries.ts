@@ -1,11 +1,12 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 
 import { queryKeys } from '../../api/queryKeys'
 import type { Bucket } from '../../api/types'
 import type { ObjectsPageQueriesAPI } from '../../lib/pageApiScopes'
 import { buildProfileCapabilityContext } from '../../lib/profileCapabilityContext'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
+import { setPersistentThumbnailCacheTTLSeconds } from '../../lib/thumbnailCache'
 import { useObjectsFavorites } from './useObjectsFavorites'
 import {
 	OBJECTS_ADVANCED_AUTO_SCAN_CAP,
@@ -50,6 +51,9 @@ export function useObjectsPageQueries({
 		queryFn: () => api.server.getMeta(),
 		enabled: !!apiToken,
 	})
+	useEffect(() => {
+		setPersistentThumbnailCacheTTLSeconds(metaQuery.data?.thumbnailCacheTTLSeconds)
+	}, [metaQuery.data?.thumbnailCacheTTLSeconds])
 
 	const profilesQuery = useQuery({
 		queryKey: queryKeys.profiles.list(apiToken),
@@ -88,7 +92,7 @@ export function useObjectsPageQueries({
 		queryKey: queryKeys.objects.list(profileId, bucket, prefix, apiToken),
 		enabled: !!profileId && !!bucket && profileCapabilityResolved && objectCrudSupported,
 		initialPageParam: undefined as ObjectsPageParam | undefined,
-		staleTime: 15_000,
+		staleTime: 30_000,
 		queryFn: async ({ pageParam, signal }) => {
 			return api.objects.listObjects({
 				profileId: profileId!,

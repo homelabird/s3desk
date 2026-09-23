@@ -30,6 +30,7 @@ type Config struct {
 	JobRetention                       time.Duration
 	JobLogRetention                    time.Duration
 	UploadSessionTTL                   time.Duration
+	ThumbnailCacheTTL                  time.Duration
 	UploadMaxBytes                     int64
 	ServerRestoreMaxBytes              int64
 	UploadDirectStream                 bool

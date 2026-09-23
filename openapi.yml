@@ -4197,6 +4197,7 @@ components:
         jobRetentionSeconds: { type: integer, format: int64, nullable: true }
         jobLogRetentionSeconds: { type: integer, format: int64, nullable: true }
         uploadSessionTTLSeconds: { type: integer, format: int64 }
+        thumbnailCacheTTLSeconds: { type: integer, format: int64 }
         uploadMaxBytes: { type: integer, format: int64, nullable: true }
         uploadDirectStream: { type: boolean }
         transferEngine:

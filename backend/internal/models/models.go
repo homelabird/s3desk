@@ -866,24 +866,25 @@ type ProviderCapability struct {
 }
 
 type MetaResponse struct {
-	Version                 string             `json:"version"`
-	ServerAddr              string             `json:"serverAddr"`
-	DataDir                 string             `json:"dataDir"`
-	DBBackend               string             `json:"dbBackend"`
-	StaticDir               string             `json:"staticDir"`
-	APITokenEnabled         bool               `json:"apiTokenEnabled"`
-	EncryptionEnabled       bool               `json:"encryptionEnabled"`
-	Warnings                []string           `json:"warnings,omitempty"`
-	Capabilities            MetaCapabilities   `json:"capabilities"`
-	AllowedLocalDirs        []string           `json:"allowedLocalDirs,omitempty"`
-	JobConcurrency          int                `json:"jobConcurrency"`
-	JobLogMaxBytes          *int64             `json:"jobLogMaxBytes,omitempty"`
-	JobRetentionSeconds     *int64             `json:"jobRetentionSeconds,omitempty"`
-	JobLogRetentionSeconds  *int64             `json:"jobLogRetentionSeconds,omitempty"`
-	UploadSessionTTLSeconds int64              `json:"uploadSessionTTLSeconds"`
-	UploadMaxBytes          *int64             `json:"uploadMaxBytes,omitempty"`
-	UploadDirectStream      bool               `json:"uploadDirectStream"`
-	TransferEngine          TransferEngineInfo `json:"transferEngine"`
+	Version                  string             `json:"version"`
+	ServerAddr               string             `json:"serverAddr"`
+	DataDir                  string             `json:"dataDir"`
+	DBBackend                string             `json:"dbBackend"`
+	StaticDir                string             `json:"staticDir"`
+	APITokenEnabled          bool               `json:"apiTokenEnabled"`
+	EncryptionEnabled        bool               `json:"encryptionEnabled"`
+	Warnings                 []string           `json:"warnings,omitempty"`
+	Capabilities             MetaCapabilities   `json:"capabilities"`
+	AllowedLocalDirs         []string           `json:"allowedLocalDirs,omitempty"`
+	JobConcurrency           int                `json:"jobConcurrency"`
+	JobLogMaxBytes           *int64             `json:"jobLogMaxBytes,omitempty"`
+	JobRetentionSeconds      *int64             `json:"jobRetentionSeconds,omitempty"`
+	JobLogRetentionSeconds   *int64             `json:"jobLogRetentionSeconds,omitempty"`
+	UploadSessionTTLSeconds  int64              `json:"uploadSessionTTLSeconds"`
+	ThumbnailCacheTTLSeconds int64              `json:"thumbnailCacheTTLSeconds"`
+	UploadMaxBytes           *int64             `json:"uploadMaxBytes,omitempty"`
+	UploadDirectStream       bool               `json:"uploadDirectStream"`
+	TransferEngine           TransferEngineInfo `json:"transferEngine"`
 }
 
 type BootstrapResponse struct {

@@ -117,7 +117,7 @@ func (svc objectThumbnailHTTPService) executePrepared(metric *storageMetric, w h
 	}
 
 	cachePath := thumbnailCachePath(svc.server.cfg.DataDir, secrets.ID, bucket, key, size, thumbnailObjectFingerprint(entry))
-	if serveCachedThumbnail(w, r, cachePath) {
+	if serveCachedThumbnail(w, r, cachePath, thumbnailCacheTTL(svc.server)) {
 		_ = writeThumbnailManifest(svc.server.cfg.DataDir, secrets.ID, bucket, key, size, thumbnailManifestEntry{
 			Fingerprint: thumbnailObjectFingerprint(entry),
 			CachePath:   cachePath,
@@ -159,7 +159,7 @@ func (svc objectThumbnailHTTPService) executePrepared(metric *storageMetric, w h
 	})
 
 	metric.SetStatus("success")
-	_ = serveCachedThumbnail(w, r, cachePath)
+	_ = serveCachedThumbnail(w, r, cachePath, thumbnailCacheTTL(svc.server))
 	return true, nil, "", rcloneAPIErrorContext{}, nil, nil
 }
 

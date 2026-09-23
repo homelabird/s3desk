@@ -41,8 +41,15 @@ const (
 	thumbnailVideoPartialMinBytes  = 32 * 1024 * 1024
 	thumbnailVideoPartialMidBytes  = 64 * 1024 * 1024
 	thumbnailVideoPartialMaxBytes  = 128 * 1024 * 1024
-	thumbnailCacheTTL              = 24 * time.Hour
+	defaultThumbnailCacheTTL       = 24 * time.Hour
 )
+
+func thumbnailCacheTTL(s *server) time.Duration {
+	if s.cfg.ThumbnailCacheTTL < time.Second {
+		return defaultThumbnailCacheTTL
+	}
+	return s.cfg.ThumbnailCacheTTL
+}
 
 var errFFmpegNotFound = errors.New("ffmpeg not found in PATH (or set FFMPEG_PATH)")
 
@@ -96,14 +103,14 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 
 func tryServeThumbnailBeforeStat(s *server, w http.ResponseWriter, r *http.Request, profileID, bucket, key string, size int) (string, bool) {
 	requestFingerprintCachePath, hasRequestFingerprint := thumbnailRequestFingerprintCachePath(s.cfg.DataDir, profileID, bucket, key, size, r)
-	if hasRequestFingerprint && serveCachedThumbnail(w, r, requestFingerprintCachePath) {
+	if hasRequestFingerprint && serveCachedThumbnail(w, r, requestFingerprintCachePath, thumbnailCacheTTL(s)) {
 		return "request_fingerprint", true
 	}
 	if hasRequestFingerprint {
 		return "", false
 	}
-	if cachePath, ok := loadThumbnailManifestPath(s.cfg.DataDir, profileID, bucket, key, size); ok {
-		if serveCachedThumbnail(w, r, cachePath) {
+	if cachePath, ok := loadThumbnailManifestPath(s.cfg.DataDir, profileID, bucket, key, size, thumbnailCacheTTL(s)); ok {
+		if serveCachedThumbnail(w, r, cachePath, thumbnailCacheTTL(s)) {
 			return "manifest", true
 		}
 	}
@@ -627,10 +634,10 @@ func thumbnailManifestPath(baseDir, profileID, bucket, key string, size int) str
 	return filepath.Join(dir, fmt.Sprintf("%s.json", hexSum))
 }
 
-func loadThumbnailManifestPath(baseDir, profileID, bucket, key string, size int) (string, bool) {
+func loadThumbnailManifestPath(baseDir, profileID, bucket, key string, size int, ttl time.Duration) (string, bool) {
 	manifestPath := thumbnailManifestPath(baseDir, profileID, bucket, key, size)
 	info, err := os.Stat(manifestPath)
-	if err != nil || info.IsDir() || time.Since(info.ModTime()) > thumbnailCacheTTL {
+	if err != nil || info.IsDir() || time.Since(info.ModTime()) > ttl {
 		return "", false
 	}
 	// #nosec G304 -- manifestPath is a deterministic cache path under the thumbnails manifest root.
@@ -693,17 +700,17 @@ func thumbnailRequestFingerprintCachePath(baseDir, profileID, bucket, key string
 	return thumbnailCachePath(baseDir, profileID, bucket, key, size, fingerprint), true
 }
 
-func serveCachedThumbnail(w http.ResponseWriter, r *http.Request, cachePath string) bool {
+func serveCachedThumbnail(w http.ResponseWriter, r *http.Request, cachePath string, ttl time.Duration) bool {
 	info, err := os.Stat(cachePath)
 	if err != nil || info.IsDir() {
 		return false
 	}
-	if time.Since(info.ModTime()) > thumbnailCacheTTL {
+	if time.Since(info.ModTime()) > ttl {
 		return false
 	}
 
 	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d", int(thumbnailCacheTTL.Seconds())))
+	w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d", int(ttl.Seconds())))
 	http.ServeFile(w, r, cachePath)
 	return true
 }

@@ -32,6 +32,15 @@ const PERSISTENT_THUMBNAIL_CACHE_INDEX_KEY = 's3desk-thumbnail-blobs-v1:index'
 const PERSISTENT_THUMBNAIL_CACHE_PREFIX = 'https://thumbnail-cache.s3desk.local/'
 export const PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const PERSISTENT_THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES = 120
+let persistentThumbnailCacheTTLMS = PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS
+
+export function setPersistentThumbnailCacheTTLSeconds(ttlSeconds: number | null | undefined): void {
+	if (typeof ttlSeconds !== 'number' || !Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
+		persistentThumbnailCacheTTLMS = PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS
+		return
+	}
+	persistentThumbnailCacheTTLMS = Math.floor(ttlSeconds * 1000)
+}
 const PERSISTENT_THUMBNAIL_EXTENSIONS = new Set([
 	'jpg',
 	'jpeg',
@@ -104,7 +113,7 @@ async function getReusablePersistentThumbnailBlobByCacheKey(
 		const cache = await window.caches.open(PERSISTENT_THUMBNAIL_CACHE_NAME)
 		const index = loadPersistentThumbnailIndex()
 		const now = Date.now()
-		const ttlMs = options.ttlMs ?? PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS
+		const ttlMs = options.ttlMs ?? persistentThumbnailCacheTTLMS
 		let indexChanged = false
 		for (const [indexedKey, updatedAt] of Object.entries(index)) {
 			if (now - updatedAt <= ttlMs) continue
@@ -368,7 +377,7 @@ async function prunePersistentThumbnailCache(
 	options: PersistentThumbnailOptions,
 ): Promise<void> {
 	const now = Date.now()
-	const ttlMs = options.ttlMs ?? PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS
+	const ttlMs = options.ttlMs ?? persistentThumbnailCacheTTLMS
 	const maxEntries = options.maxEntries ?? PERSISTENT_THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES
 
 	for (const [cacheKey, updatedAt] of Object.entries(index)) {
