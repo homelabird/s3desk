@@ -55,6 +55,37 @@ func TestJobEnqueueLogFieldsCorrelatesRequestAndJob(t *testing.T) {
 	}
 }
 
+func TestRepeatedActiveIndexSubmissionReusesSameJob(t *testing.T) {
+	lockTestEnv(t)
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.66.0", nil
+	})
+	st, _, httpSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	request := models.JobCreateRequest{
+		Type: jobs.JobTypeS3IndexObjects,
+		Payload: map[string]any{
+			"bucket":      "bucket-a",
+			"prefix":      "reports",
+			"fullReindex": true,
+		},
+	}
+
+	first := createJob(t, httpSrv, profile.ID, request.Type, request.Payload)
+	second := createJob(t, httpSrv, profile.ID, request.Type, request.Payload)
+	if second.ID != first.ID {
+		t.Fatalf("second job ID=%s, want existing job %s", second.ID, first.ID)
+	}
+	jobType := jobs.JobTypeS3IndexObjects
+	listed, err := st.ListJobs(context.Background(), profile.ID, store.JobFilter{Type: &jobType, Limit: 10})
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(listed.Items) != 1 {
+		t.Fatalf("active index jobs=%d, want exactly one", len(listed.Items))
+	}
+}
+
 func TestValidateRunnableJobRequestReportsIncompatibleRclone(t *testing.T) {
 	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
 		return "", "", &jobs.RcloneIncompatibleError{

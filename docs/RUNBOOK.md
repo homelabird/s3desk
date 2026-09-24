@@ -210,6 +210,9 @@ Watch these metrics together:
 
 - `storage_operations_total{provider,operation,status}`
 - `storage_operation_duration_ms{provider,operation,status}`
+- `storage_rclone_list_entries_scanned_total{provider,operation}` (entries enumerated by fallback listings, including cursor-replay skips, and full index scans where `operation="object_index"`)
+- `storage_list_page_requests_total{provider,status}` (one native provider list-page call; retry attempts are counted separately where the SDK exposes them)
+- `storage_api_retries_scheduled_total{provider}` (AWS SDK retry delays scheduled; canceled requests may not reach another attempt)
 - `thumbnail_cache_hits_total{source}`
 - `download_proxy_mode_total{mode}`
 - `transfer_errors_total{code}`
@@ -232,6 +235,9 @@ Use these operational thresholds:
 ### Object-storage cost pressure
 
 - Compare `storage_operations_total` by provider and operation before and after high-traffic UI changes.
+- Compare native page request rate with logical list operations using `sum by (provider) (rate(storage_list_page_requests_total[5m]))`.
+- Use `storage_list_page_requests_total{provider,status}` to distinguish successful native pagination from provider errors; this counts paginator page calls, while SDK retry attempts remain in the separate retry counter where available.
+- Compare `storage_rclone_list_entries_scanned_total` by `operation`. For `list_objects_continuation`, rising scans with flat returned-page activity signal costly cursor replay; for `object_index`, the count is the metadata entries enumerated by explicit index jobs. These counts are not provider request counts or billed currency.
 - Investigate when list/stat/head-style operations grow faster than the user-visible browse or preview workload they support; as a working threshold, treat sustained growth above roughly `2x` the expected browse/preview action rate as cost pressure.
 - Investigate when any provider operation has an error ratio above roughly `5%` for more than `10 minutes`; repeated failed operations often create both cost and latency pressure.
 - Investigate when `storage_operation_duration_ms` p95 for list or metadata operations stays above `3000ms` for more than `10 minutes`, because slow control-plane calls usually amplify retries, queue depth, and user refreshes.
@@ -260,7 +266,10 @@ Use these operational thresholds:
 
 ### Dashboard and alert expectations
 
+- Import [`grafana-object-storage-cost.json`](../charts/s3desk/files/grafana-object-storage-cost.json) into Grafana or enable `monitoring.grafanaDashboard.enabled=true` in Helm for a sidecar-discovered ConfigMap. Choose the S3Desk Prometheus datasource from the dashboard dropdown. The ConfigMap does not install or configure Grafana discovery. The dashboard shows request, retry, scan, and latency activity, not billed currency.
 - Dashboard panels should break down `storage_operations_total` by provider and operation so thumbnail, list, and download spikes are obvious.
+- Add a panel for `rate(storage_rclone_list_entries_scanned_total[5m])` by provider and operation; alert on repeated high continuation scans before they reach the per-request cap of `100000` entries. Interpret `object_index` separately as explicit index workload.
+- Split `storage_list_page_requests_total` by provider and status; Helm rules alert when continuation scans reach the configured ten-minute threshold or page errors exceed five percent with at least twenty requests.
 - Track `thumbnail_cache_hits_total` by source to see whether hits come from request fingerprint, manifest, or post-stat paths.
 - Track `download_proxy_mode_total` split between `stat_skipped` and `stat_required`.
 - Track maintenance cleanup errors and deletions by resource.

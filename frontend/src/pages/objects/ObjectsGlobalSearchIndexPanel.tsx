@@ -1,5 +1,5 @@
 import { DownOutlined } from '@ant-design/icons'
-import { Button, Input } from 'antd'
+import { Alert, Button, Input } from 'antd'
 import { useState } from 'react'
 
 import styles from './ObjectsSearch.module.css'
@@ -52,6 +52,12 @@ export function ObjectsGlobalSearchIndexPanel({
 					<p className={styles.globalSearchIndexHint}>
 						Build/rebuild the index for <code className={styles.globalSearchCode}>{bucket}</code>.
 					</p>
+					<Alert
+						type="info"
+						showIcon
+						title="Default safety limit: 100,000 objects or 15 minutes."
+						description="This scan lists metadata and can incur provider request charges; it does not download object contents. The server operator can change OBJECT_INDEX_MAX_OBJECTS and OBJECT_INDEX_MAX_DURATION. Cancel a running scan from Jobs."
+					/>
 					<div className={styles.globalSearchFieldRow}>
 						<Input
 							size={buttonSize}

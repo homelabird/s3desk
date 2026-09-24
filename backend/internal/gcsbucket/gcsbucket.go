@@ -13,14 +13,17 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"s3desk/internal/gcsauth"
 	"s3desk/internal/models"
+	"s3desk/internal/objectlisting"
 	"s3desk/internal/profileendpoint"
 	"s3desk/internal/profiletls"
 	"s3desk/internal/responsebody"
@@ -34,6 +37,95 @@ type Response struct {
 
 type ClientOptions struct {
 	AllowRemote bool
+}
+
+type HTTPStatusError struct{ StatusCode int }
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("GCS API returned HTTP %d", e.StatusCode)
+}
+
+// ListObjectsPage reads one GCS JSON API page and returns only fields needed by
+// the object browser. Provider response bodies and credentials never enter errors.
+func ListObjectsPage(ctx context.Context, profile models.ProfileSecrets, req objectlisting.Request, opts ClientOptions) (objectlisting.Page, error) {
+	baseURL, err := resolveEndpoint(profile)
+	if err != nil {
+		return objectlisting.Page{}, err
+	}
+	u := *baseURL
+	u.Path = strings.TrimRight(u.Path, "/") + "/b/" + url.PathEscape(req.Bucket) + "/o"
+	query := u.Query()
+	query.Set("maxResults", fmt.Sprint(req.MaxKeys))
+	query.Set("fields", "nextPageToken,items(name,size,etag,updated,storageClass),prefixes")
+	if req.Prefix != "" {
+		query.Set("prefix", req.Prefix)
+	}
+	if req.Delimiter != "" {
+		query.Set("delimiter", req.Delimiter)
+	}
+	if req.ContinuationToken != "" {
+		query.Set("pageToken", req.ContinuationToken)
+	}
+	u.RawQuery = query.Encode()
+	client, err := newHTTPClient(profile, opts)
+	if err != nil {
+		return objectlisting.Page{}, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return objectlisting.Page{}, err
+	}
+	token, err := resolveBearerToken(ctx, profile, opts)
+	if err != nil {
+		return objectlisting.Page{}, err
+	}
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return objectlisting.Page{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return objectlisting.Page{}, &HTTPStatusError{StatusCode: response.StatusCode}
+	}
+	body, err := responsebody.ReadAll(response.Body, responsebody.ControlPlaneMaxBytes)
+	if err != nil {
+		return objectlisting.Page{}, err
+	}
+	var wire struct {
+		NextPageToken string   `json:"nextPageToken"`
+		Prefixes      []string `json:"prefixes"`
+		Items         []struct {
+			Name         string `json:"name"`
+			Size         string `json:"size"`
+			ETag         string `json:"etag"`
+			Updated      string `json:"updated"`
+			StorageClass string `json:"storageClass"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		return objectlisting.Page{}, objectlisting.ErrInvalidPage
+	}
+	page := objectlisting.Page{NextToken: wire.NextPageToken, IsTruncated: wire.NextPageToken != "", CommonPrefixes: wire.Prefixes}
+	for _, item := range wire.Items {
+		size, err := strconv.ParseInt(item.Size, 10, 64)
+		if err != nil || size < 0 || item.Name == "" {
+			return objectlisting.Page{}, objectlisting.ErrInvalidPage
+		}
+		modified, err := time.Parse(time.RFC3339Nano, item.Updated)
+		if item.Updated != "" && err != nil {
+			return objectlisting.Page{}, objectlisting.ErrInvalidPage
+		}
+		lastModified := ""
+		if !modified.IsZero() {
+			lastModified = modified.UTC().Format(time.RFC3339Nano)
+		}
+		page.Items = append(page.Items, models.ObjectItem{Key: item.Name, Size: size, ETag: item.ETag, LastModified: lastModified, StorageClass: item.StorageClass})
+	}
+	return page, nil
 }
 
 func GetBucket(ctx context.Context, profile models.ProfileSecrets, bucket string) (Response, error) {

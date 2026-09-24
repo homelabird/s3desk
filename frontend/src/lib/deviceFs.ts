@@ -167,7 +167,7 @@ export async function writeResponseToFile(args: {
 				if (done) break
 				if (value) {
 					loadedBytes += value.byteLength
-					await writable.write(value)
+					await writable.write(toArrayBufferChunk(value))
 					onProgress?.({ loadedBytes, totalBytes })
 				}
 			}
@@ -181,7 +181,7 @@ export async function writeResponseToFile(args: {
 		await writable.close()
 	} catch (error) {
 		try { await reader?.cancel() } catch { /* preserve the original error */ }
-		try { await writable.abort() } catch { /* preserve the original error */ }
+		try { await writable.abort?.() } catch { /* preserve the original error */ }
 		throw error
 	} finally {
 		signal?.removeEventListener('abort', onAbort)
@@ -194,4 +194,11 @@ function parseContentLength(value: string | null): number | undefined {
 	const parsed = Number.parseInt(value, 10)
 	if (!Number.isFinite(parsed) || parsed < 0) return undefined
 	return parsed
+}
+
+function toArrayBufferChunk(chunk: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBuffer> {
+	if (chunk.buffer instanceof ArrayBuffer) {
+		return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+	}
+	return new Uint8Array(chunk)
 }

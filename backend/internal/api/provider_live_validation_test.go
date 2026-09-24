@@ -16,7 +16,8 @@ import (
 // These tests are intentionally env-gated and read-only.
 // They are meant for low-cost provider validation before release:
 //   1. profile connectivity check
-//   2. object listing against an existing bucket/container with maxKeys=1
+//   2. native object listing against an existing bucket/container with maxKeys=1
+//   3. a continuation-page request when the first page is truncated
 //
 // Providers covered:
 //   - AWS S3
@@ -86,7 +87,9 @@ func runLiveProviderValidation(t *testing.T, spec liveProviderValidationSpec) {
 	t.Helper()
 	lockTestEnv(t)
 
-	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	// Provider canaries must exercise the default native cursor path; ordinary
+	// API fixtures keep native listing disabled to retain fallback coverage.
+	st, _, srv, _ := newTestJobsServerWithNativeListing(t, testEncryptionKey(), false)
 	profile, err := st.CreateProfile(context.Background(), spec.createRequest)
 	if err != nil {
 		t.Fatalf("create profile: %v", err)
@@ -118,6 +121,23 @@ func runLiveProviderValidation(t *testing.T, spec liveProviderValidationSpec) {
 	decodeJSONResponse(t, listRes, &listResp)
 	if listResp.Bucket != spec.bucket {
 		t.Fatalf("bucket=%q, want %q", listResp.Bucket, spec.bucket)
+	}
+	if listResp.IsTruncated {
+		if listResp.NextContinuationToken == nil || strings.TrimSpace(*listResp.NextContinuationToken) == "" {
+			t.Fatal("truncated provider listing has no continuation token")
+		}
+		listPath += "&continuationToken=" + url.QueryEscape(*listResp.NextContinuationToken)
+		nextRes := doJSONRequestWithProfile(t, srv, http.MethodGet, listPath, profile.ID, nil)
+		defer nextRes.Body.Close()
+		if nextRes.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(nextRes.Body)
+			t.Fatalf("continued object list status=%d, want %d: %s", nextRes.StatusCode, http.StatusOK, string(body))
+		}
+		var nextResp models.ListObjectsResponse
+		decodeJSONResponse(t, nextRes, &nextResp)
+		if nextResp.Bucket != spec.bucket {
+			t.Fatalf("continued listing bucket=%q, want %q", nextResp.Bucket, spec.bucket)
+		}
 	}
 }
 

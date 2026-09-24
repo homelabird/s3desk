@@ -53,3 +53,26 @@ func TestListObjectFavoritesRejectsUnsupportedControlCharactersWhenHydrating(t *
 		t.Fatalf("expected control character error, got %q", errResp.Error.Message)
 	}
 }
+
+func TestListObjectFavoritesUsesServerModtimeWhenHydrating(t *testing.T) {
+	st, srv := newTestServer(t, testEncryptionKey())
+	profile := createTestProfile(t, st)
+	if _, err := st.AddObjectFavorite(context.Background(), profile.ID, "mybucket", "report.txt"); err != nil {
+		t.Fatalf("add favorite: %v", err)
+	}
+
+	var calls [][]string
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		return `[{"Path":"report.txt","Size":3,"ModTime":"2026-08-06T12:00:00Z","Hashes":{"MD5":"etag-report"}}]`, "", nil
+	})
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodGet, "/api/v1/buckets/mybucket/objects/favorites?hydrate=true", profile.ID, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusOK)
+	}
+	if len(calls) != 1 || !strings.Contains(strings.Join(calls[0], " "), "--use-server-modtime") || !strings.Contains(strings.Join(calls[0], " "), "--hash") {
+		t.Fatalf("rclone calls=%v, want server modtime and hashes", calls)
+	}
+}

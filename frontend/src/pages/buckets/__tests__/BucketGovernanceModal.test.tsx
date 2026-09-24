@@ -514,10 +514,11 @@ describe("BucketGovernanceModal", () => {
     const lifecycleSection = await screen.findByTestId(
       "bucket-governance-lifecycle",
     );
+    const lifecycleEditor = within(lifecycleSection).getByRole("textbox", {
+      name: /lifecycle rules json/i,
+    });
     fireEvent.change(
-      within(lifecycleSection).getByRole("textbox", {
-        name: /lifecycle rules json/i,
-      }),
+      lifecycleEditor,
       {
         target: {
           value: JSON.stringify(
@@ -536,6 +537,24 @@ describe("BucketGovernanceModal", () => {
       },
     );
     fireEvent.click(
+      within(lifecycleSection).getByRole("button", {
+        name: /add 7-day cleanup rule/i,
+      }),
+    );
+    expect(JSON.parse((lifecycleEditor as HTMLTextAreaElement).value)).toEqual([
+      {
+        id: "expire-logs",
+        status: "Enabled",
+        filter: { prefix: "logs/" },
+        expiration: { days: 30 },
+      },
+      {
+        id: "s3desk-abort-incomplete-uploads-7d",
+        status: "Enabled",
+        abortIncompleteMultipartUpload: { daysAfterInitiation: 7 },
+      },
+    ]);
+    fireEvent.click(
       within(lifecycleSection).getByRole("button", { name: "Save" }),
     );
 
@@ -550,6 +569,11 @@ describe("BucketGovernanceModal", () => {
               status: "Enabled",
               filter: { prefix: "logs/" },
               expiration: { days: 30 },
+            },
+            {
+              id: "s3desk-abort-incomplete-uploads-7d",
+              status: "Enabled",
+              abortIncompleteMultipartUpload: { daysAfterInitiation: 7 },
             },
           ],
         },

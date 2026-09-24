@@ -7,6 +7,7 @@ import {
 import {
 	OBJECTS_COST_MODE_DEFAULT,
 	OBJECTS_COST_MODE_STORAGE_KEY,
+	getObjectsCostModeStorageKey,
 	type ObjectsCostMode,
 } from '../../lib/objectsCostMode'
 import { THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES } from '../../lib/thumbnailCache'
@@ -107,9 +108,18 @@ export function useObjectsFiltersState(apiToken: string, profileId: string | nul
 	const [viewMode, setViewMode] = useLocalStorageState<ObjectsViewMode>('objectsViewMode', 'list')
 	const [showThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
 	const [thumbnailCacheSize] = useLocalStorageState<number>('objectsThumbnailCacheSize', THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES)
-	const [objectsCostMode] = useLocalStorageState<ObjectsCostMode>(OBJECTS_COST_MODE_STORAGE_KEY, OBJECTS_COST_MODE_DEFAULT)
-	const [autoIndexEnabled] = useLocalStorageState<boolean>('objectsAutoIndexEnabled', OBJECTS_AUTO_INDEX_DEFAULT_ENABLED)
-	const [autoIndexTtlHours] = useLocalStorageState<number>('objectsAutoIndexTtlHours', OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS)
+	const costModeStorageKey = getObjectsCostModeStorageKey(apiToken, profileId)
+	const [objectsCostMode] = useLocalStorageState<ObjectsCostMode>(costModeStorageKey, OBJECTS_COST_MODE_DEFAULT, {
+		...(profileId ? { legacyLocalStorageKey: OBJECTS_COST_MODE_STORAGE_KEY } : {}),
+	})
+	const autoIndexEnabledKey = profileId ? profileScopedStorageKey('objects', apiToken, profileId, 'autoIndexEnabled') : 'objectsAutoIndexEnabled'
+	const [autoIndexEnabled] = useLocalStorageState<boolean>(autoIndexEnabledKey, OBJECTS_AUTO_INDEX_DEFAULT_ENABLED, {
+		...(profileId ? { legacyLocalStorageKey: 'objectsAutoIndexEnabled' } : {}),
+	})
+	const autoIndexTtlKey = profileId ? profileScopedStorageKey('objects', apiToken, profileId, 'autoIndexTtlHours') : 'objectsAutoIndexTtlHours'
+	const [autoIndexTtlHours] = useLocalStorageState<number>(autoIndexTtlKey, OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS, {
+		...(profileId ? { legacyLocalStorageKey: 'objectsAutoIndexTtlHours' } : {}),
+	})
 
 	return {
 		typeFilter,

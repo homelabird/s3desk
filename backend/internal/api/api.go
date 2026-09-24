@@ -53,7 +53,7 @@ func New(dep Dependencies) http.Handler {
 		realtimeLimit:   newRequestLimiter(defaultRealtimeMaxConnections),
 		realtimeMax:     defaultRealtimeMaxConnections,
 		bucketGov: bucketgov.NewServiceWithOptions(
-			bucketgov.NewDefaultRegistryWithOptions(bucketgov.DefaultRegistryOptions{AllowRemote: dep.Config.AllowRemote}),
+			bucketgov.NewDefaultRegistryWithOptions(bucketgov.DefaultRegistryOptions{AllowRemote: dep.Config.AllowRemote, Metrics: dep.Metrics}),
 			bucketgov.ServiceOptions{AllowRemote: dep.Config.AllowRemote},
 		),
 	}

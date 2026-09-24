@@ -279,7 +279,7 @@ export function createObjectsSubFacade(deps: SubFacadeDeps) {
 		deleteObjects(args: { profileId: string; bucket: string; keys: string[] }): Promise<DeleteObjectsResponse> {
 			return objectsDomain.deleteObjects(deps.requestFn, args)
 		},
-		listObjectFavorites(args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean; signal?: AbortSignal }): Promise<ObjectFavoritesResponse> {
+		listObjectFavorites(args: { profileId: string; bucket: string; prefix?: string; cursor?: string; hydrate?: boolean; signal?: AbortSignal }): Promise<ObjectFavoritesResponse> {
 			return objectsDomain.listObjectFavorites(deps.requestFn, args)
 		},
 		createObjectFavorite(args: { profileId: string; bucket: string; key: string }): Promise<ObjectFavorite> {

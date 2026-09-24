@@ -57,6 +57,9 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 			})
 		}
 	}
+	if err := m.store.DiscardOrphanObjectIndexReplacements(ctx); err != nil {
+		return fmt.Errorf("discard orphan object index replacements: %w", err)
+	}
 	queuedJobs, err := m.store.ListJobsByStatus(ctx, models.JobStatusQueued)
 	if err != nil {
 		return err

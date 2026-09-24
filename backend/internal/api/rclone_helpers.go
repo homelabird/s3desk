@@ -63,6 +63,9 @@ func usesVisibleFolderMarker(p models.ProfileProvider) bool {
 }
 
 var errRcloneListStop = errors.New("rclone list stop")
+var errRcloneListCursorScanLimit = errors.New("rclone list cursor scan limit reached")
+
+const maxRcloneListCursorScanEntries = 100_000
 
 // listPaginator manages token-based pagination and truncation state for
 // handleListObjects, eliminating the three identical check-and-truncate blocks.

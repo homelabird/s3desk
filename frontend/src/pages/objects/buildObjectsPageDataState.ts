@@ -79,6 +79,9 @@ export interface ObjectsListVm extends Pick<
 		| 'bucketsQuery'
 		| 'favoriteItems'
 		| 'favoriteKeys'
+		| 'hasMoreFavoriteItems'
+		| 'isLoadingMoreFavoriteItems'
+		| 'loadMoreFavoriteItems'
 		| 'favoritePendingKeys'
 		| 'favoritesQuery'
 		| 'objectsQuery'
@@ -302,6 +305,9 @@ export function buildObjectsPageDataState(args: ObjectsPageDataStateArgs): Objec
 		extOptions: args.search.extOptions,
 		favoriteItems: args.queries.favoriteItems,
 		favoriteKeys: args.queries.favoriteKeys,
+		hasMoreFavoriteItems: args.queries.hasMoreFavoriteItems,
+		isLoadingMoreFavoriteItems: args.queries.isLoadingMoreFavoriteItems,
+		loadMoreFavoriteItems: args.queries.loadMoreFavoriteItems,
 		favoritePendingKeys: args.queries.favoritePendingKeys,
 		favoritesFirst: args.view.favoritesFirst,
 		favoritesOnly: args.view.favoritesOnly,

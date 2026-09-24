@@ -138,7 +138,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await expect(dialog).toHaveCount(0)
 	})
 
-	test('finishes profile refresh and mTLS changes after browser back during save', async ({ page }) => {
+	test('keeps profile edit open while saving, then finishes mTLS changes', async ({ page }) => {
 		let profile = {
 			id: 'profiles-buckets-mobile-profile', name: 'Responsive Profile', provider: 's3_compatible',
 			endpoint: 'http://localhost:9000', region: 'us-east-1', forcePathStyle: true,
@@ -183,12 +183,17 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 			await dialog.getByRole('button', { name: 'Save', exact: true }).click()
 			await expect.poll(() => started).toBe(true)
 			await page.goBack()
-			await expect(page.getByRole('heading', { name: 'Buckets', exact: true })).toBeVisible()
-			await expect(dialog).toHaveCount(0)
+			await expect(page).toHaveURL(/\/profiles$/)
+			await expect(dialog).toBeVisible()
 			releaseSave()
 			await expect.poll(() => tlsChanges).toEqual(['DELETE'])
+			await expect(dialog).toHaveCount(0)
+			await expect.poll(() => page.evaluate(() => !('__s3deskMobileBackV1' in (window.history.state ?? {})))).toBe(true)
 			await expect(page.getByRole('combobox', { name: 'Profile', exact: true }).locator('option:checked')).toHaveText('Updated Profile')
+			await page.goBack()
+			await expect(page.getByRole('heading', { name: 'Buckets', exact: true })).toBeVisible()
 			await page.goForward()
+			await expect(page).toHaveURL(/\/profiles$/)
 			await expect(getProfileCard(page, 'Updated Profile')).toBeVisible()
 		} finally {
 			releaseSave()

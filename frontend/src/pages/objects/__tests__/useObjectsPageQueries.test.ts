@@ -181,6 +181,49 @@ describe('getNextObjectsContinuationToken', () => {
 })
 
 describe('useObjectsPageQueries', () => {
+	it('keeps favorites-pane expansion DB-only and hydrates for favorites-only browsing', async () => {
+		const listObjectFavorites = vi.fn().mockResolvedValue({
+			bucket: 'bucket-a',
+			prefix: '',
+			count: 1,
+			keys: ['docs/readme.txt'],
+			hydrated: false,
+			items: [],
+		})
+		const api = createMockApiClient({
+			server: { getMeta: async () => buildMeta() },
+			profiles: { listProfiles: async () => [buildProfile()] },
+			buckets: { listBuckets: async () => [{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' }] },
+			objects: {
+				listObjects: async () => buildPage(),
+				listObjectFavorites,
+				createObjectFavorite: vi.fn(),
+				deleteObjectFavorite: vi.fn(),
+			},
+		})
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+		const args = {
+			api,
+			apiToken: 'token-a',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			prefix: '',
+			debugObjectsList: false,
+			favoritesPaneExpanded: true,
+		}
+		const { rerender } = renderHook(
+			({ favoritesOnly }: { favoritesOnly: boolean }) => useObjectsPageQueries({ ...args, favoritesOnly }),
+			{ initialProps: { favoritesOnly: false }, wrapper: createWrapper(queryClient) },
+		)
+
+		await waitFor(() => expect(listObjectFavorites).toHaveBeenCalledTimes(1))
+		expect(listObjectFavorites).toHaveBeenLastCalledWith(expect.objectContaining({ hydrate: false }))
+
+		rerender({ favoritesOnly: true })
+		await waitFor(() => expect(listObjectFavorites).toHaveBeenCalledTimes(2))
+		expect(listObjectFavorites).toHaveBeenLastCalledWith(expect.objectContaining({ hydrate: true }))
+	})
+
 	it('aborts the stale object list request when the prefix changes', async () => {
 		const signals: AbortSignal[] = []
 		const listBuckets = vi.fn().mockResolvedValue([{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' }])

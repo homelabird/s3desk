@@ -386,7 +386,22 @@ require_text "${GITLAB_CI}" 'E2E_BASE_URL && $E2E_LIVE != "1"' "non-live E2E lan
 require_text "${GITLAB_CI}" 'E2E_LIVE == "1" && $E2E_BASE_URL && $CI_COMMIT_REF_PROTECTED == "true"' "protected live E2E lane guard"
 require_text "${CONTAINERFILE}" "node:22-alpine@sha256:" "digest-pinned production Node image"
 require_text "${CONTAINERFILE}" "golang:1.25.13-alpine@sha256:" "digest-pinned production Go image"
-require_text "${CONTAINERFILE}" "rclone/rclone:1.72.0@sha256:" "digest-pinned production rclone image"
+RCLONE_VERSION="$(sed -nE 's/^FROM .*rclone\/rclone:([0-9]+\.[0-9]+\.[0-9]+)@sha256:.*/\1/p' "${CONTAINERFILE}")"
+if [[ -z "${RCLONE_VERSION}" ]]; then
+  echo "[release-gate] production rclone version pin is missing" >&2
+  exit 1
+fi
+require_text "${CONTAINERFILE}" "FROM docker.io/rclone/rclone:${RCLONE_VERSION}@sha256:" "Docker Hub digest-pinned production rclone image"
+for rclone_pin_file in \
+  "${ROOT}/Containerfile.deploy" \
+  "${ROOT}/Containerfile.local" \
+  "${ROOT}/compose/demo/compose.yml" \
+  "${ROOT}/compose/dev/compose.yml" \
+  "${ROOT}/compose/test/e2e.yml" \
+  "${PORTABLE_SMOKE_COMPOSE}" \
+  "${ROOT}/scripts/run_live_e2e_local.sh"; do
+  require_text "${rclone_pin_file}" "${RCLONE_VERSION}" "rclone version pin in ${rclone_pin_file#"${ROOT}/"}"
+done
 require_text "${CONTAINERFILE}" "-X s3desk/internal/version.Version" "release binary version linker injection"
 require_text "${CONTAINERFILE}" "alpine:3.21@sha256:" "digest-pinned production Alpine image"
 require_text "${E2E_RUNNER_DOCKERFILE}" "python:3.12-slim@sha256:" "digest-pinned E2E runner image"

@@ -169,10 +169,10 @@ func TestCommitDirectNonS3BatchesRcloneVerification(t *testing.T) {
 	var calls [][]string
 	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
 		calls = append(calls, append([]string(nil), args...))
-		if len(args) != 8 {
+		if len(args) != 9 {
 			t.Fatalf("rclone args=%v, want batch lsjson args", args)
 		}
-		keys, err := os.ReadFile(args[6])
+		keys, err := os.ReadFile(args[7])
 		if err != nil {
 			t.Fatalf("read batch keys: %v", err)
 		}
@@ -191,7 +191,7 @@ func TestCommitDirectNonS3BatchesRcloneVerification(t *testing.T) {
 		body, _ := io.ReadAll(res.Body)
 		t.Fatalf("status=%d, want %d: %s", res.StatusCode, http.StatusCreated, string(body))
 	}
-	if len(calls) != 1 || calls[0][0] != "lsjson" || calls[0][1] != "--recursive" || calls[0][2] != "--files-only" || calls[0][3] != "--no-mimetype" || calls[0][4] != "--hash" || calls[0][5] != "--files-from-raw" || calls[0][7] != "remote:test-bucket" {
+	if len(calls) != 1 || calls[0][0] != "lsjson" || calls[0][1] != "--recursive" || calls[0][2] != "--files-only" || calls[0][3] != "--no-mimetype" || calls[0][4] != "--use-server-modtime" || calls[0][5] != "--hash" || calls[0][6] != "--files-from-raw" || calls[0][8] != "remote:test-bucket" {
 		t.Fatalf("rclone calls=%v, want one batch lsjson call", calls)
 	}
 

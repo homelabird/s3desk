@@ -5,6 +5,24 @@ import { describe, expect, it, vi } from 'vitest'
 import { getObjectDownloadURL, getObjectIndexSummary, getObjectMeta, listObjectFavorites, listObjects, searchObjectsIndex } from '../domains/objects'
 
 describe('listObjects', () => {
+	it('preserves an explicit empty delimiter for recursive listing', async () => {
+		const request = vi.fn().mockResolvedValue({
+			bucket: 'bucket-a',
+			prefix: '',
+			items: [],
+			commonPrefixes: [],
+			isTruncated: false,
+		})
+
+		await listObjects(request, { profileId: 'profile-1', bucket: 'bucket-a', delimiter: '' })
+
+		expect(request).toHaveBeenCalledWith(
+			'/buckets/bucket-a/objects?delimiter=',
+			{ method: 'GET', signal: undefined },
+			{ profileId: 'profile-1' },
+		)
+	})
+
 	it('forwards the caller abort signal to the request transport', async () => {
 		const controller = new AbortController()
 		const request = vi.fn().mockResolvedValue({
@@ -144,6 +162,28 @@ describe('listObjectFavorites', () => {
 		expect(request.mock.calls[1][0]).toContain('cursor=page-2')
 		expect(response).toMatchObject({ count: 2, keys: ['new.txt', 'old.txt'], items: [] })
 		expect(response.nextCursor).toBeUndefined()
+	})
+
+	it('returns one hydrated page with its cursor', async () => {
+		const request = vi.fn().mockResolvedValue({
+			bucket: 'bucket-a',
+			count: 1,
+			keys: ['new.txt'],
+			hydrated: true,
+			items: [{ key: 'new.txt', size: 4, lastModified: '2026-09-24T00:00:00Z', createdAt: '2026-09-24T00:00:00Z' }],
+			nextCursor: 'page-2',
+		})
+
+		const response = await listObjectFavorites(request as Parameters<typeof listObjectFavorites>[0], {
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			cursor: 'page-1',
+			hydrate: true,
+		})
+
+		expect(request).toHaveBeenCalledTimes(1)
+		expect(request.mock.calls[0][0]).toContain('cursor=page-1')
+		expect(response.nextCursor).toBe('page-2')
 	})
 
 	it('stops before the next page when the caller aborts after a response', async () => {

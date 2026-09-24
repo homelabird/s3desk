@@ -104,7 +104,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			if (!current || current.status !== 'queued') return
 
 			const items = getUploadItems(args.uploadItemsByTaskIdRef, taskId)
-			if ((!items || items.length === 0) && !task.pendingCommit) {
+			if ((!items || items.length === 0) && !current.pendingCommit) {
 				args.updateUploadTask(taskId, (t) => ({
 					...t,
 					status: 'failed',

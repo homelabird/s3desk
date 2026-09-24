@@ -4,6 +4,9 @@ import "time"
 
 type Config struct {
 	S3NativeList                       bool
+	GCSNativeList                      bool
+	AzureNativeList                    bool
+	OCINativeList                      bool
 	S3NativeDownload                   bool
 	Addr                               string
 	ExternalBaseURL                    string

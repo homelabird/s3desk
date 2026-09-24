@@ -12,7 +12,7 @@ export function buildObjectsTreePaneProps(args: BuildObjectsPagePanesPropsArgs):
 		treeDrawerOpen: args.treeDrawerOpen,
 		hasProfile,
 		hasBucket,
-		favorites: args.favoriteItems,
+		favorites: [...args.favoriteKeys].map((key) => ({ key })),
 		favoriteCount: args.favoriteCount,
 		favoritesSearch: args.favoritesSearch,
 		onFavoritesSearchChange: args.setFavoritesSearch,

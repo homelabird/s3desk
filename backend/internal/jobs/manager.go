@@ -33,9 +33,11 @@ const (
 )
 
 const (
-	defaultJobQueueCapacity = 256
-	defaultMaxLogLineBytes  = 256 * 1024
-	jobProgressTick         = 2 * time.Second
+	defaultJobQueueCapacity   = 256
+	defaultMaxLogLineBytes    = 256 * 1024
+	defaultS3IndexMaxObjects  = 100_000
+	defaultS3IndexMaxDuration = 15 * time.Minute
+	jobProgressTick           = 2 * time.Second
 )
 
 var ErrJobQueueFull = errors.New("job queue is full")
@@ -97,6 +99,8 @@ type Manager struct {
 	rcloneRetryMaxDelay    time.Duration
 	rcloneRetryJitterRatio float64
 	rcloneRetryRandFloat   func() float64
+	s3IndexMaxObjects      int64
+	s3IndexMaxDuration     time.Duration
 
 	// When enabled, persist unknown rclone stderr samples for later pattern expansion.
 	captureUnknownRcloneErrors bool
@@ -147,6 +151,8 @@ func NewManager(cfg Config) *Manager {
 		rcloneRetryMaxDelay:        wiring.rcloneRetryMaxDelay,
 		rcloneRetryJitterRatio:     wiring.rcloneRetryJitterRatio,
 		rcloneRetryRandFloat:       wiring.rcloneRetryRandFloat,
+		s3IndexMaxObjects:          int64(wiring.s3IndexMaxObjects),
+		s3IndexMaxDuration:         wiring.s3IndexMaxDuration,
 		captureUnknownRcloneErrors: wiring.captureUnknownRcloneErrors,
 	}
 	m.queueCond = sync.NewCond(&m.queueMu)

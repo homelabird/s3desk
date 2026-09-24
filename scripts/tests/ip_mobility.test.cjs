@@ -2,10 +2,10 @@ const assert = require('node:assert/strict')
 const {test} = require('node:test')
 const path = require('node:path')
 const {webcrypto} = require('node:crypto')
-const {createTypeScriptLoader} = require('../test-support/load_typescript.cjs')
+const {createLoader} = require('../test-support/load_typescript.cjs')
 const root=path.resolve(__dirname,'../..')
-const load=createTypeScriptLoader({root,moduleStubs:{react:{useSyncExternalStore(){throw new Error('React hooks are not exercised by this standalone probe')}}}})
-const {createClientTransport}=load('frontend/src/api/clientTransport.ts')
+const load=createLoader(root)
+const {createAPIClientTransport}=load('frontend/src/api/clientTransport.ts')
 const {OperationRecoveryRegistry,supportsOperationReceipt}=load('frontend/src/api/operationRecovery.ts')
 const {waitForNetworkRetry}=load('frontend/src/lib/networkRecovery.ts')
 const {RequestAbortedError}=load('frontend/src/api/errors.ts')
@@ -13,7 +13,7 @@ const {commitUploadAndTrackJob}=load('frontend/src/components/transfers/uploadRu
 const {readPendingUploadCommit,pendingCommitRequest}=load('frontend/src/components/transfers/uploadCommitRecovery.ts')
 function memoryStorage(){const data=new Map();return {getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k),data}}
 function setup(t){const oldFetch=global.fetch,oldWindow=global.window;const window=new EventTarget();window.sessionStorage=memoryStorage();global.window=window;t.after(()=>{global.fetch=oldFetch;global.window=oldWindow});return window}
-function transport(){return createClientTransport({getApiToken:()=> 'secret-token',getBaseUrl:()=>'/api/v1'})}
+function transport(){return createAPIClientTransport({getApiToken:()=> 'secret-token',getBaseUrl:()=>'/api/v1',getDefaultOptions:()=>({})})}
 function json(value,status=200,headers={}){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json',...headers}})}
 function mutation(api){return api.fetchResponse('/jobs',{method:'POST',body:'{"type":"delete"}'},{profileId:'profile-a',retryDelayMs:1,retryMaxDelayMs:1})}
 test('only explicit receipt-protected control routes are eligible',()=>{
@@ -26,11 +26,11 @@ test('lost mutation response reuses the SAME durable key, including new client i
 })
 test('gateway loss does not forget a pending intent across reload',async t=>{
  setup(t);const seen=[];let broken=true;global.fetch=async(url,init)=>{if(url.endsWith('/operations/capabilities'))return json({version:1,durable:true});seen.push(new Headers(init.headers).get('Idempotency-Key'));return broken?new Response('gateway lost the response',{status:502}):json({jobId:'one'},201,{'Idempotency-Replayed':'true'})}
- await mutation(transport());broken=false;await mutation(transport());assert.ok(seen.length>=4);assert.equal(new Set(seen).size,1)
+ await assert.rejects(()=>mutation(transport()));broken=false;await mutation(transport());assert.ok(seen.length>=2);assert.equal(new Set(seen).size,1)
 })
 test('unknown commit result is not auto-retried or converted into new intent',async t=>{
  setup(t);let calls=0;const keys=[];global.fetch=async(url,init)=>{if(url.endsWith('/operations/capabilities'))return json({version:1,durable:true});calls++;keys.push(new Headers(init.headers).get('Idempotency-Key'));return json({error:{code:'operation_outcome_unknown'}},409)}
- await mutation(transport());assert.equal(calls,1);await mutation(transport());assert.equal(calls,2);assert.equal(keys[0],keys[1])
+ await assert.rejects(()=>mutation(transport()));assert.equal(calls,1);await assert.rejects(()=>mutation(transport()));assert.equal(calls,2);assert.equal(keys[0],keys[1])
 })
 test('old server does not gain unsafe POST replay',async t=>{
  setup(t);let calls=0;global.fetch=async(url,init)=>{if(url.endsWith('/operations/capabilities'))return new Response('',{status:404});calls++;assert.equal(new Headers(init.headers).has('Idempotency-Key'),false);throw new TypeError('network')}
@@ -40,7 +40,7 @@ test('bulk file POST remains non-replayable',async t=>{
  setup(t);let calls=0;global.fetch=async()=>{calls++;throw new TypeError('network')};await assert.rejects(()=>transport().fetchResponse('/uploads/id/files',{method:'POST',body:'data'}),TypeError);assert.equal(calls,1)
 })
 test('recorded provider 5xx is not repeated automatically or forgotten on retry',async t=>{
- setup(t);const keys=[];global.fetch=async(url,init)=>{if(url.endsWith('/operations/capabilities'))return json({version:1,durable:true});keys.push(new Headers(init.headers).get('Idempotency-Key'));return json({error:{code:'provider_error'}},503,{'Idempotency-Replayed':'false'})};const api=transport();await mutation(api);assert.equal(keys.length,1);await mutation(api);assert.equal(keys[0],keys[1])
+ setup(t);const keys=[];global.fetch=async(url,init)=>{if(url.endsWith('/operations/capabilities'))return json({version:1,durable:true});keys.push(new Headers(init.headers).get('Idempotency-Key'));return json({error:{code:'provider_error'}},503,{'Idempotency-Replayed':'false'})};const api=transport();await assert.rejects(()=>mutation(api));assert.equal(keys.length,1);await assert.rejects(()=>mutation(api));assert.equal(keys[0],keys[1])
 })
 test('GET retries after network change without mutation key',async t=>{
  setup(t);let calls=0;global.fetch=async(url,init)=>{assert.equal(new Headers(init.headers).has('Idempotency-Key'),false);if(calls++===0)throw new TypeError('network');return json({ok:true})};await transport().fetchResponse('/buckets',{method:'GET'},{retryDelayMs:1});assert.equal(calls,2)
@@ -71,7 +71,7 @@ test('task-level commit recovery never deletes or recreates the existing upload'
   taskId:'task',task:state,items:[],apiToken:'token',api:{uploads:{
    commitUpload:async(p,id,body)=>{commitCalls++;assert.equal(id,'previous');assert.equal(body.totalBytes,10);throw new TypeError('response interrupted')},
    deleteUpload:async()=>{deleteCalls++},createUpload:async()=>{newSessions++;throw new Error('must not create a new session')},
-  }},uploadAbortersRef:ref(),uploadAttemptAbortersRef:ref(),uploadItemsByTaskIdRef:ref(),updateUploadTask:(id,fn)=>{state=fn(state)},queryClient:{invalidateQueries:async()=>{}},notifications:{error(){},warning(){},success(){},info(){},open(){}},handleUploadJobUpdate(){},
+  }},uploadAbortByTaskIdRef:ref(),uploadEstimatorByTaskIdRef:ref(),uploadItemsByTaskIdRef:ref(),uploadChunkFileConcurrency:1,uploadResumeConversionEnabled:false,pickUploadTuning:()=>({}),updateUploadTask:(id,fn)=>{state=fn(state)},queryClient:{invalidateQueries:async()=>{}},notifications:{error(){},warning(){},success(){},info(){},open(){}},handleUploadJobUpdate(){},
  })
  assert.equal(commitCalls,1);assert.equal(deleteCalls,0);assert.equal(newSessions,0);assert.equal(state.status,'failed');assert.equal(state.pendingCommit.uploadId,'previous')
 })

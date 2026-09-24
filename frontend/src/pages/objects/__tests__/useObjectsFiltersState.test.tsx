@@ -82,6 +82,34 @@ describe('useObjectsFiltersState', () => {
 		expect(result.current.maxModifiedMs).toBe(1000)
 	})
 
+	it('loads a separate storage cost mode for each profile and migrates the old shared preference once', async () => {
+		window.localStorage.setItem('objectsCostMode', JSON.stringify('aggressive'))
+		window.localStorage.setItem('objectsAutoIndexEnabled', JSON.stringify(true))
+		window.localStorage.setItem('objectsAutoIndexTtlHours', JSON.stringify(7))
+		const firstKey = profileScopedStorageKey('objects', 'token-a', 'profile-1', 'costMode')
+		const secondKey = profileScopedStorageKey('objects', 'token-a', 'profile-2', 'costMode')
+		const firstAutoIndexKey = profileScopedStorageKey('objects', 'token-a', 'profile-1', 'autoIndexEnabled')
+		const { result, rerender } = renderHook(
+			({ profileId }: { profileId: string }) => useObjectsFiltersState('token-a', profileId),
+			{ initialProps: { profileId: 'profile-1' } },
+		)
+
+		expect(result.current.objectsCostMode).toBe('aggressive')
+		expect(result.current.autoIndexEnabled).toBe(true)
+		expect(result.current.autoIndexTtlHours).toBe(7)
+		await waitFor(() => expect(window.localStorage.getItem(firstKey)).toBe(JSON.stringify('aggressive')))
+		await waitFor(() => expect(window.localStorage.getItem(firstAutoIndexKey)).toBe(JSON.stringify(true)))
+		rerender({ profileId: 'profile-2' })
+		expect(result.current.objectsCostMode).toBe('conservative')
+		expect(result.current.autoIndexEnabled).toBe(false)
+		expect(result.current.autoIndexTtlHours).toBe(12)
+		await waitFor(() => expect(window.localStorage.getItem('objectsCostMode')).toBeNull())
+		window.localStorage.setItem(secondKey, JSON.stringify('balanced'))
+		rerender({ profileId: 'profile-1' })
+		rerender({ profileId: 'profile-2' })
+		expect(result.current.objectsCostMode).toBe('balanced')
+	})
+
 	it('keeps filter state isolated per api token for the same profile', () => {
 		const { result, rerender } = renderHook(
 			({ apiToken }: { apiToken: string }) => useObjectsFiltersState(apiToken, 'profile-1'),

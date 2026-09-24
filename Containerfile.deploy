@@ -16,7 +16,7 @@ RUN go mod download
 COPY backend/ /src/backend/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X s3desk/internal/version.Version=${APP_VERSION}" -o /out/s3desk-server ./cmd/server
 
-FROM docker.io/rclone/rclone:1.72.0 AS rclone
+FROM docker.io/rclone/rclone:1.75.1 AS rclone
 
 FROM docker.io/library/golang:1.25.13-alpine AS runtime
 RUN set -e; \

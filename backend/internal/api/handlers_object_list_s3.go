@@ -9,20 +9,20 @@ import (
 	"github.com/aws/smithy-go"
 
 	"s3desk/internal/models"
+	"s3desk/internal/objectlisting"
 	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/s3client"
-	"s3desk/internal/s3listing"
 )
 
 func (svc objectListHTTPService) executeS3(metric *storageMetric, r *http.Request, p models.ProfileSecrets, bucket, prefix, delimiter, token string, maxKeys int, prefixesOnly bool) (*models.ListObjectsResponse, error) {
-	client, err := s3ClientFromProfile(p, svc.server.cfg.AllowRemote)
+	client, err := s3ClientFromProfile(p, svc.server.cfg.AllowRemote, svc.server.metrics)
 	if err != nil {
 		metric.SetStatus("invalid_config")
 		return nil, newObjectListHTTPError(http.StatusBadRequest, "invalid_config", "failed to prepare S3 listing client", nil)
 	}
 	// Preserve the existing API's directory semantics (docs and docs/ are equal).
-	q := s3listing.Query{ProfileID: p.ID, Bucket: bucket, Prefix: rcloneconfig.NormalizePrefix(prefix, p.PreserveLeadingSlash), Delimiter: delimiter, Token: token, MaxKeys: maxKeys, PrefixesOnly: prefixesOnly}
-	result, err := s3listing.List(r.Context(), q, s3client.ListPage(client))
+	q := objectlisting.Query{ProfileID: p.ID, Bucket: bucket, Prefix: rcloneconfig.NormalizePrefix(prefix, p.PreserveLeadingSlash), Delimiter: delimiter, Token: token, MaxKeys: maxKeys, PrefixesOnly: prefixesOnly}
+	result, err := objectlisting.List(r.Context(), q, metric.TrackObjectListPages(string(p.Provider), s3client.ListPage(client)))
 	if err != nil {
 		metric.SetStatus("remote_error")
 		return nil, s3ListHTTPError(err)
@@ -34,7 +34,7 @@ func (svc objectListHTTPService) executeS3(metric *storageMetric, r *http.Reques
 
 func s3ListHTTPError(err error) *objectListHTTPError {
 	status, code, message := http.StatusBadGateway, "s3_error", "failed to list objects"
-	if errors.Is(err, s3listing.ErrInvalidToken) {
+	if errors.Is(err, objectlisting.ErrInvalidToken) {
 		status, code, message = http.StatusBadRequest, "invalid_request", "invalid continuation token; refresh the listing"
 	} else if errors.Is(err, context.Canceled) {
 		status, code, message = http.StatusRequestTimeout, "canceled", "object listing canceled"

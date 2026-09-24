@@ -2,14 +2,17 @@ package ocicli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/objectlisting"
 	"s3desk/internal/processio"
 	"s3desk/internal/profileendpoint"
 )
@@ -36,6 +39,56 @@ func GetBucketWithOptions(ctx context.Context, profile models.ProfileSecrets, bu
 		"-bn", strings.TrimSpace(bucket),
 		"-ns", strings.TrimSpace(profile.OciNamespace),
 	)
+}
+
+func ListObjectsPage(ctx context.Context, profile models.ProfileSecrets, bucket string, req objectlisting.Request, opts ClientOptions) (objectlisting.Page, error) {
+	args := []string{"--output", "json", "--no-retry", "os", "object", "list",
+		"-bn", strings.TrimSpace(bucket), "-ns", strings.TrimSpace(profile.OciNamespace),
+		"--limit", fmt.Sprint(req.MaxKeys), "--fields", "name,size,etag,timeModified,storageTier"}
+	if req.Prefix != "" {
+		args = append(args, "--prefix", req.Prefix)
+	}
+	if req.Delimiter != "" {
+		args = append(args, "--delimiter", req.Delimiter)
+	}
+	if req.ContinuationToken != "" {
+		args = append(args, "--start", req.ContinuationToken)
+	}
+	resp, err := run(ctx, profile, opts, args...)
+	if err != nil {
+		return objectlisting.Page{}, err
+	}
+	var payload struct {
+		NextStartWith string   `json:"next-start-with"`
+		Prefixes      []string `json:"prefixes"`
+		Data          []struct {
+			Name         string          `json:"name"`
+			Size         json.RawMessage `json:"size"`
+			ETag         string          `json:"etag"`
+			TimeModified string          `json:"time-modified"`
+			StorageTier  string          `json:"storage-tier"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body, &payload); err != nil {
+		return objectlisting.Page{}, objectlisting.ErrInvalidPage
+	}
+	page := objectlisting.Page{NextToken: payload.NextStartWith, IsTruncated: payload.NextStartWith != "", CommonPrefixes: payload.Prefixes}
+	for _, object := range payload.Data {
+		var size int64
+		if len(object.Size) == 0 || string(object.Size) == "null" || json.Unmarshal(object.Size, &size) != nil || size < 0 || object.Name == "" {
+			return objectlisting.Page{}, objectlisting.ErrInvalidPage
+		}
+		modified := ""
+		if object.TimeModified != "" && object.TimeModified != "null" {
+			value, err := time.Parse(time.RFC3339Nano, object.TimeModified)
+			if err != nil {
+				return objectlisting.Page{}, objectlisting.ErrInvalidPage
+			}
+			modified = value.UTC().Format(time.RFC3339Nano)
+		}
+		page.Items = append(page.Items, models.ObjectItem{Key: object.Name, Size: size, ETag: object.ETag, LastModified: modified, StorageClass: object.StorageTier})
+	}
+	return page, nil
 }
 
 func UpdateBucket(ctx context.Context, profile models.ProfileSecrets, bucket string, publicAccessType string, versioning string) (Response, error) {

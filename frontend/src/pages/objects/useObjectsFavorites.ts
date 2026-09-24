@@ -53,6 +53,7 @@ function updateFavoriteResponse(
 		keys: uniqueKeys,
 		hydrated: args.hydrated || response?.hydrated || false,
 		items: nextItems,
+		nextCursor: response.nextCursor,
 	}
 }
 
@@ -65,10 +66,27 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	const [favoritePendingOwnersByScope, setFavoritePendingOwnersByScope] = useState(
 		() => new Map<string, Map<string, number>>(),
 	)
+	const [isLoadingMoreFavoriteItems, setIsLoadingMoreFavoriteItems] = useState(false)
+	const loadingMoreFavoriteItemsRef = useRef(false)
+	const loadMoreFavoriteItemsControllerRef = useRef<AbortController | null>(null)
 
 	useEffect(() => {
 		favoriteContextVersionRef.current += 1
+		loadMoreFavoriteItemsControllerRef.current?.abort()
+		loadMoreFavoriteItemsControllerRef.current = null
+		loadingMoreFavoriteItemsRef.current = false
+		setIsLoadingMoreFavoriteItems(false)
 	}, [currentScopeKey])
+
+	useEffect(() => {
+		if (!hydrateItems) {
+			loadMoreFavoriteItemsControllerRef.current?.abort()
+			loadMoreFavoriteItemsControllerRef.current = null
+			loadingMoreFavoriteItemsRef.current = false
+			setIsLoadingMoreFavoriteItems(false)
+		}
+		return () => loadMoreFavoriteItemsControllerRef.current?.abort()
+	}, [hydrateItems])
 
 	const favoriteSummaryQueryKey = useMemo(
 		() => queryKeys.objects.favoritesSummary(profileId, bucket, apiToken),
@@ -85,20 +103,21 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 		retry: false,
 		queryFn: ({ signal }) => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true, signal }),
 	})
-	const favoriteSummaryEnabled = enabled && !!profileId && !!bucket && (!hydrateItems || favoriteItemsQuery.isError)
 	const favoriteSummaryQuery = useQuery({
-		queryKey: favoriteSummaryEnabled ? favoriteSummaryQueryKey : [...favoriteSummaryQueryKey, 'disabled'],
-		enabled: favoriteSummaryEnabled,
+		queryKey: favoriteSummaryQueryKey,
+		enabled: enabled && !!profileId && !!bucket,
 		retry: false,
 		queryFn: ({ signal }) => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false, signal }),
 	})
 	const favoritesQuery = hydrateItems ? favoriteItemsQuery : favoriteSummaryQuery
 	const favoriteItemsResponse = favoriteItemsQuery.data ?? queryClient.getQueryData<ObjectFavoritesResponse>(favoriteItemsQueryKey)
 	const favoriteSummaryResponse = favoriteSummaryQuery.data ?? queryClient.getQueryData<ObjectFavoritesResponse>(favoriteSummaryQueryKey)
-	const favoriteResponse = hydrateItems && !favoriteItemsQuery.isError
-		? favoriteItemsResponse ?? favoriteSummaryResponse
-		: favoriteSummaryResponse ?? favoriteItemsResponse
-	const favoriteItems = useMemo(() => favoriteItemsResponse?.items ?? [], [favoriteItemsResponse?.items])
+	const favoriteResponse = favoriteSummaryResponse ?? favoriteItemsResponse
+	const favoriteItems = useMemo<ObjectItem[]>(() => {
+		if (favoriteItemsResponse?.hydrated) return favoriteItemsResponse.items
+		if (hydrateItems && !favoriteItemsQuery.isError) return []
+		return favoriteKeysFromResponse(favoriteSummaryResponse).map((key) => ({ key, size: 0, lastModified: '' }))
+	}, [favoriteItemsQuery.isError, favoriteItemsResponse, favoriteSummaryResponse, hydrateItems])
 	const favoriteKeys = useMemo(() => new Set(favoriteKeysFromResponse(favoriteResponse)), [favoriteResponse])
 	const favoriteCount = favoriteResponse?.count ?? favoriteKeys.size
 
@@ -118,6 +137,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	)
 	const favoriteQueryKeys = [favoriteSummaryQueryKey, favoriteItemsQueryKey]
 	const cancelFavoriteQueriesForMutation = async () => {
+		loadMoreFavoriteItemsControllerRef.current?.abort()
 		const queryKeysToRecover = favoriteQueryKeys.filter((queryKey) => {
 			const state = queryClient.getQueryState(queryKey)
 			return state?.fetchStatus === 'fetching' || state?.data === undefined
@@ -283,7 +303,37 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 			) return
 			objectsFeedback.error(err)
 		},
-		})
+	})
+
+	const loadMoreFavoriteItems = useCallback(async () => {
+		const cursor = queryClient.getQueryData<ObjectFavoritesResponse>(favoriteItemsQueryKey)?.nextCursor
+		if (!cursor || !hydrateItems || !profileId || loadingMoreFavoriteItemsRef.current) return
+		loadingMoreFavoriteItemsRef.current = true
+		setIsLoadingMoreFavoriteItems(true)
+		const controller = new AbortController()
+		loadMoreFavoriteItemsControllerRef.current = controller
+		try {
+			const page = await api.objects.listObjectFavorites({ profileId, bucket, cursor, hydrate: true, signal: controller.signal })
+			if (controller.signal.aborted) return
+			queryClient.setQueryData<ObjectFavoritesResponse>(favoriteItemsQueryKey, (current) => {
+				if (!current) return page
+				return {
+					...page,
+					count: current.count + page.count,
+					keys: Array.from(new Set([...current.keys, ...page.keys])),
+					items: [...current.items, ...page.items.filter((item) => !current.items.some((existing) => existing.key === item.key))],
+				}
+			})
+		} catch (error) {
+			if (!controller.signal.aborted) objectsFeedback.error(error)
+		} finally {
+			if (loadMoreFavoriteItemsControllerRef.current === controller) {
+				loadMoreFavoriteItemsControllerRef.current = null
+				loadingMoreFavoriteItemsRef.current = false
+				setIsLoadingMoreFavoriteItems(false)
+			}
+		}
+	}, [api, bucket, favoriteItemsQueryKey, hydrateItems, profileId, queryClient])
 
 	const favoritesReady = favoriteResponse !== undefined
 	const favoritePendingKeys = useMemo(() => {
@@ -319,6 +369,9 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 		favoritesQuery,
 		favoriteCount,
 		favoriteItems,
+		hasMoreFavoriteItems: hydrateItems && !!favoriteItemsResponse?.nextCursor,
+		isLoadingMoreFavoriteItems,
+		loadMoreFavoriteItems,
 		favoriteKeys,
 		favoritePendingKeys,
 		toggleFavorite,

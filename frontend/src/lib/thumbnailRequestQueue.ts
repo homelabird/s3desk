@@ -45,8 +45,8 @@ function pumpThumbnailQueue() {
 	}
 }
 
-export function scheduleThumbnailRequest<T>(start: () => TransferHandle<T>): TransferHandle<T> {
-	concurrencyLimit = getThumbnailRequestConcurrency(readStoredObjectsCostMode())
+export function scheduleThumbnailRequest<T>(start: () => TransferHandle<T>, costMode = readStoredObjectsCostMode()): TransferHandle<T> {
+	concurrencyLimit = getThumbnailRequestConcurrency(costMode)
 	let taskRef: PendingTask<T> | null = null
 
 	const promise = new Promise<T>((resolve, reject) => {

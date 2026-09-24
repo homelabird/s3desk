@@ -64,7 +64,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		const drawer = dialogByName(page, 'Settings')
 		await expect(drawer).toBeVisible()
 		await drawer.getByRole('tab', { name: 'Transfers' }).click()
-		await expect(drawer.getByText('Defaults work for most connections.')).toBeVisible()
+		await expect(drawer.getByRole('combobox', { name: 'Transfer safety' })).toHaveValue('auto')
 		await openTransferAdvancedOptions(drawer, advancedOptionsName, proxySwitchName)
 		await expect(drawer.getByText(proxySwitchName)).toBeVisible()
 		await expectMinTouchTarget(drawer.getByRole('switch', { name: proxySwitchName }))

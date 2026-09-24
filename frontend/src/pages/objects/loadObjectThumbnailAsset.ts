@@ -8,6 +8,7 @@ import {
 	type ThumbnailCacheRequest,
 } from '../../lib/thumbnailCache'
 import { scheduleThumbnailRequest } from '../../lib/thumbnailRequestQueue'
+import { readStoredObjectsCostMode } from '../../lib/objectsCostMode'
 
 type TransferHandle<T> = {
 	promise: Promise<T>
@@ -88,6 +89,7 @@ export function loadObjectThumbnailAsset(args: LoadObjectThumbnailAssetArgs): Tr
 				lastModified: args.lastModified,
 				contentType: args.contentType,
 			}),
+			readStoredObjectsCostMode(args.request.apiToken, args.request.profileId),
 		)
 		abort = handle.abort
 		const resp = await handle.promise

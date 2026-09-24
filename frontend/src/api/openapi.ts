@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/operations/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check durable control-operation replay support
+         * @description Requires the API token. A network reconnect never enables POST replay without this capability. Bulk file bodies and signed-URL issuance are not receipt-cached.
+         */
+        get: operations["getOperationReplayCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ws": {
         parameters: {
             query?: never;
@@ -1947,6 +1967,7 @@ export interface paths {
             parameters: {
                 query?: {
                     prefix?: string;
+                    /** @description Use "/" for folder-like listing; pass an empty value for recursive listing. Omit to use "/". */
                     delimiter?: string;
                     maxKeys?: number;
                     continuationToken?: string;
@@ -1987,6 +2008,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Opaque 16–128 character [A-Za-z0-9_-] operation identity, scoped to the authenticated token and profile, never the client IP. Same key and exact request replays the recorded result for at least 24h. Conflicting intent or unknown outcome returns 409; do not resubmit with a new key before reconciliation. Supported only when /operations/capabilities reports durable=true. */
+                    "Idempotency-Key"?: string;
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -2193,6 +2216,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Opaque 16–128 character [A-Za-z0-9_-] operation identity, scoped to the authenticated token and profile, never the client IP. Same key and exact request replays the recorded result for at least 24h. Conflicting intent or unknown outcome returns 409; do not resubmit with a new key before reconciliation. Supported only when /operations/capabilities reports durable=true. */
+                    "Idempotency-Key"?: string;
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -2580,6 +2605,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Opaque 16–128 character [A-Za-z0-9_-] operation identity, scoped to the authenticated token and profile, never the client IP. Same key and exact request replays the recorded result for at least 24h. Conflicting intent or unknown outcome returns 409; do not resubmit with a new key before reconciliation. Supported only when /operations/capabilities reports durable=true. */
+                    "Idempotency-Key"?: string;
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -2851,6 +2878,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Opaque 16–128 character [A-Za-z0-9_-] operation identity, scoped to the authenticated token and profile, never the client IP. Same key and exact request replays the recorded result for at least 24h. Conflicting intent or unknown outcome returns 409; do not resubmit with a new key before reconciliation. Supported only when /operations/capabilities reports durable=true. */
+                    "Idempotency-Key"?: string;
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -2943,6 +2972,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Opaque 16–128 character [A-Za-z0-9_-] operation identity, scoped to the authenticated token and profile, never the client IP. Same key and exact request replays the recorded result for at least 24h. Conflicting intent or unknown outcome returns 409; do not resubmit with a new key before reconciliation. Supported only when /operations/capabilities reports durable=true. */
+                    "Idempotency-Key"?: string;
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -3065,6 +3096,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Opaque 16–128 character [A-Za-z0-9_-] operation identity, scoped to the authenticated token and profile, never the client IP. Same key and exact request replays the recorded result for at least 24h. Conflicting intent or unknown outcome returns 409; do not resubmit with a new key before reconciliation. Supported only when /operations/capabilities reports durable=true. */
+                    "Idempotency-Key"?: string;
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -3405,6 +3438,8 @@ export interface paths {
             parameters: {
                 query?: never;
                 header: {
+                    /** @description Opaque 16–128 character [A-Za-z0-9_-] operation identity, scoped to the authenticated token and profile, never the client IP. Same key and exact request replays the recorded result for at least 24h. Conflicting intent or unknown outcome returns 409; do not resubmit with a new key before reconciliation. Supported only when /operations/capabilities reports durable=true. */
+                    "Idempotency-Key"?: string;
                     "X-Profile-Id": components["parameters"]["XProfileId"];
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -4757,6 +4792,8 @@ export interface components {
             /** Format: int64 */
             uploadSessionTTLSeconds: number;
             /** Format: int64 */
+            thumbnailCacheTTLSeconds?: number;
+            /** Format: int64 */
             uploadMaxBytes?: number | null;
             uploadDirectStream: boolean;
             transferEngine: {
@@ -4978,6 +5015,38 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
-            thumbnailCacheTTLSeconds?: number;
-            /** Format: int64 */
+export interface operations {
+    getOperationReplayCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Receipt protocol support for this server deployment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {integer} */
+                        version: 1;
+                        durable: boolean;
+                        /** @enum {integer} */
+                        retentionSeconds: 86400;
+                    };
+                };
+            };
+            /** @description Invalid or missing API token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+}

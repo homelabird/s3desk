@@ -43,7 +43,6 @@ export function useObjectsPageQueries({
 	bucket,
 	prefix,
 	debugObjectsList,
-	favoritesPaneExpanded,
 	favoritesOnly,
 }: UseObjectsPageQueriesArgs) {
 	const metaQuery = useQuery({
@@ -127,13 +126,13 @@ export function useObjectsPageQueries({
 		},
 	})
 
-	const { favoritesQuery, favoriteCount, favoriteItems, favoriteKeys, favoritePendingKeys, toggleFavorite } = useObjectsFavorites({
+	const { favoritesQuery, favoriteCount, favoriteItems, favoriteKeys, favoritePendingKeys, toggleFavorite, hasMoreFavoriteItems, isLoadingMoreFavoriteItems, loadMoreFavoriteItems } = useObjectsFavorites({
 		api,
 		profileId,
 		bucket,
 		apiToken,
 		objectsPages: objectsQuery.data?.pages ?? [],
-		hydrateItems: favoritesPaneExpanded || favoritesOnly,
+		hydrateItems: favoritesOnly,
 		enabled: profileCapabilityResolved && objectCrudSupported,
 	})
 
@@ -157,6 +156,9 @@ export function useObjectsPageQueries({
 		favoriteCount,
 		favoriteItems,
 		favoriteKeys,
+		hasMoreFavoriteItems,
+		isLoadingMoreFavoriteItems,
+		loadMoreFavoriteItems,
 		favoritePendingKeys,
 		toggleFavorite,
 	}

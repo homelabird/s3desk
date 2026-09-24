@@ -111,12 +111,49 @@ func (s *Store) FinalizeObjectIndexReplacement(ctx context.Context, replacementI
 	})
 }
 
+func (s *Store) MergeObjectIndexReplacement(ctx context.Context, replacementID string) error {
+	replacementID = strings.TrimSpace(replacementID)
+	if replacementID == "" {
+		return errors.New("replacementID is required")
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var staged []objectIndexReplacementRow
+		if err := tx.Where("replacement_id = ?", replacementID).Find(&staged).Error; err != nil {
+			return err
+		}
+		rows := make([]objectIndexRow, 0, len(staged))
+		for _, entry := range staged {
+			rows = append(rows, objectIndexRow{
+				ProfileID: entry.ProfileID, Bucket: entry.Bucket, ObjectKey: entry.ObjectKey,
+				Size: entry.Size, ETag: entry.ETag, LastModified: entry.LastModified, IndexedAt: entry.IndexedAt,
+			})
+		}
+		if len(rows) > 0 {
+			if err := upsertObjectIndexRows(tx, rows); err != nil {
+				return err
+			}
+		}
+		return tx.Where("replacement_id = ?", replacementID).Delete(&objectIndexReplacementRow{}).Error
+	})
+}
+
 func (s *Store) DiscardObjectIndexReplacement(ctx context.Context, replacementID string) error {
 	replacementID = strings.TrimSpace(replacementID)
 	if replacementID == "" {
 		return nil
 	}
 	return s.db.WithContext(ctx).Where("replacement_id = ?", replacementID).Delete(&objectIndexReplacementRow{}).Error
+}
+
+func (s *Store) DiscardOrphanObjectIndexReplacements(ctx context.Context) error {
+	activeJobs := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Select("id").
+		Where("type = ? AND status IN ?", "s3_index_objects", []string{string(models.JobStatusQueued), string(models.JobStatusRunning)})
+	return s.db.WithContext(ctx).
+		Where("replacement_id NOT IN (?)", activeJobs).
+		Delete(&objectIndexReplacementRow{}).Error
 }
 
 func (s *Store) finalizeObjectIndexReplacementTx(tx *gorm.DB, replacementID, profileID, bucket, prefix string) error {

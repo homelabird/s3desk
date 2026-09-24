@@ -34,6 +34,7 @@ type server struct {
 	restoreMu         sync.RWMutex
 	// ponytail: global process-local object transition fence; use per-object durable claims if HA or promotion throughput matters.
 	uploadObjectStateMu sync.Mutex
+	indexJobMu          keyedmutex.Mutex[indexJobKey]
 	// Serialize only the same upload object, not every profile and file.
 	multipartStateMu keyedmutex.Mutex[multipartStateKey]
 }
@@ -47,3 +48,7 @@ const (
 
 // Structured keys avoid collisions between profile, session and object paths.
 type multipartStateKey struct{ profileID, uploadID, path string }
+type indexJobKey struct {
+	profileID, bucket, prefix string
+	fullReindex               bool
+}

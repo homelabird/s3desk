@@ -86,7 +86,7 @@ export function useObjectsPrefetch({
 		(open: boolean) => {
 			if (!open) return
 			if (!profileId || bucketOptions.length === 0) return
-			const plan = getBucketPrefetchPlan(objectsCostMode, profileProvider)
+			const plan = getBucketPrefetchPlan(objectsCostMode)
 			if (plan.dropdownPreferred <= 0 && plan.dropdownFallback <= 0) return
 			const recent = new Set<string>()
 			if (bucket) recent.add(bucket)
@@ -104,7 +104,7 @@ export function useObjectsPrefetch({
 				void prefetchObjectsPage(name)
 			}
 		},
-		[bucket, bucketOptions, objectsCostMode, prefetchObjectsPage, profileId, profileProvider, recentBuckets],
+		[bucket, bucketOptions, objectsCostMode, prefetchObjectsPage, profileId, recentBuckets],
 	)
 
 	const prefetchQueueRef = useRef<string[]>([])
@@ -147,7 +147,7 @@ export function useObjectsPrefetch({
 	useEffect(() => {
 		if (prefetchStartedRef.current) return
 		if (!profileId) return
-		const plan = getBucketPrefetchPlan(objectsCostMode, profileProvider)
+		const plan = getBucketPrefetchPlan(objectsCostMode)
 		if (plan.initial <= 0) return
 		const names = bucketOptions.map((option) => option.value).filter(Boolean)
 		if (names.length === 0) return

@@ -71,6 +71,10 @@ spec:
               value: {{ .Values.jobs.concurrency | quote }}
             - name: JOB_QUEUE_CAPACITY
               value: {{ .Values.jobs.queueCapacity | quote }}
+            - name: OBJECT_INDEX_MAX_OBJECTS
+              value: {{ .Values.jobs.objectIndexMaxObjects | quote }}
+            - name: OBJECT_INDEX_MAX_DURATION
+              value: {{ .Values.jobs.objectIndexMaxDuration | quote }}
             - name: JOB_LOG_MAX_BYTES
               value: {{ int64 .Values.jobs.logMaxBytes | quote }}
             - name: JOB_LOG_MAX_LINE_BYTES
@@ -87,6 +91,12 @@ spec:
               value: {{ int64 .Values.uploads.maxBytes | quote }}
             - name: SERVER_RESTORE_MAX_BYTES
               value: {{ int64 .Values.backup.restoreMaxBytes | quote }}
+            - name: GCS_NATIVE_LIST
+              value: {{ .Values.objectListing.gcsNativeList | quote }}
+            - name: AZURE_NATIVE_LIST
+              value: {{ .Values.objectListing.azureNativeList | quote }}
+            - name: OCI_NATIVE_LIST
+              value: {{ .Values.objectListing.ociNativeList | quote }}
             - name: UPLOAD_DIRECT_STREAM
               value: {{ .Values.uploads.directStream | quote }}
             - name: UPLOAD_MAX_CONCURRENT_REQUESTS

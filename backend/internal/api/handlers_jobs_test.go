@@ -705,6 +705,14 @@ func newTestJobsServerWithAllowedDirs(t *testing.T, encryptionKey string, startM
 }
 
 func newTestJobsServerWithAdvertisedBackend(t *testing.T, encryptionKey string, startManager bool, allowedLocalDirs []string, advertisedBackend db.Backend) (*store.Store, *jobs.Manager, *httptest.Server, string) {
+	return newTestJobsServerWithAdvertisedBackendAndNativeList(t, encryptionKey, startManager, allowedLocalDirs, advertisedBackend, false)
+}
+
+func newTestJobsServerWithNativeListing(t *testing.T, encryptionKey string, startManager bool) (*store.Store, *jobs.Manager, *httptest.Server, string) {
+	return newTestJobsServerWithAdvertisedBackendAndNativeList(t, encryptionKey, startManager, nil, db.BackendSQLite, true)
+}
+
+func newTestJobsServerWithAdvertisedBackendAndNativeList(t *testing.T, encryptionKey string, startManager bool, allowedLocalDirs []string, advertisedBackend db.Backend, nativeList bool) (*store.Store, *jobs.Manager, *httptest.Server, string) {
 	t.Helper()
 	dataDir := t.TempDir()
 	gormDB, err := db.Open(db.Config{
@@ -746,6 +754,10 @@ func newTestJobsServerWithAdvertisedBackend(t *testing.T, encryptionKey string, 
 			DBBackend:        string(advertisedBackend),
 			StaticDir:        dataDir,
 			EncryptionKey:    encryptionKey,
+			S3NativeList:     nativeList,
+			GCSNativeList:    nativeList,
+			AzureNativeList:  nativeList,
+			OCINativeList:    nativeList,
 			JobConcurrency:   1,
 			AllowedLocalDirs: allowedLocalDirs,
 			UploadSessionTTL: time.Minute,

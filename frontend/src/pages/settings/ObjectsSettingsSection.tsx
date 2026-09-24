@@ -12,6 +12,7 @@ import {
 import {
 	OBJECTS_COST_MODE_DEFAULT,
 	OBJECTS_COST_MODE_STORAGE_KEY,
+	getObjectsCostModeStorageKey,
 	type ObjectsCostMode,
 } from '../../lib/objectsCostMode'
 import {
@@ -20,25 +21,28 @@ import {
 	THUMBNAIL_CACHE_MIN_ENTRIES,
 } from '../../lib/thumbnailCache'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
+import { profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import styles from '../SettingsPage.module.css'
 
-export function ObjectsSettingsSection() {
+export function ObjectsSettingsSection(props: { apiToken: string; profileId: string | null; profileName: string | null }) {
 	const [objectsShowThumbnails, setObjectsShowThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
 	const [objectsThumbnailCacheSize, setObjectsThumbnailCacheSize] = useLocalStorageState<number>(
 		'objectsThumbnailCacheSize',
 		THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
 	)
-	const [objectsCostMode, setObjectsCostMode] = useLocalStorageState<ObjectsCostMode>(
-		OBJECTS_COST_MODE_STORAGE_KEY,
-		OBJECTS_COST_MODE_DEFAULT,
-	)
+	const costModeStorageKey = getObjectsCostModeStorageKey(props.apiToken, props.profileId)
+	const [objectsCostMode, setObjectsCostMode] = useLocalStorageState<ObjectsCostMode>(costModeStorageKey, OBJECTS_COST_MODE_DEFAULT, {
+		...(props.profileId ? { legacyLocalStorageKey: OBJECTS_COST_MODE_STORAGE_KEY } : {}),
+	})
 	const [objectsAutoIndexEnabled, setObjectsAutoIndexEnabled] = useLocalStorageState<boolean>(
-		'objectsAutoIndexEnabled',
+		props.profileId ? profileScopedStorageKey('objects', props.apiToken, props.profileId, 'autoIndexEnabled') : 'objectsAutoIndexEnabled',
 		OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
+		props.profileId ? { legacyLocalStorageKey: 'objectsAutoIndexEnabled' } : {},
 	)
 	const [objectsAutoIndexTtlHours, setObjectsAutoIndexTtlHours] = useLocalStorageState<number>(
-		'objectsAutoIndexTtlHours',
+		props.profileId ? profileScopedStorageKey('objects', props.apiToken, props.profileId, 'autoIndexTtlHours') : 'objectsAutoIndexTtlHours',
 		OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
+		props.profileId ? { legacyLocalStorageKey: 'objectsAutoIndexTtlHours' } : {},
 	)
 
 	return (
@@ -56,12 +60,13 @@ export function ObjectsSettingsSection() {
 			<FormField
 				label="Object storage cost mode"
 				htmlFor="settings-objects-cost-mode"
-				extra="Conservative uses fewer requests; Aggressive prioritizes speed."
+				extra={`${props.profileId ? `Saved for ${props.profileName || 'the selected profile'}.` : 'Select a profile to save a separate preference.'} Conservative disables background prefetch; Aggressive is capped at two bucket pages.`}
 			>
 				<Select
 					id="settings-objects-cost-mode"
 					aria-label="Object storage cost mode"
 					value={objectsCostMode}
+					disabled={!props.profileId}
 					onChange={(value) => setObjectsCostMode(value as ObjectsCostMode)}
 					options={[
 						{ value: 'conservative', label: 'Conservative' },
@@ -101,7 +106,7 @@ export function ObjectsSettingsSection() {
 								</FormField>
 								<FormField
 									label="Auto index current prefix"
-									extra="When Search bucket is used, build/refresh the index for the current prefix automatically."
+									extra="Refreshes an existing index for this profile when Search bucket is used. First-time scans always require clicking Build index."
 								>
 									<ToggleSwitch
 										checked={objectsAutoIndexEnabled}

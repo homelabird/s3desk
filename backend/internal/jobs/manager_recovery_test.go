@@ -152,6 +152,46 @@ func TestRecoverAndRequeue(t *testing.T) {
 	}
 }
 
+func TestRecoverAndRequeueDiscardsInterruptedIndexStaging(t *testing.T) {
+	manager, st, _, gormDB, profile, _ := newManagerConsistencyFixture(t)
+	ctx := context.Background()
+	running, err := st.CreateJob(ctx, profile.ID, store.CreateJobInput{
+		Type: JobTypeS3IndexObjects, Status: models.JobStatusRunning,
+		Payload: map[string]any{"bucket": "bucket-a"},
+	})
+	if err != nil {
+		t.Fatalf("create running index job: %v", err)
+	}
+	queued, err := st.CreateJob(ctx, profile.ID, store.CreateJobInput{
+		Type: JobTypeS3IndexObjects, Payload: map[string]any{"bucket": "bucket-a"},
+	})
+	if err != nil {
+		t.Fatalf("create queued index job: %v", err)
+	}
+	for _, id := range []string{running.ID, queued.ID, "missing-job"} {
+		if err := st.StageObjectIndexReplacementBatch(ctx, id, profile.ID, "bucket-a", []store.ObjectIndexEntry{{Key: id}}, "2026-09-24T00:00:00Z"); err != nil {
+			t.Fatalf("stage replacement for %s: %v", id, err)
+		}
+	}
+
+	if err := manager.RecoverAndRequeue(ctx); err != nil {
+		t.Fatalf("recover and requeue: %v", err)
+	}
+	var remaining []struct {
+		ReplacementID string `gorm:"column:replacement_id"`
+	}
+	if err := gormDB.WithContext(ctx).Table("object_index_replacements").Distinct("replacement_id").Find(&remaining).Error; err != nil {
+		t.Fatalf("list remaining replacement IDs: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].ReplacementID != queued.ID {
+		t.Fatalf("remaining replacement IDs=%+v, want queued job %s only", remaining, queued.ID)
+	}
+	updated, ok, err := st.GetJob(ctx, profile.ID, running.ID)
+	if err != nil || !ok || updated.Status != models.JobStatusFailed {
+		t.Fatalf("interrupted job=%+v ok=%t err=%v, want failed", updated, ok, err)
+	}
+}
+
 func TestRecoverAndRequeueTracksOverflowWaiter(t *testing.T) {
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
 

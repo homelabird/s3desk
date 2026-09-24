@@ -148,7 +148,7 @@ func (svc objectFavoritesHTTPService) executeList(metric *storageMetric, r *http
 	}
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	args := []string{"lsjson", "--files-only", "--no-mimetype", "--hash", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
+	args := []string{"lsjson", "--files-only", "--no-mimetype", "--use-server-modtime", "--hash", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
 	proc, err := svc.server.startRclone(r.Context(), secrets, args, "favorites")
 	if err != nil {
 		metric.SetStatus("remote_error")

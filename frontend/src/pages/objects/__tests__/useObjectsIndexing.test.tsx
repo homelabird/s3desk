@@ -157,6 +157,22 @@ describe('useObjectsIndexing', () => {
 		expect(setIndexPrefix).toHaveBeenCalledWith('reports/')
 	})
 
+	it('does not silently scan a prefix that has never been indexed', async () => {
+		const getObjectIndexSummary = vi.fn().mockResolvedValue({})
+		const createJobWithRetry = vi.fn()
+		const api = createMockApiClient({ objects: { getObjectIndexSummary } })
+		const { Wrapper } = createWrapper()
+		renderHook(() => useObjectsIndexing({
+			api, profileId: 'profile-1', apiToken: 'token-1', bucket: 'bucket-a', prefix: 'reports/',
+			globalSearchOpen: true, globalSearchQueryText: 'alpha', globalSearchPrefixNormalized: 'reports/',
+			objectsCostMode: 'aggressive', autoIndexEnabled: true, autoIndexTtlMs: 1, autoIndexCooldownMs: 0,
+			setIndexPrefix: vi.fn(), createJobWithRetry,
+		}), { wrapper: Wrapper })
+		await waitFor(() => expect(getObjectIndexSummary).toHaveBeenCalledOnce())
+		await flushEffects()
+		expect(createJobWithRetry).not.toHaveBeenCalled()
+	})
+
 	it('does not repeat a fresh summary probe for the same location during cooldown', async () => {
 		const deferred = createDeferred<{ indexedAt?: string }>()
 		const getObjectIndexSummary = vi.fn().mockReturnValue(deferred.promise)

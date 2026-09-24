@@ -64,7 +64,10 @@ for release evidence files. Keep one completed record per affected provider.
 
 ### Minimal Backend Smoke
 
-Run this low-cost provider smoke before the manual UI pass:
+Run this low-cost provider-native listing smoke before the manual UI pass. The
+canary fixture enables native listing so it does not silently test the rclone
+fallback instead. It follows a continuation cursor when the test bucket has
+more than one page of results:
 
 ```bash
 cd backend

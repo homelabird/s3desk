@@ -86,7 +86,7 @@ describe('commitUploadAndTrackJob', () => {
 		expect(onCommitted).toHaveBeenCalledTimes(1)
 		expect(uploadItemsByTaskIdRef.current['upload-1']).toBeUndefined()
 		expect(updateUploadTask).toHaveBeenCalledWith('upload-1', expect.any(Function))
-		const nextTask = updateUploadTask.mock.calls[0][1](task)
+		const nextTask = updateUploadTask.mock.calls.at(-1)![1](task)
 		expect(nextTask).toMatchObject({
 			status: 'waiting_job',
 			jobId: 'job-1',

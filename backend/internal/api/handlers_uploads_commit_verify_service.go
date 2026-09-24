@@ -190,7 +190,7 @@ func (svc uploadCommitVerificationService) verifyTargetsRclone(
 	}
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	args := []string{"lsjson", "--recursive", "--files-only", "--no-mimetype", "--hash", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
+	args := []string{"lsjson", "--recursive", "--files-only", "--no-mimetype", "--use-server-modtime", "--hash", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
 	batchCtx, cancelBatch := context.WithCancel(ctx)
 	defer cancelBatch()
 	proc, err := svc.server.startRclone(batchCtx, secrets, args, "verify-upload-batch")

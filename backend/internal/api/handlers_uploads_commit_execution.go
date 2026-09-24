@@ -239,7 +239,7 @@ func (svc uploadCommitExecutionService) executeDirect(
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
 		return svc.executeImmediateRclone(ctx, profileID, uploadID, us, req, secrets)
 	}
-	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote)
+	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote, svc.server.metrics)
 	if err != nil {
 		return models.JobCreatedResponse{}, &uploadHTTPError{
 			status:  http.StatusInternalServerError,

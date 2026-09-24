@@ -57,7 +57,7 @@ export function useObjectsScreenPanes({
 		},
 		treeDrawerOpen: paneVm.treeDrawerOpen,
 		dockTree: paneVm.dockTree,
-		favoriteItems: listVm.favoriteItems,
+		favoriteKeys: listVm.favoriteKeys,
 		favoriteCount: paneVm.favoriteCount,
 		favoritesSearch: paneVm.favoritesSearch,
 		setFavoritesSearch: paneVm.setFavoritesSearch,

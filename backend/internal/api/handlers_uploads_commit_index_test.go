@@ -143,7 +143,7 @@ func TestUploadCommitFinalizeService_EnqueueObjectIndexRepair(t *testing.T) {
 		t.Fatalf("repair jobs=%d, want 1", len(resp.Items))
 	}
 	job := resp.Items[0]
-	if job.Payload["bucket"] != "bucket-a" || job.Payload["prefix"] != "incoming" {
+	if job.Payload["bucket"] != "bucket-a" || job.Payload["prefix"] != "incoming/" {
 		t.Fatalf("repair payload=%v, want bucket and prefix", job.Payload)
 	}
 	if fullReindex, ok := job.Payload["fullReindex"].(bool); !ok || !fullReindex {

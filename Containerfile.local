@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG RCLONE_VERSION=1.72.0
+ARG RCLONE_VERSION=1.75.1
 
 # Keep registry prefixes explicit so Podman can build local smoke/dev images non-interactively.
 FROM docker.io/library/node:22-alpine AS frontend

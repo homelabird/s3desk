@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"gorm.io/gorm"
+
+	"s3desk/internal/models"
 )
 
 func TestSearchObjectIndexOnlyProbesIndexAfterEmptyResult(t *testing.T) {
@@ -320,5 +322,81 @@ func TestFinalizeObjectIndexReplacementRespectsPrefixScope(t *testing.T) {
 	wantKeys := []string{"other/keep.txt", "target/new.txt"}
 	if fmt.Sprint(gotKeys) != fmt.Sprint(wantKeys) {
 		t.Fatalf("object keys = %v, want %v", gotKeys, wantKeys)
+	}
+}
+
+func TestMergeObjectIndexReplacementPreservesExistingRows(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	if err := st.UpsertObjectIndexBatch(ctx, profile.ID, "bucket-a", []ObjectIndexEntry{
+		{Key: "existing/keep.txt", Size: 3},
+		{Key: "existing/update.txt", Size: 5},
+	}, "2026-03-07T12:00:00Z"); err != nil {
+		t.Fatalf("seed object index: %v", err)
+	}
+
+	const replacementID = "job-incremental"
+	if err := st.StageObjectIndexReplacementBatch(ctx, replacementID, profile.ID, "bucket-a", []ObjectIndexEntry{
+		{Key: "existing/update.txt", Size: 7},
+		{Key: "existing/new.txt", Size: 11},
+	}, "2026-03-08T12:00:00Z"); err != nil {
+		t.Fatalf("stage incremental rows: %v", err)
+	}
+	if err := st.MergeObjectIndexReplacement(ctx, replacementID); err != nil {
+		t.Fatalf("merge incremental rows: %v", err)
+	}
+
+	summary, err := st.SummarizeObjectIndex(ctx, profile.ID, SummarizeObjectIndexInput{Bucket: "bucket-a", SampleLimit: 5})
+	if err != nil {
+		t.Fatalf("summarize merged index: %v", err)
+	}
+	if summary.ObjectCount != 3 || summary.TotalBytes != 21 || summary.IndexedAt == nil || *summary.IndexedAt != "2026-03-08T12:00:00Z" {
+		t.Fatalf("merged summary=%+v, want 3 objects, 21 bytes at new indexedAt", summary)
+	}
+	var stagedCount int64
+	if err := st.db.WithContext(ctx).Model(&objectIndexReplacementRow{}).Where("replacement_id = ?", replacementID).Count(&stagedCount).Error; err != nil {
+		t.Fatalf("count staged rows: %v", err)
+	}
+	if stagedCount != 0 {
+		t.Fatalf("staged rows remaining=%d, want 0", stagedCount)
+	}
+}
+
+func TestDiscardOrphanObjectIndexReplacementsKeepsQueuedAndRunningJobs(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	jobs := make(map[string]struct{})
+	for _, status := range []models.JobStatus{models.JobStatusQueued, models.JobStatusRunning, models.JobStatusSucceeded, models.JobStatusFailed} {
+		job, err := st.CreateJob(ctx, profile.ID, CreateJobInput{
+			Type: "s3_index_objects", Status: status, Payload: map[string]any{"bucket": "bucket-a"},
+		})
+		if err != nil {
+			t.Fatalf("create %s job: %v", status, err)
+		}
+		if err := st.StageObjectIndexReplacementBatch(ctx, job.ID, profile.ID, "bucket-a", []ObjectIndexEntry{{Key: string(status)}}, "2026-09-24T00:00:00Z"); err != nil {
+			t.Fatalf("stage %s replacement: %v", status, err)
+		}
+		jobs[job.ID] = struct{}{}
+	}
+	if err := st.StageObjectIndexReplacementBatch(ctx, "missing-job", profile.ID, "bucket-a", []ObjectIndexEntry{{Key: "orphan"}}, "2026-09-24T00:00:00Z"); err != nil {
+		t.Fatalf("stage missing-job replacement: %v", err)
+	}
+
+	if err := st.DiscardOrphanObjectIndexReplacements(ctx); err != nil {
+		t.Fatalf("discard orphan replacements: %v", err)
+	}
+	var remaining []objectIndexReplacementRow
+	if err := st.db.WithContext(ctx).Find(&remaining).Error; err != nil {
+		t.Fatalf("list remaining replacements: %v", err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("remaining staging rows=%d, want queued and running only", len(remaining))
+	}
+	for _, row := range remaining {
+		if _, ok := jobs[row.ReplacementID]; !ok {
+			t.Fatalf("orphan replacement %q remains", row.ReplacementID)
+		}
 	}
 }

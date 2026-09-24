@@ -91,14 +91,11 @@ func (svc uploadCommitFinalizeService) enqueueObjectIndexRepair(ctx context.Cont
 		return
 	}
 
-	job, err := svc.server.store.CreateJob(ctx, profileID, store.CreateJobInput{
-		Type: jobs.JobTypeS3IndexObjects,
-		Payload: map[string]any{
-			"bucket":      bucket,
-			"prefix":      prefix,
-			"fullReindex": true,
-			"reason":      "upload_object_index_repair",
-		},
+	job, _, err := svc.server.createAndEnqueueIndexJob(ctx, profileID, map[string]any{
+		"bucket":      bucket,
+		"prefix":      prefix,
+		"fullReindex": true,
+		"reason":      "upload_object_index_repair",
 	})
 	if err != nil {
 		logging.ErrorFields("upload object index repair job creation failed", map[string]any{
@@ -110,25 +107,7 @@ func (svc uploadCommitFinalizeService) enqueueObjectIndexRepair(ctx context.Cont
 		return
 	}
 
-	if err := svc.server.jobs.Enqueue(job.ID); err != nil {
-		rollbackErr := svc.server.rollbackCreatedJobAfterEnqueueFailure(ctx, profileID, job, err)
-		logging.ErrorFields("upload object index repair job enqueue failed", map[string]any{
-			"event":      "upload.object_index_repair_enqueue_failed",
-			"profile_id": profileID,
-			"bucket":     bucket,
-			"job_id":     job.ID,
-			"error":      err.Error(),
-		})
-		if rollbackErr != nil {
-			logging.ErrorFields("upload object index repair job rollback failed", map[string]any{
-				"event":         "upload.object_index_repair_rollback_failed",
-				"profile_id":    profileID,
-				"bucket":        bucket,
-				"job_id":        job.ID,
-				"enqueue_error": err.Error(),
-				"error":         rollbackErr.Error(),
-			})
-		}
+	if job.Status != models.JobStatusQueued {
 		return
 	}
 

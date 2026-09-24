@@ -3,8 +3,8 @@ import { SearchOutlined, StarFilled } from "@ant-design/icons";
 import { useMemo, useRef, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { ToggleSwitch } from "../../components/ToggleSwitch";
 import type { FavoriteObjectItem } from "../../api/types";
+import { ToggleSwitch } from "../../components/ToggleSwitch";
 import {
   clearFavoritesFilterHint,
   chooseProfileToShowPinnedObjectsHint,
@@ -25,6 +25,8 @@ import styles from "./ObjectsFavorites.module.css";
 import { ObjectsPaneStatus } from "./ObjectsPaneStatus";
 import { ObjectsTreePane } from "./ObjectsTreePane";
 
+export type FavoriteDisplayItem = Pick<FavoriteObjectItem, "key"> & Partial<Omit<FavoriteObjectItem, "key">>;
+
 type ObjectsFavoritesPaneProps = {
   hasProfile: boolean;
   hasBucket: boolean;
@@ -32,7 +34,7 @@ type ObjectsFavoritesPaneProps = {
   isLoading: boolean;
   errorMessage?: string | null;
   onRetry: () => void;
-  favorites: FavoriteObjectItem[];
+  favorites: FavoriteDisplayItem[];
   favoritesOnly: boolean;
   onFavoritesOnlyChange: (value: boolean) => void;
   query: string;

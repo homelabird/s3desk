@@ -38,7 +38,7 @@ func (s *server) directMultipartChunkFlow(
 		return uploadErr
 	}
 
-	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote)
+	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote, s.metrics)
 	if err != nil {
 		return newUploadInternalError("failed to prepare multipart client", map[string]any{"error": err.Error()})
 	}

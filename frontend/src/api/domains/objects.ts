@@ -42,7 +42,7 @@ export function listObjects(
 ): Promise<ListObjectsResponse> {
 	const params = new URLSearchParams()
 	if (args.prefix) params.set('prefix', args.prefix)
-	if (args.delimiter) params.set('delimiter', args.delimiter)
+	if (args.delimiter !== undefined) params.set('delimiter', args.delimiter)
 	if (args.maxKeys) params.set('maxKeys', String(args.maxKeys))
 	if (args.continuationToken) params.set('continuationToken', args.continuationToken)
 	if (args.prefixesOnly) params.set('prefixesOnly', 'true')
@@ -187,24 +187,34 @@ export function deleteObjects(request: RequestFn, args: { profileId: string; buc
 
 export function listObjectFavorites(
 	request: RequestFn,
-	args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean; signal?: AbortSignal },
+	args: { profileId: string; bucket: string; prefix?: string; cursor?: string; hydrate?: boolean; signal?: AbortSignal },
 ): Promise<ObjectFavoritesResponse> {
 	return (async () => {
-		const keys: string[] = []
-		const items: ObjectFavoritesResponse['items'] = []
-		let response: ObjectFavoritesResponse | undefined
-		let cursor: string | undefined
-		do {
-			args.signal?.throwIfAborted()
+		const requestPage = (cursor?: string) => {
 			const params = new URLSearchParams({ limit: '200' })
 			if (args.prefix) params.set('prefix', args.prefix)
 			if (typeof args.hydrate === 'boolean') params.set('hydrate', String(args.hydrate))
 			if (cursor) params.set('cursor', cursor)
-			response = await request<ObjectFavoritesResponse>(
+			return request<ObjectFavoritesResponse>(
 				`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites?${params.toString()}`,
 				{ method: 'GET', signal: args.signal },
 				{ profileId: args.profileId },
 			)
+		}
+		if (args.hydrate === true) {
+			args.signal?.throwIfAborted()
+			const page = await requestPage(args.cursor)
+			args.signal?.throwIfAborted()
+			return page
+		}
+
+		const keys: string[] = []
+		const items: ObjectFavoritesResponse['items'] = []
+		let response: ObjectFavoritesResponse | undefined
+		let cursor = args.cursor
+		do {
+			args.signal?.throwIfAborted()
+			response = await requestPage(cursor)
 			args.signal?.throwIfAborted()
 			keys.push(...response.keys)
 			items.push(...response.items)

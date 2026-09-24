@@ -84,6 +84,13 @@ export async function installObjectsMobileResponsiveFixtures(page: Page) {
 			body: previewSvg,
 		})
 	})
+	await page.route('**/download-proxy?**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/svg+xml',
+			body: previewSvg,
+		})
+	})
 
 	await installApiFixtures(page, [
 		{

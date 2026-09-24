@@ -10,8 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
+	"s3desk/internal/objectlisting"
 	"s3desk/internal/rcloneconfig"
-	"s3desk/internal/s3listing"
 )
 
 type objectListHTTPError struct {
@@ -46,11 +46,15 @@ func buildObjectListRcloneErrorContext() rcloneAPIErrorContext {
 	}
 }
 
-func (svc objectListHTTPService) prepareListObjects(metric *storageMetric, r *http.Request) (models.ProfileSecrets, string, string, string, string, int, error) {
-	delimiter := r.URL.Query().Get("delimiter")
-	if delimiter == "" {
-		delimiter = "/"
+func objectListDelimiter(r *http.Request) string {
+	if !r.URL.Query().Has("delimiter") {
+		return "/"
 	}
+	return r.URL.Query().Get("delimiter")
+}
+
+func (svc objectListHTTPService) prepareListObjects(metric *storageMetric, r *http.Request) (models.ProfileSecrets, string, string, string, string, int, error) {
+	delimiter := objectListDelimiter(r)
 	token := strings.TrimSpace(r.URL.Query().Get("continuationToken"))
 
 	secrets, ok := profileFromContext(r.Context())
@@ -91,20 +95,33 @@ func (svc objectListHTTPService) executePrepared(metric *storageMetric, r *http.
 	}
 
 	// Keep legacy o:/p: cursors on their original route during a rolling refresh.
-	// New S3 listings use true provider pagination; other clouds still use rclone.
-	if svc.server.cfg.S3NativeList && rcloneconfig.IsS3LikeProvider(secrets.Provider) && delimiter == "/" && (token == "" || s3listing.IsToken(token)) {
+	// Each enabled provider uses its native cursor; disabled or incompatible modes fall back to rclone.
+	if svc.server.cfg.S3NativeList && rcloneconfig.IsS3LikeProvider(secrets.Provider) && (delimiter == "/" || delimiter == "") && (token == "" || objectlisting.IsToken(token)) {
 		resp, err := svc.executeS3(metric, r, secrets, bucket, prefix, delimiter, token, maxKeys, prefixesOnly)
 		return resp, nil, "", rcloneAPIErrorContext{}, nil, err
 	}
-	if s3listing.IsToken(token) {
+	if svc.server.cfg.GCSNativeList && secrets.Provider == models.ProfileProviderGcpGcs && (delimiter == "/" || delimiter == "") && (token == "" || strings.HasPrefix(token, objectlisting.GCSTokenPrefix)) {
+		resp, err := svc.executeGCS(metric, r, secrets, bucket, prefix, delimiter, token, maxKeys, prefixesOnly)
+		return resp, nil, "", rcloneAPIErrorContext{}, nil, err
+	}
+	if svc.server.cfg.AzureNativeList && secrets.Provider == models.ProfileProviderAzureBlob && (delimiter == "/" || delimiter == "") && (token == "" || strings.HasPrefix(token, objectlisting.AzureTokenPrefix)) {
+		resp, err := svc.executeAzure(metric, r, secrets, bucket, prefix, delimiter, token, maxKeys, prefixesOnly)
+		return resp, nil, "", rcloneAPIErrorContext{}, nil, err
+	}
+	if svc.server.cfg.OCINativeList && secrets.Provider == models.ProfileProviderOciObjectStorage && (delimiter == "/" || delimiter == "") && (token == "" || strings.HasPrefix(token, objectlisting.OCITokenPrefix)) {
+		resp, err := svc.executeOCI(metric, r, secrets, bucket, prefix, delimiter, token, maxKeys, prefixesOnly)
+		return resp, nil, "", rcloneAPIErrorContext{}, nil, err
+	}
+	if objectlisting.IsToken(token) {
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectListHTTPError(http.StatusBadRequest, "invalid_request", "listing mode changed; refresh the listing", nil)
 	}
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	args := []string{"lsjson", "--no-mimetype"}
+	// Browsing needs the provider's LastModified; don't HEAD every listed object for rclone metadata.
+	args := []string{"lsjson", "--no-mimetype", "--use-server-modtime"}
 	if delimiter == "" {
-		args = append(args, "-R", "--fast-list")
+		args = append(args, "-R")
 	}
 	args = append(args, rcloneRemoteDir(bucket, prefix, secrets.PreserveLeadingSlash))
 
@@ -129,8 +146,15 @@ func (svc objectListHTTPService) executePrepared(metric *storageMetric, r *http.
 		commonPrefixSet: make(map[string]struct{}, 64),
 		cancel:          cancel,
 	}
+	scannedEntries := 0
 
 	listErr := decodeRcloneList(proc.stdout, func(entry rcloneListEntry) error {
+		if token != "" && !pag.foundToken && scannedEntries >= maxRcloneListCursorScanEntries {
+			cancel()
+			return errRcloneListCursorScanLimit
+		}
+		scannedEntries++
+		metric.AddScannedEntries(1)
 		key := entry.Path
 		if strings.TrimSpace(key) == "" && strings.TrimSpace(entry.Name) != "" {
 			key = entry.Name
@@ -190,6 +214,15 @@ func (svc objectListHTTPService) executePrepared(metric *storageMetric, r *http.
 	if errors.Is(listErr, errRcloneListStop) {
 		listErr = nil
 	}
+	if errors.Is(listErr, errRcloneListCursorScanLimit) {
+		metric.SetStatus("unsupported")
+		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectListHTTPError(
+			http.StatusUnprocessableEntity,
+			"listing_cursor_too_deep",
+			"This provider requires rescanning earlier objects for this page; narrow the prefix to continue browsing safely",
+			map[string]any{"maxScannedEntries": maxRcloneListCursorScanEntries},
+		)
+	}
 	if listErr != nil {
 		if waitErr != nil && !pag.stopped {
 			metric.SetStatus("remote_error")
@@ -220,10 +253,7 @@ func (svc objectListHTTPService) executeGet(metric *storageMetric, r *http.Reque
 }
 
 func (svc objectListHTTPService) handleListObjects(w http.ResponseWriter, r *http.Request) {
-	delimiter := r.URL.Query().Get("delimiter")
-	if delimiter == "" {
-		delimiter = "/"
-	}
+	delimiter := objectListDelimiter(r)
 	token := strings.TrimSpace(r.URL.Query().Get("continuationToken"))
 	metric := svc.server.beginStorageMetric("unknown", listObjectsMetricOperation(delimiter, token))
 	defer metric.Observe()

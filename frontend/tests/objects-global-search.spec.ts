@@ -190,6 +190,13 @@ test('search errors remain distinct from empty results and keep cached matches',
 	response = 'not_indexed'
 	await drawer.getByRole('button', { name: /Refresh/ }).click()
 	await expect(drawer.getByText('Search index needed', { exact: true })).toBeVisible({ timeout: 15_000 })
+	const indexLimitNotice = drawer.getByText('Default safety limit: 100,000 objects or 15 minutes.')
+	await expect(indexLimitNotice).toBeVisible()
+	await indexLimitNotice.scrollIntoViewIfNeeded()
+	await expect(indexLimitNotice).toBeInViewport({ ratio: 1 })
+	const buildIndexButton = drawer.getByRole('button', { name: 'Build search index', exact: true })
+	await buildIndexButton.scrollIntoViewIfNeeded()
+	await expect(buildIndexButton).toBeInViewport({ ratio: 1 })
 	await expect(drawer.getByText('No results', { exact: true })).toHaveCount(0)
 	response = 'empty'
 	await drawer.getByRole('button', { name: /Refresh/ }).click()

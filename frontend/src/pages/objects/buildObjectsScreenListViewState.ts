@@ -83,7 +83,7 @@ export function buildObjectsScreenListViewState(args: BuildObjectsScreenListView
 	const handleClearSearch = clearSearch
 	const canClearSearch = !!search.trim() || !!searchDraft.trim()
 	const listIsFetching = favoritesOnly ? listVm.favoritesQuery.isFetching : objectsQuery.isFetching
-	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
+	const listIsFetchingNextPage = favoritesOnly ? listVm.isLoadingMoreFavoriteItems : objectsQuery.isFetchingNextPage
 	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
 	const canInteract = !!props.profileId && !!bucket && !operationVm.isOffline
 

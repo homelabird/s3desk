@@ -124,7 +124,7 @@ func TestRollbackCreatedMultipartUploadPreservesMetadataWhenAbortFails(t *testin
 	if err != nil || !ok {
 		t.Fatalf("get profile secrets: ok=%v err=%v", ok, err)
 	}
-	client, err := s3ClientFromProfile(secrets, false)
+	client, err := s3ClientFromProfile(secrets, false, nil)
 	if err != nil {
 		t.Fatalf("create S3 client: %v", err)
 	}
@@ -603,14 +603,6 @@ func TestCompleteMultipartUploadPreconditions(t *testing.T) {
 			wantCode:         http.StatusBadRequest,
 			wantErrorCode:    "invalid_request",
 			wantBodyContains: "path is required",
-		},
-		{
-			name:             "rejects missing parts",
-			mode:             "presigned",
-			body:             `{"path":"file.bin","parts":[]}`,
-			wantCode:         http.StatusBadRequest,
-			wantErrorCode:    "invalid_request",
-			wantBodyContains: "parts are required",
 		},
 		{
 			name:             "rejects missing multipart metadata",

@@ -38,6 +38,7 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertEqual(MODULE.release_unit_for("backend/internal/api/handlers_objects.go"), "backend-api-provider-surface")
         self.assertEqual(MODULE.release_unit_for("openapi.yml"), "frontend-api-contracts")
         self.assertEqual(MODULE.release_unit_for("frontend/src/lib/profileCapabilityContext.ts"), "frontend-lib")
+        self.assertEqual(MODULE.release_unit_for(".agents/skills/s3desk-backend/SKILL.md"), "docs")
         self.assertEqual(MODULE.release_unit_for("CHANGELOG.md"), "docs")
         self.assertEqual(MODULE.release_unit_for("notes/FRONTEND_DESIGN_REPORT_OBJECTS_2026-05-17.md"), "docs")
 

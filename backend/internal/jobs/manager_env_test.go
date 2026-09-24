@@ -17,6 +17,8 @@ func TestValidateEnvironmentRejectsInvalidValues(t *testing.T) {
 		{name: "tune flag", key: "RCLONE_TUNE", value: "maybe"},
 		{name: "retry jitter", key: "RCLONE_RETRY_JITTER_RATIO", value: "lots"},
 		{name: "max transfers", key: "RCLONE_MAX_TRANSFERS", value: "many"},
+		{name: "object index max objects", key: "OBJECT_INDEX_MAX_OBJECTS", value: "many"},
+		{name: "object index max duration", key: "OBJECT_INDEX_MAX_DURATION", value: "soon"},
 	}
 
 	for _, tc := range tests {
@@ -85,5 +87,20 @@ func TestResolveManagerWiringClampsParsedValues(t *testing.T) {
 	}
 	if len(wiring.allowedLocalDirs) != 1 || wiring.allowedLocalDirs[0] != "/tmp/data" {
 		t.Fatalf("allowedLocalDirs=%v, want [/tmp/data]", wiring.allowedLocalDirs)
+	}
+	if wiring.s3IndexMaxObjects != defaultS3IndexMaxObjects || wiring.s3IndexMaxDuration != defaultS3IndexMaxDuration {
+		t.Fatalf("index limits=%d/%s, want safe defaults %d/%s", wiring.s3IndexMaxObjects, wiring.s3IndexMaxDuration, defaultS3IndexMaxObjects, defaultS3IndexMaxDuration)
+	}
+}
+
+func TestResolveManagerWiringAcceptsExplicitIndexBudgets(t *testing.T) {
+	t.Setenv("OBJECT_INDEX_MAX_OBJECTS", "25000")
+	t.Setenv("OBJECT_INDEX_MAX_DURATION", "7m")
+	wiring, err := resolveManagerWiring(Config{Concurrency: 1})
+	if err != nil {
+		t.Fatalf("resolveManagerWiring(): %v", err)
+	}
+	if wiring.s3IndexMaxObjects != 25_000 || wiring.s3IndexMaxDuration != 7*time.Minute {
+		t.Fatalf("index limits=%d/%s, want 25000/7m", wiring.s3IndexMaxObjects, wiring.s3IndexMaxDuration)
 	}
 }

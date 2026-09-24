@@ -4,11 +4,14 @@ import (
 	"crypto/tls"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"s3desk/internal/metrics"
 	"s3desk/internal/models"
 	"s3desk/internal/profileendpoint"
 	"s3desk/internal/profilehttp"
@@ -16,6 +19,7 @@ import (
 
 type ProfileOptions struct {
 	AllowRemote bool
+	Metrics     *metrics.Metrics
 }
 
 func FromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
@@ -58,6 +62,13 @@ func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string, opt
 		Region:      region,
 		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(secrets.AccessKeyID, secrets.SecretAccessKey, derefString(secrets.SessionToken))),
 	}
+	if opts.Metrics != nil {
+		cfg.Retryer = func() aws.Retryer {
+			return observedRetryer{Retryer: retry.NewStandard(), onRetry: func() {
+				opts.Metrics.IncStorageAPIRetryScheduled(string(secrets.Provider))
+			}}
+		}
+	}
 
 	httpClient, err := profilehttp.Client(secrets, opts.AllowRemote)
 	if err != nil {
@@ -71,6 +82,19 @@ func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string, opt
 			o.BaseEndpoint = aws.String(endpoint)
 		}
 	}), nil
+}
+
+type observedRetryer struct {
+	aws.Retryer
+	onRetry func()
+}
+
+func (r observedRetryer) RetryDelay(attempt int, err error) (time.Duration, error) {
+	delay, retryErr := r.Retryer.RetryDelay(attempt, err)
+	if retryErr == nil && r.onRetry != nil {
+		r.onRetry()
+	}
+	return delay, retryErr
 }
 
 func newHTTPClient(tlsCfg *tls.Config, allowRemote bool) *http.Client {

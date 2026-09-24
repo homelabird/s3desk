@@ -12,7 +12,20 @@ import (
 	"s3desk/internal/store"
 )
 
+var errS3IndexObjectLimit = errors.New("object index object limit reached")
+
 func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
+	maxDuration := m.s3IndexMaxDuration
+	if maxDuration <= 0 {
+		maxDuration = defaultS3IndexMaxDuration
+	}
+	maxObjects := m.s3IndexMaxObjects
+	if maxObjects <= 0 {
+		maxObjects = defaultS3IndexMaxObjects
+	}
+	ctx, cancel := context.WithTimeout(ctx, maxDuration)
+	defer cancel()
+
 	parsed, err := parseS3IndexObjectsPayload(payload)
 	if err != nil {
 		return err
@@ -43,17 +56,14 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 
 	writeLog("Starting index: bucket=%q prefix=%q", bucket, prefix)
 
-	replacementID := ""
-	if fullReindex {
-		replacementID = jobID
-		if err := m.store.DiscardObjectIndexReplacement(ctx, replacementID); err != nil {
-			return err
-		}
-		cleanupCtx := context.WithoutCancel(ctx)
-		defer func() {
-			_ = m.store.DiscardObjectIndexReplacement(cleanupCtx, replacementID)
-		}()
+	replacementID := jobID
+	if err := m.store.DiscardObjectIndexReplacement(ctx, replacementID); err != nil {
+		return err
 	}
+	cleanupCtx := context.WithoutCancel(ctx)
+	defer func() {
+		_ = m.store.DiscardObjectIndexReplacement(cleanupCtx, replacementID)
+	}()
 
 	secrets, ok, err := m.profileSecrets(ctx, profileID)
 	if err != nil {
@@ -62,6 +72,12 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	if !ok {
 		return ErrProfileNotFound
 	}
+	var scannedEntries int
+	defer func() {
+		if m.metrics != nil {
+			m.metrics.AddStorageRcloneListEntriesScanned(string(secrets.Provider), "object_index", scannedEntries)
+		}
+	}()
 
 	indexedAt := time.Now().UTC().Format(time.RFC3339Nano)
 	var (
@@ -92,26 +108,23 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		if len(batch) == 0 {
 			return nil
 		}
-		if fullReindex {
-			if err := m.store.StageObjectIndexReplacementBatch(ctx, replacementID, profileID, bucket, batch, indexedAt); err != nil {
-				return err
-			}
-		} else {
-			if err := m.store.UpsertObjectIndexBatch(ctx, profileID, bucket, batch, indexedAt); err != nil {
-				return err
-			}
+		if err := m.store.StageObjectIndexReplacementBatch(ctx, replacementID, profileID, bucket, batch, indexedAt); err != nil {
+			return err
 		}
 		batch = batch[:0]
 		return nil
 	}
 
-	args := []string{"lsjson", "-R", "--fast-list", "--no-mimetype", "--hash", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
+	// Index results use provider LastModified and don't need hashes; avoid per-object metadata HEADs.
+	args := []string{"lsjson", "-R", "--no-mimetype", "--use-server-modtime"}
+	args = append(args, rcloneRemoteDir(bucket, prefix, preserveLeadingSlash))
 	proc, err := m.startRcloneCommand(ctx, secrets, jobID, args)
 	if err != nil {
 		return err
 	}
 
 	listErr := decodeRcloneList(proc.stdout, func(obj rcloneListEntry) error {
+		scannedEntries++
 		select {
 		case <-ctx.Done():
 			_ = flushBatch()
@@ -121,6 +134,10 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		}
 		if obj.IsDir {
 			return nil
+		}
+		if objectsDone >= maxObjects {
+			cancel()
+			return errS3IndexObjectLimit
 		}
 		key := obj.Path
 		if strings.TrimSpace(key) == "" && strings.TrimSpace(obj.Name) != "" {
@@ -157,6 +174,9 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	})
 
 	waitErr := proc.wait()
+	if errors.Is(listErr, errS3IndexObjectLimit) {
+		return fmt.Errorf("object index scan exceeded OBJECT_INDEX_MAX_OBJECTS=%d", maxObjects)
+	}
 	if errors.Is(listErr, errRcloneListStop) {
 		listErr = nil
 	}
@@ -173,6 +193,10 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	if fullReindex {
 		writeLog("Finalizing index replacement…")
 		if err := m.store.FinalizeObjectIndexReplacement(ctx, replacementID, profileID, bucket, prefix); err != nil {
+			return err
+		}
+	} else {
+		if err := m.store.MergeObjectIndexReplacement(ctx, replacementID); err != nil {
 			return err
 		}
 	}

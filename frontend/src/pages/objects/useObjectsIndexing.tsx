@@ -142,8 +142,10 @@ export function useObjectsIndexing({
 				}
 				autoIndexLastKeyRef.current = key
 				autoIndexLastTriggeredRef.current = Date.now()
+				// First-time indexing may scan a very large remote prefix. Require an explicit user action.
+				if (!indexedAtMs) return
 
-				const stale = !indexedAtMs || Date.now() - indexedAtMs > autoIndexTtlMs
+				const stale = Date.now() - indexedAtMs > autoIndexTtlMs
 				if (!stale) return
 
 				setIndexPrefix(targetPrefix)

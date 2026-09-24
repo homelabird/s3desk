@@ -39,7 +39,7 @@ services:
       start_period: 10s
     stop_grace_period: 30s
   seaweedfs-seed:
-    image: docker.io/rclone/rclone:${RCLONE_VERSION:-1.72.0}
+    image: docker.io/rclone/rclone:${RCLONE_VERSION:-1.75.1}
     depends_on:
       seaweedfs:
         condition: service_healthy
@@ -78,7 +78,7 @@ services:
       dockerfile: Containerfile.local
       args:
         DB_BACKEND: sqlite
-        RCLONE_VERSION: ${RCLONE_VERSION:-1.72.0}
+        RCLONE_VERSION: ${RCLONE_VERSION:-1.75.1}
     image: ${S3DESK_PORTABLE_SMOKE_IMAGE:-localhost/s3desk-portable-smoke:dev}
     depends_on:
       postgres:
@@ -98,6 +98,11 @@ services:
       ENCRYPTION_KEY: ${PORTABLE_SMOKE_SOURCE_ENCRYPTION_KEY-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
       DB_STARTUP_TIMEOUT: ${PORTABLE_SMOKE_DB_STARTUP_TIMEOUT:-60s}
       S3_NATIVE_LIST: ${S3_NATIVE_LIST:-true}
+      GCS_NATIVE_LIST: ${GCS_NATIVE_LIST:-true}
+      AZURE_NATIVE_LIST: ${AZURE_NATIVE_LIST:-true}
+      OCI_NATIVE_LIST: ${OCI_NATIVE_LIST:-true}
+      OBJECT_INDEX_MAX_OBJECTS: ${OBJECT_INDEX_MAX_OBJECTS:-100000}
+      OBJECT_INDEX_MAX_DURATION: ${OBJECT_INDEX_MAX_DURATION:-15m}
     volumes:
     - portable-smoke-source-data:/data
   target:
@@ -118,6 +123,11 @@ services:
       ENCRYPTION_KEY: ${PORTABLE_SMOKE_TARGET_ENCRYPTION_KEY-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
       DB_STARTUP_TIMEOUT: ${PORTABLE_SMOKE_DB_STARTUP_TIMEOUT:-60s}
       S3_NATIVE_LIST: ${S3_NATIVE_LIST:-true}
+      GCS_NATIVE_LIST: ${GCS_NATIVE_LIST:-true}
+      AZURE_NATIVE_LIST: ${AZURE_NATIVE_LIST:-true}
+      OCI_NATIVE_LIST: ${OCI_NATIVE_LIST:-true}
+      OBJECT_INDEX_MAX_OBJECTS: ${OBJECT_INDEX_MAX_OBJECTS:-100000}
+      OBJECT_INDEX_MAX_DURATION: ${OBJECT_INDEX_MAX_DURATION:-15m}
     volumes:
     - portable-smoke-target-data:/data
   source-seed:

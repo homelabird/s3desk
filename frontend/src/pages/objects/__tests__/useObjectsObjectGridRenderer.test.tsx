@@ -70,10 +70,8 @@ describe('useObjectsObjectGridRenderer', () => {
 
 		render(<Harness onPreview={onPreview} onSelect={onSelect} onToggleFavorite={onToggleFavorite} />)
 
-		const cardTitle = screen.getByText('preview.png')
-		const card = cardTitle.closest('[data-objects-row="true"]')
+		const card = screen.getByRole('group', { name: 'Object preview.png' })
 		expect(card).not.toBeNull()
-		expect(screen.getByRole('group', { name: 'Object preview.png' })).toBe(card)
 		expect(card).not.toHaveAttribute('aria-selected')
 		expect(card?.className).toContain(styles.gridCardSelected)
 		expect(screen.getByRole('checkbox', { name: 'Select preview.png' })).toBeChecked()
@@ -91,7 +89,7 @@ describe('useObjectsObjectGridRenderer', () => {
 		expect(objectActionsButton.className).toContain(styles.gridCardIconButton)
 		expect(previewButton.className).toContain(styles.gridCardPreviewActionButton)
 		expect(screen.getByTestId('grid-thumbnail').closest('button')).toBe(previewButton)
-		expect(screen.queryByRole('button', { name: 'Preview', exact: true })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument()
 
 		fireEvent.click(selectButton)
 		expect(onSelect).toHaveBeenCalledWith('preview.png')

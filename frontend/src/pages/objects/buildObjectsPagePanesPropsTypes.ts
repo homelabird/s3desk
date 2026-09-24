@@ -18,7 +18,7 @@ export type BuildObjectsPagePanesPropsArgs = {
 
 	treeDrawerOpen: boolean
 	dockTree: boolean
-	favoriteItems: TreeProps['favorites']
+	favoriteKeys: Set<string>
 	favoriteCount: number
 	favoritesSearch: string
 	setFavoritesSearch: (value: string) => void

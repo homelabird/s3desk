@@ -24,6 +24,8 @@ type managerWiringConfig struct {
 	rcloneRetryMaxDelay        time.Duration
 	rcloneRetryJitterRatio     float64
 	rcloneRetryRandFloat       func() float64
+	s3IndexMaxObjects          int
+	s3IndexMaxDuration         time.Duration
 	captureUnknownRcloneErrors bool
 }
 
@@ -78,7 +80,20 @@ func resolveManagerWiring(cfg Config) (managerWiringConfig, error) {
 	if retryMaxDelay < retryBaseDelay {
 		retryMaxDelay = retryBaseDelay
 	}
-
+	s3IndexMaxObjects, err := lookupEnvInt("OBJECT_INDEX_MAX_OBJECTS", defaultS3IndexMaxObjects)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	if s3IndexMaxObjects < 1 {
+		s3IndexMaxObjects = defaultS3IndexMaxObjects
+	}
+	s3IndexMaxDuration, err := lookupEnvDuration("OBJECT_INDEX_MAX_DURATION", defaultS3IndexMaxDuration)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	if s3IndexMaxDuration <= 0 {
+		s3IndexMaxDuration = defaultS3IndexMaxDuration
+	}
 	rcloneTuneEnabled, err := lookupEnvBool("RCLONE_TUNE", true)
 	if err != nil {
 		return managerWiringConfig{}, err
@@ -129,6 +144,8 @@ func resolveManagerWiring(cfg Config) (managerWiringConfig, error) {
 		rcloneRetryMaxDelay:        retryMaxDelay,
 		rcloneRetryJitterRatio:     clampRetryJitterRatio(rcloneRetryJitterRatio),
 		rcloneRetryRandFloat:       rand.Float64,
+		s3IndexMaxObjects:          s3IndexMaxObjects,
+		s3IndexMaxDuration:         s3IndexMaxDuration,
 		captureUnknownRcloneErrors: captureUnknownRcloneErrors,
 	}, nil
 }

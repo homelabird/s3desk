@@ -111,7 +111,7 @@ describe('SettingsPage', () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
-		expect(await screen.findByText('Defaults work for most connections.')).toBeInTheDocument()
+		expect(await screen.findByLabelText('Transfer safety')).toHaveValue('auto')
 		expect(screen.queryByRole('switch', { name: 'Use server for downloads and previews' })).not.toBeInTheDocument()
 		fireEvent.click(screen.getByText('Advanced transfer options'))
 		const proxySwitch = await screen.findByRole('switch', { name: 'Use server for downloads and previews' })

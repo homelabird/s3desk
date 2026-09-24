@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"s3desk/internal/models"
+	"s3desk/internal/objectlisting"
 )
 
 func TestResolveCLIPathUsesPATHWhenUnset(t *testing.T) {
@@ -107,6 +108,50 @@ func TestGetBucketRejectsOversizedCLIStdout(t *testing.T) {
 	}, "bucket")
 	if err == nil || !strings.Contains(err.Error(), "oci cli output: stdout exceeds capture limit") {
 		t.Fatalf("GetBucket err=%v, want stdout capture limit error", err)
+	}
+}
+
+func TestListObjectsPageUsesSingleBoundedOCIPageAndMapsCursor(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(t.TempDir(), "args.txt")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$OCI_TEST_ARGS"
+printf '%s\n' '{"data":[{"name":"docs/a.txt","size":7,"etag":"etag","time-modified":"2026-09-01T12:00:00+00:00","storage-tier":"Standard"}],"prefixes":["docs/sub/"],"next-start-with":"opaque/+=="}'
+`
+	writeTestExecutableWithScript(t, dir, "oci", script)
+	t.Setenv("PATH", dir)
+	t.Setenv("OCI_CLI_PATH", "")
+	t.Setenv("OCI_TEST_ARGS", argsPath)
+	profile := models.ProfileSecrets{OciNamespace: "namespace", OciConfigFile: "/data/oci/config", OciConfigProfile: "S3Desk", OciAuthProvider: "instance_principal_auth", Region: "us-phoenix-1", OciEndpoint: "http://127.0.0.1:8080"}
+	req := objectlisting.Request{Bucket: "bucket", Prefix: "docs/", Delimiter: "/", MaxKeys: 10}
+	page, err := ListObjectsPage(context.Background(), profile, "bucket", req, ClientOptions{})
+	if err != nil || !page.IsTruncated || page.NextToken != "opaque/+==" || len(page.Items) != 1 || len(page.CommonPrefixes) != 1 {
+		t.Fatalf("page=%+v err=%v", page, err)
+	}
+	item := page.Items[0]
+	if item.Key != "docs/a.txt" || item.Size != 7 || item.ETag != "etag" || item.LastModified != "2026-09-01T12:00:00Z" || item.StorageClass != "Standard" {
+		t.Fatalf("item=%+v", item)
+	}
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"--output\njson", "--no-retry", "--config-file\n/data/oci/config", "--profile\nS3Desk", "--region\nus-phoenix-1", "--endpoint\nhttp://127.0.0.1:8080", "--auth\ninstance_principal", "os\nobject\nlist", "--limit\n10", "--fields\nname,size,etag,timeModified,storageTier", "--prefix\ndocs/", "--delimiter\n/"} {
+		if !strings.Contains(string(args), want) {
+			t.Errorf("args %q do not contain %q", args, want)
+		}
+	}
+	if strings.Contains(string(args), "--all") {
+		t.Fatalf("OCI CLI must not eagerly fetch all pages: %q", args)
+	}
+
+	req.ContinuationToken = page.NextToken
+	if _, err := ListObjectsPage(context.Background(), profile, "bucket", req, ClientOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	args, err = os.ReadFile(argsPath)
+	if err != nil || !strings.Contains(string(args), "--start\nopaque/+==") {
+		t.Fatalf("continuation args=%q err=%v", args, err)
 	}
 }
 

@@ -64,7 +64,7 @@ export class MobileBackCoordinator {
 	}
 
 	private sync() {
-		if (this.pendingClose) return
+		if (this.disposed || !this.host.history || this.pendingClose) return
 		const state = objectState(this.host.history.state)
 		const currentMarker = state[markerKey]
 		this.lastIndex = indexOf(state)
@@ -101,14 +101,15 @@ export class MobileBackCoordinator {
 		const targetMarker = state[markerKey]
 		const isMarker = typeof targetMarker === 'string' && (this.retired.has(targetMarker) || targetMarker.startsWith('s3desk:'))
 		if (isMarker && targetMarker !== this.marker?.id) {
-			if (targetIndex !== undefined && this.lastIndex !== undefined && targetIndex < this.lastIndex) {
+			if (targetIndex !== undefined && this.lastIndex !== undefined && targetIndex !== this.lastIndex) {
 				event.stopImmediatePropagation()
+				const movingBackward = targetIndex < this.lastIndex
 				this.lastIndex = targetIndex
-				this.host.history.back()
+				if (movingBackward) this.host.history.back()
+				else this.host.history.forward()
 				return
 			}
-			// Forward must not reopen closed dialogs or hit a dead-end marker.
-			// Convert the forward entry to an ordinary same-URL entry instead.
+			// Forward must not reopen closed dialogs or stop on their same-URL entries.
 			const clean = { ...state }
 			delete clean[markerKey]
 			this.host.history.replaceState(clean, '', this.host.location.href)

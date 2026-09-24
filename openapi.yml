@@ -1191,6 +1191,7 @@ paths:
           schema: { type: string, default: "" }
         - name: delimiter
           in: query
+          description: Use "/" for folder-like listing; pass an empty value for recursive listing. Omit to use "/".
           schema: { type: string, default: "/" }
         - name: maxKeys
           in: query

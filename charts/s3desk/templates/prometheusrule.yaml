@@ -44,4 +44,38 @@ spec:
           annotations:
             summary: S3Desk maintenance cleanup failed
             description: A retention or orphan cleanup operation failed during the last thirty minutes.
+        - alert: S3DeskObjectListFallbackScanHigh
+          expr: |
+            increase(storage_rclone_list_entries_scanned_total{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }},operation="list_objects_continuation"}[10m]) >= 100000
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: S3Desk object listing is replaying many entries
+            description: A provider continuation listing enumerated at least 100000 fallback entries in ten minutes; check whether native pagination is disabled and narrow the prefix if needed.
+        - alert: S3DeskObjectIndexScanHigh
+          expr: |
+            sum by (provider) (
+              increase(storage_rclone_list_entries_scanned_total{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }},operation="object_index"}[15m])
+            ) >= 100000
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: S3Desk indexed at least 100000 objects in fifteen minutes
+            description: Object-index scans reached the default per-job object limit over fifteen minutes. This alert reports scan volume; it does not stop provider requests or imply a billing hard cap.
+        - alert: S3DeskObjectListPageErrors
+          expr: |
+            (
+              sum by (provider) (increase(storage_list_page_requests_total{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }},status="error"}[10m]))
+              /
+              sum by (provider) (increase(storage_list_page_requests_total{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }}}[10m]))
+            ) > 0.05
+            and sum by (provider) (increase(storage_list_page_requests_total{namespace={{ .Release.Namespace | quote }},job=~{{ printf "(.*/)?%s(/.*)?" (include "s3desk.fullname" .) | quote }}}[10m])) >= 20
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: S3Desk object-list page errors are elevated
+            description: More than five percent of at least twenty provider page requests failed during the last ten minutes.
 {{- end }}

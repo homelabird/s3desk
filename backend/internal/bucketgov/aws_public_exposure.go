@@ -10,6 +10,7 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 
+	"s3desk/internal/metrics"
 	"s3desk/internal/models"
 	"s3desk/internal/s3client"
 )
@@ -34,10 +35,12 @@ type awsAdapter struct {
 
 type DefaultRegistryOptions struct {
 	AllowRemote bool
+	Metrics     *metrics.Metrics
 }
 
 type AWSAdapterOptions struct {
 	AllowRemote bool
+	Metrics     *metrics.Metrics
 }
 
 func NewDefaultRegistry() *Registry {
@@ -47,9 +50,9 @@ func NewDefaultRegistry() *Registry {
 func NewDefaultRegistryWithOptions(opts DefaultRegistryOptions) *Registry {
 	registry := NewRegistry()
 	registry.Register(models.ProfileProviderAwsS3, NewAWSAdapterWithOptions(AWSAdapterOptions(opts)))
-	registry.Register(models.ProfileProviderGcpGcs, NewGCSAdapterWithOptions(GCSAdapterOptions(opts)))
-	registry.Register(models.ProfileProviderAzureBlob, NewAzureAdapterWithOptions(AzureAdapterOptions(opts)))
-	registry.Register(models.ProfileProviderOciObjectStorage, NewOCIAdapterWithOptions(OCIAdapterOptions(opts)))
+	registry.Register(models.ProfileProviderGcpGcs, NewGCSAdapterWithOptions(GCSAdapterOptions{AllowRemote: opts.AllowRemote}))
+	registry.Register(models.ProfileProviderAzureBlob, NewAzureAdapterWithOptions(AzureAdapterOptions{AllowRemote: opts.AllowRemote}))
+	registry.Register(models.ProfileProviderOciObjectStorage, NewOCIAdapterWithOptions(OCIAdapterOptions{AllowRemote: opts.AllowRemote}))
 	return registry
 }
 
@@ -60,7 +63,7 @@ func NewAWSAdapter() Adapter {
 func NewAWSAdapterWithOptions(opts AWSAdapterOptions) Adapter {
 	return &awsAdapter{
 		newClient: func(secrets models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
-			return s3client.FromProfileWithOptions(secrets, s3client.ProfileOptions{AllowRemote: opts.AllowRemote})
+			return s3client.FromProfileWithOptions(secrets, s3client.ProfileOptions{AllowRemote: opts.AllowRemote, Metrics: opts.Metrics})
 		},
 	}
 }

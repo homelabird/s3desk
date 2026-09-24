@@ -151,7 +151,11 @@ export function SettingsPage(props: Props) {
 						label: 'Objects',
 						children: (
 							<Suspense fallback={<SettingsSectionFallback />}>
-								<ObjectsSettingsSection />
+								<ObjectsSettingsSection
+									apiToken={props.apiToken}
+									profileId={props.profileId}
+									profileName={props.profileName}
+								/>
 							</Suspense>
 						),
 					},

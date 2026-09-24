@@ -1,6 +1,6 @@
-// Package s3listing implements bounded, provider-cursor-based S3 pagination.
+// Package objectlisting implements bounded, provider-cursor-based pagination.
 // Provider I/O is injected so pagination can be tested without a storage server.
-package s3listing
+package objectlisting
 
 import (
 	"context"
@@ -15,6 +15,9 @@ import (
 )
 
 const TokenPrefix = "s3v2."
+const GCSTokenPrefix = "gcsv1."
+const AzureTokenPrefix = "azv1."
+const OCITokenPrefix = "ociv1."
 const MaxPagesPerRequest = 8
 const maxTokenBytes = 16384
 
@@ -23,6 +26,8 @@ var ErrInvalidPage = errors.New("invalid S3 pagination response")
 
 type Query struct {
 	ProfileID, Bucket, Prefix, Delimiter string
+	Provider                             string
+	TokenPrefix                          string
 	PrefixesOnly                         bool
 	MaxKeys                              int
 	Token                                string
@@ -43,19 +48,31 @@ type cursor struct {
 	Next  string   `json:"n"`
 }
 
-func IsToken(token string) bool { return strings.HasPrefix(token, TokenPrefix) }
+func IsToken(token string) bool {
+	return strings.HasPrefix(token, TokenPrefix) || strings.HasPrefix(token, GCSTokenPrefix) || strings.HasPrefix(token, AzureTokenPrefix) || strings.HasPrefix(token, OCITokenPrefix)
+}
+func tokenPrefix(q Query) string {
+	if q.TokenPrefix != "" {
+		return q.TokenPrefix
+	}
+	return TokenPrefix
+}
 func scope(q Query) [32]byte {
-	raw, _ := json.Marshal([]any{q.ProfileID, q.Bucket, q.Prefix, q.Delimiter, q.PrefixesOnly})
+	values := []any{q.ProfileID, q.Bucket, q.Prefix, q.Delimiter, q.PrefixesOnly}
+	if q.Provider != "" {
+		values = append(values, q.Provider)
+	}
+	raw, _ := json.Marshal(values)
 	return sha256.Sum256(raw)
 }
 func decodeToken(q Query) (string, error) {
 	if q.Token == "" {
 		return "", nil
 	}
-	if !IsToken(q.Token) || len(q.Token) > maxTokenBytes {
+	if !strings.HasPrefix(q.Token, tokenPrefix(q)) || len(q.Token) > maxTokenBytes {
 		return "", ErrInvalidToken
 	}
-	data, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(q.Token, TokenPrefix))
+	data, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(q.Token, tokenPrefix(q)))
 	if err != nil {
 		return "", ErrInvalidToken
 	}
@@ -67,7 +84,7 @@ func decodeToken(q Query) (string, error) {
 }
 func encodeToken(q Query, next string) (string, error) {
 	data, _ := json.Marshal(cursor{Scope: scope(q), Next: next})
-	token := TokenPrefix + base64.RawURLEncoding.EncodeToString(data)
+	token := tokenPrefix(q) + base64.RawURLEncoding.EncodeToString(data)
 	if len(token) > maxTokenBytes {
 		return "", ErrInvalidPage
 	}

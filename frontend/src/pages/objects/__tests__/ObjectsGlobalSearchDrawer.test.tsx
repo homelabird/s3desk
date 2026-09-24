@@ -157,6 +157,8 @@ describe('ObjectsGlobalSearchDrawer', () => {
 		const card = screen.getByText('alpha.txt').closest('[data-global-search-result-card="true"]')
 		expect(card).toBeInTheDocument()
 		expect(screen.getByTestId('objects-global-search-index-card')).toBeInTheDocument()
+		expect(screen.getByText('Default safety limit: 100,000 objects or 15 minutes.')).toBeInTheDocument()
+		expect(screen.getByText(/Cancel a running scan from Jobs/)).toBeInTheDocument()
 		expect(screen.getByTestId('objects-global-search-results')).toBeInTheDocument()
 		expect(screen.getByText('alpha.txt')).toHaveAttribute('data-global-search-result-key', 'true')
 		expect(screen.queryByRole('table')).not.toBeInTheDocument()

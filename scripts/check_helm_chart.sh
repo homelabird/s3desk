@@ -62,12 +62,25 @@ helm lint "${CHART_PATH}" --values "${CHART_PATH}/values-istio.yaml"
 
 DEFAULT_RENDERED="${TMP_DIR}/default-rendered.yaml"
 helm template "${RELEASE_NAME}" "${CHART_PATH}" >"${DEFAULT_RENDERED}"
+assert_env_value "${DEFAULT_RENDERED}" OBJECT_INDEX_MAX_OBJECTS 100000
+assert_env_value "${DEFAULT_RENDERED}" OBJECT_INDEX_MAX_DURATION 15m
 if grep -q '^kind: PrometheusRule$' "${DEFAULT_RENDERED}"; then
   echo "[helm-check] expected PrometheusRule to remain opt-in" >&2
   exit 1
 fi
+if grep -q 'grafana_dashboard:' "${DEFAULT_RENDERED}"; then
+  echo "[helm-check] expected Grafana dashboard ConfigMap to remain opt-in" >&2
+  exit 1
+fi
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --values "${CHART_PATH}/ci-values.yaml" >/dev/null
+INDEX_LIMIT_RENDERED="${TMP_DIR}/object-index-limit-rendered.yaml"
+helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+  --set jobs.objectIndexMaxObjects=25000 \
+  --set-string jobs.objectIndexMaxDuration=7m \
+  >"${INDEX_LIMIT_RENDERED}"
+assert_env_value "${INDEX_LIMIT_RENDERED}" OBJECT_INDEX_MAX_OBJECTS 25000
+assert_env_value "${INDEX_LIMIT_RENDERED}" OBJECT_INDEX_MAX_DURATION 7m
 if helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set replicaCount=2 >"${TMP_DIR}/multiple-replicas-negative.out" 2>&1; then
   echo "[helm-check] expected unsupported multi-replica chart render to fail" >&2
@@ -293,6 +306,39 @@ grep -Eq "networkPolicy|Additional property|from|to" "${TMP_DIR}/network-policy-
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set monitoring.serviceMonitor.enabled=true \
   --set monitoring.podMonitor.enabled=true >/dev/null
+GRAFANA_DASHBOARD_RENDERED="${TMP_DIR}/grafana-dashboard-rendered.yaml"
+helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+  --set monitoring.grafanaDashboard.enabled=true >"${GRAFANA_DASHBOARD_RENDERED}"
+grep -q '^kind: ConfigMap$' "${GRAFANA_DASHBOARD_RENDERED}"
+grep -q 'grafana_dashboard: "1"' "${GRAFANA_DASHBOARD_RENDERED}"
+grep -q '"title": "S3Desk Object Storage Cost Signals"' "${GRAFANA_DASHBOARD_RENDERED}"
+grep -q '"name": "DS_PROMETHEUS"' "${GRAFANA_DASHBOARD_RENDERED}"
+grep -q 'storage_api_retries_scheduled_total' "${GRAFANA_DASHBOARD_RENDERED}"
+if grep -q '"__inputs"' "${GRAFANA_DASHBOARD_RENDERED}"; then
+  echo "[helm-check] expected provisionable dashboard JSON without import-only __inputs" >&2
+  exit 1
+fi
+python3 - "${CHART_PATH}/files/grafana-object-storage-cost.json" "${ROOT}/backend/internal/metrics/metrics.go" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+dashboard = json.loads(Path(sys.argv[1]).read_text())
+metrics = set(re.findall(r'Name:\s+"([^"]+)"', Path(sys.argv[2]).read_text()))
+variables = {item["name"] for item in dashboard["templating"]["list"]}
+assert "DS_PROMETHEUS" in variables and "__inputs" not in dashboard
+queries = [target["expr"] for panel in dashboard["panels"] for target in panel.get("targets", [])]
+used = {name for query in queries for name in re.findall(r"([A-Za-z_][A-Za-z0-9_:]*)\s*(?=\{|\[)", query)}
+unknown = {name for name in used if name not in metrics and not (name.endswith("_bucket") and name[:-7] in metrics)}
+assert not unknown, f"dashboard references undefined metrics: {sorted(unknown)}"
+for index, panel in enumerate(dashboard["panels"]):
+    a = panel["gridPos"]
+    for other in dashboard["panels"][index + 1:]:
+        b = other["gridPos"]
+        overlaps = a["x"] < b["x"] + b["w"] and b["x"] < a["x"] + a["w"] and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]
+        assert not overlaps, f"dashboard panels overlap: {panel['id']} and {other['id']}"
+PY
 PROMETHEUS_RULE_RENDERED="${TMP_DIR}/prometheus-rule-rendered.yaml"
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set server.allowRemote=false \
@@ -301,6 +347,10 @@ grep -q '^kind: PrometheusRule$' "${PROMETHEUS_RULE_RENDERED}"
 grep -q 'alert: S3DeskTargetDown' "${PROMETHEUS_RULE_RENDERED}"
 grep -q 'alert: S3DeskJobQueueFull' "${PROMETHEUS_RULE_RENDERED}"
 grep -q 'alert: S3DeskMaintenanceCleanupError' "${PROMETHEUS_RULE_RENDERED}"
+grep -q 'alert: S3DeskObjectListFallbackScanHigh' "${PROMETHEUS_RULE_RENDERED}"
+grep -q 'alert: S3DeskObjectIndexScanHigh' "${PROMETHEUS_RULE_RENDERED}"
+grep -Fq 'operation="object_index"}[15m])' "${PROMETHEUS_RULE_RENDERED}"
+grep -q 'alert: S3DeskObjectListPageErrors' "${PROMETHEUS_RULE_RENDERED}"
 MONITORING_EXISTING_SECRET_RENDERED="${TMP_DIR}/monitoring-existing-secret-rendered.yaml"
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set server.allowRemote=false \

@@ -46,7 +46,7 @@ func (s *server) abortStoredMultipartUploadsWithSecrets(ctx context.Context, pro
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
 		return fmt.Errorf("multipart cleanup requires an S3-compatible profile")
 	}
-	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote)
+	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote, s.metrics)
 	if err != nil {
 		return err
 	}

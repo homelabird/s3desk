@@ -14,9 +14,10 @@ func TestApplyEnvConfigOverridesAppliesValidValues(t *testing.T) {
 	t.Setenv("ALLOW_REMOTE", "true")
 
 	cfg := config.Config{
-		JobConcurrency:   2,
-		UploadSessionTTL: 24 * time.Hour,
-		AllowRemote:      false,
+		JobConcurrency:    2,
+		UploadSessionTTL:  24 * time.Hour,
+		ThumbnailCacheTTL: 24 * time.Hour,
+		AllowRemote:       false,
 	}
 
 	if err := applyEnvConfigOverrides(&cfg, nil); err != nil {
@@ -88,7 +89,8 @@ func TestApplyEnvConfigOverridesIgnoresEnvWhenFlagWasSet(t *testing.T) {
 	t.Setenv("JOB_CONCURRENCY", "broken")
 
 	cfg := config.Config{
-		JobConcurrency: 5,
+		JobConcurrency:    5,
+		ThumbnailCacheTTL: 24 * time.Hour,
 	}
 	setFlags := map[string]struct{}{
 		"job-concurrency": {},
@@ -103,6 +105,7 @@ func TestApplyEnvConfigOverridesIgnoresEnvWhenFlagWasSet(t *testing.T) {
 }
 
 func TestS3NativeListConfigurationRollbackAndFlagPrecedence(t *testing.T) {
+	t.Setenv("THUMBNAIL_CACHE_TTL", "24h")
 	t.Setenv("S3_NATIVE_LIST", "false")
 	cfg := config.Config{S3NativeList: true}
 	if err := applyEnvConfigOverrides(&cfg, nil); err != nil || cfg.S3NativeList {
@@ -115,5 +118,56 @@ func TestS3NativeListConfigurationRollbackAndFlagPrecedence(t *testing.T) {
 	t.Setenv("S3_NATIVE_LIST", "invalid")
 	if err := applyEnvConfigOverrides(&cfg, nil); err == nil || !strings.Contains(err.Error(), "S3_NATIVE_LIST") {
 		t.Fatalf("invalid setting must fail: %v", err)
+	}
+}
+
+func TestGCSNativeListConfigurationRollbackAndFlagPrecedence(t *testing.T) {
+	t.Setenv("THUMBNAIL_CACHE_TTL", "24h")
+	t.Setenv("GCS_NATIVE_LIST", "false")
+	cfg := config.Config{GCSNativeList: true}
+	if err := applyEnvConfigOverrides(&cfg, nil); err != nil || cfg.GCSNativeList {
+		t.Fatalf("environment rollback: native=%v err=%v", cfg.GCSNativeList, err)
+	}
+	cfg.GCSNativeList = true
+	if err := applyEnvConfigOverrides(&cfg, map[string]struct{}{"gcs-native-list": {}}); err != nil || !cfg.GCSNativeList {
+		t.Fatalf("explicit flag must win: native=%v err=%v", cfg.GCSNativeList, err)
+	}
+	t.Setenv("GCS_NATIVE_LIST", "invalid")
+	if err := applyEnvConfigOverrides(&cfg, nil); err == nil || !strings.Contains(err.Error(), "GCS_NATIVE_LIST") {
+		t.Fatalf("invalid env error=%v", err)
+	}
+}
+
+func TestAzureNativeListConfigurationRollbackAndFlagPrecedence(t *testing.T) {
+	t.Setenv("THUMBNAIL_CACHE_TTL", "24h")
+	t.Setenv("AZURE_NATIVE_LIST", "false")
+	cfg := config.Config{AzureNativeList: true}
+	if err := applyEnvConfigOverrides(&cfg, nil); err != nil || cfg.AzureNativeList {
+		t.Fatalf("environment rollback: native=%v err=%v", cfg.AzureNativeList, err)
+	}
+	cfg.AzureNativeList = true
+	if err := applyEnvConfigOverrides(&cfg, map[string]struct{}{"azure-native-list": {}}); err != nil || !cfg.AzureNativeList {
+		t.Fatalf("explicit flag must win: native=%v err=%v", cfg.AzureNativeList, err)
+	}
+	t.Setenv("AZURE_NATIVE_LIST", "invalid")
+	if err := applyEnvConfigOverrides(&cfg, nil); err == nil || !strings.Contains(err.Error(), "AZURE_NATIVE_LIST") {
+		t.Fatalf("invalid env error=%v", err)
+	}
+}
+
+func TestOCINativeListConfigurationRollbackAndFlagPrecedence(t *testing.T) {
+	t.Setenv("THUMBNAIL_CACHE_TTL", "24h")
+	t.Setenv("OCI_NATIVE_LIST", "false")
+	cfg := config.Config{OCINativeList: true}
+	if err := applyEnvConfigOverrides(&cfg, nil); err != nil || cfg.OCINativeList {
+		t.Fatalf("environment rollback: native=%v err=%v", cfg.OCINativeList, err)
+	}
+	cfg.OCINativeList = true
+	if err := applyEnvConfigOverrides(&cfg, map[string]struct{}{"oci-native-list": {}}); err != nil || !cfg.OCINativeList {
+		t.Fatalf("explicit flag must win: native=%v err=%v", cfg.OCINativeList, err)
+	}
+	t.Setenv("OCI_NATIVE_LIST", "invalid")
+	if err := applyEnvConfigOverrides(&cfg, nil); err == nil || !strings.Contains(err.Error(), "OCI_NATIVE_LIST") {
+		t.Fatalf("invalid env error=%v", err)
 	}
 }

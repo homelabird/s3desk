@@ -98,7 +98,7 @@ func downloadS3Error(err error) error {
 	return &objectdownload.HTTPError{Status: status}
 }
 func (s *server) serveS3Download(w http.ResponseWriter, r *http.Request, secrets models.ProfileSecrets, bucket, key string) {
-	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote)
+	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote, s.metrics)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_config", "failed to prepare S3 download", nil)
 		return

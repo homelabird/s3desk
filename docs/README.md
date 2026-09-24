@@ -12,6 +12,10 @@ that need to stay close to the codebase.
 - [FRONTEND_STATE_BOUNDARIES.md](FRONTEND_STATE_BOUNDARIES.md): where auth state, API client state, `FullApp` shell state, and page shell/controller/composition layers belong after the provider split
 - [RELEASE_GATE.md](RELEASE_GATE.md): minimum release bar and required evidence
 - [PROVIDERS.md](PROVIDERS.md): provider support matrix and operator-facing capability notes
+- [COST_SPIKE_DEFENSE_AUDIT.ko.md](COST_SPIKE_DEFENSE_AUDIT.ko.md): object-storage cost-spike risks, implemented bounds, provider budget limits, and remaining work
+- [OBJECT_LIST_NATIVE_CURSOR_PLAN.ko.md](OBJECT_LIST_NATIVE_CURSOR_PLAN.ko.md): provider-native pagination design, GCS/Azure/OCI cursor contracts, snapshot tradeoffs, and staged validation plan
+- [OBJECT_STORAGE_COST_OPTIMIZATION.ko.md](OBJECT_STORAGE_COST_OPTIMIZATION.ko.md): prioritized cost optimization recommendations, including first-time bucket analysis and cloud/on-prem safeguards
+- [Grafana object-storage cost dashboard](../charts/s3desk/files/grafana-object-storage-cost.json): importable panels for provider page calls, fallback scans, logical operations, errors, and latency; the Helm chart can publish it as an opt-in ConfigMap
 - [PORTABLE_BACKUP.md](PORTABLE_BACKUP.md): portable backup/import scope, workflow, validation, and limits
 - [BUCKET_GOVERNANCE.md](BUCKET_GOVERNANCE.md): shipped governance scope, live validation workflow, and remaining gaps
 - [OBJECTS_DENSITY.md](OBJECTS_DENSITY.md): dense object grid/list geometry, desktop sidebar toggle, mobile touch targets, and validation boundaries

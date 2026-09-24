@@ -1,4 +1,4 @@
-import { Input, Typography } from "antd";
+import { Alert, Button, Input, Typography } from "antd";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import type {
@@ -188,8 +188,68 @@ export function AWSLifecycleControlBody({
   setLifecycleText: (value: string) => void;
   warnings: ReactNode;
 }) {
+  const incompleteUploadRuleId = "s3desk-abort-incomplete-uploads-7d";
+  let suggestedRulesText: string | undefined;
+  try {
+    const rules: unknown = JSON.parse(lifecycleText);
+    if (
+      Array.isArray(rules) &&
+      !rules.some(
+        (rule) =>
+          typeof rule === "object" &&
+          rule !== null &&
+          "id" in rule &&
+          rule.id === incompleteUploadRuleId,
+      )
+    ) {
+      suggestedRulesText = JSON.stringify(
+        [
+          ...rules,
+          {
+            id: incompleteUploadRuleId,
+            status: "Enabled",
+            abortIncompleteMultipartUpload: { daysAfterInitiation: 7 },
+          },
+        ],
+        null,
+        2,
+      );
+    }
+  } catch {
+    // Keep the suggestion unavailable until the editor contains valid JSON.
+  }
+
   return (
     <>
+      <Alert
+        type="info"
+        showIcon
+        title="Reduce storage from abandoned uploads"
+        description={
+          <>
+            <Typography.Paragraph>
+              This rule removes parts from incomplete multipart uploads after 7
+              days. It does not delete completed objects. Choose a longer period
+              if uploads may be paused for more than a week.
+            </Typography.Paragraph>
+            <Button
+              size="small"
+              disabled={!suggestedRulesText}
+              onClick={() => {
+                if (suggestedRulesText) setLifecycleText(suggestedRulesText);
+              }}
+            >
+              Add 7-day cleanup rule
+            </Button>
+          </>
+        }
+      />
+      <Typography.Paragraph type="secondary">
+        With versioning enabled, deletes and overwrites can retain older object
+        versions. AWS lifecycle rules can expire noncurrent versions, but that
+        permanently removes recovery copies; set the retention period to match
+        your recovery needs before adding such a rule.
+      </Typography.Paragraph>
       <FormField
         label="Lifecycle rules JSON"
         htmlFor="bucket-governance-lifecycle-json"

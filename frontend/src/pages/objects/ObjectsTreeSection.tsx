@@ -1,15 +1,15 @@
 import type { DragEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
-import type { FavoriteObjectItem } from '../../api/types'
 import type { TreeNode } from '../../lib/tree'
 
 import { ObjectsTreePanel } from './ObjectsTreePanel'
+import type { FavoriteDisplayItem } from './ObjectsFavoritesPane'
 
 type ObjectsTreeSectionProps = {
 	dockTree: boolean
 	treeDrawerOpen: boolean
 	hasProfile: boolean
 	hasBucket: boolean
-	favorites: FavoriteObjectItem[]
+	favorites: FavoriteDisplayItem[]
 	favoriteCount: number
 	favoritesSearch: string
 	onFavoritesSearchChange: (value: string) => void

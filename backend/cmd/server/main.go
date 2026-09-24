@@ -60,6 +60,9 @@ func main() {
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", 0, "max total bytes per upload session (0=unlimited)")
 	flag.Int64Var(&cfg.ServerRestoreMaxBytes, "server-restore-max-bytes", 4*1024*1024*1024, "max accepted backup restore bundle bytes before staging (0=unlimited)")
 	flag.BoolVar(&cfg.S3NativeList, "s3-native-list", true, "use native S3 pagination (set false for legacy rclone listing)")
+	flag.BoolVar(&cfg.GCSNativeList, "gcs-native-list", true, "use native GCS pagination (set false for legacy rclone listing)")
+	flag.BoolVar(&cfg.AzureNativeList, "azure-native-list", true, "use native Azure Blob pagination (set false for legacy rclone listing)")
+	flag.BoolVar(&cfg.OCINativeList, "oci-native-list", true, "use native OCI pagination (set false for legacy rclone listing)")
 	flag.BoolVar(&cfg.S3NativeDownload, "s3-native-download", true, "stream S3 downloads with conditional range reads")
 	flag.BoolVar(&cfg.UploadProxyOnly, "upload-proxy-only", false, "send new uploads through S3Desk instead of browser-to-storage presigned URLs")
 	flag.BoolVar(&cfg.UploadDirectStream, "upload-direct-stream", true, "stream uploads directly to the provider (set false to use staging)")
@@ -320,6 +323,27 @@ func applyEnvConfigOverrides(cfg *config.Config, setFlags map[string]struct{}) e
 			return err
 		}
 		cfg.S3NativeList = value
+	}
+	if !flagWasSet(setFlags, "gcs-native-list") {
+		value, err := lookupEnvBool("GCS_NATIVE_LIST", cfg.GCSNativeList)
+		if err != nil {
+			return err
+		}
+		cfg.GCSNativeList = value
+	}
+	if !flagWasSet(setFlags, "azure-native-list") {
+		value, err := lookupEnvBool("AZURE_NATIVE_LIST", cfg.AzureNativeList)
+		if err != nil {
+			return err
+		}
+		cfg.AzureNativeList = value
+	}
+	if !flagWasSet(setFlags, "oci-native-list") {
+		value, err := lookupEnvBool("OCI_NATIVE_LIST", cfg.OCINativeList)
+		if err != nil {
+			return err
+		}
+		cfg.OCINativeList = value
 	}
 	if !flagWasSet(setFlags, "upload-proxy-only") {
 		value, err := lookupEnvBool("UPLOAD_PROXY_ONLY", cfg.UploadProxyOnly)

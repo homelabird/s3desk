@@ -55,7 +55,7 @@ services:
     stop_grace_period: 30s
 
   seaweedfs-seed:
-    image: "docker.io/rclone/rclone:${RCLONE_VERSION:-1.72.0}"
+    image: "docker.io/rclone/rclone:${RCLONE_VERSION:-1.75.1}"
     depends_on:
       seaweedfs:
         condition: service_healthy
@@ -72,7 +72,7 @@ services:
       dockerfile: Containerfile.local
       args:
         DB_BACKEND: sqlite
-        RCLONE_VERSION: ${RCLONE_VERSION:-1.72.0}
+        RCLONE_VERSION: ${RCLONE_VERSION:-1.75.1}
     image: "${S3DESK_DEMO_IMAGE:-localhost/s3desk-demo:sqlite}"
     depends_on:
       seaweedfs-seed:
@@ -97,7 +97,12 @@ services:
       THUMBNAIL_CACHE_TTL: "${THUMBNAIL_CACHE_TTL:-24h}"
       ALLOWED_LOCAL_DIRS: "${ALLOWED_LOCAL_DIRS:-/tmp}"
       JOB_QUEUE_CAPACITY: "20"
+      OBJECT_INDEX_MAX_OBJECTS: "${OBJECT_INDEX_MAX_OBJECTS:-100000}"
+      OBJECT_INDEX_MAX_DURATION: "${OBJECT_INDEX_MAX_DURATION:-15m}"
       S3_NATIVE_LIST: "${S3_NATIVE_LIST:-true}"
+      GCS_NATIVE_LIST: "${GCS_NATIVE_LIST:-true}"
+      AZURE_NATIVE_LIST: "${AZURE_NATIVE_LIST:-true}"
+      OCI_NATIVE_LIST: "${OCI_NATIVE_LIST:-true}"
       UPLOAD_PROXY_ONLY: "${UPLOAD_PROXY_ONLY:-true}"
       S3_NATIVE_DOWNLOAD: "${S3_NATIVE_DOWNLOAD:-true}"
       DOWNLOAD_MAX_CONCURRENT_REQUESTS: "${DOWNLOAD_MAX_CONCURRENT_REQUESTS:-8}"

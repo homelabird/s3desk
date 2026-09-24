@@ -4,6 +4,7 @@ import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
+import type { ObjectFavoritesResponse } from '../../../api/types'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsFavorites } from '../useObjectsFavorites'
 
@@ -93,7 +94,10 @@ describe('useObjectsFavorites', () => {
 		)
 
 		await waitFor(() => expect(result.current.favoriteCount).toBe(2))
-		expect(result.current.favoriteItems).toEqual([])
+		expect(result.current.favoriteItems).toEqual([
+			{ key: 'docs/readme.txt', size: 0, lastModified: '' },
+			{ key: 'videos/demo.mp4', size: 0, lastModified: '' },
+		])
 		expect(listObjectFavorites).toHaveBeenNthCalledWith(1, {
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
@@ -112,7 +116,7 @@ describe('useObjectsFavorites', () => {
 		})
 	})
 
-	it('aborts the active favorite request when hydration mode changes', async () => {
+	it('keeps the DB summary available while remote metadata hydration starts', async () => {
 		const requests: Array<{ hydrate?: boolean; signal?: AbortSignal }> = []
 		const listObjectFavorites = vi.fn((request: { hydrate?: boolean; signal?: AbortSignal }) => {
 			requests.push(request)
@@ -143,30 +147,30 @@ describe('useObjectsFavorites', () => {
 		await waitFor(() => expect(requests[0]?.signal).toBeInstanceOf(AbortSignal))
 		const summarySignal = requests[0]!.signal!
 		rerender({ hydrateItems: true })
-		await waitFor(() => expect(summarySignal.aborted).toBe(true))
-		await waitFor(() => expect(requests[1]?.signal).toBeInstanceOf(AbortSignal))
+		await waitFor(() => expect(requests.some((request) => request.hydrate === true)).toBe(true))
+		expect(summarySignal.aborted).toBe(false)
 
-		const itemsSignal = requests[1]!.signal!
+		const itemsSignal = requests.find((request) => request.hydrate === true)!.signal!
 		rerender({ hydrateItems: false })
 		await waitFor(() => expect(itemsSignal.aborted).toBe(true))
 	})
 
-	it('uses one hydrated request on initial expanded load without creating a partial summary cache', async () => {
-		const listObjectFavorites = vi.fn().mockResolvedValue({
+	it('loads the DB summary and only the first hydrated page initially', async () => {
+		const listObjectFavorites = vi.fn(({ hydrate }: { hydrate?: boolean }) => Promise.resolve({
 			bucket: 'bucket-a',
 			prefix: '',
 			count: 2,
 			keys: ['docs/readme.txt', 'missing.txt'],
-			hydrated: true,
-			items: [
+			hydrated: hydrate === true,
+			items: hydrate === true ? [
 				{
 					key: 'docs/readme.txt',
 					size: 12,
 					lastModified: '2026-03-09T00:00:00Z',
 					createdAt: '2026-03-09T00:00:00Z',
 				},
-			],
-		})
+			] : [],
+		}))
 		const createObjectFavorite = vi.fn().mockResolvedValue({
 			key: 'logs/new.txt',
 			createdAt: '2026-03-10T00:00:00Z',
@@ -194,20 +198,88 @@ describe('useObjectsFavorites', () => {
 		)
 
 		await waitFor(() => expect(result.current.favoriteCount).toBe(2))
-		expect(listObjectFavorites).toHaveBeenCalledTimes(1)
-		expect(listObjectFavorites).toHaveBeenCalledWith({
+		expect(listObjectFavorites).toHaveBeenCalledTimes(2)
+		expect(listObjectFavorites).toHaveBeenCalledWith(expect.objectContaining({
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
 			hydrate: true,
-			signal: expect.any(AbortSignal),
-		})
+		}))
 		expect(result.current.favoriteKeys).toEqual(new Set(['docs/readme.txt', 'missing.txt']))
 
 		act(() => {
 			result.current.toggleFavorite('logs/new.txt')
 		})
 		await waitFor(() => expect(result.current.favoriteKeys.has('logs/new.txt')).toBe(true))
-		expect(queryClient.getQueryData(queryKeys.objects.favoritesSummary('profile-1', 'bucket-a', 'token'))).toBeUndefined()
+		expect(queryClient.getQueryData(queryKeys.objects.favoritesSummary('profile-1', 'bucket-a', 'token'))).toMatchObject({ count: 3 })
+	})
+
+	it('hydrates additional favorite metadata only when the next page is requested', async () => {
+		const listObjectFavorites = vi.fn(({ hydrate, cursor }: { hydrate?: boolean; cursor?: string }) => {
+			if (!hydrate) {
+				return Promise.resolve({ bucket: 'bucket-a', prefix: '', count: 2, keys: ['a.txt', 'b.txt'], hydrated: false, items: [] })
+			}
+			if (!cursor) {
+				return Promise.resolve({ bucket: 'bucket-a', prefix: '', count: 1, keys: ['a.txt'], hydrated: true, items: [{ key: 'a.txt', size: 1, lastModified: '', createdAt: '' }], nextCursor: 'page-2' })
+			}
+			return Promise.resolve({ bucket: 'bucket-a', prefix: '', count: 1, keys: ['b.txt'], hydrated: true, items: [{ key: 'b.txt', size: 2, lastModified: '', createdAt: '' }] })
+		})
+		const api = createMockApiClient({
+			objects: { listObjectFavorites, createObjectFavorite: vi.fn(), deleteObjectFavorite: vi.fn() },
+		})
+		const { Wrapper } = createWrapper()
+		const { result } = renderHook(
+			() => useObjectsFavorites({
+				api,
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				apiToken: 'token',
+				objectsPages: [],
+				hydrateItems: true,
+			}),
+			{ wrapper: Wrapper },
+		)
+
+		await waitFor(() => expect(result.current.favoriteItems).toHaveLength(1))
+		expect(result.current.hasMoreFavoriteItems).toBe(true)
+		expect(listObjectFavorites).toHaveBeenCalledTimes(2)
+
+		await act(async () => result.current.loadMoreFavoriteItems())
+
+		expect(result.current.favoriteItems.map((item) => item.key)).toEqual(['a.txt', 'b.txt'])
+		expect(result.current.hasMoreFavoriteItems).toBe(false)
+		expect(listObjectFavorites).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'page-2', hydrate: true }))
+	})
+
+	it('aborts an in-flight next page when a favorite is removed', async () => {
+		const nextPage = deferred<ObjectFavoritesResponse>()
+		let nextPageSignal: AbortSignal | undefined
+		const listObjectFavorites = vi.fn(({ hydrate, cursor, signal }: { hydrate?: boolean; cursor?: string; signal?: AbortSignal }) => {
+			if (!hydrate) return Promise.resolve({ bucket: 'bucket-a', prefix: '', count: 1, keys: ['a.txt'], hydrated: false, items: [] })
+			if (cursor) {
+				nextPageSignal = signal
+				return nextPage.promise
+			}
+			return Promise.resolve({ bucket: 'bucket-a', prefix: '', count: 1, keys: ['a.txt'], hydrated: true, items: [{ key: 'a.txt', size: 1, lastModified: '', createdAt: '' }], nextCursor: 'page-2' })
+		})
+		const api = createMockApiClient({
+			objects: { listObjectFavorites, createObjectFavorite: vi.fn(), deleteObjectFavorite: vi.fn().mockResolvedValue(undefined) },
+		})
+		const { Wrapper } = createWrapper()
+		const { result } = renderHook(
+			() => useObjectsFavorites({ api, profileId: 'profile-1', bucket: 'bucket-a', apiToken: 'token', objectsPages: [], hydrateItems: true }),
+			{ wrapper: Wrapper },
+		)
+		await waitFor(() => expect(result.current.hasMoreFavoriteItems).toBe(true))
+
+		let loadMore: Promise<void> | undefined
+		act(() => { loadMore = result.current.loadMoreFavoriteItems() })
+		await waitFor(() => expect(nextPageSignal).toBeInstanceOf(AbortSignal))
+		act(() => result.current.toggleFavorite('a.txt'))
+		await waitFor(() => expect(nextPageSignal?.aborted).toBe(true))
+		nextPage.resolve({ bucket: 'bucket-a', prefix: '', count: 1, keys: ['b.txt'], hydrated: true, items: [{ key: 'b.txt', size: 2, lastModified: '', createdAt: '' }] })
+		await act(async () => loadMore)
+
+		expect(result.current.favoriteItems.map((item) => item.key)).not.toContain('b.txt')
 	})
 
 	it('falls back to DB-only keys when remote hydration fails', async () => {
@@ -253,9 +325,21 @@ describe('useObjectsFavorites', () => {
 	})
 
 	it('prefers a fresh DB summary after a hydrated background refresh fails', async () => {
-		const listObjectFavorites = vi
-			.fn()
-			.mockResolvedValueOnce({
+		let hydrationCalls = 0
+		const listObjectFavorites = vi.fn(({ hydrate }: { hydrate?: boolean }) => {
+			if (!hydrate) {
+				return Promise.resolve({
+					bucket: 'bucket-a',
+					prefix: '',
+					count: 2,
+					keys: ['docs/readme.txt', 'missing.txt'],
+					hydrated: false,
+					items: [],
+				})
+			}
+			hydrationCalls += 1
+			if (hydrationCalls > 1) return Promise.reject(new Error('remote metadata unavailable'))
+			return Promise.resolve({
 				bucket: 'bucket-a',
 				prefix: '',
 				count: 1,
@@ -270,15 +354,7 @@ describe('useObjectsFavorites', () => {
 					},
 				],
 			})
-			.mockRejectedValueOnce(new Error('remote metadata unavailable'))
-			.mockResolvedValueOnce({
-				bucket: 'bucket-a',
-				prefix: '',
-				count: 2,
-				keys: ['docs/readme.txt', 'missing.txt'],
-				hydrated: false,
-				items: [],
-			})
+		})
 		const api = createMockApiClient({
 			objects: {
 				listObjectFavorites,
@@ -301,7 +377,7 @@ describe('useObjectsFavorites', () => {
 			{ wrapper: Wrapper },
 		)
 
-		await waitFor(() => expect(result.current.favoriteCount).toBe(1))
+		await waitFor(() => expect(result.current.favoriteCount).toBe(2))
 		await act(async () => {
 			void queryClient.invalidateQueries({
 				queryKey: queryKeys.objects.favoritesItems('profile-1', 'bucket-a', 'token'),
@@ -312,7 +388,7 @@ describe('useObjectsFavorites', () => {
 		await waitFor(() => expect(result.current.favoriteKeys.has('missing.txt')).toBe(true))
 		expect(result.current.favoriteCount).toBe(2)
 		expect(result.current.favoritesQuery.isError).toBe(true)
-		expect(listObjectFavorites).toHaveBeenCalledTimes(3)
+		expect(hydrationCalls).toBe(2)
 	})
 
 	it('refetches the active mode after a mutation cancels an empty in-flight cache', async () => {

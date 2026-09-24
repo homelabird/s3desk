@@ -255,6 +255,21 @@
     "monitoring": {
       "type": "object",
       "properties": {
+        "grafanaDashboard": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "labels": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
+        },
         "prometheusRule": {
           "type": "object",
           "properties": {
@@ -372,6 +387,24 @@
       },
       "additionalProperties": true
     },
+    "objectListing": {
+      "type": "object",
+      "properties": {
+        "gcsNativeList": {
+          "type": "boolean",
+          "description": "Use GCS native pagination; disable to roll back to rclone listing."
+        },
+        "azureNativeList": {
+          "type": "boolean",
+          "description": "Use Azure Blob native pagination; disable to roll back to rclone listing."
+        },
+        "ociNativeList": {
+          "type": "boolean",
+          "description": "Use OCI native pagination; disable to roll back to rclone listing."
+        }
+      },
+      "additionalProperties": true
+    },
     "db": {
       "type": "object",
       "properties": {
@@ -417,6 +450,16 @@
         "queueCapacity": {
           "type": "integer",
           "minimum": 1
+        },
+        "objectIndexMaxObjects": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum objects scanned by one object-index job."
+        },
+        "objectIndexMaxDuration": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Maximum duration per object-index job (Go duration format)."
         },
         "logMaxBytes": {
           "type": "integer",

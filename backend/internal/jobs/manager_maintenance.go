@@ -79,9 +79,18 @@ func (m *Manager) runMaintenanceCycle(ctx context.Context) {
 	defer func() { m.metrics.ObserveMaintenanceCycle(time.Since(startedAt)) }()
 
 	m.cleanupExpiredUploadSessions(ctx)
+	m.cleanupOrphanObjectIndexReplacements(ctx)
 	m.cleanupOrphanArtifacts(ctx)
 	m.cleanupOldJobs(ctx)
 	m.cleanupExpiredJobLogs(ctx)
+}
+
+func (m *Manager) cleanupOrphanObjectIndexReplacements(ctx context.Context) {
+	const resource = "object_index_replacements"
+	m.metrics.AddMaintenanceCleanup(resource, "run", 1)
+	if err := m.store.DiscardOrphanObjectIndexReplacements(ctx); err != nil {
+		m.recordMaintenanceError(resource, "discard_orphaned", err)
+	}
 }
 
 func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
@@ -194,7 +203,7 @@ func (m *Manager) cleanupExpiredUploadSessionMultipartUploads(ctx context.Contex
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
 		return fmt.Errorf("multipart cleanup requires an S3-compatible profile")
 	}
-	client, err := s3ClientFromProfile(secrets, m.allowRemote)
+	client, err := s3ClientFromProfile(secrets, m.allowRemote, m.metrics)
 	if err != nil {
 		return err
 	}

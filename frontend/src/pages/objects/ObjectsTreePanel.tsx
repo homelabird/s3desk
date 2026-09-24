@@ -4,12 +4,11 @@ import type { DragEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEv
 
 import { newFolderShortcutHint } from '../../lib/actionHints'
 import styles from './ObjectsShell.module.css'
-import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
+import { ObjectsFavoritesPane, type FavoriteDisplayItem } from './ObjectsFavoritesPane'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import { ObjectsTreePane } from './ObjectsTreePane'
 import { ObjectsTreeView } from './ObjectsTreeView'
 import { OBJECTS_TREE_DRAWER_ID } from './objectsOverlayIds'
-import type { FavoriteObjectItem } from '../../api/types'
 import type { TreeNode } from '../../lib/tree'
 
 type ObjectsTreePanelProps = {
@@ -17,7 +16,7 @@ type ObjectsTreePanelProps = {
 	treeDrawerOpen: boolean
 	hasProfile: boolean
 	hasBucket: boolean
-	favorites: FavoriteObjectItem[]
+	favorites: FavoriteDisplayItem[]
 	favoriteCount: number
 	favoritesSearch: string
 	onFavoritesSearchChange: (value: string) => void

@@ -124,7 +124,9 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		actions,
 	})
 
-	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
+	const hasNextPage = favoritesOnly ? listVm.hasMoreFavoriteItems : objectsQuery.hasNextPage ?? false
+	const isFetchingNextPage = favoritesOnly ? listVm.isLoadingMoreFavoriteItems : objectsQuery.isFetchingNextPage
+	const fetchNextPage = favoritesOnly ? listVm.loadMoreFavoriteItems : objectsQuery.fetchNextPage
 	const { showLoadMore, loadMoreLabel, handleLoadMore, searchAutoScanCap } = useObjectsAutoScan({
 		favoritesOnly,
 		profileId: props.profileId,

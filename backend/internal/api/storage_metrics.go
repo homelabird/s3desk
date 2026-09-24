@@ -1,16 +1,20 @@
 package api
 
 import (
+	"context"
 	"strings"
 	"time"
+
+	"s3desk/internal/objectlisting"
 )
 
 type storageMetric struct {
-	server    *server
-	provider  string
-	operation string
-	status    string
-	startedAt time.Time
+	server         *server
+	provider       string
+	operation      string
+	status         string
+	startedAt      time.Time
+	scannedEntries int
 }
 
 func (s *server) beginStorageMetric(provider, operation string) *storageMetric {
@@ -42,6 +46,27 @@ func (m *storageMetric) Observe() {
 		return
 	}
 	m.server.metrics.ObserveStorageOperation(m.provider, m.operation, m.status, time.Since(m.startedAt))
+	m.server.metrics.AddStorageRcloneListEntriesScanned(m.provider, m.operation, m.scannedEntries)
+}
+
+func (m *storageMetric) AddScannedEntries(entries int) {
+	if m != nil && entries > 0 {
+		m.scannedEntries += entries
+	}
+}
+
+func (m *storageMetric) TrackObjectListPages(provider string, fetch objectlisting.Fetch) objectlisting.Fetch {
+	return func(ctx context.Context, req objectlisting.Request) (objectlisting.Page, error) {
+		page, err := fetch(ctx, req)
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+		if m != nil && m.server != nil && m.server.metrics != nil {
+			m.server.metrics.IncStorageListPageRequest(normalizeStorageMetricProvider(provider), status)
+		}
+		return page, err
+	}
 }
 
 func normalizeStorageMetricProvider(provider string) string {

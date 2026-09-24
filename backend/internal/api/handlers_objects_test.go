@@ -136,6 +136,28 @@ func TestHandleListObjectsPrefixesOnlyPaginatesPrefixesWithoutCountingObjects(t 
 	}
 }
 
+func TestRecursiveRcloneListDoesNotPassIneffectiveFastListFlag(t *testing.T) {
+	lockTestEnv(t)
+	var gotArgs []string
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		gotArgs = append([]string(nil), args...)
+		return `[{"Path":"file.txt","Name":"file.txt","Size":1}]`, "", nil
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects?delimiter=&maxKeys=1", nil)
+	req = withBucketParam(req, "my-test")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+	rr := httptest.NewRecorder()
+	srv.handleListObjects(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s, want 200", rr.Code, rr.Body.String())
+	}
+	if !slices.Contains(gotArgs, "-R") || slices.Contains(gotArgs, "--fast-list") {
+		t.Fatalf("recursive listing args=%v, want -R without ineffective --fast-list", gotArgs)
+	}
+}
+
 func TestHandleGetObjectMetaReturnsNotFoundWhenObjectMissing(t *testing.T) {
 	lockTestEnv(t)
 	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {

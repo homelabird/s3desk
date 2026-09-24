@@ -8,7 +8,7 @@ SEAWEEDFS_IMAGE="${SEAWEEDFS_IMAGE:-docker.io/chrislusf/seaweedfs:4.47}"
 SEAWEEDFS_API_PORT="${SEAWEEDFS_API_PORT:-8333}"
 SEAWEEDFS_ACCESS_KEY="${SEAWEEDFS_ACCESS_KEY:-demo-seaweedfs}"
 SEAWEEDFS_SECRET_KEY="${SEAWEEDFS_SECRET_KEY:-demo-seaweedfs-secret}"
-RCLONE_IMAGE="${RCLONE_IMAGE:-docker.io/rclone/rclone:1.72.0}"
+RCLONE_IMAGE="${RCLONE_IMAGE:-docker.io/rclone/rclone:1.75.1}"
 
 API_TOKEN="${API_TOKEN:-change-me}"
 BACKEND_ADDR="${BACKEND_ADDR:-127.0.0.1:8080}"
@@ -164,7 +164,9 @@ cleanup() {
 		podman rm -f "${SEAWEEDFS_CONTAINER}" >/dev/null 2>&1 || true
 	fi
 	if [ -n "${SEAWEEDFS_TEMP_DIR}" ]; then
-		rm -rf "${SEAWEEDFS_TEMP_DIR}"
+		if ! rm -rf "${SEAWEEDFS_TEMP_DIR}"; then
+			podman unshare rm -rf "${SEAWEEDFS_TEMP_DIR}"
+		fi
 	fi
 	if [ -n "${BACKEND_TEMP_DIR}" ]; then
 		rm -rf "${BACKEND_TEMP_DIR}" >/dev/null 2>&1 || true

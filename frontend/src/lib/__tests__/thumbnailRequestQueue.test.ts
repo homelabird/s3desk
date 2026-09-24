@@ -24,7 +24,7 @@ it('drains a large thumbnail queue in order within the concurrency limit', async
 		}),
 	)
 
-	expect(started).toEqual([0, 1, 2, 3])
+	expect(started).toEqual([0, 1])
 	let released = 0
 	while (released < releases.length || started.length < handles.length) {
 		while (released < releases.length) releases[released++]?.()
@@ -34,6 +34,22 @@ it('drains a large thumbnail queue in order within the concurrency limit', async
 
 	await expect(Promise.all(handles.map((handle) => handle.promise))).resolves.toHaveLength(200)
 	expect(started).toEqual(Array.from({ length: 200 }, (_, index) => index))
+})
+
+it('uses the profile cost mode to cap thumbnail request concurrency', async () => {
+	const started: number[] = []
+	const handles = Array.from({ length: 10 }, (_, index) =>
+		scheduleThumbnailRequest(
+			() => {
+				started.push(index)
+				return { promise: Promise.resolve(), abort: vi.fn() }
+			},
+			'aggressive',
+		),
+	)
+	expect(started).toHaveLength(8)
+	await Promise.all(handles.map((handle) => handle.promise))
+	expect(started).toHaveLength(10)
 })
 
 it('releases slots when starting a request throws synchronously', async () => {

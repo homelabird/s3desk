@@ -169,6 +169,36 @@ func (s *Store) GetJob(ctx context.Context, profileID, jobID string) (models.Job
 	return job, true, nil
 }
 
+func (s *Store) FindActiveS3IndexJob(ctx context.Context, profileID, bucket, prefix string, fullReindex bool) (models.Job, bool, error) {
+	var rows []jobRow
+	if err := s.db.WithContext(ctx).
+		Where("profile_id = ? AND type = ? AND status IN ?", profileID, "s3_index_objects", []string{string(models.JobStatusQueued), string(models.JobStatusRunning)}).
+		Order("created_at ASC").
+		Find(&rows).Error; err != nil {
+		return models.Job{}, false, err
+	}
+	for _, row := range rows {
+		job, err := jobFromRow(row)
+		if err != nil {
+			return models.Job{}, false, fmt.Errorf("decode active index job %q: %w", row.ID, err)
+		}
+		jobBucket, _ := job.Payload["bucket"].(string)
+		jobPrefix, _ := job.Payload["prefix"].(string)
+		jobPrefix = strings.TrimLeft(strings.TrimSpace(jobPrefix), "/")
+		if jobPrefix != "" && !strings.HasSuffix(jobPrefix, "/") {
+			jobPrefix += "/"
+		}
+		jobFullReindex, ok := job.Payload["fullReindex"].(bool)
+		if !ok {
+			jobFullReindex = true
+		}
+		if jobBucket == bucket && jobPrefix == prefix && jobFullReindex == fullReindex {
+			return job, true, nil
+		}
+	}
+	return models.Job{}, false, nil
+}
+
 func (s *Store) DeleteJob(ctx context.Context, profileID, jobID string) (bool, error) {
 	res := s.db.WithContext(ctx).
 		Where("profile_id = ? AND id = ?", profileID, jobID).

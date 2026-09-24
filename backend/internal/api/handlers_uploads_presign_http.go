@@ -236,7 +236,7 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		return nil, newUploadInternalError("failed to load multipart upload", nil)
 	}
 	if found && (meta.FileSize != fileSize || meta.ChunkSize != partSize) {
-		client, clientErr := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
+		client, clientErr := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote, svc.server.metrics)
 		if clientErr != nil {
 			return nil, newUploadInternalError("failed to prepare multipart reset", map[string]any{"error": clientErr.Error()})
 		}
@@ -248,7 +248,7 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 	createdMeta := false
 	var createdClient *s3.Client
 	if !found {
-		client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
+		client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote, svc.server.metrics)
 		if err != nil {
 			return nil, newUploadInternalError("failed to prepare multipart client", nil)
 		}

@@ -67,6 +67,11 @@ networkPolicy:
     extra: []
 
 monitoring:
+  grafanaDashboard:
+    enabled: false
+    labels:
+      grafana_dashboard: "1"
+    annotations: {}
   prometheusRule:
     enabled: false
     labels: {}
@@ -125,6 +130,11 @@ server:
   allowedLocalDirs:
     - "/data"
 
+objectListing:
+  gcsNativeList: true
+  azureNativeList: true
+  ociNativeList: true
+
 db:
   backend: "sqlite"
   databaseUrl: ""
@@ -138,6 +148,8 @@ db:
 jobs:
   concurrency: 2
   queueCapacity: 256
+  objectIndexMaxObjects: 100000
+  objectIndexMaxDuration: "15m"
   logMaxBytes: 0
   logMaxLineBytes: 262144
   logEmitStdout: false

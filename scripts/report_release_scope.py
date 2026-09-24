@@ -266,7 +266,7 @@ def release_unit_for(path: str) -> str:
         return "frontend-shell-theme"
     if path.startswith("frontend/"):
         return "frontend-other"
-    if path.startswith("docs/") or path.startswith("notes/") or path in {"CHANGELOG.md", "README.md"}:
+    if path.startswith((".agents/skills/", "docs/", "notes/")) or path in {"CHANGELOG.md", "README.md"}:
         return "docs"
     if path.startswith("scripts/"):
         return "scripts-tooling"

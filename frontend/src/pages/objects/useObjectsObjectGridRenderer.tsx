@@ -233,7 +233,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 								aria-pressed={isSelected}
 								onClick={(event) => {
 									event.stopPropagation()
-									selectObjectFromCheckboxEvent(event as unknown as ReactMouseEvent, key)
+									selectObjectFromPointerEvent(event as unknown as ReactMouseEvent, key)
 								}}
 							>
 								<Typography.Text className={gridStyles.gridCardTitle} title={key}>

@@ -160,8 +160,8 @@ export function useObjectsAutoScan(args: UseObjectsAutoScanArgs): ObjectsAutoSca
 		search,
 	])
 
-	const showLoadMore = useMemo(() => !favoritesOnly && autoScanCapped && hasNextPage, [autoScanCapped, favoritesOnly, hasNextPage])
-	const loadMoreLabel = hasSearch ? 'Load more results' : hasNonSearchFilters ? 'Load more filtered items' : 'Load more'
+	const showLoadMore = useMemo(() => favoritesOnly ? hasNextPage : autoScanCapped && hasNextPage, [autoScanCapped, favoritesOnly, hasNextPage])
+	const loadMoreLabel = favoritesOnly ? 'Load more favorites' : hasSearch ? 'Load more results' : hasNonSearchFilters ? 'Load more filtered items' : 'Load more'
 	const handleLoadMore = useCallback(() => {
 		if (!hasNextPage || isFetchingNextPage) return
 		log(debugEnabled, 'debug', 'Manual load more triggered', {

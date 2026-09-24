@@ -92,7 +92,6 @@ describe('useObjectsPrefetch', () => {
 			.mock.calls.map((call) => call[0]?.queryKey)
 		expect(prefetchQueryKeys).toEqual([
 			queryKeys.objects.list('profile-1', 'bucket-c', '', 'token'),
-			queryKeys.objects.list('profile-1', 'bucket-b', '', 'token'),
 		])
 	})
 

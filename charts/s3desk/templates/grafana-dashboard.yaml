@@ -1,0 +1,18 @@
+{{- if .Values.monitoring.grafanaDashboard.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "s3desk.fullname" . }}-grafana-dashboard
+  labels:
+    {{- include "s3desk.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.grafanaDashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.monitoring.grafanaDashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  grafana-object-storage-cost.json: |-
+    {{- .Files.Get "files/grafana-object-storage-cost.json" | nindent 4 }}
+{{- end }}

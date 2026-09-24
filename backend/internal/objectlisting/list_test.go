@@ -1,4 +1,4 @@
-package s3listing
+package objectlisting
 
 import (
 	"context"
@@ -73,6 +73,46 @@ func TestTokenScopeAndMalformedTokensRejectedBeforeIO(t *testing.T) {
 	q.MaxKeys = 1
 	if _, err := decodeToken(q); err != nil {
 		t.Fatal("changing page size should be allowed")
+	}
+}
+
+func TestProviderTokenPrefixesAndScopesAreIsolated(t *testing.T) {
+	gcs := query()
+	gcs.Provider = "gcs"
+	gcs.TokenPrefix = GCSTokenPrefix
+	awsToken, err := encodeToken(query(), "aws-next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gcsToken, err := encodeToken(gcs, "gcs-next")
+	if err != nil || !strings.HasPrefix(gcsToken, GCSTokenPrefix) {
+		t.Fatalf("token=%q err=%v", gcsToken, err)
+	}
+	azure := query()
+	azure.Provider = "azure"
+	azure.TokenPrefix = AzureTokenPrefix
+	azureToken, err := encodeToken(azure, "azure-next")
+	if err != nil || !strings.HasPrefix(azureToken, AzureTokenPrefix) {
+		t.Fatalf("token=%q err=%v", azureToken, err)
+	}
+	oci := query()
+	oci.Provider = "oci"
+	oci.TokenPrefix = OCITokenPrefix
+	ociToken, err := encodeToken(oci, "oci-next")
+	if err != nil || !strings.HasPrefix(ociToken, OCITokenPrefix) {
+		t.Fatalf("token=%q err=%v", ociToken, err)
+	}
+	for _, tc := range []struct {
+		q     Query
+		token string
+	}{{gcs, awsToken}, {query(), gcsToken}, {azure, gcsToken}, {azure, awsToken}, {oci, azureToken}, {oci, awsToken}} {
+		tc.q.Token = tc.token
+		if _, err := List(context.Background(), tc.q, func(context.Context, Request) (Page, error) {
+			t.Fatal("provider-mismatched token reached fetcher")
+			return Page{}, nil
+		}); !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("err=%v", err)
+		}
 	}
 }
 func TestPrefixFilteringAndFolderMarkers(t *testing.T) {

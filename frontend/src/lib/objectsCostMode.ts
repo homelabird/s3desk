@@ -1,7 +1,15 @@
+import { profileScopedStorageKey } from './profileScopedStorage'
+
 export type ObjectsCostMode = 'aggressive' | 'balanced' | 'conservative'
 
 export const OBJECTS_COST_MODE_STORAGE_KEY = 'objectsCostMode'
-export const OBJECTS_COST_MODE_DEFAULT: ObjectsCostMode = 'balanced'
+export const OBJECTS_COST_MODE_DEFAULT: ObjectsCostMode = 'conservative'
+
+export function getObjectsCostModeStorageKey(apiToken: string, profileId: string | null): string {
+	return profileId
+		? profileScopedStorageKey('objects', apiToken, profileId, 'costMode')
+		: OBJECTS_COST_MODE_STORAGE_KEY
+}
 
 type BucketPrefetchPlan = {
 	initial: number
@@ -20,19 +28,18 @@ export function normalizeObjectsCostMode(value: string | null | undefined): Obje
 	}
 }
 
-export function readStoredObjectsCostMode(): ObjectsCostMode {
+export function readStoredObjectsCostMode(apiToken?: string, profileId?: string | null): ObjectsCostMode {
 	if (typeof window === 'undefined') return OBJECTS_COST_MODE_DEFAULT
 	try {
-		return normalizeObjectsCostMode(window.localStorage.getItem(OBJECTS_COST_MODE_STORAGE_KEY))
+		const profileKey = apiToken && profileId ? getObjectsCostModeStorageKey(apiToken, profileId) : null
+		const stored = profileKey ? window.localStorage.getItem(profileKey) ?? window.localStorage.getItem(OBJECTS_COST_MODE_STORAGE_KEY) : window.localStorage.getItem(OBJECTS_COST_MODE_STORAGE_KEY)
+		return normalizeObjectsCostMode(stored)
 	} catch {
 		return OBJECTS_COST_MODE_DEFAULT
 	}
 }
 
-export function getBucketPrefetchPlan(
-	mode: ObjectsCostMode,
-	provider?: string | null,
-): BucketPrefetchPlan {
+export function getBucketPrefetchPlan(mode: ObjectsCostMode): BucketPrefetchPlan {
 	if (mode === 'conservative') {
 		return {
 			initial: 0,
@@ -41,15 +48,9 @@ export function getBucketPrefetchPlan(
 		}
 	}
 
-	if (provider === 'oci_object_storage' || provider === 'azure_blob' || provider === 's3_compatible') {
-		return mode === 'aggressive'
-			? { initial: 2, dropdownPreferred: 1, dropdownFallback: 0 }
-			: { initial: 0, dropdownPreferred: 1, dropdownFallback: 0 }
-	}
-
 	return mode === 'aggressive'
-		? { initial: 12, dropdownPreferred: 3, dropdownFallback: 3 }
-		: { initial: 0, dropdownPreferred: 2, dropdownFallback: 1 }
+		? { initial: 2, dropdownPreferred: 1, dropdownFallback: 0 }
+		: { initial: 0, dropdownPreferred: 1, dropdownFallback: 0 }
 }
 
 export function getThumbnailRequestConcurrency(mode: ObjectsCostMode): number {

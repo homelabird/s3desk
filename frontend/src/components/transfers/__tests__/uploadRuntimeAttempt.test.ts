@@ -15,6 +15,7 @@ vi.mock('../presignedUpload', () => ({
 	uploadPresignedFilesWithProgress: (...args: unknown[]) => uploadPresignedFilesWithProgressMock(...args),
 }))
 
+
 function deferred<T>() {
 	let resolve!: (value: T) => void
 	let reject!: (reason?: unknown) => void
@@ -126,6 +127,7 @@ describe('executeUploadAttempt', () => {
 			updateUploadTask,
 		})
 
+		await vi.waitFor(() => expect(uploadFilesWithProgress).toHaveBeenCalled())
 		expect(uploadFilesWithProgress).toHaveBeenCalledWith('profile-1', 'session-1', [item], {
 			onProgress: expect.any(Function),
 			concurrency: 3,
@@ -140,7 +142,7 @@ describe('executeUploadAttempt', () => {
 			forceMultipartForm: false,
 		})
 
-		const initialTask = updateUploadTask.mock.calls[0][1](task)
+		const initialTask = updateUploadTask.mock.calls.find(([, update]) => update(task).uploadId === 'session-1')![1](task)
 		expect(initialTask).toMatchObject({
 			uploadId: 'session-1',
 			uploadMode: 'direct',
@@ -151,7 +153,7 @@ describe('executeUploadAttempt', () => {
 
 		const options = uploadFilesWithProgress.mock.calls[0][3]
 		options.onProgress({ loadedBytes: 128, totalBytes: item.file.size })
-		const progressTask = updateUploadTask.mock.calls[1][1](task)
+		const progressTask = updateUploadTask.mock.calls.find(([, update]) => update(task).loadedBytes === 128)![1](task)
 		expect(progressTask).toMatchObject({
 			loadedBytes: 128,
 			totalBytes: item.file.size,
@@ -162,6 +164,7 @@ describe('executeUploadAttempt', () => {
 	})
 
 	it('routes presigned uploads through the presigned uploader without resume metadata', async () => {
+		uploadPresignedFilesWithProgressMock.mockClear()
 		const item = uploadItem()
 		const task = uploadTask()
 		const abort = vi.fn()
@@ -206,13 +209,17 @@ describe('executeUploadAttempt', () => {
 			partConcurrency: 2,
 			chunkThresholdBytes: 128,
 			chunkSizeBytes: 32,
+			existingChunksByPath: undefined,
+			chunkSizeBytesByPath: { 'folder/report.bin': 32 },
+			preserveSessionOnFailure: true,
+			networkRetries: 4,
 		})
-		const initialTask = updateUploadTask.mock.calls[0][1](task)
+		const initialTask = updateUploadTask.mock.calls.find(([, update]) => update(task).uploadId === 'session-1')![1](task)
 		expect(initialTask).toMatchObject({
 			uploadId: 'session-1',
 			uploadMode: 'presigned',
-			resumeChunkSizeBytes: undefined,
-			resumeFiles: undefined,
+			resumeChunkSizeBytes: 32,
+			resumeFiles: [{ path: 'folder/report.bin', size: item.file.size, chunkSizeBytes: 32, fingerprint: expect.stringMatching(/^s3desk-sha256-chain-v1:/) }],
 		})
 	})
 

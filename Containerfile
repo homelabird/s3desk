@@ -19,7 +19,7 @@ RUN go mod download
 COPY backend/ /src/backend/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X s3desk/internal/version.Version=${APP_VERSION}" -o /out/s3desk-server ./cmd/server
 
-FROM harbor.k8s.homelabird.com/library/rclone/rclone:1.72.0@sha256:0eb18825ac9732c21c11d654007170572bbd495352bb6dbb624f18e4f462c496 AS rclone
+FROM docker.io/rclone/rclone:1.75.1@sha256:4055fb65b7a975caf3cb54a94bf12713e81947d6f3d0bb221907a05b0f6ab390 AS rclone
 
 FROM harbor.k8s.homelabird.com/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS runtime
 ARG DB_BACKEND=sqlite

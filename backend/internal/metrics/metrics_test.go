@@ -12,6 +12,9 @@ func TestObserveStorageOperationRegistersMetrics(t *testing.T) {
 	m := New()
 
 	m.ObserveStorageOperation("oci_object_storage", "list_objects", "success", 250*time.Millisecond)
+	m.IncStorageListPageRequest("oci_object_storage", "success")
+	m.IncStorageListPageRequest("oci_object_storage", "failure")
+	m.AddStorageRcloneListEntriesScanned("gcp_gcs", "list_objects_continuation", 100_000)
 
 	families, err := m.registry.Gather()
 	if err != nil {
@@ -20,12 +23,24 @@ func TestObserveStorageOperationRegistersMetrics(t *testing.T) {
 
 	var foundCounter bool
 	var foundHistogram bool
+	var foundRcloneScans bool
+	var foundListPages bool
 	for _, family := range families {
 		switch family.GetName() {
 		case "storage_operations_total":
 			foundCounter = true
+			if !strings.Contains(family.GetHelp(), "logical S3Desk storage operations") {
+				t.Fatalf("storage_operations_total help=%q, want logical-operation semantics", family.GetHelp())
+			}
 		case "storage_operation_duration_ms":
 			foundHistogram = true
+		case "storage_rclone_list_entries_scanned_total":
+			foundRcloneScans = true
+		case "storage_list_page_requests_total":
+			foundListPages = true
+			if !strings.Contains(family.GetHelp(), "SDK internal retries are not included") {
+				t.Fatalf("storage_list_page_requests_total help=%q, want retry limitation", family.GetHelp())
+			}
 		}
 	}
 
@@ -34,6 +49,12 @@ func TestObserveStorageOperationRegistersMetrics(t *testing.T) {
 	}
 	if !foundHistogram {
 		t.Fatal("expected storage_operation_duration_ms to be registered")
+	}
+	if !foundRcloneScans {
+		t.Fatal("expected storage_rclone_list_entries_scanned_total to be registered")
+	}
+	if !foundListPages {
+		t.Fatal("expected storage_list_page_requests_total to be registered")
 	}
 }
 

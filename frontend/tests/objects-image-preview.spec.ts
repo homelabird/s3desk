@@ -263,8 +263,7 @@ test.describe('Objects image preview', () => {
 
 		const card = rowFor(page, 'hero.png')
 		await expect(card).toBeVisible()
-		await card.getByRole('button', { name: 'Object actions for hero.png' }).click()
-		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
+		await card.getByRole('button', { name: 'Open large preview for hero.png' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		const stage = modal.getByTestId('objects-image-viewer-stage')

@@ -183,7 +183,7 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		})
 	}
 
-	test('does not show a late creation warning after browser back and refreshes the list on return', async ({ page }) => {
+	test('keeps bucket creation open while pending and reports partial defaults failure', async ({ page }) => {
 		await installProfilesBucketsMobileResponsiveFixtures(page, { profileProvider: 'aws_s3' })
 		await seedProfilesBucketsMobileResponsiveStorage(page)
 		const bucketName = 'late-created-bucket'
@@ -215,13 +215,13 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		await dialog.getByRole('button', { name: 'Create', exact: true }).click()
 		await expect.poll(() => started).toBe(true)
 		await page.goBack()
-		await expect(page).toHaveURL(/\/profiles$/)
-		await expect(dialog).toHaveCount(0)
+		await expect(page).toHaveURL(/\/buckets$/)
+		await expect(dialog).toBeVisible()
 		releaseCreate()
 		await response
-		await page.goForward()
+		await expect(dialog).toHaveCount(0)
 		await expect(getBucketCard(page, bucketName)).toBeVisible()
-		expect(await page.locator('.ant-message-notice-content').filter({ hasText: 'secure defaults failed' }).count()).toBe(0)
+		await expect(page.locator('.ant-message-notice-content').filter({ hasText: 'secure defaults failed' })).toBeVisible()
 	})
 
 	test('opens policy and controls overlays from compact bucket cards', async ({ page }) => {

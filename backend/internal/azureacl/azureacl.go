@@ -3,24 +3,17 @@ package azureacl
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
 	"s3desk/internal/azureutil"
 	"s3desk/internal/models"
-	"s3desk/internal/profileendpoint"
-	"s3desk/internal/profiletls"
 	"s3desk/internal/responsebody"
 )
 
@@ -209,163 +202,17 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, container, p
 }
 
 func resolveEndpoint(profile models.ProfileSecrets) (*url.URL, string, string, error) {
-	accountName := strings.TrimSpace(profile.AzureAccountName)
-	accountKey := strings.TrimSpace(profile.AzureAccountKey)
-	if accountName == "" || accountKey == "" {
-		return nil, "", "", errors.New("missing azure account credentials")
-	}
-
-	ep := strings.TrimSpace(azureutil.BlobEndpoint(profile))
-
-	if !strings.Contains(ep, "://") {
-		if looksLikeLocalEndpoint(ep) {
-			ep = "http://" + ep
-		} else {
-			ep = "https://" + ep
-		}
-	}
-
-	u, err := url.Parse(ep)
-	if err != nil {
-		return nil, "", "", err
-	}
-	u.Path = strings.TrimRight(u.Path, "/")
-	return u, accountName, accountKey, nil
+	return azureutil.ResolveBlobCredentials(profile)
 }
 
 func newHTTPClient(profile models.ProfileSecrets, opts ClientOptions) (*http.Client, error) {
-	tlsCfg, err := profiletls.BuildConfig(profile)
-	if err != nil {
-		return nil, err
-	}
-
-	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
-		AllowRemote: opts.AllowRemote,
-		TLSConfig:   tlsCfg,
-		Timeout:     30 * time.Second,
-	}), nil
-}
-
-func looksLikeLocalEndpoint(endpoint string) bool {
-	host := endpoint
-	if strings.Contains(host, "/") {
-		host = strings.SplitN(host, "/", 2)[0]
-	}
-	h := strings.Trim(host, "[]")
-	hostname := h
-	if strings.Contains(hostname, ":") {
-		hostname, _, _ = strings.Cut(hostname, ":")
-	}
-	hostname = strings.ToLower(strings.TrimSpace(hostname))
-	if hostname == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(hostname)
-	if ip == nil {
-		return false
-	}
-	return ip.IsPrivate() || ip.IsLoopback()
+	return azureutil.NewHTTPClient(profile, opts.AllowRemote)
 }
 
 // ---- Shared Key auth ----
 
 func buildSharedKeyAuthorization(req *http.Request, accountName, accountKeyB64 string) (string, error) {
-	key, err := base64.StdEncoding.DecodeString(accountKeyB64)
-	if err != nil {
-		return "", errors.New("invalid azure account key")
-	}
-
-	stringToSign := buildStringToSign(req, accountName)
-	h := hmac.New(sha256.New, key)
-	_, _ = h.Write([]byte(stringToSign))
-	sig := base64.StdEncoding.EncodeToString(h.Sum(nil))
-	return fmt.Sprintf("SharedKey %s:%s", accountName, sig), nil
-}
-
-func buildStringToSign(req *http.Request, accountName string) string {
-	// See: https://learn.microsoft.com/en-us/rest/api/storageservices/authorize-with-shared-key
-	// Keep the fields stable; most are empty for our operations.
-	contentLength := req.Header.Get("Content-Length")
-	if contentLength == "" && req.ContentLength > 0 {
-		contentLength = fmt.Sprintf("%d", req.ContentLength)
-	}
-	if req.Body == nil || req.Method == http.MethodGet || req.Method == http.MethodHead {
-		contentLength = ""
-	}
-	if contentLength == "0" {
-		contentLength = ""
-	}
-
-	canonicalHeaders := canonicalizeHeaders(req.Header)
-	canonicalResource := canonicalizeResource(req.URL, accountName)
-
-	// Date is empty because we always use x-ms-date.
-	return strings.Join([]string{
-		req.Method,
-		"", // Content-Encoding
-		"", // Content-Language
-		contentLength,
-		"", // Content-MD5
-		req.Header.Get("Content-Type"),
-		"", // Date
-		"", // If-Modified-Since
-		"", // If-Match
-		"", // If-None-Match
-		"", // If-Unmodified-Since
-		"", // Range
-		canonicalHeaders + canonicalResource,
-	}, "\n")
-}
-
-func canonicalizeHeaders(h http.Header) string {
-	var keys []string
-	for k := range h {
-		lk := strings.ToLower(k)
-		if strings.HasPrefix(lk, "x-ms-") {
-			keys = append(keys, lk)
-		}
-	}
-	sort.Strings(keys)
-	var b strings.Builder
-	for _, k := range keys {
-		vals := h.Values(k)
-		// h.Values is case-sensitive; fallback to canonical lookup.
-		if len(vals) == 0 {
-			vals = h.Values(http.CanonicalHeaderKey(k))
-		}
-		v := strings.Join(vals, ",")
-		v = strings.TrimSpace(v)
-		b.WriteString(k)
-		b.WriteString(":")
-		b.WriteString(v)
-		b.WriteString("\n")
-	}
-	return b.String()
-}
-
-func canonicalizeResource(u *url.URL, accountName string) string {
-	// /<account>/<path>
-	path := u.EscapedPath()
-	if path == "" {
-		path = "/"
-	}
-	res := "/" + accountName + path
-
-	q, _ := url.ParseQuery(u.RawQuery)
-	if len(q) == 0 {
-		return res
-	}
-	var keys []string
-	for k := range q {
-		keys = append(keys, strings.ToLower(k))
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		vals := q[k]
-		sort.Strings(vals)
-		res += "\n" + k + ":" + strings.Join(vals, ",")
-	}
-	return res
+	return azureutil.BuildSharedKeyAuthorization(req, accountName, accountKeyB64)
 }
 
 // ---- XML models ----

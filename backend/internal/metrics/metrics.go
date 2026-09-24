@@ -28,13 +28,16 @@ type Metrics struct {
 	transferBytesTotal  *prometheus.CounterVec
 	transferErrorsTotal *prometheus.CounterVec
 
-	storageOperationsTotal     *prometheus.CounterVec
-	storageOperationDurationMs *prometheus.HistogramVec
-	thumbnailCacheHitsTotal    *prometheus.CounterVec
-	downloadProxyModeTotal     *prometheus.CounterVec
-	downloadActive             prometheus.Gauge
-	downloadRejected           prometheus.Counter
-	downloadDuration           prometheus.Histogram
+	storageOperationsTotal          *prometheus.CounterVec
+	storageOperationDurationMs      *prometheus.HistogramVec
+	storageListPageRequestsTotal    *prometheus.CounterVec
+	storageRcloneListEntriesScanned *prometheus.CounterVec
+	storageAPIRetriesTotal          *prometheus.CounterVec
+	thumbnailCacheHitsTotal         *prometheus.CounterVec
+	downloadProxyModeTotal          *prometheus.CounterVec
+	downloadActive                  prometheus.Gauge
+	downloadRejected                prometheus.Counter
+	downloadDuration                prometheus.Histogram
 
 	eventsConnections       prometheus.Gauge
 	eventsReconnectsTotal   prometheus.Counter
@@ -96,13 +99,25 @@ func New() *Metrics {
 	}, []string{"code"})
 	m.storageOperationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "storage_operations_total",
-		Help: "Total number of storage operations issued by provider, operation, and status.",
+		Help: "Total number of logical S3Desk storage operations; provider SDK internal requests and retries may differ.",
 	}, []string{"provider", "operation", "status"})
 	m.storageOperationDurationMs = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "storage_operation_duration_ms",
 		Help:    "Storage operation duration in milliseconds.",
 		Buckets: prometheus.ExponentialBuckets(10, 2, 14),
 	}, []string{"provider", "operation", "status"})
+	m.storageListPageRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "storage_list_page_requests_total",
+		Help: "S3Desk object-list page fetch invocations; provider SDK internal retries are not included.",
+	}, []string{"provider", "status"})
+	m.storageRcloneListEntriesScanned = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "storage_rclone_list_entries_scanned_total",
+		Help: "Entries enumerated by rclone object listings, including legacy cursor replay and full object-index scans.",
+	}, []string{"provider", "operation"})
+	m.storageAPIRetriesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "storage_api_retries_scheduled_total",
+		Help: "S3 SDK retry delays scheduled by provider; canceled requests may not reach another attempt.",
+	}, []string{"provider"})
 	m.thumbnailCacheHitsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "thumbnail_cache_hits_total",
 		Help: "Total number of backend thumbnail cache hits by source.",
@@ -149,6 +164,9 @@ func New() *Metrics {
 		m.transferErrorsTotal,
 		m.storageOperationsTotal,
 		m.storageOperationDurationMs,
+		m.storageListPageRequestsTotal,
+		m.storageRcloneListEntriesScanned,
+		m.storageAPIRetriesTotal,
 		m.thumbnailCacheHitsTotal,
 		m.downloadProxyModeTotal,
 		m.downloadActive, m.downloadRejected, m.downloadDuration,
@@ -289,6 +307,46 @@ func (m *Metrics) ObserveStorageOperation(provider, operation, status string, du
 		ms = 0
 	}
 	m.storageOperationDurationMs.WithLabelValues(provider, operation, status).Observe(ms)
+}
+
+func (m *Metrics) AddStorageRcloneListEntriesScanned(provider, operation string, entries int) {
+	if m == nil || entries <= 0 {
+		return
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = "unknown"
+	}
+	operation = strings.TrimSpace(operation)
+	if operation == "" {
+		operation = "unknown"
+	}
+	m.storageRcloneListEntriesScanned.WithLabelValues(provider, operation).Add(float64(entries))
+}
+
+func (m *Metrics) IncStorageListPageRequest(provider, status string) {
+	if m == nil {
+		return
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = "unknown"
+	}
+	if status != "success" {
+		status = "error"
+	}
+	m.storageListPageRequestsTotal.WithLabelValues(provider, status).Inc()
+}
+
+func (m *Metrics) IncStorageAPIRetryScheduled(provider string) {
+	if m == nil {
+		return
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = "unknown"
+	}
+	m.storageAPIRetriesTotal.WithLabelValues(provider).Inc()
 }
 
 func (m *Metrics) IncThumbnailCacheHit(source string) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -366,7 +367,39 @@ func (s *server) submitRunnableJob(
 	if err := s.validateRunnableJobRequest(ctx, request.Type, request.Payload); err != nil {
 		return models.Job{}, nil, err
 	}
+	if request.Type == jobs.JobTypeS3IndexObjects {
+		return s.createAndEnqueueIndexJob(ctx, profileID, request.Payload)
+	}
 	return s.createAndEnqueueJob(ctx, profileID, request.Type, request.Payload)
+}
+
+func (s *server) createAndEnqueueIndexJob(ctx context.Context, profileID string, payload map[string]any) (models.Job, *jobs.QueueStats, error) {
+	bucket, _ := payload["bucket"].(string)
+	prefix, _ := payload["prefix"].(string)
+	prefix = strings.TrimLeft(strings.TrimSpace(prefix), "/")
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	payload["prefix"] = prefix
+	fullReindex, ok := payload["fullReindex"].(bool)
+	if !ok {
+		fullReindex = true
+	}
+	key := indexJobKey{profileID: profileID, bucket: bucket, prefix: prefix, fullReindex: fullReindex}
+	unlock, err := s.indexJobMu.Lock(ctx, key)
+	if err != nil {
+		return models.Job{}, nil, err
+	}
+	defer unlock()
+
+	existing, found, err := s.store.FindActiveS3IndexJob(ctx, profileID, bucket, prefix, fullReindex)
+	if err != nil {
+		return models.Job{}, nil, err
+	}
+	if found {
+		return existing, nil, nil
+	}
+	return s.createAndEnqueueJob(ctx, profileID, jobs.JobTypeS3IndexObjects, payload)
 }
 
 func (s *server) prepareRetryJobSubmission(
