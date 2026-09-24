@@ -9,13 +9,14 @@ not an HA or production storage design.
 
 Use Docker Compose v2 or a Podman Compose provider implementing health checks
 and `depends_on` conditions `service_healthy` / `service_completed_successfully`.
-Run from the repository root and provide `DEMO_PUBLIC_HOST` explicitly, including
-for `logs`, `ps`, and `down`.
+Run from the repository root. If omitted, `DEMO_PUBLIC_HOST` defaults to
+`0.0.0.0`; set it explicitly to a reachable LAN address when clients connect
+from another device. Use the same value for later `logs`, `ps`, and `down` calls.
 
 ```bash
-DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo up --build -d --remove-orphans
-DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo ps -a
-DEMO_PUBLIC_HOST=127.0.0.1 ./scripts/compose.sh demo logs seaweedfs-seed s3desk-seed
+./scripts/compose.sh demo up --build -d --remove-orphans
+./scripts/compose.sh demo ps -a
+./scripts/compose.sh demo logs seaweedfs-seed s3desk-seed
 ```
 
 Open `http://127.0.0.1:8080`, authenticate using the configured `API_TOKEN`,

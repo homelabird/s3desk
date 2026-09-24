@@ -127,11 +127,7 @@ require_non_empty_setting() {
 }
 
 require_explicit_demo_public_host() {
-  if [[ ! -v DEMO_PUBLIC_HOST || -z "${DEMO_PUBLIC_HOST//[[:space:]]/}" ]]; then
-    echo "DEMO_PUBLIC_HOST must be provided explicitly for demo (IP address or hostname)" >&2
-    echo "example: DEMO_PUBLIC_HOST=192.168.0.227 ./scripts/compose.sh demo up -d" >&2
-    exit 1
-  fi
+  export DEMO_PUBLIC_HOST="${DEMO_PUBLIC_HOST:-0.0.0.0}"
   if [[ "${DEMO_PUBLIC_HOST}" == *://* || "${DEMO_PUBLIC_HOST}" == */* || "${DEMO_PUBLIC_HOST}" == *:* || ! "${DEMO_PUBLIC_HOST}" =~ ^[[:alnum:]]([[:alnum:].-]*[[:alnum:]])?$ ]]; then
     echo "DEMO_PUBLIC_HOST must be an IP address or hostname without a scheme, port, or path" >&2
     exit 1
