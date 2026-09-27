@@ -93,6 +93,16 @@ describe('getObjectIndexSummary', () => {
 })
 
 describe('getObjectMeta', () => {
+ it('preserves literal plus, spaces, and percent escapes in metadata keys', async () => {
+  const request = vi.fn().mockResolvedValue({})
+  const key = '日本語/the+winning ticket%2F1080.mp4'
+  await getObjectMeta(request, { profileId: 'profile-1', bucket: 'demo', key })
+  const url = new URL(request.mock.calls[0][0], 'http://localhost')
+  expect(url.searchParams.get('key')).toBe(key)
+  expect(url.search).toContain('%2B')
+  expect(url.search).toContain('%252F')
+ })
+
 	it('forwards the caller abort signal to the request transport', async () => {
 		const controller = new AbortController()
 		const request = vi.fn().mockResolvedValue({ key: 'report.txt', size: 1 })
@@ -133,6 +143,23 @@ describe('getObjectDownloadURL', () => {
 })
 
 describe('listObjectFavorites', () => {
+	it.each([false, true])('accepts empty arrays with hydrate=%s', async (hydrate) => {
+		const request = vi.fn().mockResolvedValue({ keys: [], items: [], count: 0 })
+		await expect(listObjectFavorites(request, { profileId: 'profile-1', bucket: 'bucket-a', hydrate }))
+			.resolves.toMatchObject({ keys: [], items: [], count: 0 })
+	})
+
+	it.each([null, {}, { keys: null, items: [] }, { keys: 'file', items: [] },
+		{ keys: [42], items: [] }, { keys: [], items: null }, { keys: [], items: [null] }])(
+		'reports malformed favorites as data errors: %j', async (response) => {
+			for (const hydrate of [false, true]) {
+				const request = vi.fn().mockResolvedValue(response)
+				await expect(listObjectFavorites(request, { profileId: 'profile-1', bucket: 'bucket-a', hydrate }))
+					.rejects.toThrow('Invalid favorites response')
+			}
+		},
+	)
+
 	it('collects bounded favorite pages', async () => {
 		const request = vi
 			.fn()

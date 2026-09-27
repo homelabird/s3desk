@@ -2,11 +2,36 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 )
+
+func TestUploadRelativePathEncoding(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw, encoding, want string
+		invalid                   bool
+	}{
+		{name: "legacy percent", raw: "nested/a+%2F.mp4", want: "nested/a+%2F.mp4"},
+		{name: "unicode", raw: url.PathEscape("日本語/中文_한글+%2F(1).mp4"), encoding: "percent-encoded", want: "日本語/中文_한글+%2F(1).mp4"},
+		{name: "literal plus", raw: "nested/a+b.mp4", encoding: "percent-encoded", want: "nested/a+b.mp4"},
+		{name: "invalid percent", raw: "%ZZ", encoding: "percent-encoded", invalid: true},
+		{name: "invalid utf8", raw: "%FF", encoding: "percent-encoded", invalid: true},
+		{name: "unknown encoding", raw: "file", encoding: "base64", invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := http.Header{}
+			headers.Set("X-Upload-Relative-Path", tc.raw)
+			headers.Set("X-Upload-Relative-Path-Encoding", tc.encoding)
+			got, err := uploadRelativePathHeader(headers)
+			if (err != nil) != tc.invalid || got != tc.want {
+				t.Fatalf("path=%q, error=%v; want %q, invalid=%v", got, err, tc.want, tc.invalid)
+			}
+		})
+	}
+}
 
 func TestUniqueFilePathRejectsExhaustedNames(t *testing.T) {
 	dir := t.TempDir()

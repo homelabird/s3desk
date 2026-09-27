@@ -118,6 +118,23 @@ describe('uploadFilesWithProgress', () => {
 		globalThis.XMLHttpRequest = originalXMLHttpRequest
 	})
 
+	it.each([false, true])('preserves Unicode and literal percent/plus paths on retry (multipart=%s)', async (forceMultipartForm) => {
+		const path = '日本語/中文_한글+%2F(1).mp4'
+		for (let attempt = 0; attempt < 2; attempt++) {
+			await uploadFilesWithProgress(
+				{ baseUrl: '/api/v1', apiToken: 'test-token' }, 'profile-1', 'upload-1',
+				[buildItem('video', '中文_한글+%2F(1).mp4', path)],
+				{ forceMultipartForm, chunkSizeBytes: 1024 },
+			).promise
+		}
+		expect(FakeXMLHttpRequest.requests).toHaveLength(2)
+		for (const request of FakeXMLHttpRequest.requests) {
+			expect(request.headers['x-upload-relative-path-encoding']).toBe('percent-encoded')
+			expect(decodeURIComponent(request.headers['x-upload-relative-path'])).toBe(path)
+			expect(request.headers['x-upload-relative-path']).toMatch(/^[\x20-\x7e]+$/)
+		}
+	})
+
 	it.each([['constructor'], ['toString'], ['__proto__'], ['constructor', 'toString', '__proto__']])(
 		'uploads filenames that overlap inherited properties: %s',
 		async (...names) => {

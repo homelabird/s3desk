@@ -1272,7 +1272,9 @@ export interface paths {
          *
          *     - S3 providers: PutBucketPolicy.
          *     - GCS: Set bucket IAM policy.
-         *     - Azure: Set container ACL/public access.
+         *     - Azure: Set container ACL/public access. Both publicAccess (private, blob,
+         *       or container) and storedAccessPolicies (array) are required. An explicit
+         *       empty array removes all stored policies; omitted fields are rejected.
          */
         put: {
             parameters: {
@@ -1302,6 +1304,7 @@ export interface paths {
                 };
                 400: components["responses"]["ErrorResponse"];
                 404: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
                 429: components["responses"]["ErrorResponse"];
                 502: components["responses"]["ErrorResponse"];
             };
@@ -1512,6 +1515,7 @@ export interface paths {
                     content?: never;
                 };
                 400: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
             };
         };
         post?: never;
@@ -1584,6 +1588,7 @@ export interface paths {
                     content?: never;
                 };
                 400: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
             };
         };
         post?: never;
@@ -2549,7 +2554,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an object thumbnail */
+        /**
+         * Get an object thumbnail
+         * @description Returns a JPEG thumbnail. HTTP 415 uses code unsupported for an unsupported object kind, or thumbnail_decode_failed when a supported image/video kind could not be decoded. Decode failure details identify the decoder and video range attempts; this does not prove the object's codec is supported.
+         */
         get: {
             parameters: {
                 query: {
@@ -2672,8 +2680,10 @@ export interface paths {
                     "X-Upload-Chunk-Size"?: number;
                     /** @description Required in raw chunk mode; total file size in bytes. */
                     "X-Upload-File-Size"?: number;
-                    /** @description Required in raw chunk mode; relative file path within the upload session. */
+                    /** @description Required in raw chunk mode; relative file path within the upload session. Also supported for a single direct multipart file. For Unicode paths, percent-encode UTF-8 and set X-Upload-Relative-Path-Encoding. */
                     "X-Upload-Relative-Path"?: string;
+                    /** @description Decode X-Upload-Relative-Path exactly once as percent-encoded UTF-8 (plus signs remain literal). Omit for legacy unencoded paths. */
+                    "X-Upload-Relative-Path-Encoding"?: "percent-encoded";
                 };
                 path: {
                     uploadId: components["parameters"]["UploadId"];
@@ -4066,7 +4076,9 @@ export interface components {
         };
         BucketStoredAccessPolicy: {
             id: string;
+            /** @description Azure ISO 8601 date or timestamp with timezone; date-only and minute precision are supported. */
             start?: string;
+            /** @description Azure ISO 8601 date or timestamp with timezone; date-only and minute precision are supported. */
             expiry?: string;
             permission?: string;
         };
@@ -4083,6 +4095,7 @@ export interface components {
         BucketAccessPutRequest: {
             objectOwnership?: components["schemas"]["BucketObjectOwnershipMode"];
             bindings?: components["schemas"]["BucketAccessBinding"][];
+            /** @description Required for GCS edits; preserve the ETag from the loaded policy. GCS bucket creation defaults may omit it and use the newly created policy revision. */
             etag?: string;
             storedAccessPolicies?: components["schemas"]["BucketStoredAccessPolicy"][];
         };
@@ -4169,7 +4182,10 @@ export interface components {
             warnings?: string[];
         };
         BucketVersioningPutRequest: {
-            /** @enum {string} */
+            /**
+             * @description AWS S3 and OCI accept enabled or suspended. GCS and Azure accept enabled or disabled.
+             * @enum {string}
+             */
             status: "enabled" | "disabled" | "suspended";
         };
         /** @enum {string} */

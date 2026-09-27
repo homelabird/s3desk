@@ -97,7 +97,7 @@ func buildObjectFavoritesListResponse(bucket, prefix string, keys []string, next
 		Bucket:     bucket,
 		Prefix:     prefix,
 		Count:      len(keys),
-		Keys:       append([]string(nil), keys...),
+		Keys:       append([]string{}, keys...),
 		Hydrated:   false,
 		Items:      []models.FavoriteObjectItem{},
 		NextCursor: nextCursor,

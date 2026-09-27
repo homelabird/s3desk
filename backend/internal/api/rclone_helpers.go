@@ -401,11 +401,14 @@ func (s *server) rcloneStat(ctx context.Context, profile models.ProfileSecrets, 
 	if strings.TrimSpace(out) == "" {
 		return rcloneListEntry{}, stderr, errors.New("empty rclone response")
 	}
-	var entry rcloneListEntry
+	var entry *rcloneListEntry
 	if err := json.Unmarshal([]byte(out), &entry); err != nil {
 		return rcloneListEntry{}, stderr, err
 	}
-	return entry, stderr, nil
+	if entry == nil {
+		return rcloneListEntry{}, stderr, errors.New("invalid rclone stat response: expected an object, received null")
+	}
+	return *entry, stderr, nil
 }
 
 func rcloneETagFromHashes(hashes map[string]string) string {

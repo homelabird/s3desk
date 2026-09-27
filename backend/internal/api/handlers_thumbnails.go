@@ -213,7 +213,15 @@ func (s *server) decodeThumbnailVideoWithFallbacks(
 ) (image.Image, []thumbnailVideoAttempt, error) {
 	if size <= 0 || size <= thumbnailVideoFullStreamBytes {
 		img, attempt, err := s.decodeThumbnailVideoStreamAttempt(ctx, secrets, bucket, key, ffmpegPath, "full", 0, 0)
-		return img, []thumbnailVideoAttempt{attempt}, err
+		attempts := []thumbnailVideoAttempt{attempt}
+		var fetchErr *thumbnailVideoFetchError
+		if err == nil || size <= 0 || ctx.Err() != nil || errors.As(err, &fetchErr) {
+			return img, attempts, err
+		}
+		// MP4 with its index at the end needs a seekable source after probing.
+		// Reuse the bounded temporary-file path instead of retrying the same pipe.
+		img, attempt, err = s.decodeThumbnailVideoSparseAttempt(ctx, secrets, bucket, key, size, ffmpegPath, size)
+		return img, append(attempts, attempt), err
 	}
 
 	attempts := make([]thumbnailVideoAttempt, 0, 3)

@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -222,74 +223,80 @@ func TestUploadDirectHTTPService_FormUploadDeletesTempObjectAfterReservationRace
 }
 
 func TestUploadDirectHTTPService_FormUploadPreservesRelativePathAndPromotesTempObject(t *testing.T) {
-	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
-	profile := createTestProfile(t, st)
-	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
-	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeDirect, "", expiresAt)
-	if err != nil {
-		t.Fatalf("create upload session: %v", err)
-	}
+	for _, relativePath := range []string{"nested/file.bin", "日本語/中文_한글+%2F(1).mp4"} {
+		t.Run(relativePath, func(t *testing.T) {
+			st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+			profile := createTestProfile(t, st)
+			expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+			upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeDirect, "", expiresAt)
+			if err != nil {
+				t.Fatalf("create upload session: %v", err)
+			}
 
-	var captureCalls [][]string
-	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
-		captureCalls = append(captureCalls, append([]string(nil), args...))
-		return "", "", nil
-	})
-	var stdinCalls [][]string
-	installAPIRcloneStdinHook(t, func(_ models.ProfileSecrets, args []string, stdin io.Reader) (string, error) {
-		stdinCalls = append(stdinCalls, append([]string(nil), args...))
-		payload, err := io.ReadAll(stdin)
-		if err != nil {
-			t.Fatalf("read stdin: %v", err)
-		}
-		if string(payload) != "hello" {
-			t.Fatalf("payload=%q, want hello", string(payload))
-		}
-		return "", nil
-	})
+			var captureCalls [][]string
+			installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+				captureCalls = append(captureCalls, append([]string(nil), args...))
+				return "", "", nil
+			})
+			var stdinCalls [][]string
+			installAPIRcloneStdinHook(t, func(_ models.ProfileSecrets, args []string, stdin io.Reader) (string, error) {
+				stdinCalls = append(stdinCalls, append([]string(nil), args...))
+				payload, err := io.ReadAll(stdin)
+				if err != nil {
+					t.Fatalf("read stdin: %v", err)
+				}
+				if string(payload) != "hello" {
+					t.Fatalf("payload=%q, want hello", string(payload))
+				}
+				return "", nil
+			})
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	part, err := writer.CreateFormFile("files", "file.bin")
-	if err != nil {
-		t.Fatalf("create form file: %v", err)
-	}
-	if _, err := part.Write([]byte("hello")); err != nil {
-		t.Fatalf("write form file: %v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("close writer: %v", err)
-	}
+			var body bytes.Buffer
+			writer := multipart.NewWriter(&body)
+			part, err := writer.CreateFormFile("files", "file.bin")
+			if err != nil {
+				t.Fatalf("create form file: %v", err)
+			}
+			if _, err := part.Write([]byte("hello")); err != nil {
+				t.Fatalf("write form file: %v", err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatalf("close writer: %v", err)
+			}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("X-Upload-Relative-Path", "nested/file.bin")
-	req = withProfileSecrets(req, models.ProfileSecrets{ID: profile.ID, Provider: models.ProfileProviderS3Compatible})
-	rr := httptest.NewRecorder()
-	srv := &server{cfg: config.Config{DataDir: dataDir, UploadMaxBytes: 10}, store: st}
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/files", &body)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			req.Header.Set("X-Upload-Relative-Path", url.PathEscape(relativePath))
+			req.Header.Set("X-Upload-Relative-Path-Encoding", "percent-encoded")
+			req = withProfileSecrets(req, models.ProfileSecrets{ID: profile.ID, Provider: models.ProfileProviderS3Compatible})
+			rr := httptest.NewRecorder()
+			srv := &server{cfg: config.Config{DataDir: dataDir, UploadMaxBytes: 10}, store: st}
 
-	newUploadDirectHTTPService(srv).handleDirectMultipartFormUpload(rr, req, profile.ID, upload.ID, upload)
+			newUploadDirectHTTPService(srv).handleDirectMultipartFormUpload(rr, req, profile.ID, upload.ID, upload)
 
-	res := rr.Result()
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusNoContent {
-		raw, _ := io.ReadAll(res.Body)
-		t.Fatalf("status=%d, want %d: %s", res.StatusCode, http.StatusNoContent, string(raw))
-	}
-	assertRcloneStdinTempTarget(t, stdinCalls, upload.ID, "incoming/nested/file.bin")
-	assertRcloneMovetoTempToFinal(t, captureCalls, upload.ID, "incoming/nested/file.bin")
-	assertNoRcloneCommand(t, captureCalls, "deletefile")
-	assertUploadSessionBytesForAPI(t, st, profile.ID, upload.ID, 5)
+			res := rr.Result()
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusNoContent {
+				raw, _ := io.ReadAll(res.Body)
+				t.Fatalf("status=%d, want %d: %s", res.StatusCode, http.StatusNoContent, string(raw))
+			}
+			assertRcloneStdinTempTarget(t, stdinCalls, upload.ID, "incoming/"+relativePath)
+			assertRcloneMovetoTempToFinal(t, captureCalls, upload.ID, "incoming/"+relativePath)
+			assertNoRcloneCommand(t, captureCalls, "deletefile")
+			assertUploadSessionBytesForAPI(t, st, profile.ID, upload.ID, 5)
 
-	objects, err := st.ListUploadObjects(context.Background(), profile.ID, upload.ID)
-	if err != nil {
-		t.Fatalf("list upload objects: %v", err)
-	}
-	if len(objects) != 1 {
-		t.Fatalf("len(objects)=%d, want 1", len(objects))
-	}
-	if objects[0].ObjectKey != "incoming/nested/file.bin" {
-		t.Fatalf("object key=%q, want incoming/nested/file.bin", objects[0].ObjectKey)
+			objects, err := st.ListUploadObjects(context.Background(), profile.ID, upload.ID)
+			if err != nil {
+				t.Fatalf("list upload objects: %v", err)
+			}
+			if len(objects) != 1 {
+				t.Fatalf("len(objects)=%d, want 1", len(objects))
+			}
+			if objects[0].ObjectKey != "incoming/"+relativePath {
+				t.Fatalf("object key=%q, want incoming/nested/file.bin", objects[0].ObjectKey)
+			}
+
+		})
 	}
 }
 

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,6 +9,24 @@ import (
 	"s3desk/internal/config"
 	"s3desk/internal/models"
 )
+
+func TestObjectFavoritesEmptyResponseUsesArrays(t *testing.T) {
+	for _, keys := range [][]string{nil, {}} {
+		body, err := json.Marshal(buildObjectFavoritesListResponse("bucket", "", keys, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var response map[string]json.RawMessage
+		if err := json.Unmarshal(body, &response); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"keys", "items"} {
+			if string(response[field]) != "[]" {
+				t.Fatalf("%s = %s, want []", field, response[field])
+			}
+		}
+	}
+}
 
 func TestObjectFavoritesHTTPService_HandleListObjectFavorites_ReturnsMissingProfile(t *testing.T) {
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}

@@ -199,7 +199,13 @@ export function listObjectFavorites(
 				`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites?${params.toString()}`,
 				{ method: 'GET', signal: args.signal },
 				{ profileId: args.profileId },
-			)
+			).then((page) => {
+				if (!page || !Array.isArray(page.keys) || !page.keys.every((key) => typeof key === 'string') ||
+					!Array.isArray(page.items) || !page.items.every((item) => item && typeof item.key === 'string')) {
+					throw new Error('Invalid favorites response: keys and items must be arrays. Retry favorites; if this persists, update the server or inspect its response.')
+				}
+				return page
+			})
 		}
 		if (args.hydrate === true) {
 			args.signal?.throwIfAborted()

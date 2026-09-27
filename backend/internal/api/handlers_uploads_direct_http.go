@@ -73,7 +73,11 @@ func (svc uploadDirectHTTPService) prepareForm(profileID, uploadID string, us st
 	if err != nil {
 		return uploadDirectFormPreparedRequest{err: newUploadBadRequestError("expected multipart/form-data", map[string]any{"error": err.Error()})}
 	}
-	rawRelativePath := strings.TrimSpace(r.Header.Get("X-Upload-Relative-Path"))
+	rawRelativePath, pathErr := uploadRelativePathHeader(r.Header)
+	if pathErr != nil {
+		return uploadDirectFormPreparedRequest{err: pathErr}
+	}
+	rawRelativePath = strings.TrimSpace(rawRelativePath)
 	relativePath := sanitizeUploadPath(rawRelativePath)
 	if rawRelativePath != "" && relativePath == "" {
 		return uploadDirectFormPreparedRequest{err: newUploadBadRequestError("invalid upload path", map[string]any{"path": rawRelativePath})}

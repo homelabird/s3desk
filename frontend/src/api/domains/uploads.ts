@@ -26,6 +26,11 @@ import type {
 type RequestFn = <T>(path: string, init: RequestInit, options?: RequestOptions) => Promise<T>
 type XhrConfig = { baseUrl: string; apiToken: string }
 
+function setUploadPathHeaders(xhr: XMLHttpRequest, path: string) {
+	setSafeXHRHeader(xhr, 'X-Upload-Relative-Path', encodeURI(path))
+	setSafeXHRHeader(xhr, 'X-Upload-Relative-Path-Encoding', 'percent-encoded')
+}
+
 export function createUpload(
 	request: RequestFn,
 	profileId: string,
@@ -226,7 +231,7 @@ export function uploadFilesWithProgress(
 			setSafeXHRHeader(xhr, 'X-Profile-Id', profileId)
 			setSafeXHRHeader(xhr, 'X-Api-Token', config.apiToken)
 			if (args.forceMultipartForm) {
-				setSafeXHRHeader(xhr, 'X-Upload-Relative-Path', resolveUploadFilename(batch[0]))
+				setUploadPathHeaders(xhr, resolveUploadFilename(batch[0]))
 			}
 		} catch (err) {
 			return rejectedTransferHandle<UploadFilesResult>(err instanceof Error ? err : new Error('invalid request headers'))
@@ -405,7 +410,7 @@ function uploadFileChunksWithProgress(
 				setSafeXHRHeader(xhr, 'X-Upload-Chunk-Total', String(totalChunks))
 				setSafeXHRHeader(xhr, 'X-Upload-Chunk-Size', String(chunkSizeBytes))
 				setSafeXHRHeader(xhr, 'X-Upload-File-Size', String(file.size))
-				setSafeXHRHeader(xhr, 'X-Upload-Relative-Path', resolveUploadFilename(item))
+				setUploadPathHeaders(xhr, resolveUploadFilename(item))
 			} catch (err) {
 				reject(err instanceof Error ? err : new Error('invalid request headers'))
 				return

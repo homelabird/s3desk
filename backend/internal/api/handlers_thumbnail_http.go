@@ -175,8 +175,8 @@ func (svc objectThumbnailHTTPService) loadSourceImage(metric *storageMetric, r *
 			metric.SetStatus("remote_error")
 			return nil, fetchErr.err, fetchErr.stderr, buildObjectThumbnailFetchRcloneErrorContext(), map[string]any{"bucket": bucket, "key": key}, nil
 		}
-		metric.SetStatus("unsupported")
-		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectThumbnailHTTPError(http.StatusUnsupportedMediaType, "unsupported", "failed to decode thumbnail source", map[string]any{
+		metric.SetStatus("decode_failed")
+		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectThumbnailHTTPError(http.StatusUnsupportedMediaType, "thumbnail_decode_failed", "failed to decode thumbnail source", map[string]any{
 			"key":      key,
 			"kind":     kind,
 			"decoder":  "image.Decode",
@@ -194,7 +194,7 @@ func (svc objectThumbnailHTTPService) loadSourceImage(metric *storageMetric, r *
 			metric.SetStatus("remote_error")
 			return nil, fetchErr.err, fetchErr.stderr, buildObjectThumbnailFetchRcloneErrorContext(), map[string]any{"bucket": bucket, "key": key}, nil
 		}
-		metric.SetStatus("unsupported")
+		metric.SetStatus("decode_failed")
 		details := map[string]any{
 			"key":      key,
 			"kind":     kind,
@@ -209,7 +209,7 @@ func (svc objectThumbnailHTTPService) loadSourceImage(metric *storageMetric, r *
 			details["stream"] = last.Stream
 			details["streamBytes"] = last.StreamBytes
 		}
-		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectThumbnailHTTPError(http.StatusUnsupportedMediaType, "unsupported", "failed to extract video thumbnail frame", details)
+		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectThumbnailHTTPError(http.StatusUnsupportedMediaType, "thumbnail_decode_failed", "failed to extract video thumbnail frame", details)
 	default:
 		metric.SetStatus("unsupported")
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectThumbnailHTTPError(http.StatusUnsupportedMediaType, "unsupported", "unsupported thumbnail kind", map[string]any{"key": key})

@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -114,13 +116,33 @@ func parseUploadChunkHeaders(headers http.Header, chunkIndexRaw string, enforceM
 	return parseUploadChunkHeadersWithMinimumFileSize(headers, chunkIndexRaw, enforceMaxParts, 1)
 }
 
+func uploadRelativePathHeader(headers http.Header) (string, *uploadHTTPError) {
+	raw := headers.Get("X-Upload-Relative-Path")
+	switch headers.Get("X-Upload-Relative-Path-Encoding") {
+	case "": // Older clients send an unencoded path; never unescape literal percent signs.
+		return raw, nil
+	case "percent-encoded":
+		decoded, err := url.PathUnescape(raw)
+		if err != nil || !utf8.ValidString(decoded) {
+			return "", newUploadBadRequestError("invalid encoded upload path", nil)
+		}
+		return decoded, nil
+	default:
+		return "", newUploadBadRequestError("unsupported upload path encoding", nil)
+	}
+}
+
 func parseStagingUploadChunkHeaders(headers http.Header, chunkIndexRaw string, enforceMaxParts bool) (uploadChunkHeaderValues, *uploadHTTPError) {
 	return parseUploadChunkHeadersWithMinimumFileSize(headers, chunkIndexRaw, enforceMaxParts, 0)
 }
 
 func parseUploadChunkHeadersWithMinimumFileSize(headers http.Header, chunkIndexRaw string, enforceMaxParts bool, minimumFileSize int64) (uploadChunkHeaderValues, *uploadHTTPError) {
 	chunkTotalRaw := strings.TrimSpace(headers.Get("X-Upload-Chunk-Total"))
-	relPath := sanitizeUploadPath(headers.Get("X-Upload-Relative-Path"))
+	rawPath, pathErr := uploadRelativePathHeader(headers)
+	if pathErr != nil {
+		return uploadChunkHeaderValues{}, pathErr
+	}
+	relPath := sanitizeUploadPath(rawPath)
 	if chunkTotalRaw == "" || relPath == "" {
 		return uploadChunkHeaderValues{}, &uploadHTTPError{
 			status:  http.StatusBadRequest,
