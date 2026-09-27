@@ -60,8 +60,8 @@ export function AWSObjectOwnershipControlBody({
   setObjectOwnership,
   warnings,
 }: {
-  objectOwnership: BucketObjectOwnershipMode;
-  setObjectOwnership: (mode: BucketObjectOwnershipMode) => void;
+  objectOwnership: BucketObjectOwnershipMode | "";
+  setObjectOwnership: (mode: BucketObjectOwnershipMode | "") => void;
   warnings: ReactNode;
 }) {
   return (
@@ -73,6 +73,7 @@ export function AWSObjectOwnershipControlBody({
         <NativeSelect
           id="bucket-governance-object-ownership"
           value={objectOwnership}
+          placeholder="Not configured — select a mode"
           onChange={(value) =>
             setObjectOwnership(value as BucketObjectOwnershipMode)
           }

@@ -275,8 +275,8 @@ test('Azure governance access uses the structured stored access policy editor', 
 		.getByTestId('bucket-governance-azure-stored-access-policy-card')
 		.first()
 	await policyCard.getByRole('textbox', { name: 'Identifier' }).fill('shared-upload')
-	await policyCard.getByRole('textbox', { name: 'Start (RFC3339)' }).fill('2026-03-10T00:00:00Z')
-	await policyCard.getByRole('textbox', { name: 'Expiry (RFC3339)' }).fill('2026-03-20T00:00:00Z')
+	await policyCard.getByRole('textbox', { name: 'Start (ISO 8601)' }).fill('2026-03-10')
+	await policyCard.getByRole('textbox', { name: 'Expiry (ISO 8601)' }).fill('2026-03-20T00:00Z')
 	await policyCard.getByLabel('Read').check()
 	await policyCard.getByLabel('Write').check()
 	await accessSection.getByRole('button', { name: 'Save' }).click()
@@ -286,8 +286,8 @@ test('Azure governance access uses the structured stored access policy editor', 
 		storedAccessPolicies: [
 			{
 				id: 'shared-upload',
-				start: '2026-03-10T00:00:00Z',
-				expiry: '2026-03-20T00:00:00Z',
+				start: '2026-03-10',
+				expiry: '2026-03-20T00:00Z',
 				permission: 'rw',
 			},
 		],
@@ -367,7 +367,7 @@ for (const width of [1280, 390]) {
 }
 
 
-test('provider validation only describes the current policy draft', async ({ page }) => {
+test('static validation only describes the current policy draft', async ({ page }) => {
 	let finishFirst!: () => void
 	const pending = new Promise<void>((resolve) => { finishFirst = resolve })
 	const requests: unknown[] = []
@@ -384,17 +384,18 @@ test('provider validation only describes the current policy draft', async ({ pag
 	await gotoBucketsPage(page, { ready: (scope) => scope.getByText(bucket) })
 	await clickBucketCardManageAction(page, page.locator('body'), bucket, /Policy editor/)
 	const editor = page.getByRole('textbox', { name: 'Raw policy JSON' })
-	const validate = page.getByRole('button', { name: 'Validate with provider' })
+	const validate = page.getByRole('button', { name: 'Run static checks' })
 	await validate.click()
 	await expect.poll(() => requests.length).toBe(1)
 	const draft = { Version: '2012-10-17', Statement: [], Id: 'changed-draft' }
 	await editor.fill(JSON.stringify(draft))
 	finishFirst()
 	await expect(validate).toBeEnabled()
-	await expect(page.getByText('Server validation OK', { exact: true })).toHaveCount(0)
+	await expect(page.getByText('Static checks passed', { exact: true })).toHaveCount(0)
 	await expect(editor).toHaveValue(JSON.stringify(draft))
 	await validate.click()
-	await expect(page.getByText('Server validation OK', { exact: true })).toBeVisible()
+	await expect(page.getByText('Static checks passed', { exact: true })).toBeVisible()
+	await expect(page.getByText('Static checks only. Provider acceptance and access effects remain unverified.', { exact: true })).toBeVisible()
 	expect(requests).toEqual([{ policy: {} }, { policy: draft }])
 })
 

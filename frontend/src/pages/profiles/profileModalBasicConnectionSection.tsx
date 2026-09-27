@@ -233,7 +233,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 									</FormField>
 								</div>
 								<Typography.Text type="secondary" className={styles.sectionNote}>
-									<Typography.Text strong>Azure ARM fields are optional.</Typography.Text> Fill them together only for ARM features like immutability edits.
+									<Typography.Text strong>Azure ARM fields are optional.</Typography.Text> Fill them together for versioning, immutability edits, or legal hold edits.
 								</Typography.Text>
 							</>
 						),

@@ -18,6 +18,7 @@ Current implementation highlights:
 - GCS: typed public exposure, uniform access, versioning, retention, and structured IAM bindings
 - Azure Blob: typed anonymous access, stored access policies, versioning, soft delete, ARM-backed immutability editing, and legal-hold tag editing
 - OCI Object Storage: typed visibility, versioning, multi-rule retention, and PAR create/delete flows
+  - Versioning updates accept enabled or suspended; disabled is a read-only initial state. Once enabled, OCI versioning cannot be disabled.
 
 Provider-by-provider operator limits and support notes stay in
 [PROVIDERS.md](PROVIDERS.md).
@@ -103,3 +104,31 @@ The main open work is now narrower than the original rollout:
 - S3-compatible capability detection should be reviewed again after more live validation
 
 For release readiness and evidence policy, see [RELEASE_GATE.md](RELEASE_GATE.md).
+
+## Policy change audit events
+
+Raw policy and typed governance PUT/DELETE requests emit `bucket.policy.change`
+start/response events after token and profile authorization, using the existing
+structured application logger. Configure log collection and retention for your deployment.
+The shared API credential fingerprint identifies a credential, not an individual person.
+Request/response bodies, query strings, credentials, and signed sharing URLs are excluded.
+
+`audit_schema_version` describes the event format. `validation_rules_version`
+identifies S3Desk's local policy checks; `app_version` identifies the application build
+version. Bump `policyValidationRulesVersion` in `backend/internal/api/policy_audit.go`
+when changing raw policy, typed governance, or their shared provider validators.
+This rules version does not claim live provider validation.
+
+`accepted_unverified` means a successful HTTP response, not independently confirmed
+provider state. `unconfirmed`, or a start event without a response, requires state
+inspection before retrying. Versioning changes additionally emit `bucket.policy.versioning.observation` with
+before/requested/after statuses. `observed_match` confirms that a follow-up read matched
+the requested status at that moment, not long-term enforcement or causality. A failed
+initial read blocks the write; failed or mismatched readback returns an unconfirmed error.
+Other sections still lack before/after observations, so audit coverage remains incomplete.
+
+AWS encryption writes read the current rule and preserve `BlockedEncryptionTypes` on both SSE-S3 and SSE-KMS updates. SSE-KMS also preserves the explicit `BucketKeyEnabled` value. A failed or unrepresentable read blocks the update. This read/modify/write sequence does not provide a conditional-write guarantee against concurrent external updates.
+
+The current KMS editor represents both SSE-KMS and DSSE-KMS in its KMS mode. For an existing DSSE-KMS bucket, saving in that mode preserves DSSE-KMS while applying the requested key. Selecting SSE-S3 explicitly changes the algorithm. Creating DSSE-KMS or switching DSSE-KMS to standard SSE-KMS is not exposed by this editor.
+
+AWS lifecycle rule updates first read and preserve the existing `TransitionDefaultMinimumObjectSize` setting. An explicit no-configuration response permits creation; read failures block replacement. This prerequisite read does not eliminate concurrent external update races.

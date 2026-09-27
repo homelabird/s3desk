@@ -2,7 +2,10 @@ package bucketgov
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -20,14 +23,20 @@ func (a *awsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecret
 	})
 	if err != nil {
 		if isAWSAPICode(err, "OwnershipControlsNotFoundError") {
-			return newAWSAccessView(bucket, models.BucketObjectOwnershipBucketOwnerEnforced), nil
+			view := newAWSAccessView(bucket, "")
+			view.ObjectOwnership = nil
+			view.Warnings = append(view.Warnings, "Object Ownership controls are not configured; BucketOwnerEnforced has not been verified.")
+			return view, nil
 		}
 		return models.BucketAccessView{}, mapAWSAccessError(err, bucket, "get")
 	}
 
-	mode := models.BucketObjectOwnershipBucketOwnerEnforced
-	if out != nil && out.OwnershipControls != nil && len(out.OwnershipControls.Rules) > 0 {
-		mode = fromS3ObjectOwnership(out.OwnershipControls.Rules[0].ObjectOwnership)
+	if out == nil || out.OwnershipControls == nil || len(out.OwnershipControls.Rules) != 1 {
+		return models.BucketAccessView{}, UpstreamOperationError("bucket_access_error", "invalid Object Ownership response", bucket, errors.New("expected one ownership rule"))
+	}
+	mode := fromS3ObjectOwnership(out.OwnershipControls.Rules[0].ObjectOwnership)
+	if mode == "" {
+		return models.BucketAccessView{}, UpstreamOperationError("bucket_access_error", "invalid Object Ownership response", bucket, errors.New("unknown ownership mode"))
 	}
 	return newAWSAccessView(bucket, mode), nil
 }
@@ -45,8 +54,14 @@ func (a *awsAdapter) PutAccess(ctx context.Context, profile models.ProfileSecret
 			},
 		},
 	})
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, readErr := a.GetAccess(readCtx, profile, bucket)
 	if err != nil {
 		return mapAWSAccessError(err, bucket, "put")
+	}
+	if readErr != nil || observed.ObjectOwnership == nil || observed.ObjectOwnership.Mode != *req.ObjectOwnership {
+		return &OperationError{Status: http.StatusBadGateway, Code: "bucket_access_unconfirmed", Message: "Object Ownership update was accepted but current state did not confirm the request; reload before retrying", Details: map[string]any{"bucket": bucket}}
 	}
 	return nil
 }
@@ -72,8 +87,10 @@ func fromS3ObjectOwnership(value s3types.ObjectOwnership) models.BucketObjectOwn
 		return models.BucketObjectOwnershipBucketOwnerPreferred
 	case s3types.ObjectOwnershipObjectWriter:
 		return models.BucketObjectOwnershipObjectWriter
-	default:
+	case s3types.ObjectOwnershipBucketOwnerEnforced:
 		return models.BucketObjectOwnershipBucketOwnerEnforced
+	default:
+		return ""
 	}
 }
 

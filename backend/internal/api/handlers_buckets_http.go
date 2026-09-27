@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"s3desk/internal/azurearmimmutability"
 	"s3desk/internal/bucketgov"
 	"s3desk/internal/bucketops"
 	"s3desk/internal/models"
@@ -139,6 +140,12 @@ func (svc bucketHTTPService) prepareCreateBucket(metric *storageMetric, r *http.
 		if err := bucketgov.ValidateCreateDefaults(secrets.Provider, req.Defaults); err != nil {
 			metric.SetStatus("invalid_request")
 			return models.ProfileSecrets{}, models.BucketCreateRequest{}, buildCreateBucketDefaultsValidationError(err)
+		}
+		if secrets.Provider == models.ProfileProviderAzureBlob && req.Defaults.Versioning != nil && !azurearmimmutability.HasConfig(secrets) {
+			metric.SetStatus("invalid_request")
+			return models.ProfileSecrets{}, models.BucketCreateRequest{}, buildCreateBucketDefaultsValidationError(
+				bucketgov.InvalidFieldError("defaults.versioning", "Azure versioning requires ARM profile configuration", nil),
+			)
 		}
 	}
 

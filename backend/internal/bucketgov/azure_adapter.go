@@ -16,6 +16,8 @@ import (
 )
 
 type azureAdapter struct {
+	getARMServiceProperties  func(context.Context, models.ProfileSecrets) (azurearmimmutability.Response, error)
+	putARMVersioning         func(context.Context, models.ProfileSecrets, bool) (azurearmimmutability.Response, error)
 	getPolicy                func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error)
 	putPolicy                func(context.Context, models.ProfileSecrets, string, []byte) (azureacl.Response, error)
 	getServiceProperties     func(context.Context, models.ProfileSecrets) (azureacl.Response, error)
@@ -58,7 +60,10 @@ func NewAzureAdapter() Adapter {
 }
 
 func NewAzureAdapterWithOptions(opts AzureAdapterOptions) Adapter {
+	armClient := azurearmimmutability.NewClientWithOptions(azurearmimmutability.ClientOptions{AllowRemote: opts.AllowRemote})
 	return &azureAdapter{
+		getARMServiceProperties: armClient.GetBlobServiceProperties,
+		putARMVersioning:        armClient.PutBlobVersioning,
 		getPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string) (azureacl.Response, error) {
 			return azureacl.GetContainerPolicyWithOptions(ctx, profile, container, azureacl.ClientOptions{AllowRemote: opts.AllowRemote})
 		},
@@ -140,6 +145,10 @@ func (a *azureAdapter) GetGovernance(ctx context.Context, profile models.Profile
 	}
 	view.Protection = &protection
 
+	if !azurearmimmutability.HasConfig(profile) {
+		SetCapability(&view, models.BucketGovernanceCapabilityVersioning, false, "Azure versioning requires ARM profile configuration")
+		return view, nil
+	}
 	versioning, err := requestAdapter.GetVersioning(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketGovernanceView{}, err
@@ -188,7 +197,7 @@ func (a *azureAdapter) PutAccess(ctx context.Context, profile models.ProfileSecr
 			Permission: strings.TrimSpace(item.Permission),
 		})
 	}
-	return a.putContainerPolicy(ctx, profile, bucket, current, "put bucket access controls", "bucket_access_error")
+	return a.putContainerPolicy(ctx, profile, bucket, current, "put bucket access controls", "bucket_access_error", "bucket_access_unconfirmed")
 }
 
 func (a *azureAdapter) GetPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketPublicExposureView, error) {
@@ -218,7 +227,34 @@ func (a *azureAdapter) PutPublicExposure(ctx context.Context, profile models.Pro
 		return err
 	}
 	current.PublicAccess = string(visibility)
-	return a.putContainerPolicy(ctx, profile, bucket, current, "put bucket public exposure", "bucket_public_exposure_error")
+	return a.putContainerPolicy(ctx, profile, bucket, current, "put bucket public exposure", "bucket_public_exposure_error", "bucket_public_exposure_unconfirmed")
+}
+
+func azureStoredAccessPoliciesMatch(expected, observed []azureacl.StoredAccessPolicy) bool {
+	if len(expected) != len(observed) {
+		return false
+	}
+	counts := make(map[azureacl.StoredAccessPolicy]int, len(expected))
+	for _, policy := range expected {
+		counts[normalizeAzurePolicyTimes(policy)]++
+	}
+	for _, policy := range observed {
+		policy = normalizeAzurePolicyTimes(policy)
+		if counts[policy] == 0 {
+			return false
+		}
+		counts[policy]--
+	}
+	return true
+}
+
+func normalizeAzurePolicyTimes(policy azureacl.StoredAccessPolicy) azureacl.StoredAccessPolicy {
+	for _, value := range []*string{&policy.Start, &policy.Expiry} {
+		if parsed, err := azureacl.ParseStoredPolicyTime(*value); err == nil {
+			*value = parsed.UTC().Format(time.RFC3339Nano)
+		}
+	}
+	return policy
 }
 
 func (a *azureAdapter) GetProtection(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketProtectionView, error) {
@@ -245,7 +281,7 @@ func (a *azureAdapter) GetProtection(ctx context.Context, profile models.Profile
 		}
 	}
 	view.Immutability = &models.BucketImmutabilityView{
-		Enabled:           false,
+		Enabled:           containerProps.HasImmutabilityPolicy,
 		Editable:          azurearmimmutability.HasConfig(profile),
 		LegalHold:         containerProps.HasLegalHold,
 		LegalHoldEditable: azurearmimmutability.HasConfig(profile),
@@ -261,7 +297,8 @@ func (a *azureAdapter) GetProtection(ctx context.Context, profile models.Profile
 		}
 		policy, err := a.getAzureImmutabilityPolicy(ctx, profile, bucket, "get Azure container immutability policy", "bucket_protection_error")
 		if err != nil {
-			view.Warnings = append(view.Warnings, "Azure immutability policy lookup through ARM failed. Soft delete and versioning remain available, but immutability details may be stale.")
+			view.Immutability.Editable = false
+			view.Warnings = append(view.Warnings, "Azure immutability policy lookup through ARM failed. Immutability editing is disabled until its current policy can be read safely.")
 		} else if policy != nil {
 			applyAzureImmutabilityPolicy(view.Immutability, *policy)
 		}
@@ -375,9 +412,23 @@ func (a *azureAdapter) rollbackAzureServiceProperties(ctx context.Context, profi
 }
 
 func (a *azureAdapter) GetVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketVersioningView, error) {
-	props, err := a.getBlobServiceProperties(ctx, profile, bucket, "get Azure Blob service properties", "bucket_versioning_error")
+	if !azurearmimmutability.HasConfig(profile) || a.getARMServiceProperties == nil {
+		return models.BucketVersioningView{}, InvalidFieldError("versioning", "Azure versioning requires ARM profile configuration", nil)
+	}
+	resp, err := a.getARMServiceProperties(ctx, profile)
 	if err != nil {
-		return models.BucketVersioningView{}, err
+		return models.BucketVersioningView{}, UpstreamOperationError("bucket_versioning_error", "failed to read Azure ARM versioning", bucket, err)
+	}
+	var resource struct {
+		Properties struct {
+			Enabled *bool `json:"isVersioningEnabled"`
+		} `json:"properties"`
+	}
+	if resp.Status != http.StatusOK {
+		return models.BucketVersioningView{}, UpstreamOperationError("bucket_versioning_error", "failed to read Azure ARM versioning", bucket, fmt.Errorf("azure ARM returned status %d", resp.Status))
+	}
+	if err := json.Unmarshal(resp.Body, &resource); err != nil || resource.Properties.Enabled == nil {
+		return models.BucketVersioningView{}, UpstreamOperationError("bucket_versioning_error", "invalid Azure ARM versioning response", bucket, fmt.Errorf("missing or invalid isVersioningEnabled"))
 	}
 	view := models.BucketVersioningView{
 		Provider: models.ProfileProviderAzureBlob,
@@ -387,19 +438,32 @@ func (a *azureAdapter) GetVersioning(ctx context.Context, profile models.Profile
 			"Azure Blob versioning is configured at the storage account level and affects all containers in this account.",
 		},
 	}
-	if props.IsVersioningEnabled {
+	if *resource.Properties.Enabled {
 		view.Status = models.BucketVersioningStatusEnabled
 	}
 	return view, nil
 }
 
 func (a *azureAdapter) PutVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
-	props, err := a.getBlobServiceProperties(ctx, profile, bucket, "read current Azure Blob service properties", "bucket_versioning_error")
-	if err != nil {
-		return err
+	if !azurearmimmutability.HasConfig(profile) || a.putARMVersioning == nil {
+		return InvalidFieldError("versioning", "Azure versioning requires ARM profile configuration", nil)
 	}
-	props.IsVersioningEnabled = req.Status == models.BucketVersioningStatusEnabled
-	return a.putBlobServiceProperties(ctx, profile, bucket, props, "put Azure Blob service properties", "bucket_versioning_error")
+	resp, err := a.putARMVersioning(ctx, profile, req.Status == models.BucketVersioningStatusEnabled)
+	if err != nil {
+		return UpstreamOperationError("bucket_versioning_error", "failed to update Azure ARM versioning", bucket, err)
+	}
+	if resp.Status != http.StatusOK {
+		return UpstreamOperationError("bucket_versioning_error", "failed to update Azure ARM versioning", bucket, fmt.Errorf("azure ARM returned status %d", resp.Status))
+	}
+	var resource struct {
+		Properties struct {
+			Enabled *bool `json:"isVersioningEnabled"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(resp.Body, &resource); err != nil || resource.Properties.Enabled == nil || *resource.Properties.Enabled != (req.Status == models.BucketVersioningStatusEnabled) {
+		return UpstreamOperationError("bucket_versioning_error", "Azure ARM response did not confirm requested versioning; reload current settings before retrying", bucket, fmt.Errorf("missing, invalid, or mismatched isVersioningEnabled"))
+	}
+	return nil
 }
 
 func (a *azureAdapter) GetEncryption(context.Context, models.ProfileSecrets, string) (models.BucketEncryptionView, error) {
@@ -427,18 +491,30 @@ func (a *azureAdapter) PutSharing(context.Context, models.ProfileSecrets, string
 }
 
 func (a *azureAdapter) getContainerPolicy(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (azureacl.Policy, error) {
+	if a.getPolicy == nil {
+		return azureacl.Policy{}, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure container policy client is not configured"))
+	}
 	resp, err := a.getPolicy(ctx, profile, strings.TrimSpace(bucket))
 	if err != nil {
 		return azureacl.Policy{}, UpstreamOperationError(code, "failed to "+operation, bucket, err)
 	}
 	switch resp.Status {
 	case http.StatusOK:
-		var policy azureacl.Policy
+		var policy *azureacl.Policy
 		if err := json.Unmarshal(resp.Body, &policy); err != nil {
 			return azureacl.Policy{}, UpstreamOperationError(code, "failed to decode Azure container policy", bucket, err)
 		}
+		if policy == nil {
+			return azureacl.Policy{}, UpstreamOperationError(code, "failed to decode Azure container policy", bucket, fmt.Errorf("expected a policy object, received null"))
+		}
+		if policy.StoredAccessPolicies == nil {
+			return azureacl.Policy{}, UpstreamOperationError(code, "failed to decode Azure container policy", bucket, fmt.Errorf("missing or null stored access policies"))
+		}
 		policy.PublicAccess = string(normalizeAzurePublicAccess(policy.PublicAccess))
-		return policy, nil
+		if policy.PublicAccess == "" {
+			return azureacl.Policy{}, UpstreamOperationError(code, "failed to decode Azure container policy", bucket, fmt.Errorf("missing or unknown public access level"))
+		}
+		return *policy, nil
 	case http.StatusNotFound:
 		return azureacl.Policy{}, BucketNotFoundError(bucket)
 	default:
@@ -446,23 +522,33 @@ func (a *azureAdapter) getContainerPolicy(ctx context.Context, profile models.Pr
 	}
 }
 
-func (a *azureAdapter) putContainerPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string, policy azureacl.Policy, operation, code string) error {
+func (a *azureAdapter) putContainerPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string, policy azureacl.Policy, operation, code, unconfirmedCode string) error {
 	body, err := json.Marshal(policy)
 	if err != nil {
 		return UpstreamOperationError(code, "failed to encode Azure container policy", bucket, err)
 	}
-	resp, err := a.putPolicy(ctx, profile, strings.TrimSpace(bucket), body)
-	if err != nil {
-		return UpstreamOperationError(code, "failed to "+operation, bucket, err)
+	resp, writeErr := a.putPolicy(ctx, profile, strings.TrimSpace(bucket), body)
+	if writeErr != nil {
+		writeErr = UpstreamOperationError(code, "failed to "+operation, bucket, writeErr)
+	} else {
+		switch resp.Status {
+		case http.StatusOK, http.StatusNoContent:
+		case http.StatusNotFound:
+			writeErr = BucketNotFoundError(bucket)
+		default:
+			writeErr = UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
+		}
 	}
-	switch resp.Status {
-	case http.StatusOK, http.StatusNoContent:
-		return nil
-	case http.StatusNotFound:
-		return BucketNotFoundError(bucket)
-	default:
-		return UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, readErr := a.getContainerPolicy(readCtx, profile, bucket, "confirm Azure container access policy", code)
+	if writeErr != nil {
+		return writeErr
 	}
+	if readErr != nil || observed.PublicAccess != policy.PublicAccess || !azureStoredAccessPoliciesMatch(policy.StoredAccessPolicies, observed.StoredAccessPolicies) {
+		return UpstreamOperationError(unconfirmedCode, "Azure access policy update was accepted but current state did not confirm the request; reload before retrying", bucket, fmt.Errorf("access policy readback failed or differed"))
+	}
+	return nil
 }
 
 func (a *azureAdapter) getBlobServiceProperties(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (azureacl.ServiceProperties, error) {
@@ -475,11 +561,14 @@ func (a *azureAdapter) getBlobServiceProperties(ctx context.Context, profile mod
 	}
 	switch resp.Status {
 	case http.StatusOK:
-		var props azureacl.ServiceProperties
+		var props *azureacl.ServiceProperties
 		if err := json.Unmarshal(resp.Body, &props); err != nil {
 			return azureacl.ServiceProperties{}, UpstreamOperationError(code, "failed to decode Azure Blob service properties", bucket, err)
 		}
-		return props, nil
+		if props == nil {
+			return azureacl.ServiceProperties{}, UpstreamOperationError(code, "failed to decode Azure Blob service properties", bucket, fmt.Errorf("expected a service properties object, received null"))
+		}
+		return *props, nil
 	default:
 		return azureacl.ServiceProperties{}, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
 	}
@@ -507,7 +596,7 @@ func (a *azureAdapter) putBlobServiceProperties(ctx context.Context, profile mod
 
 func (a *azureAdapter) getAzureContainerProperties(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (azureacl.ContainerProperties, error) {
 	if a.getContainerProperties == nil {
-		return azureacl.ContainerProperties{}, nil
+		return azureacl.ContainerProperties{}, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure container properties client is not configured"))
 	}
 	resp, err := a.getContainerProperties(ctx, profile, strings.TrimSpace(bucket))
 	if err != nil {
@@ -515,11 +604,14 @@ func (a *azureAdapter) getAzureContainerProperties(ctx context.Context, profile 
 	}
 	switch resp.Status {
 	case http.StatusOK:
-		var props azureacl.ContainerProperties
+		var props *azureacl.ContainerProperties
 		if err := json.Unmarshal(resp.Body, &props); err != nil {
 			return azureacl.ContainerProperties{}, UpstreamOperationError(code, "failed to decode Azure container properties", bucket, err)
 		}
-		return props, nil
+		if props == nil {
+			return azureacl.ContainerProperties{}, UpstreamOperationError(code, "failed to decode Azure container properties", bucket, fmt.Errorf("expected container properties object, received null"))
+		}
+		return *props, nil
 	case http.StatusNotFound:
 		return azureacl.ContainerProperties{}, BucketNotFoundError(bucket)
 	default:
@@ -533,8 +625,10 @@ func normalizeAzurePublicAccess(value string) models.BucketPublicExposureMode {
 		return models.BucketPublicExposureModeBlob
 	case "container":
 		return models.BucketPublicExposureModeContainer
-	default:
+	case "private":
 		return models.BucketPublicExposureModePrivate
+	default:
+		return ""
 	}
 }
 
@@ -561,7 +655,7 @@ func azureVisibilityFromRequest(req models.BucketPublicExposurePutRequest) (mode
 
 func (a *azureAdapter) getAzureImmutabilityPolicy(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (*azurearmimmutability.Policy, error) {
 	if a.getImmutabilityPolicy == nil {
-		return nil, nil
+		return nil, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure immutability client is not configured"))
 	}
 	resp, err := a.getImmutabilityPolicy(ctx, profile, strings.TrimSpace(bucket))
 	if err != nil {
@@ -569,14 +663,17 @@ func (a *azureAdapter) getAzureImmutabilityPolicy(ctx context.Context, profile m
 	}
 	switch resp.Status {
 	case http.StatusOK:
-		var policy azurearmimmutability.Policy
+		var policy *azurearmimmutability.Policy
 		if err := json.Unmarshal(resp.Body, &policy); err != nil {
 			return nil, UpstreamOperationError(code, "failed to decode Azure immutability policy", bucket, err)
+		}
+		if policy == nil {
+			return nil, UpstreamOperationError(code, "failed to decode Azure immutability policy", bucket, fmt.Errorf("expected an immutability policy object, received null"))
 		}
 		if strings.TrimSpace(policy.ETag) == "" {
 			policy.ETag = strings.TrimSpace(resp.Headers.Get("Etag"))
 		}
-		return &policy, nil
+		return policy, nil
 	case http.StatusNotFound:
 		return nil, nil
 	default:
@@ -586,7 +683,7 @@ func (a *azureAdapter) getAzureImmutabilityPolicy(ctx context.Context, profile m
 
 func (a *azureAdapter) getAzureLegalHold(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (*azureLegalHold, error) {
 	if a.getContainer == nil {
-		return nil, nil
+		return nil, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure legal hold client is not configured"))
 	}
 	resp, err := a.getContainer(ctx, profile, strings.TrimSpace(bucket))
 	if err != nil {
@@ -594,9 +691,12 @@ func (a *azureAdapter) getAzureLegalHold(ctx context.Context, profile models.Pro
 	}
 	switch resp.Status {
 	case http.StatusOK:
-		var resource azureLegalHoldResource
+		var resource *azureLegalHoldResource
 		if err := json.Unmarshal(resp.Body, &resource); err != nil {
 			return nil, UpstreamOperationError(code, "failed to decode Azure container legal hold", bucket, err)
+		}
+		if resource == nil {
+			return nil, UpstreamOperationError(code, "failed to decode Azure container legal hold", bucket, fmt.Errorf("expected a container resource object, received null"))
 		}
 		tags := make([]string, 0, len(resource.Properties.LegalHold.Tags))
 		for _, item := range resource.Properties.LegalHold.Tags {
@@ -888,14 +988,17 @@ func (a *azureAdapter) putAzureImmutability(ctx context.Context, profile models.
 	}
 	switch resp.Status {
 	case http.StatusOK, http.StatusCreated:
-		var policy azurearmimmutability.Policy
+		var policy *azurearmimmutability.Policy
 		if err := json.Unmarshal(resp.Body, &policy); err != nil {
 			return nil, UpstreamOperationError(code, "failed to decode Azure immutability policy", bucket, err)
+		}
+		if policy == nil {
+			return nil, UpstreamOperationError(code, "failed to decode Azure immutability policy", bucket, fmt.Errorf("expected an immutability policy object, received null"))
 		}
 		if strings.TrimSpace(policy.ETag) == "" {
 			policy.ETag = strings.TrimSpace(resp.Headers.Get("Etag"))
 		}
-		return &policy, nil
+		return policy, nil
 	default:
 		return nil, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure arm returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
 	}

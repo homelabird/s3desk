@@ -7,10 +7,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"s3desk/internal/azureutil"
 	"s3desk/internal/models"
@@ -60,26 +62,45 @@ func GetContainerPolicyWithOptions(ctx context.Context, profile models.ProfileSe
 
 	pol := Policy{PublicAccess: "private", StoredAccessPolicies: []StoredAccessPolicy{}}
 	if v := strings.TrimSpace(resp.Headers.Get("x-ms-blob-public-access")); v != "" {
+		if v != "blob" && v != "container" {
+			return Response{}, errors.New("invalid Azure container ACL response: unknown public access level")
+		}
 		pol.PublicAccess = v
 	}
 
 	if len(resp.Body) > 0 {
 		var env signedIdentifiersEnvelope
-		if err := xml.Unmarshal(resp.Body, &env); err == nil {
-			for _, si := range env.SignedIdentifiers {
-				p := StoredAccessPolicy{ID: strings.TrimSpace(si.ID)}
-				p.Start = strings.TrimSpace(si.AccessPolicy.Start)
-				p.Expiry = strings.TrimSpace(si.AccessPolicy.Expiry)
-				p.Permission = strings.TrimSpace(si.AccessPolicy.Permission)
-				if p.ID != "" {
-					pol.StoredAccessPolicies = append(pol.StoredAccessPolicies, p)
-				}
+		if err := xml.Unmarshal(resp.Body, &env); err != nil {
+			return Response{}, errors.New("invalid Azure container ACL response")
+		}
+		for _, si := range env.SignedIdentifiers {
+			p := StoredAccessPolicy{ID: strings.TrimSpace(si.ID)}
+			p.Start = strings.TrimSpace(si.AccessPolicy.Start)
+			p.Expiry = strings.TrimSpace(si.AccessPolicy.Expiry)
+			p.Permission = strings.TrimSpace(si.AccessPolicy.Permission)
+			if p.ID == "" {
+				return Response{}, errors.New("invalid Azure container ACL response: missing policy identifier")
 			}
+			pol.StoredAccessPolicies = append(pol.StoredAccessPolicies, p)
 		}
 	}
 
 	b, _ := json.Marshal(pol)
 	return Response{Status: resp.Status, Headers: resp.Headers, Body: b}, nil
+}
+
+// ValidateStoredPolicyPermission checks Blob service permissions supported by our
+// 2020-10-02 request version. Empty permissions can be supplied by the SAS itself.
+// https://learn.microsoft.com/en-us/rest/api/storageservices/create-service-sas
+func ValidateStoredPolicyPermission(permission string) error {
+	seen := make(map[rune]bool)
+	for _, ch := range strings.TrimSpace(permission) {
+		if !strings.ContainsRune("racwdxyltfmeopi", ch) || seen[ch] {
+			return errors.New("stored access policy permission must use distinct lowercase Blob permission letters: r,a,c,w,d,x,y,l,t,f,m,e,o,p,i")
+		}
+		seen[ch] = true
+	}
+	return nil
 }
 
 // PutContainerPolicy sets public access + stored access policies for a container.
@@ -90,8 +111,13 @@ func PutContainerPolicy(ctx context.Context, profile models.ProfileSecrets, cont
 
 func PutContainerPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, policyJSON []byte, opts ClientOptions) (Response, error) {
 	var pol Policy
-	if err := json.Unmarshal(policyJSON, &pol); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(policyJSON))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&pol); err != nil {
 		return Response{}, fmt.Errorf("invalid azure policy json: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return Response{}, errors.New("invalid azure policy json: expected one document")
 	}
 	pa := strings.ToLower(strings.TrimSpace(pol.PublicAccess))
 	if pa == "" {
@@ -101,12 +127,30 @@ func PutContainerPolicyWithOptions(ctx context.Context, profile models.ProfileSe
 		return Response{}, errors.New("publicAccess must be one of: private, blob, container")
 	}
 
+	if len(pol.StoredAccessPolicies) > 5 {
+		return Response{}, errors.New("Azure allows a maximum of 5 stored access policies")
+	}
+	seenIDs := make(map[string]bool)
 	// Build XML body for signed identifiers.
 	env := signedIdentifiersEnvelope{SignedIdentifiers: []signedIdentifier{}}
 	for _, p := range pol.StoredAccessPolicies {
 		id := strings.TrimSpace(p.ID)
-		if id == "" {
-			continue
+		if id == "" || utf8.RuneCountInString(id) > 64 {
+			return Response{}, errors.New("stored access policy id must contain 1 to 64 characters")
+		}
+		if seenIDs[id] {
+			return Response{}, errors.New("stored access policy ids must be unique")
+		}
+		seenIDs[id] = true
+		if err := ValidateStoredPolicyPermission(p.Permission); err != nil {
+			return Response{}, err
+		}
+		for _, value := range []string{p.Start, p.Expiry} {
+			if strings.TrimSpace(value) != "" {
+				if err := ValidateStoredPolicyTime(value); err != nil {
+					return Response{}, err
+				}
+			}
 		}
 		env.SignedIdentifiers = append(env.SignedIdentifiers, signedIdentifier{
 			ID: id,
@@ -231,4 +275,20 @@ type accessPolicy struct {
 	Start      string `xml:"Start"`
 	Expiry     string `xml:"Expiry"`
 	Permission string `xml:"Permission"`
+}
+
+// ValidateStoredPolicyTime accepts the date and timestamp forms documented for Set Container ACL.
+func ValidateStoredPolicyTime(value string) error {
+	_, err := ParseStoredPolicyTime(value)
+	return err
+}
+
+// ParseStoredPolicyTime parses the date and timestamp forms accepted by Set Container ACL.
+func ParseStoredPolicyTime(value string) (time.Time, error) {
+	for _, layout := range []string{time.DateOnly, "2006-01-02T15:04Z07:00", time.RFC3339Nano} {
+		if parsed, err := time.Parse(layout, strings.TrimSpace(value)); err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("stored access policy time must be an ISO 8601 date or timestamp with timezone")
 }

@@ -14,7 +14,6 @@ import (
 )
 
 type ServiceProperties struct {
-	IsVersioningEnabled   bool                   `json:"isVersioningEnabled"`
 	DeleteRetentionPolicy *DeleteRetentionPolicy `json:"deleteRetentionPolicy,omitempty"`
 }
 
@@ -31,7 +30,6 @@ type ContainerProperties struct {
 type storageServicePropertiesEnvelope struct {
 	XMLName               xml.Name                         `xml:"StorageServiceProperties"`
 	DeleteRetentionPolicy *storageDeleteRetentionPolicyXML `xml:"DeleteRetentionPolicy,omitempty"`
-	IsVersioningEnabled   bool                             `xml:"IsVersioningEnabled,omitempty"`
 }
 
 type storageDeleteRetentionPolicyXML struct {
@@ -57,9 +55,7 @@ func GetBlobServicePropertiesWithOptions(ctx context.Context, profile models.Pro
 		return Response{}, err
 	}
 
-	payload := ServiceProperties{
-		IsVersioningEnabled: env.IsVersioningEnabled,
-	}
+	payload := ServiceProperties{}
 	if env.DeleteRetentionPolicy != nil {
 		payload.DeleteRetentionPolicy = &DeleteRetentionPolicy{
 			Enabled: env.DeleteRetentionPolicy.Enabled,
@@ -81,9 +77,7 @@ func PutBlobServicePropertiesWithOptions(ctx context.Context, profile models.Pro
 		return Response{}, err
 	}
 
-	env := storageServicePropertiesEnvelope{
-		IsVersioningEnabled: props.IsVersioningEnabled,
-	}
+	env := storageServicePropertiesEnvelope{}
 	if props.DeleteRetentionPolicy != nil {
 		env.DeleteRetentionPolicy = &storageDeleteRetentionPolicyXML{
 			Enabled: props.DeleteRetentionPolicy.Enabled,

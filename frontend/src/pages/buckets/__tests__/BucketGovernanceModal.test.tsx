@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { APIError } from "../../../api/errors";
 import { queryKeys } from "../../../api/queryKeys";
 import { ensureDomShims } from "../../../test/domShims";
 import { createMockApiClient } from "../../../test/mockApiClient";
@@ -386,6 +387,42 @@ describe("BucketGovernanceModal", () => {
     );
   }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
+  it("reports accepted but unverified changes when governance readback fails", async () => {
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(createGovernance("aws_s3"))
+        .mockRejectedValue(new Error("read unavailable")),
+    });
+    renderModal(api, { provider: "aws_s3" });
+    const section = await screen.findByTestId("bucket-governance-public-exposure");
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(message.error).toHaveBeenCalled());
+    expect(JSON.stringify(vi.mocked(message.error).mock.calls)).toContain("Change request accepted, but current settings could not be read");
+    expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledTimes(1);
+    expect(message.success).not.toHaveBeenCalled();
+  });
+
+  it("requires an explicit ownership choice when AWS controls are unconfigured", async () => {
+    const governance = createGovernance("aws_s3");
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi.fn().mockResolvedValue({ ...governance, access: {
+        provider: "aws_s3", bucket: "demo-bucket", warnings: ["Ownership controls are not configured."],
+      } }),
+    });
+    renderModal(api, { provider: "aws_s3" });
+    const section = await screen.findByTestId("bucket-governance-access");
+    const select = within(section).getByRole("combobox", { name: "Ownership mode" });
+    const save = within(section).getByRole("button", { name: "Save" });
+    expect(select).toHaveValue("");
+    expect(save).toBeDisabled();
+    expect(api.buckets.putBucketAccess).not.toHaveBeenCalled();
+    fireEvent.change(select, { target: { value: "bucket_owner_preferred" } });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() => expect(api.buckets.putBucketAccess).toHaveBeenCalledWith(
+      "profile-1", "demo-bucket", { objectOwnership: "bucket_owner_preferred" },
+    ));
+  });
+
   it("resets unsaved controls state when the profile context changes", async () => {
     const firstGovernance = createGovernance("aws_s3");
     const secondGovernance = {
@@ -504,6 +541,28 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
+  });
+
+  it("keeps unconfirmed lifecycle deletion as an error and refreshes without retry", async () => {
+    const base = createGovernance("aws_s3");
+    const governance = { ...base, lifecycle: { provider: "aws_s3", bucket: "demo-bucket",
+      rules: [{ id: "existing", status: "enabled", expiration: { days: 30 } }] } };
+    const errorMessage = "Lifecycle deletion was accepted but current state did not confirm removal; reload before retrying";
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi.fn().mockResolvedValue(governance),
+      putBucketLifecycle: vi.fn().mockRejectedValue(new APIError({
+        status: 502, code: "bucket_lifecycle_unconfirmed", message: errorMessage,
+      })),
+    });
+    renderModal(api);
+    const section = await screen.findByTestId("bucket-governance-lifecycle");
+    fireEvent.change(within(section).getByRole("textbox", { name: /lifecycle rules json/i }), { target: { value: "[]" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(message.error).toHaveBeenCalledWith(expect.stringContaining(errorMessage)));
+    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2));
+    expect(api.buckets.putBucketLifecycle).toHaveBeenCalledExactlyOnceWith("profile-1", "demo-bucket", { rules: [] });
+    expect(message.success).not.toHaveBeenCalled();
+    expect(screen.getByTestId("bucket-governance-lifecycle")).toBeInTheDocument();
   });
 
   it("updates lifecycle rules from JSON", async () => {
@@ -730,6 +789,46 @@ describe("BucketGovernanceModal", () => {
     expect(message.success).not.toHaveBeenCalled();
   });
 
+  it("blocks GCS access save when the loaded ETag is cleared", async () => {
+    const api = createApi("gcp_gcs");
+    renderModal(api, { provider: "gcp_gcs" });
+    const section = await screen.findByTestId("bucket-governance-access");
+    fireEvent.change(within(section).getByRole("textbox", { name: "Policy ETag" }), { target: { value: "  " } });
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(message.error).toHaveBeenCalledWith(expect.stringContaining("require the loaded policy ETag")));
+    expect(api.buckets.putBucketAccess).not.toHaveBeenCalled();
+    expect(message.success).not.toHaveBeenCalled();
+  });
+
+  it("reports partial GCS exposure changes and reloads without retrying", async () => {
+    const governance = createGovernance("gcp_gcs");
+    const refreshed = {
+      ...governance,
+      publicExposure: { ...governance.publicExposure, mode: "public", publicAccessPrevention: false },
+    };
+    const errorMessage = "GCS accepted the IAM policy update but public access prevention could not be confirmed; reload both settings before retrying";
+    const api = createApi("gcp_gcs", {
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(governance).mockResolvedValue(refreshed),
+      putBucketPublicExposure: vi.fn().mockRejectedValue(new APIError({
+        status: 502, code: "bucket_public_exposure_partial", message: errorMessage,
+        details: { iamPolicyUpdateAccepted: true, publicAccessPreventionState: "unknown" },
+      })),
+    });
+    renderModal(api, { provider: "gcp_gcs" });
+    const section = await screen.findByTestId("bucket-governance-public-exposure");
+    fireEvent.change(within(section).getByRole("combobox", { name: "GCS public exposure mode" }), { target: { value: "public" } });
+    fireEvent.click(within(section).getByRole("switch", { name: "GCS public access prevention" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(message.error).toHaveBeenCalledWith(expect.stringContaining(errorMessage)));
+    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(within(screen.getByTestId("bucket-governance-public-exposure"))
+      .getByRole("switch", { name: "GCS public access prevention" })).not.toBeChecked());
+    expect(within(screen.getByTestId("bucket-governance-public-exposure"))
+      .getByRole("combobox", { name: "GCS public exposure mode" })).toHaveValue("public");
+    expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledOnce();
+    expect(message.success).not.toHaveBeenCalled();
+  });
+
   it("retries a failed controls load in the open dialog", async () => {
     const api = createApi("aws_s3", {
       getBucketGovernance: vi.fn().mockRejectedValueOnce(new Error("controls service unavailable"))
@@ -859,7 +958,7 @@ describe("BucketGovernanceModal", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: queryKeys.buckets.policy("profile-1", "demo-bucket", "token"),
         exact: true,
-      }),
+      }, { throwOnError: true }),
     );
 
     const publicExposureSection = await screen.findByTestId(
@@ -971,6 +1070,21 @@ describe("BucketGovernanceModal", () => {
     );
   }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
+  it("does not show disabled as the versioning state when Azure ARM is unavailable", async () => {
+    const base = createGovernance("azure_blob");
+    const governance = { ...base, versioning: undefined, capabilities: {
+      ...base.capabilities, bucket_versioning: { enabled: false, reason: "Azure versioning requires ARM profile configuration" },
+    } };
+    const api = createApi("azure_blob", { getBucketGovernance: vi.fn().mockResolvedValue(governance) });
+    renderModal(api, { provider: "azure_blob" });
+    const section = await screen.findByTestId("bucket-governance-versioning");
+    expect(within(section).getByText("Versioning unavailable")).toBeInTheDocument();
+    expect(within(section).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByText("Versioning: unavailable")).toBeInTheDocument();
+    expect(api.buckets.putBucketVersioning).not.toHaveBeenCalled();
+  });
+
   it("renders Azure controls and updates visibility plus typed protection controls", async () => {
     const api = createApi("azure_blob");
 
@@ -1016,18 +1130,18 @@ describe("BucketGovernanceModal", () => {
     );
     fireEvent.change(
       within(azurePolicyCard).getByRole("textbox", {
-        name: "Start (RFC3339)",
+        name: "Start (ISO 8601)",
       }),
       {
-        target: { value: "2026-03-10T00:00:00Z" },
+        target: { value: "2026-03-10" },
       },
     );
     fireEvent.change(
       within(azurePolicyCard).getByRole("textbox", {
-        name: "Expiry (RFC3339)",
+        name: "Expiry (ISO 8601)",
       }),
       {
-        target: { value: "2026-03-20T00:00:00Z" },
+        target: { value: "2026-03-20T00:00Z" },
       },
     );
     fireEvent.click(within(azurePolicyCard).getByLabelText("Write"));
@@ -1044,8 +1158,8 @@ describe("BucketGovernanceModal", () => {
           storedAccessPolicies: [
             {
               id: "upload",
-              start: "2026-03-10T00:00:00Z",
-              expiry: "2026-03-20T00:00:00Z",
+              start: "2026-03-10",
+              expiry: "2026-03-20T00:00Z",
               permission: "rwdl",
             },
           ],
@@ -1179,7 +1293,7 @@ describe("BucketGovernanceModal", () => {
         name: "OCI versioning status",
       }),
       {
-        target: { value: "enabled" },
+        target: { value: "suspended" },
       },
     );
     fireEvent.click(
@@ -1191,7 +1305,7 @@ describe("BucketGovernanceModal", () => {
         "profile-1",
         "demo-bucket",
         {
-          status: "enabled",
+          status: "suspended",
         },
       ),
     );

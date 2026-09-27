@@ -57,8 +57,8 @@ export function OCIVersioningControlBody({
   setVersioningStatus,
   warnings,
 }: {
-  versioningStatus: "enabled" | "disabled";
-  setVersioningStatus: (status: "enabled" | "disabled") => void;
+  versioningStatus: "enabled" | "suspended";
+  setVersioningStatus: (status: "enabled" | "suspended") => void;
   warnings: ReactNode;
 }) {
   return (
@@ -71,11 +71,11 @@ export function OCIVersioningControlBody({
           id="bucket-governance-oci-versioning-status"
           value={versioningStatus}
           onChange={(value) =>
-            setVersioningStatus(value === "enabled" ? "enabled" : "disabled")
+            setVersioningStatus(value === "enabled" ? "enabled" : "suspended")
           }
           options={[
             { value: "enabled", label: "Enabled" },
-            { value: "disabled", label: "Disabled" },
+            { value: "suspended", label: "Suspended" },
           ]}
           ariaLabel="OCI versioning status"
         />

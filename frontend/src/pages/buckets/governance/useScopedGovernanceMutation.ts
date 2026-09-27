@@ -18,7 +18,7 @@ type UseScopedGovernanceMutationArgs<TData, TVariables> = {
   mutationScope: GovernanceMutationScope;
   mutationFn: (variables: TVariables) => Promise<TData>;
   successMessage: string;
-  refreshState: (apiToken: string) => Promise<void>;
+  refreshState: (apiToken: string, throwOnError?: boolean) => Promise<void>;
   onSuccess?: (
     data: TData,
     variables: TVariables,
@@ -38,9 +38,15 @@ export function useScopedGovernanceMutation<TData = unknown, TVariables = void>(
       return args.mutationScope.createContext(requestTokenRef.current);
     },
     onSuccess: async (data, variables, context) => {
+      if (args.mutationScope.isCurrentRequest(context, requestTokenRef.current)) {
+        await args.onSuccess?.(data, variables, context);
+      }
+      const refreshed = await args.refreshState(context.apiToken, true).then(() => true, () => false);
       if (!args.mutationScope.isCurrentRequest(context, requestTokenRef.current)) return;
-      await args.onSuccess?.(data, variables, context);
-      if (!args.mutationScope.isCurrentRequest(context, requestTokenRef.current)) return;
+      if (!refreshed) {
+        appFeedback.error("Change request accepted, but current settings could not be read. Reload to verify before retrying.");
+        return;
+      }
       appFeedback.success(args.successMessage);
     },
     onError: (err, _variables, context) => {
@@ -49,14 +55,14 @@ export function useScopedGovernanceMutation<TData = unknown, TVariables = void>(
     },
     onSettled: async (_data, _error, _variables, context) => {
       // Provider errors can follow partial writes; refresh even after navigation.
-      if (context) await args.refreshState(context.apiToken);
+      if (context && _error) await args.refreshState(context.apiToken);
     },
   });
 }
 
 type GovernanceMutationRunner = {
   mutationScope: GovernanceMutationScope;
-  refreshState: (apiToken: string) => Promise<void>;
+  refreshState: (apiToken: string, throwOnError?: boolean) => Promise<void>;
 };
 
 export function useGovernanceControlMutation<TData = unknown, TVariables = void>(
@@ -80,13 +86,14 @@ export function useLinkedGovernanceMutationState(args: GovernanceMutationStateAr
     provider: args.provider,
     bucket: args.bucket,
   });
-  const refreshState = (apiToken: string) =>
+  const refreshState = (apiToken: string, throwOnError = false) =>
     invalidateLinkedBucketState(
       args.queryClient,
       args.profileId,
       args.bucket,
       args.provider,
       apiToken,
+      throwOnError,
     );
 
   return { mutationScope, refreshState };
@@ -99,8 +106,8 @@ export function useGovernanceMutationState(args: GovernanceMutationStateArgs) {
     provider: args.provider,
     bucket: args.bucket,
   });
-  const refreshState = (apiToken: string) =>
-    invalidateGovernance(args.queryClient, args.profileId, args.bucket, apiToken);
+  const refreshState = (apiToken: string, throwOnError = false) =>
+    invalidateGovernance(args.queryClient, args.profileId, args.bucket, apiToken, throwOnError);
 
   return { mutationScope, refreshState };
 }

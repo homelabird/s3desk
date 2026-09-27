@@ -221,7 +221,7 @@ export function GCSIAMBindingsControlBody({
       <FormField
         label="Policy ETag"
         htmlFor="bucket-governance-gcs-etag"
-        extra="Leave the current etag in place unless you intentionally want the backend to reuse the latest server value."
+        extra="Keep the ETag from the loaded policy. If it is missing or conflicts, reload the policy before saving."
       >
         <Input
           id="bucket-governance-gcs-etag"

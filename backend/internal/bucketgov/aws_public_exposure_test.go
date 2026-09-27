@@ -2,10 +2,13 @@ package bucketgov
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -50,6 +53,8 @@ func (f *fakePublicAccessBlockClient) PutPublicAccessBlock(_ context.Context, in
 	if f.putErr != nil {
 		return nil, f.putErr
 	}
+	f.getOutput = &s3.GetPublicAccessBlockOutput{PublicAccessBlockConfiguration: input.PublicAccessBlockConfiguration}
+	f.getErr = nil
 	return &s3.PutPublicAccessBlockOutput{}, nil
 }
 
@@ -102,6 +107,8 @@ func (f *fakePublicAccessBlockClient) PutBucketLifecycleConfiguration(_ context.
 	if f.putLifecycleErr != nil {
 		return nil, f.putLifecycleErr
 	}
+	f.lifecycleOutput = &s3.GetBucketLifecycleConfigurationOutput{Rules: input.LifecycleConfiguration.Rules, TransitionDefaultMinimumObjectSize: input.TransitionDefaultMinimumObjectSize}
+	f.lifecycleErr = nil
 	return &s3.PutBucketLifecycleConfigurationOutput{}, nil
 }
 
@@ -123,10 +130,10 @@ func TestAWSAdapterGetGovernanceReusesClient(t *testing.T) {
 	t.Parallel()
 
 	client := &fakePublicAccessBlockClient{
-		getOutput:        &s3.GetPublicAccessBlockOutput{},
-		ownershipOutput:  &s3.GetBucketOwnershipControlsOutput{},
+		getOutput:        &s3.GetPublicAccessBlockOutput{PublicAccessBlockConfiguration: &s3types.PublicAccessBlockConfiguration{BlockPublicAcls: boolPtr(false), IgnorePublicAcls: boolPtr(false), BlockPublicPolicy: boolPtr(false), RestrictPublicBuckets: boolPtr(false)}},
+		ownershipOutput:  &s3.GetBucketOwnershipControlsOutput{OwnershipControls: &s3types.OwnershipControls{Rules: []s3types.OwnershipControlsRule{{ObjectOwnership: s3types.ObjectOwnershipBucketOwnerEnforced}}}},
 		versioningOutput: &s3.GetBucketVersioningOutput{},
-		encryptionOutput: &s3.GetBucketEncryptionOutput{},
+		encryptionErr:    &smithy.GenericAPIError{Code: "ServerSideEncryptionConfigurationNotFoundError"},
 		lifecycleOutput:  &s3.GetBucketLifecycleConfigurationOutput{},
 	}
 	newClientCalls := 0
@@ -304,7 +311,7 @@ func TestAWSAdapterGetAccess(t *testing.T) {
 	}
 }
 
-func TestAWSAdapterGetAccessDefaultsToBucketOwnerEnforced(t *testing.T) {
+func TestAWSAdapterGetAccessPreservesMissingControls(t *testing.T) {
 	t.Parallel()
 
 	client := &fakePublicAccessBlockClient{
@@ -318,15 +325,15 @@ func TestAWSAdapterGetAccessDefaultsToBucketOwnerEnforced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAccess err=%v", err)
 	}
-	if view.ObjectOwnership == nil || view.ObjectOwnership.Mode != models.BucketObjectOwnershipBucketOwnerEnforced {
-		t.Fatalf("objectOwnership=%+v, want bucket_owner_enforced", view.ObjectOwnership)
+	if view.ObjectOwnership != nil || len(view.Warnings) == 0 {
+		t.Fatalf("missing controls must not imply an enforced mode: %+v", view)
 	}
 }
 
 func TestAWSAdapterPutAccess(t *testing.T) {
 	t.Parallel()
 
-	client := &fakePublicAccessBlockClient{}
+	client := &fakePublicAccessBlockClient{ownershipOutput: &s3.GetBucketOwnershipControlsOutput{OwnershipControls: &s3types.OwnershipControls{Rules: []s3types.OwnershipControlsRule{{ObjectOwnership: s3types.ObjectOwnershipObjectWriter}}}}}
 	adapter := &awsAdapter{
 		newClient: stubAWSClient(client),
 	}
@@ -387,6 +394,26 @@ func TestAWSAdapterGetVersioningDefaultsToDisabled(t *testing.T) {
 	}
 	if view.Status != models.BucketVersioningStatusDisabled {
 		t.Fatalf("status=%q, want %q", view.Status, models.BucketVersioningStatusDisabled)
+	}
+}
+
+func TestAWSAdapterGetVersioningRejectsUnconfirmedState(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		out  *s3.GetBucketVersioningOutput
+	}{
+		{name: "missing response"},
+		{name: "unknown status", out: &s3.GetBucketVersioningOutput{Status: "FutureStatus"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{versioningOutput: tc.out}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			view, err := adapter.GetVersioning(context.Background(), models.ProfileSecrets{}, "demo")
+			if err == nil || view.Status != "" {
+				t.Fatalf("GetVersioning returned confirmed state: view=%+v err=%v", view, err)
+			}
+		})
 	}
 }
 
@@ -563,10 +590,20 @@ func TestAWSAdapterGetLifecycleWithoutConfig(t *testing.T) {
 	}
 }
 
+func TestAWSAdapterGetLifecycleRejectsMissingResponse(t *testing.T) {
+	t.Parallel()
+	adapter := &awsAdapter{newClient: stubAWSClient(&fakePublicAccessBlockClient{})}
+	view, err := adapter.GetLifecycle(context.Background(), models.ProfileSecrets{}, "demo")
+	var operationErr *OperationError
+	if !errors.As(err, &operationErr) || operationErr.Code != "bucket_lifecycle_error" || view.Rules != nil {
+		t.Fatalf("view=%+v err=%v", view, err)
+	}
+}
+
 func TestAWSAdapterPutLifecycle(t *testing.T) {
 	t.Parallel()
 
-	client := &fakePublicAccessBlockClient{}
+	client := &fakePublicAccessBlockClient{lifecycleErr: &smithy.GenericAPIError{Code: "NoSuchLifecycleConfiguration"}}
 	adapter := &awsAdapter{
 		newClient: stubAWSClient(client),
 	}
@@ -595,7 +632,7 @@ func TestAWSAdapterPutLifecycle(t *testing.T) {
 func TestAWSAdapterPutLifecycleDeletesWhenRulesEmpty(t *testing.T) {
 	t.Parallel()
 
-	client := &fakePublicAccessBlockClient{}
+	client := &fakePublicAccessBlockClient{lifecycleErr: &smithy.GenericAPIError{Code: "NoSuchLifecycleConfiguration"}}
 	adapter := &awsAdapter{
 		newClient: stubAWSClient(client),
 	}
@@ -629,4 +666,554 @@ func stringPtr(value string) *string {
 
 func int32Ptr(value int32) *int32 {
 	return &value
+}
+
+func TestAWSAdapterGetAccessRejectsInvalidResponse(t *testing.T) {
+	for _, out := range []*s3.GetBucketOwnershipControlsOutput{
+		nil, {}, {OwnershipControls: &s3types.OwnershipControls{}},
+		{OwnershipControls: &s3types.OwnershipControls{Rules: []s3types.OwnershipControlsRule{{ObjectOwnership: "unknown"}}}},
+	} {
+		adapter := &awsAdapter{newClient: stubAWSClient(&fakePublicAccessBlockClient{ownershipOutput: out})}
+		if _, err := adapter.GetAccess(context.Background(), models.ProfileSecrets{}, "demo"); err == nil {
+			t.Fatalf("invalid response accepted: %+v", out)
+		}
+	}
+}
+
+func TestAWSMissingEncryptionResponseBlocksReadAndKMSWrite(t *testing.T) {
+	t.Parallel()
+	for _, out := range []*s3.GetBucketEncryptionOutput{
+		nil, {}, {ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{}},
+		{ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{Rules: []s3types.ServerSideEncryptionRule{{}}}},
+		{ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{Rules: []s3types.ServerSideEncryptionRule{{ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{}}}}},
+		{ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{Rules: []s3types.ServerSideEncryptionRule{{}, {}}}},
+	} {
+		client := &fakePublicAccessBlockClient{encryptionOutput: out}
+		adapter := &awsAdapter{newClient: stubAWSClient(client)}
+		if view, err := adapter.GetEncryption(context.Background(), models.ProfileSecrets{}, "demo"); err == nil || view.Mode != "" {
+			t.Fatalf("view=%+v err=%v", view, err)
+		}
+		if err := adapter.PutEncryption(context.Background(), models.ProfileSecrets{}, "demo", models.BucketEncryptionPutRequest{Mode: models.BucketEncryptionModeSSEKMS}); err == nil {
+			t.Fatal("unconfirmed configuration allowed KMS write")
+		}
+		if client.putEncryption != nil {
+			t.Fatal("provider write occurred despite invalid read response")
+		}
+	}
+}
+
+func TestAWSEncryptionUpdatePreservesUneditedRestrictions(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []models.BucketEncryptionMode{models.BucketEncryptionModeSSES3, models.BucketEncryptionModeSSEKMS} {
+		t.Run(string(mode), func(t *testing.T) {
+			original := s3types.ServerSideEncryptionRule{
+				ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{SSEAlgorithm: s3types.ServerSideEncryptionAwsKms},
+				BucketKeyEnabled:                   boolPtr(false),
+				BlockedEncryptionTypes:             &s3types.BlockedEncryptionTypes{EncryptionType: []s3types.EncryptionType{"SSE-C"}},
+			}
+			client := &fakePublicAccessBlockClient{encryptionOutput: &s3.GetBucketEncryptionOutput{ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{Rules: []s3types.ServerSideEncryptionRule{original}}}}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			if err := adapter.PutEncryption(context.Background(), models.ProfileSecrets{}, "demo", models.BucketEncryptionPutRequest{Mode: mode}); err != nil {
+				t.Fatal(err)
+			}
+			rule := client.putEncryption.ServerSideEncryptionConfiguration.Rules[0]
+			if !reflect.DeepEqual(rule.BlockedEncryptionTypes, original.BlockedEncryptionTypes) {
+				t.Fatal("SSE-C restriction lost")
+			}
+			if mode == models.BucketEncryptionModeSSEKMS && (rule.BucketKeyEnabled == nil || *rule.BucketKeyEnabled) {
+				t.Fatal("explicit bucket key false lost")
+			}
+			if mode == models.BucketEncryptionModeSSES3 && rule.BucketKeyEnabled != nil {
+				t.Fatal("KMS-only bucket key sent for SSE-S3")
+			}
+			if client.encryptionOutput.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm != s3types.ServerSideEncryptionAwsKms {
+				t.Fatal("source configuration mutated")
+			}
+		})
+	}
+}
+
+func TestAWSDSSEEncryptionSurvivesKMSKeyEdit(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []models.BucketEncryptionMode{models.BucketEncryptionModeSSEKMS, models.BucketEncryptionModeSSES3} {
+		t.Run(string(mode), func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{encryptionOutput: &s3.GetBucketEncryptionOutput{ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{Rules: []s3types.ServerSideEncryptionRule{{ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{SSEAlgorithm: s3types.ServerSideEncryptionAwsKmsDsse}}}}}}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			view, err := adapter.GetEncryption(context.Background(), models.ProfileSecrets{}, "demo")
+			if err != nil || view.Mode != models.BucketEncryptionModeSSEKMS || len(view.Warnings) == 0 {
+				t.Fatalf("view=%+v err=%v", view, err)
+			}
+			req := models.BucketEncryptionPutRequest{Mode: mode}
+			if mode == models.BucketEncryptionModeSSEKMS {
+				req.KMSKeyID = "alias/next"
+			}
+			if err := adapter.PutEncryption(context.Background(), models.ProfileSecrets{}, "demo", req); err != nil {
+				t.Fatal(err)
+			}
+			got := client.putEncryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault
+			want := s3types.ServerSideEncryptionAwsKmsDsse
+			if mode == models.BucketEncryptionModeSSES3 {
+				want = s3types.ServerSideEncryptionAes256
+			}
+			if got.SSEAlgorithm != want {
+				t.Fatalf("algorithm=%s want=%s", got.SSEAlgorithm, want)
+			}
+			if mode == models.BucketEncryptionModeSSEKMS && (got.KMSMasterKeyID == nil || *got.KMSMasterKeyID != req.KMSKeyID) {
+				t.Fatal("key edit lost")
+			}
+		})
+	}
+}
+
+func TestAWSUnknownEncryptionBlocksDirectUpdates(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []models.BucketEncryptionMode{models.BucketEncryptionModeSSES3, models.BucketEncryptionModeSSEKMS} {
+		t.Run(string(mode), func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{encryptionOutput: &s3.GetBucketEncryptionOutput{ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{Rules: []s3types.ServerSideEncryptionRule{{ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{SSEAlgorithm: "future:algorithm"}}}}}}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			err := adapter.PutEncryption(context.Background(), models.ProfileSecrets{}, "demo", models.BucketEncryptionPutRequest{Mode: mode})
+			var operationErr *OperationError
+			if !errors.As(err, &operationErr) || operationErr.Code != "bucket_encryption_unsupported_algorithm" {
+				t.Fatalf("err=%v", err)
+			}
+			if client.putEncryption != nil {
+				t.Fatal("unknown algorithm overwritten")
+			}
+		})
+	}
+}
+
+func TestAWSLifecycleRejectsAmbiguousOrLossyInput(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{
+		`null`, `[] []`, `[null]`,
+		`[{"status":"enabled","unknownAction":true}]`,
+		`[{"status":"enabled","expiration":{"days":1,"unknownOption":true}}]`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			err := adapter.PutLifecycle(context.Background(), models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{Rules: json.RawMessage(raw)})
+			if err == nil || client.putLifecycle != nil || client.deleteLifecycle != nil {
+				t.Fatalf("err=%v put=%v delete=%v", err, client.putLifecycle, client.deleteLifecycle)
+			}
+		})
+	}
+}
+
+func TestAWSLifecyclePreservesFilterText(t *testing.T) {
+	t.Parallel()
+	for _, prefix := range []string{" ", " reports/ ", "한글/+%2F "} {
+		t.Run(prefix, func(t *testing.T) {
+			for _, legacy := range []bool{false, true} {
+				id := " rule "
+				original := s3types.LifecycleRule{ID: &id, Status: s3types.ExpirationStatusEnabled}
+				if legacy {
+					original.Prefix = &prefix
+				} else {
+					original.Filter = &s3types.LifecycleRuleFilter{Prefix: &prefix}
+				}
+				raw, err := marshalAWSLifecycleRules([]s3types.LifecycleRule{original})
+				if err != nil {
+					t.Fatal(err)
+				}
+				rules, err := parseAWSLifecycleRulesJSON(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if rules[0].Filter == nil || rules[0].Filter.Prefix == nil || *rules[0].Filter.Prefix != prefix || *rules[0].ID != id {
+					t.Fatalf("filter text changed: %s", raw)
+				}
+			}
+		})
+	}
+	raw := json.RawMessage(`[{"status":"enabled","filter":{"and":{"prefix":" ","tags":[{"key":" key ","value":" value "}]}}}]`)
+	rules, err := parseAWSLifecycleRulesJSON(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := marshalAWSLifecycleRules(rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before, after any
+	if err := json.Unmarshal(raw, &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(encoded, &after); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("filter changed: %s", encoded)
+	}
+}
+
+func TestAWSLifecycleSchedulingBoundaries(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		action string
+		valid  bool
+	}{
+		{`"expiration":{"days":0}`, false},
+		{`"transitions":[{"days":0,"storageClass":"GLACIER"}]`, true},
+		{`"transitions":[{"days":-1,"storageClass":"GLACIER"}]`, false},
+		{`"expiration":{"date":"2030-01-01T00:00:00Z"}`, true},
+		{`"expiration":{"date":"2030-01-01T09:00:00+09:00"}`, true},
+		{`"expiration":{"date":"2030-01-01T00:00:01Z"}`, false},
+		{`"transitions":[{"date":"2030-01-01T00:00:00.001Z","storageClass":"GLACIER"}]`, false},
+		{`"transitions":[{"date":"2030-01-01T00:00:00Z","storageClass":"GLACIER"}]`, true},
+	} {
+		t.Run(tc.action, func(t *testing.T) {
+			_, err := parseAWSLifecycleRulesJSON(json.RawMessage(`[{"status":"enabled",` + tc.action + `}]`))
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v err=%v", tc.valid, err)
+			}
+		})
+	}
+}
+
+func TestAWSLifecycleRejectsConflictingActionCombinations(t *testing.T) {
+	t.Parallel()
+	for _, fields := range []string{
+		`"expiration":{"days":1,"date":"2030-01-01T00:00:00Z"}`,
+		`"expiration":{"days":30},"transitions":[{"date":"2030-01-01T00:00:00Z","storageClass":"GLACIER"}]`,
+		`"transitions":[{"days":0,"storageClass":"GLACIER"},{"date":"2030-01-01T00:00:00Z","storageClass":"DEEP_ARCHIVE"}]`,
+		`"filter":{"tag":{"key":"a","value":"b"}},"abortIncompleteMultipartUpload":{"daysAfterInitiation":1}`,
+		`"filter":{"and":{"prefix":"logs/","tags":[{"key":"a","value":"b"}]}},"expiration":{"expiredObjectDeleteMarker":true}`,
+	} {
+		t.Run(fields, func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			err := adapter.PutLifecycle(context.Background(), models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{Rules: json.RawMessage(`[{"status":"enabled",` + fields + `}]`)})
+			if err == nil || client.putLifecycle != nil || client.deleteLifecycle != nil {
+				t.Fatalf("invalid combination reached provider: %v", err)
+			}
+		})
+	}
+}
+
+func TestAWSLifecyclePreservesTransitionDefault(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		out     *s3.GetBucketLifecycleConfigurationOutput
+		err     error
+		blocked bool
+	}{
+		{name: "legacy default", out: &s3.GetBucketLifecycleConfigurationOutput{TransitionDefaultMinimumObjectSize: "varies_by_storage_class"}},
+		{name: "modern default", out: &s3.GetBucketLifecycleConfigurationOutput{TransitionDefaultMinimumObjectSize: "all_storage_classes_128K"}},
+		{name: "missing response", blocked: true},
+		{name: "denied", err: &smithy.GenericAPIError{Code: "AccessDenied"}, blocked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{lifecycleOutput: tc.out, lifecycleErr: tc.err}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			err := adapter.PutLifecycle(context.Background(), models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{Rules: json.RawMessage(`[{"status":"enabled","expiration":{"days":30}}]`)})
+			if (err != nil) != tc.blocked {
+				t.Fatalf("err=%v", err)
+			}
+			if tc.blocked {
+				if client.putLifecycle != nil || client.deleteLifecycle != nil {
+					t.Fatal("mutation after failed prerequisite read")
+				}
+			} else if client.putLifecycle == nil || client.putLifecycle.TransitionDefaultMinimumObjectSize != tc.out.TransitionDefaultMinimumObjectSize {
+				t.Fatal("transition default lost")
+			}
+		})
+	}
+}
+
+func TestAWSLifecycleFilterSizeBounds(t *testing.T) {
+	for _, tc := range []struct {
+		filter string
+		valid  bool
+	}{
+		{`{"objectSizeGreaterThan":-1}`, false}, {`{"objectSizeLessThan":-1}`, false},
+		{`{"objectSizeGreaterThan":0}`, true},
+		{`{"and":{"objectSizeGreaterThan":10,"objectSizeLessThan":10}}`, false},
+		{`{"and":{"objectSizeGreaterThan":11,"objectSizeLessThan":10}}`, false},
+		{`{"and":{"objectSizeGreaterThan":0,"objectSizeLessThan":10}}`, true},
+		{`{"and":{"prefix":"logs/"}}`, false},
+		{`{"and":{"prefix":"logs/","objectSizeGreaterThan":0}}`, true},
+	} {
+		t.Run(tc.filter, func(t *testing.T) {
+			_, err := parseAWSLifecycleRulesJSON(json.RawMessage(`[{"status":"enabled","expiration":{"days":30},"filter":` + tc.filter + `}]`))
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v err=%v", tc.valid, err)
+			}
+		})
+	}
+}
+
+func TestAWSLifecycleTagValueAndUniqueness(t *testing.T) {
+	for _, raw := range []string{
+		`[{"status":"enabled","filter":{"tag":{"key":"empty"}}}]`,
+		`[{"status":"enabled","filter":{"tag":{"key":"empty","value":""}}}]`,
+	} {
+		rules, err := parseAWSLifecycleRulesJSON(json.RawMessage(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := marshalAWSLifecycleRules(rules)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var before, after any
+		if err := json.Unmarshal([]byte(raw), &before); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(encoded, &after); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(before, after) {
+			t.Fatalf("tag value changed: %s", encoded)
+		}
+	}
+	for _, tc := range []struct {
+		second string
+		valid  bool
+	}{{"key", false}, {"Key", true}, {" key", true}} {
+		raw := `[{"status":"enabled","filter":{"and":{"tags":[{"key":"key"},{"key":"` + tc.second + `"}]}}}]`
+		_, err := parseAWSLifecycleRulesJSON(json.RawMessage(raw))
+		if (err == nil) != tc.valid {
+			t.Fatalf("key=%q err=%v", tc.second, err)
+		}
+	}
+}
+
+func TestAWSLifecycleNoncurrentRetentionUpperBound(t *testing.T) {
+	for _, versions := range []int32{99, 100, 101} {
+		expiration := awsNoncurrentVersionExpirationPayload{NoncurrentDays: int32Ptr(1), NewerNoncurrentVersions: &versions}
+		_, err := expiration.toS3(0)
+		if (err != nil) != (versions > 100) {
+			t.Fatalf("expiration versions=%d err=%v", versions, err)
+		}
+		transition := awsNoncurrentVersionTransitionPayload{NoncurrentDays: int32Ptr(1), NewerNoncurrentVersions: &versions, StorageClass: "GLACIER"}
+		_, err = transition.toS3(0, 0)
+		if (err != nil) != (versions > 100) {
+			t.Fatalf("transition versions=%d err=%v", versions, err)
+		}
+	}
+}
+
+func TestAWSLifecycleRuleCountAndIDs(t *testing.T) {
+	for _, n := range []int{1000, 1001} {
+		rules := make([]awsLifecycleRulePayload, n)
+		for i := range rules {
+			rules[i] = awsLifecycleRulePayload{Status: "enabled", Expiration: &awsLifecycleExpirationPayload{Days: int32Ptr(1)}}
+		}
+		raw, err := json.Marshal(rules)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = parseAWSLifecycleRulesJSON(raw)
+		if (err == nil) != (n == 1000) {
+			t.Fatalf("count=%d err=%v", n, err)
+		}
+	}
+	for _, n := range []int{255, 256} {
+		id := ""
+		for i := 0; i < n; i++ {
+			id += "한"
+		}
+		_, err := (awsLifecycleRulePayload{ID: id, Status: "enabled"}).toS3(0)
+		if (err == nil) != (n == 255) {
+			t.Fatalf("ID length=%d err=%v", n, err)
+		}
+	}
+	_, err := parseAWSLifecycleRulesJSON(json.RawMessage(`[{"id":"same","status":"enabled"},{"id":"same","status":"disabled"}]`))
+	if err == nil {
+		t.Fatal("duplicate IDs accepted")
+	}
+}
+
+func TestAWSLifecycleDeleteRequiresReadback(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		out                *s3.GetBucketLifecycleConfigurationOutput
+		readErr, deleteErr error
+		wantCode           string
+	}{
+		{name: "empty", out: &s3.GetBucketLifecycleConfigurationOutput{}},
+		{name: "remaining rules", out: &s3.GetBucketLifecycleConfigurationOutput{Rules: []s3types.LifecycleRule{{Status: s3types.ExpirationStatusEnabled}}}, wantCode: "bucket_lifecycle_unconfirmed"},
+		{name: "missing response", wantCode: "bucket_lifecycle_unconfirmed"},
+		{name: "read failure", readErr: errors.New("read failed"), wantCode: "bucket_lifecycle_unconfirmed"},
+		{name: "write failure retained", deleteErr: errors.New("write failed"), readErr: &smithy.GenericAPIError{Code: "NoSuchLifecycleConfiguration"}, wantCode: "bucket_lifecycle_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{lifecycleOutput: tc.out, lifecycleErr: tc.readErr, deleteLifecycleErr: tc.deleteErr}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			err := adapter.PutLifecycle(context.Background(), models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{Rules: json.RawMessage(`[]`)})
+			var opErr *OperationError
+			if tc.wantCode == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if !errors.As(err, &opErr) || opErr.Code != tc.wantCode {
+				t.Fatalf("err=%v want=%s", err, tc.wantCode)
+			}
+			if len(client.getCalls) != 1 || client.getCalls[0] != "lifecycle" || client.putLifecycle != nil {
+				t.Fatalf("unexpected retry or read calls: %v", client.getCalls)
+			}
+		})
+	}
+}
+
+func TestAWSLifecycleObservedRuleComparison(t *testing.T) {
+	base := s3types.LifecycleRule{Status: s3types.ExpirationStatusEnabled, Filter: &s3types.LifecycleRuleFilter{Prefix: stringPtr("logs/")}, Expiration: &s3types.LifecycleExpiration{Days: int32Ptr(30)}}
+	generated := base
+	generated.ID = stringPtr("generated")
+	explicit := base
+	explicit.ID = stringPtr("explicit")
+	changed := generated
+	changed.Expiration = &s3types.LifecycleExpiration{Days: int32Ptr(31)}
+	for _, tc := range []struct {
+		name      string
+		want, got []s3types.LifecycleRule
+		match     bool
+	}{
+		{"generated ID", []s3types.LifecycleRule{base}, []s3types.LifecycleRule{generated}, true},
+		{"order", []s3types.LifecycleRule{base, explicit}, []s3types.LifecycleRule{explicit, generated}, true},
+		{"different ID", []s3types.LifecycleRule{explicit}, []s3types.LifecycleRule{generated}, false},
+		{"changed action", []s3types.LifecycleRule{base}, []s3types.LifecycleRule{changed}, false},
+		{"missing rule", []s3types.LifecycleRule{base}, nil, false},
+		{"duplicate counts", []s3types.LifecycleRule{base, base}, []s3types.LifecycleRule{generated, changed}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := awsLifecycleRulesMatch(tc.want, tc.got); got != tc.match {
+				t.Fatalf("match=%v want=%v", got, tc.match)
+			}
+		})
+	}
+}
+
+type lifecycleReadbackClient struct {
+	fakePublicAccessBlockClient
+	observed          *s3.GetBucketLifecycleConfigurationOutput
+	observeErr        error
+	cancelWrite       context.CancelFunc
+	readContextErr    error
+	readDeadline      time.Time
+	readbacks, writes int
+}
+
+func (f *lifecycleReadbackClient) GetBucketLifecycleConfiguration(ctx context.Context, in *s3.GetBucketLifecycleConfigurationInput, opts ...func(*s3.Options)) (*s3.GetBucketLifecycleConfigurationOutput, error) {
+	if f.putLifecycle != nil {
+		f.readbacks++
+		f.readContextErr = ctx.Err()
+		f.readDeadline, _ = ctx.Deadline()
+		return f.observed, f.observeErr
+	}
+	return f.fakePublicAccessBlockClient.GetBucketLifecycleConfiguration(ctx, in, opts...)
+}
+func TestAWSLifecycleReplacementUnconfirmed(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		out  *s3.GetBucketLifecycleConfigurationOutput
+		err  error
+	}{
+		{name: "missing"}, {name: "empty", out: &s3.GetBucketLifecycleConfigurationOutput{}}, {name: "read error", err: errors.New("read failure")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &lifecycleReadbackClient{fakePublicAccessBlockClient: fakePublicAccessBlockClient{lifecycleErr: &smithy.GenericAPIError{Code: "NoSuchLifecycleConfiguration"}}, observed: tc.out, observeErr: tc.err}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			err := adapter.PutLifecycle(context.Background(), models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{Rules: json.RawMessage(`[{"status":"enabled","expiration":{"days":30}}]`)})
+			var opErr *OperationError
+			if !errors.As(err, &opErr) || opErr.Code != "bucket_lifecycle_unconfirmed" {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func (f *lifecycleReadbackClient) PutBucketLifecycleConfiguration(ctx context.Context, in *s3.PutBucketLifecycleConfigurationInput, opts ...func(*s3.Options)) (*s3.PutBucketLifecycleConfigurationOutput, error) {
+	f.writes++
+	if f.cancelWrite != nil {
+		f.cancelWrite()
+	}
+	return f.fakePublicAccessBlockClient.PutBucketLifecycleConfiguration(ctx, in, opts...)
+}
+func TestAWSLifecycleWriteErrorStillObservesAfterCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rules := []s3types.LifecycleRule{{Status: s3types.ExpirationStatusEnabled, Expiration: &s3types.LifecycleExpiration{Days: int32Ptr(30)}}}
+	client := &lifecycleReadbackClient{
+		fakePublicAccessBlockClient: fakePublicAccessBlockClient{lifecycleErr: &smithy.GenericAPIError{Code: "NoSuchLifecycleConfiguration"}, putLifecycleErr: context.Canceled},
+		cancelWrite:                 cancel, observed: &s3.GetBucketLifecycleConfigurationOutput{Rules: rules},
+	}
+	adapter := &awsAdapter{newClient: stubAWSClient(client)}
+	err := adapter.PutLifecycle(ctx, models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{Rules: json.RawMessage(`[{"status":"enabled","expiration":{"days":30}}]`)})
+	var opErr *OperationError
+	if !errors.As(err, &opErr) || opErr.Code != "bucket_lifecycle_error" {
+		t.Fatalf("write error was not retained: %v", err)
+	}
+	if client.readbacks != 1 || client.writes != 1 || client.readContextErr != nil {
+		t.Fatalf("reads=%d writes=%d readErr=%v", client.readbacks, client.writes, client.readContextErr)
+	}
+	if client.readDeadline.IsZero() || time.Until(client.readDeadline) <= 0 || time.Until(client.readDeadline) > 10*time.Second {
+		t.Fatal("readback deadline missing or unbounded")
+	}
+}
+
+func TestAWSOwnershipWriteRequiresObservedMode(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		mode    s3types.ObjectOwnership
+		readErr error
+	}{
+		{name: "different", mode: s3types.ObjectOwnershipBucketOwnerEnforced},
+		{name: "missing"}, {name: "read failure", readErr: errors.New("read failed")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakePublicAccessBlockClient{ownershipErr: tc.readErr}
+			if tc.mode != "" {
+				client.ownershipOutput = &s3.GetBucketOwnershipControlsOutput{OwnershipControls: &s3types.OwnershipControls{Rules: []s3types.OwnershipControlsRule{{ObjectOwnership: tc.mode}}}}
+			}
+			adapter := &awsAdapter{newClient: stubAWSClient(client)}
+			mode := models.BucketObjectOwnershipObjectWriter
+			err := adapter.PutAccess(context.Background(), models.ProfileSecrets{}, "demo", models.BucketAccessPutRequest{ObjectOwnership: &mode})
+			var opErr *OperationError
+			if !errors.As(err, &opErr) || opErr.Code != "bucket_access_unconfirmed" {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func TestAWSMissingPublicAccessBlockIsNotPublic(t *testing.T) {
+	for _, out := range []*s3.GetPublicAccessBlockOutput{nil, {}} {
+		adapter := &awsAdapter{newClient: stubAWSClient(&fakePublicAccessBlockClient{getOutput: out})}
+		view, err := adapter.GetPublicExposure(context.Background(), models.ProfileSecrets{}, "demo")
+		if err == nil || view.BlockPublicAccess != nil {
+			t.Fatalf("view=%+v err=%v", view, err)
+		}
+	}
+}
+
+type mismatchedPublicAccessClient struct{ fakePublicAccessBlockClient }
+
+func (f *mismatchedPublicAccessClient) GetPublicAccessBlock(context.Context, *s3.GetPublicAccessBlockInput, ...func(*s3.Options)) (*s3.GetPublicAccessBlockOutput, error) {
+	return &s3.GetPublicAccessBlockOutput{PublicAccessBlockConfiguration: &s3types.PublicAccessBlockConfiguration{BlockPublicAcls: boolPtr(true), IgnorePublicAcls: boolPtr(true), BlockPublicPolicy: boolPtr(true), RestrictPublicBuckets: boolPtr(false)}}, nil
+}
+func TestAWSPublicAccessWriteRejectsPartialMatch(t *testing.T) {
+	client := &mismatchedPublicAccessClient{}
+	adapter := &awsAdapter{newClient: stubAWSClient(client)}
+	err := adapter.PutPublicExposure(context.Background(), models.ProfileSecrets{}, "demo", models.BucketPublicExposurePutRequest{Mode: models.BucketPublicExposureModePrivate})
+	var opErr *OperationError
+	if !errors.As(err, &opErr) || opErr.Code != "bucket_public_exposure_unconfirmed" {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestAWSPublicAccessBlockMissingFlagIsUnknown(t *testing.T) {
+	for missing := 0; missing < 4; missing++ {
+		flags := []*bool{boolPtr(false), boolPtr(false), boolPtr(false), boolPtr(false)}
+		flags[missing] = nil
+		client := &fakePublicAccessBlockClient{getOutput: &s3.GetPublicAccessBlockOutput{PublicAccessBlockConfiguration: &s3types.PublicAccessBlockConfiguration{BlockPublicAcls: flags[0], IgnorePublicAcls: flags[1], BlockPublicPolicy: flags[2], RestrictPublicBuckets: flags[3]}}}
+		adapter := &awsAdapter{newClient: stubAWSClient(client)}
+		view, err := adapter.GetPublicExposure(context.Background(), models.ProfileSecrets{}, "demo")
+		if err == nil || view.BlockPublicAccess != nil {
+			t.Fatalf("missing flag=%d view=%+v err=%v", missing, view, err)
+		}
+	}
 }

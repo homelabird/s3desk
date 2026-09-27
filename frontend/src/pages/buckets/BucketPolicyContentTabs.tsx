@@ -24,7 +24,7 @@ export function BucketPolicyContentTabs(props: {
   selectedPresetDescription: string | null;
   policyPresets: Array<{ key: string; label: string }>;
   applyPolicyPreset: (key: string) => void;
-  updateStructuredStateFromText: (text: string) => void;
+  updateStructuredStateFromText: (text: string) => boolean | void;
   resetServerValidationState: () => void;
   policyText: string;
   setPolicyText: (text: string) => void;
@@ -107,7 +107,7 @@ export function BucketPolicyContentTabs(props: {
                               bucketsFeedback.fixJsonErrorsFirst(props.parsed.error);
                               return;
                             }
-                            props.updateStructuredStateFromText(props.policyText);
+                            if (props.updateStructuredStateFromText(props.policyText) === false) return;
                             props.setEditorMode("form");
                           } else {
                             props.setPolicyText(props.formPolicyText);
@@ -293,8 +293,8 @@ export function BucketPolicyContentTabs(props: {
                 <div className={styles.validationActionCopy}>
                   <Typography.Text strong>Validate before Save</Typography.Text>
                   <Typography.Text type="secondary">
-                    Run provider validation here, then review Preview or Diff before
-                    saving.
+                    Check policy structure on the server, then review Preview or Diff.
+                    These checks do not contact the provider or verify permissions and access effects.
                   </Typography.Text>
                 </div>
                 <Button
@@ -305,7 +305,7 @@ export function BucketPolicyContentTabs(props: {
                     props.isBusy || !props.parsed.ok || props.hasBlockingValidationIssues
                   }
                 >
-                  Validate with provider
+                  Run static checks
                 </Button>
               </div>
 
@@ -315,11 +315,14 @@ export function BucketPolicyContentTabs(props: {
                   showIcon
                   title={
                     props.serverValidation.ok
-                      ? "Server validation OK"
-                      : "Server validation found issues"
+                      ? "Static checks passed"
+                      : "Static checks found issues"
                   }
                   description={
                     <Space orientation="vertical" size={4} className={styles.fullWidth}>
+                      <Typography.Text type="secondary">
+                        Static checks only. Provider acceptance and access effects remain unverified.
+                      </Typography.Text>
                       {props.serverValidationMessages.map((row, idx) => (
                         <Typography.Text key={`${idx}-${row}`} type="secondary">
                           {row}

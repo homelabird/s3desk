@@ -1,10 +1,13 @@
 package bucketgov
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
-	"time"
+	"unicode/utf8"
 
+	"s3desk/internal/azureacl"
+	"s3desk/internal/gcsiam"
 	"s3desk/internal/models"
 )
 
@@ -40,6 +43,33 @@ func ValidateAccessPut(ctx ValidationContext, req models.BucketAccessPutRequest)
 		}
 	}
 
+	if ctx.Provider == models.ProfileProviderGcpGcs {
+		for i, binding := range req.Bindings {
+			field := "bindings[" + strconv.Itoa(i) + "]"
+			if strings.TrimSpace(binding.Role) == "" {
+				return RequiredFieldError(field+".role", map[string]any{"section": "access"})
+			}
+			if len(binding.Members) == 0 {
+				return RequiredFieldError(field+".members", map[string]any{"section": "access"})
+			}
+			if len(binding.Condition) > 0 {
+				var condition any
+				if err := json.Unmarshal(binding.Condition, &condition); err != nil {
+					return InvalidFieldError(field+".condition", "condition must be a JSON object", map[string]any{"section": "access"})
+				}
+				if err := gcsiam.ValidateCondition(condition); err != nil {
+					return InvalidFieldError(field+".condition", err.Error(), map[string]any{"section": "access"})
+				}
+			}
+
+			for _, member := range binding.Members {
+				if strings.TrimSpace(member) == "" {
+					return InvalidFieldError(field+".members", "binding members must be non-empty strings", map[string]any{"section": "access"})
+				}
+			}
+		}
+	}
+
 	if ctx.Provider == models.ProfileProviderAzureBlob {
 		if len(req.StoredAccessPolicies) > 5 {
 			return InvalidFieldError("storedAccessPolicies", "Azure allows a maximum of 5 stored access policies", map[string]any{
@@ -54,7 +84,10 @@ func ValidateAccessPut(ctx ValidationContext, req models.BucketAccessPutRequest)
 					"section": "access",
 				})
 			}
-			key := strings.ToLower(strings.TrimSpace(item.ID))
+			key := strings.TrimSpace(item.ID)
+			if utf8.RuneCountInString(key) > 64 {
+				return InvalidFieldError("storedAccessPolicies["+index+"].id", "stored access policy id must not exceed 64 characters", map[string]any{"section": "access"})
+			}
 			if _, ok := seen[key]; ok {
 				return InvalidFieldError("storedAccessPolicies["+index+"].id", "stored access policy id must be unique", map[string]any{
 					"section": "access",
@@ -64,30 +97,23 @@ func ValidateAccessPut(ctx ValidationContext, req models.BucketAccessPutRequest)
 			seen[key] = struct{}{}
 
 			if start := strings.TrimSpace(item.Start); start != "" {
-				if _, err := time.Parse(time.RFC3339, start); err != nil {
-					return InvalidFieldError("storedAccessPolicies["+index+"].start", "stored access policy start must be RFC3339", map[string]any{
+				if err := azureacl.ValidateStoredPolicyTime(start); err != nil {
+					return InvalidFieldError("storedAccessPolicies["+index+"].start", "stored access policy start must be an ISO 8601 date or timestamp with timezone", map[string]any{
 						"section": "access",
 						"value":   item.Start,
 					})
 				}
 			}
 			if expiry := strings.TrimSpace(item.Expiry); expiry != "" {
-				if _, err := time.Parse(time.RFC3339, expiry); err != nil {
-					return InvalidFieldError("storedAccessPolicies["+index+"].expiry", "stored access policy expiry must be RFC3339", map[string]any{
+				if err := azureacl.ValidateStoredPolicyTime(expiry); err != nil {
+					return InvalidFieldError("storedAccessPolicies["+index+"].expiry", "stored access policy expiry must be an ISO 8601 date or timestamp with timezone", map[string]any{
 						"section": "access",
 						"value":   item.Expiry,
 					})
 				}
 			}
-			if permission := strings.ToLower(strings.TrimSpace(item.Permission)); permission != "" {
-				for _, ch := range permission {
-					if !strings.ContainsRune("rwdlacup", ch) {
-						return InvalidFieldError("storedAccessPolicies["+index+"].permission", "stored access policy permission must use only r,w,d,l,a,c,u,p", map[string]any{
-							"section": "access",
-							"value":   item.Permission,
-						})
-					}
-				}
+			if err := azureacl.ValidateStoredPolicyPermission(item.Permission); err != nil {
+				return InvalidFieldError("storedAccessPolicies["+index+"].permission", err.Error(), map[string]any{"section": "access"})
 			}
 		}
 	}

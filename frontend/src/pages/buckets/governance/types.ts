@@ -47,7 +47,7 @@ export type AzureStoredAccessPolicyDraft = {
 
 export type BucketGovernanceDraft = {
   publicAccessBlock: BucketBlockPublicAccess;
-  objectOwnership: BucketObjectOwnershipMode;
+  objectOwnership: BucketObjectOwnershipMode | "";
   versioningStatus: "enabled" | "suspended";
   encryptionMode: "sse_s3" | "sse_kms";
   kmsKeyId: string;
@@ -84,7 +84,7 @@ export type AzureGovernanceDraft = {
 
 export type OCIGovernanceDraft = {
   visibility: "private" | "object_read" | "object_read_without_list";
-  versioningStatus: "enabled" | "disabled";
+  versioningStatus: "enabled" | "suspended";
   retentionRules: OCIRetentionRuleDraft[];
 };
 
@@ -168,13 +168,20 @@ export type BucketSharingPutClientRequest = {
 
 export const azureStoredAccessPermissionOptions = [
   { value: "r", label: "Read" },
-  { value: "w", label: "Write" },
-  { value: "d", label: "Delete" },
-  { value: "l", label: "List" },
   { value: "a", label: "Add" },
   { value: "c", label: "Create" },
-  { value: "u", label: "Update" },
-  { value: "p", label: "Process" },
+  { value: "w", label: "Write" },
+  { value: "d", label: "Delete" },
+  { value: "x", label: "Delete version" },
+  { value: "y", label: "Permanent delete" },
+  { value: "l", label: "List" },
+  { value: "t", label: "Tags" },
+  { value: "f", label: "Find tags" },
+  { value: "m", label: "Move" },
+  { value: "e", label: "Execute" },
+  { value: "o", label: "Ownership" },
+  { value: "p", label: "Permissions" },
+  { value: "i", label: "Set immutability policy" },
 ] as const;
 
 export type AzureStoredAccessPermission =

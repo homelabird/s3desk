@@ -822,7 +822,9 @@ paths:
 
         - S3 providers: PutBucketPolicy.
         - GCS: Set bucket IAM policy.
-        - Azure: Set container ACL/public access.
+        - Azure: Set container ACL/public access. Both publicAccess (private, blob,
+          or container) and storedAccessPolicies (array) are required. An explicit
+          empty array removes all stored policies; omitted fields are rejected.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
@@ -837,6 +839,8 @@ paths:
         "204":
           description: No Content
         "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
           $ref: "#/components/responses/ErrorResponse"
         "404":
           $ref: "#/components/responses/ErrorResponse"
@@ -956,6 +960,8 @@ paths:
           description: Updated
         "400":
           $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
 
   /buckets/{bucket}/governance/public-exposure:
     get:
@@ -991,6 +997,8 @@ paths:
         "204":
           description: Updated
         "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
           $ref: "#/components/responses/ErrorResponse"
 
   /buckets/{bucket}/governance/protection:
@@ -1631,6 +1639,11 @@ paths:
     get:
       tags: [Objects]
       summary: Get an object thumbnail
+      description: >-
+        Returns a JPEG thumbnail. HTTP 415 uses code unsupported for an unsupported
+        object kind, or thumbnail_decode_failed when a supported image/video kind
+        could not be decoded. Decode failure details identify the decoder and video
+        range attempts; this does not prove the object's codec is supported.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
@@ -1736,7 +1749,12 @@ paths:
           in: header
           required: false
           schema: { type: string, minLength: 1 }
-          description: Required in raw chunk mode; relative file path within the upload session.
+          description: Required in raw chunk mode; relative file path within the upload session. Also supported for a single direct multipart file. For Unicode paths, percent-encode UTF-8 and set X-Upload-Relative-Path-Encoding.
+        - name: X-Upload-Relative-Path-Encoding
+          in: header
+          required: false
+          schema: { type: string, enum: [percent-encoded] }
+          description: Decode X-Upload-Relative-Path exactly once as percent-encoded UTF-8 (plus signs remain literal). Omit for legacy unencoded paths.
       requestBody:
         required: true
         content:
@@ -3041,8 +3059,12 @@ components:
       required: [id]
       properties:
         id: { type: string }
-        start: { type: string }
-        expiry: { type: string }
+        start:
+          type: string
+          description: Azure ISO 8601 date or timestamp with timezone; date-only and minute precision are supported.
+        expiry:
+          type: string
+          description: Azure ISO 8601 date or timestamp with timezone; date-only and minute precision are supported.
         permission: { type: string }
 
     BucketAccessView:
@@ -3079,7 +3101,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BucketAccessBinding"
-        etag: { type: string }
+        etag:
+          type: string
+          description: Required for GCS edits; preserve the ETag from the loaded policy. GCS bucket creation defaults may omit it and use the newly created policy revision.
         storedAccessPolicies:
           type: array
           items:
@@ -3245,6 +3269,7 @@ components:
         status:
           type: string
           enum: [enabled, disabled, suspended]
+          description: AWS S3 and OCI accept enabled or suspended. GCS and Azure accept enabled or disabled.
 
     BucketEncryptionMode:
       type: string

@@ -144,6 +144,7 @@ func New(dep Dependencies) http.Handler {
 		})
 
 		r.Route("/buckets/{bucket}/policy", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketPolicy)
 			r.Put("/", api.handlePutBucketPolicy)
 			r.Delete("/", api.handleDeleteBucketPolicy)
@@ -151,40 +152,48 @@ func New(dep Dependencies) http.Handler {
 		})
 
 		r.Route("/buckets/{bucket}/governance", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketGovernance)
 		})
 
 		r.Route("/buckets/{bucket}/governance/access", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketAccess)
 			r.Put("/", api.handlePutBucketAccess)
 		})
 
 		r.Route("/buckets/{bucket}/governance/public-exposure", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketPublicExposure)
 			r.Put("/", api.handlePutBucketPublicExposure)
 		})
 
 		r.Route("/buckets/{bucket}/governance/protection", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketProtection)
 			r.Put("/", api.handlePutBucketProtection)
 		})
 
 		r.Route("/buckets/{bucket}/governance/versioning", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketVersioning)
 			r.Put("/", api.handlePutBucketVersioning)
 		})
 
 		r.Route("/buckets/{bucket}/governance/encryption", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketEncryption)
 			r.Put("/", api.handlePutBucketEncryption)
 		})
 
 		r.Route("/buckets/{bucket}/governance/lifecycle", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketLifecycle)
 			r.Put("/", api.handlePutBucketLifecycle)
 		})
 
 		r.Route("/buckets/{bucket}/governance/sharing", func(r chi.Router) {
+			r.Use(api.policyAudit)
 			r.Get("/", api.handleGetBucketSharing)
 			r.Put("/", api.handlePutBucketSharing)
 		})

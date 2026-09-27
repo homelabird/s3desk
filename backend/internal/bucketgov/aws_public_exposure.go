@@ -3,8 +3,10 @@ package bucketgov
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -146,10 +148,14 @@ func (a *awsAdapter) GetPublicExposure(ctx context.Context, profile models.Profi
 		return models.BucketPublicExposureView{}, mapAWSPublicExposureError(err, bucket, "get")
 	}
 
-	block := models.BucketBlockPublicAccess{}
-	if out.PublicAccessBlockConfiguration != nil {
-		block = fromS3PublicAccessBlock(*out.PublicAccessBlockConfiguration)
+	if out == nil || out.PublicAccessBlockConfiguration == nil {
+		return models.BucketPublicExposureView{}, UpstreamOperationError("bucket_public_exposure_error", "missing Public Access Block response", bucket, errors.New("missing public access configuration"))
 	}
+	configuration := out.PublicAccessBlockConfiguration
+	if configuration.BlockPublicAcls == nil || configuration.IgnorePublicAcls == nil || configuration.BlockPublicPolicy == nil || configuration.RestrictPublicBuckets == nil {
+		return models.BucketPublicExposureView{}, UpstreamOperationError("bucket_public_exposure_error", "incomplete Public Access Block response", bucket, errors.New("one or more protection flags are missing"))
+	}
+	block := fromS3PublicAccessBlock(*configuration)
 	view := newAWSPublicExposureView(bucket, block)
 	if !allPublicAccessBlockEnabled(block) {
 		view.Warnings = append(view.Warnings, "One or more S3 Block Public Access protections are disabled.")
@@ -176,8 +182,14 @@ func (a *awsAdapter) PutPublicExposure(ctx context.Context, profile models.Profi
 			RestrictPublicBuckets: boolPtr(block.RestrictPublicBuckets),
 		},
 	})
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, readErr := a.GetPublicExposure(readCtx, profile, bucket)
 	if putErr != nil {
 		return mapAWSPublicExposureError(putErr, bucket, "put")
+	}
+	if readErr != nil || observed.BlockPublicAccess == nil || *observed.BlockPublicAccess != block {
+		return &OperationError{Status: http.StatusBadGateway, Code: "bucket_public_exposure_unconfirmed", Message: "Public Access Block update was accepted but current state did not confirm the request; reload before retrying", Details: map[string]any{"bucket": bucket}}
 	}
 	return nil
 }

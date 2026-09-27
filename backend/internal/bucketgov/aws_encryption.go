@@ -2,6 +2,7 @@ package bucketgov
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -52,66 +53,55 @@ func (a *awsAdapter) PutEncryption(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *awsAdapter) toS3EncryptionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketEncryptionPutRequest) (s3types.ServerSideEncryptionRule, error) {
-	kmsKeyID := strings.TrimSpace(req.KMSKeyID)
-	switch req.Mode {
-	case models.BucketEncryptionModeSSES3:
-		return s3types.ServerSideEncryptionRule{
-			ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{
-				SSEAlgorithm: s3types.ServerSideEncryptionAes256,
-			},
-		}, nil
-	case models.BucketEncryptionModeSSEKMS:
-		bucketKeyEnabled, err := a.currentBucketKeyEnabled(ctx, profile, bucket)
-		if err != nil {
-			return s3types.ServerSideEncryptionRule{}, err
-		}
-		byDefault := &s3types.ServerSideEncryptionByDefault{
-			SSEAlgorithm: s3types.ServerSideEncryptionAwsKms,
-		}
-		if kmsKeyID != "" {
-			byDefault.KMSMasterKeyID = &kmsKeyID
-		}
-		rule := s3types.ServerSideEncryptionRule{
-			ApplyServerSideEncryptionByDefault: byDefault,
-		}
-		if bucketKeyEnabled {
-			rule.BucketKeyEnabled = boolPtr(true)
-		}
-		return rule, nil
-	default:
-		return s3types.ServerSideEncryptionRule{}, InvalidEnumFieldError("mode", string(req.Mode),
-			string(models.BucketEncryptionModeSSES3),
-			string(models.BucketEncryptionModeSSEKMS),
-		)
+	if req.Mode != models.BucketEncryptionModeSSES3 && req.Mode != models.BucketEncryptionModeSSEKMS {
+		return s3types.ServerSideEncryptionRule{}, InvalidEnumFieldError("mode", string(req.Mode), string(models.BucketEncryptionModeSSES3), string(models.BucketEncryptionModeSSEKMS))
 	}
+	rule, err := a.currentEncryptionRule(ctx, profile, bucket)
+	if err != nil {
+		return s3types.ServerSideEncryptionRule{}, err
+	}
+	byDefault := &s3types.ServerSideEncryptionByDefault{SSEAlgorithm: s3types.ServerSideEncryptionAes256}
+	if req.Mode == models.BucketEncryptionModeSSEKMS {
+		byDefault.SSEAlgorithm = s3types.ServerSideEncryptionAwsKms
+		if rule.ApplyServerSideEncryptionByDefault != nil && rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm == s3types.ServerSideEncryptionAwsKmsDsse {
+			byDefault.SSEAlgorithm = s3types.ServerSideEncryptionAwsKmsDsse
+		}
+		if key := strings.TrimSpace(req.KMSKeyID); key != "" {
+			byDefault.KMSMasterKeyID = &key
+		}
+	} else {
+		rule.BucketKeyEnabled = nil
+	}
+	rule.ApplyServerSideEncryptionByDefault = byDefault
+	return rule, nil
 }
 
-func (a *awsAdapter) currentBucketKeyEnabled(ctx context.Context, profile models.ProfileSecrets, bucket string) (bool, error) {
+func (a *awsAdapter) currentEncryptionRule(ctx context.Context, profile models.ProfileSecrets, bucket string) (s3types.ServerSideEncryptionRule, error) {
 	client, err := a.clientFor(profile, bucket)
 	if err != nil {
-		return false, err
+		return s3types.ServerSideEncryptionRule{}, err
 	}
-	out, err := client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
-		Bucket: &bucket,
-	})
+	out, err := client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{Bucket: &bucket})
 	if err != nil {
 		if isAWSAPICode(err, "ServerSideEncryptionConfigurationNotFoundError") {
-			return false, nil
+			return s3types.ServerSideEncryptionRule{}, nil
 		}
-		return false, mapAWSEncryptionError(err, bucket, "get")
+		return s3types.ServerSideEncryptionRule{}, mapAWSEncryptionError(err, bucket, "get")
 	}
-
-	rule := firstS3EncryptionRule(out)
-	if rule == nil || rule.BucketKeyEnabled == nil {
-		return false, nil
+	if _, err := newAWSEncryptionView(bucket, out); err != nil {
+		return s3types.ServerSideEncryptionRule{}, err
 	}
-	return *rule.BucketKeyEnabled, nil
+	rule, err := firstS3EncryptionRule(out)
+	if err != nil {
+		return s3types.ServerSideEncryptionRule{}, mapAWSEncryptionError(err, bucket, "get")
+	}
+	return *rule, nil
 }
 
 func newAWSEncryptionView(bucket string, out *s3.GetBucketEncryptionOutput) (models.BucketEncryptionView, error) {
-	rule := firstS3EncryptionRule(out)
-	if rule == nil || rule.ApplyServerSideEncryptionByDefault == nil {
-		return implicitSSES3EncryptionView(bucket), nil
+	rule, err := firstS3EncryptionRule(out)
+	if err != nil {
+		return models.BucketEncryptionView{}, mapAWSEncryptionError(err, bucket, "get")
 	}
 
 	view := models.BucketEncryptionView{
@@ -127,7 +117,7 @@ func newAWSEncryptionView(bucket string, out *s3.GetBucketEncryptionOutput) (mod
 		view.Mode = models.BucketEncryptionModeSSEKMS
 	case s3types.ServerSideEncryptionAwsKmsDsse:
 		view.Mode = models.BucketEncryptionModeSSEKMS
-		view.Warnings = append(view.Warnings, "DSSE-KMS is configured; saving changes here will replace it with standard SSE-KMS.")
+		view.Warnings = append(view.Warnings, "DSSE-KMS is configured and will be preserved when saving in SSE-KMS mode. Selecting SSE-S3 replaces it.")
 	default:
 		return models.BucketEncryptionView{}, &OperationError{
 			Status:  http.StatusBadGateway,
@@ -149,11 +139,15 @@ func newAWSEncryptionView(bucket string, out *s3.GetBucketEncryptionOutput) (mod
 	return view, nil
 }
 
-func firstS3EncryptionRule(out *s3.GetBucketEncryptionOutput) *s3types.ServerSideEncryptionRule {
-	if out == nil || out.ServerSideEncryptionConfiguration == nil || len(out.ServerSideEncryptionConfiguration.Rules) == 0 {
-		return nil
+func firstS3EncryptionRule(out *s3.GetBucketEncryptionOutput) (*s3types.ServerSideEncryptionRule, error) {
+	if out == nil || out.ServerSideEncryptionConfiguration == nil || len(out.ServerSideEncryptionConfiguration.Rules) != 1 {
+		return nil, errors.New("expected exactly one encryption rule")
 	}
-	return &out.ServerSideEncryptionConfiguration.Rules[0]
+	rule := &out.ServerSideEncryptionConfiguration.Rules[0]
+	if rule.ApplyServerSideEncryptionByDefault == nil || rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm == "" {
+		return nil, errors.New("missing default encryption algorithm")
+	}
+	return rule, nil
 }
 
 func implicitSSES3EncryptionView(bucket string) models.BucketEncryptionView {

@@ -277,7 +277,7 @@ Every release note set must include:
 
 For the current codebase, these unsupported or partial behaviors must be called out when relevant:
 
-- Azure immutability and legal-hold editing require ARM credentials in addition to storage credentials.
+- Azure versioning reads and writes, immutability editing, and legal-hold editing require ARM credentials in addition to storage credentials. Versioning applies to the storage account.
 - OCI PAR edits are implemented as delete-and-recreate, not true in-place mutation.
 - OCI PAR access URIs are only fully available at creation time and must be copied then.
 - AWS typed governance does not cover Object Lock.

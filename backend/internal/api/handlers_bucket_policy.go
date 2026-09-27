@@ -221,5 +221,12 @@ func (s *server) writeGenericPolicyUpstreamError(w http.ResponseWriter, op, buck
 		details["upstreamError"] = bodyStr
 	}
 
-	writeError(w, respStatus, apiCode, fmt.Sprintf("failed to %s bucket policy", op), redactRcloneDiagnosticDetails(details))
+	message := fmt.Sprintf("failed to %s bucket policy", op)
+	if providerHint == "gcs" && op == "put" && (status == http.StatusConflict || status == http.StatusPreconditionFailed) {
+		respStatus = http.StatusConflict
+		apiCode = "bucket_policy_conflict"
+		message = "GCS IAM policy changed; reload and review the current policy before retrying"
+		details["upstreamStatus"] = status
+	}
+	writeError(w, respStatus, apiCode, message, redactRcloneDiagnosticDetails(details))
 }

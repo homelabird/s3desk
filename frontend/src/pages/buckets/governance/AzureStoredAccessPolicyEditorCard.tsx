@@ -61,7 +61,7 @@ export function AzureStoredAccessPolicyEditorCard({
           />
         </FormField>
         <FormField
-          label="Start (RFC3339)"
+          label="Start (ISO 8601)"
           htmlFor={`bucket-governance-azure-policy-start-${index}`}
         >
           <Input
@@ -72,7 +72,7 @@ export function AzureStoredAccessPolicyEditorCard({
           />
         </FormField>
         <FormField
-          label="Expiry (RFC3339)"
+          label="Expiry (ISO 8601)"
           htmlFor={`bucket-governance-azure-policy-expiry-${index}`}
         >
           <Input
@@ -86,7 +86,7 @@ export function AzureStoredAccessPolicyEditorCard({
       <FormField
         label="Permissions"
         htmlFor={`bucket-governance-azure-policy-permissions-${index}`}
-        extra="Permission order is normalized to rwdlacup on save."
+        extra="Existing permissions are preserved. Available effects depend on the storage account and SAS resource."
       >
         <div
           id={`bucket-governance-azure-policy-permissions-${index}`}

@@ -194,3 +194,40 @@ func testARMProfile() models.ProfileSecrets {
 		AzureClientSecret:   "secret",
 	}
 }
+
+func TestBlobVersioningUsesARMAndPreservesFalse(t *testing.T) {
+	calls := 0
+	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body := `{"access_token":"test-token"}`
+		if req.URL.Host == "management.azure.com" {
+			calls++
+			if !strings.HasSuffix(req.URL.Path, "/blobServices/default") || strings.Contains(req.URL.Path, "/containers/") || req.URL.Query().Get("api-version") != "2024-01-01" {
+				t.Fatalf("wrong ARM resource: %s", req.URL)
+			}
+			if req.Method == http.MethodPut {
+				payload, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(payload) != `{"properties":{"isVersioningEnabled":false}}` {
+					t.Fatalf("payload=%s", payload)
+				}
+			} else if req.Method != http.MethodGet {
+				t.Fatalf("method=%s", req.Method)
+			}
+			body = `{"properties":{"isVersioningEnabled":false}}`
+		} else if req.URL.Host != "login.microsoftonline.com" {
+			t.Fatalf("unexpected host %s", req.URL.Host)
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+	})}}
+	if _, err := client.GetBlobServiceProperties(t.Context(), testARMProfile()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.PutBlobVersioning(t.Context(), testARMProfile(), false); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Fatalf("ARM calls=%d", calls)
+	}
+}

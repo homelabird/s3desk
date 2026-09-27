@@ -36,7 +36,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
   const [publicAccessBlock, setPublicAccessBlock] =
     useState(draft.publicAccessBlock);
   const [objectOwnership, setObjectOwnership] =
-    useState<BucketObjectOwnershipMode>(draft.objectOwnership);
+    useState<BucketObjectOwnershipMode | "">(draft.objectOwnership);
   const [versioningStatus, setVersioningStatus] = useState<
     "enabled" | "suspended"
   >(draft.versioningStatus);
@@ -59,12 +59,14 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
 
   const accessMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Object ownership updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketAccess(
+    mutationFn: () => {
+      if (!objectOwnership) throw new Error("Select an ownership mode before saving.");
+      return props.api.buckets.putBucketAccess(
         props.profileId,
         props.bucket,
         buildAWSAccessRequest(objectOwnership),
-      ),
+      );
+    },
   });
 
   const versioningMutation = useGovernanceControlMutation(mutationRunner, {
@@ -150,6 +152,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
             description:
               "Prefer bucket-owner-enforced ownership unless ACL interoperability is required.",
             saveLoading: accessMutation.isPending,
+            saveDisabled: !objectOwnership,
             onSave: () => accessMutation.mutate(),
             content: (
               <AWSObjectOwnershipControlBody

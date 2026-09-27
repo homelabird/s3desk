@@ -441,6 +441,23 @@ describe("BucketPolicyModal", () => {
     await waitFor(() => expect(publicReadCheckbox).toBeChecked());
   });
 
+  it("disables the public access shortcut for conditional IAM bindings", async () => {
+    const api = createApi({
+      getBucketPolicy: vi.fn().mockResolvedValue({
+        bucket: "demo-bucket", exists: true,
+        policy: { version: 3, etag: "revision-1", bindings: [{
+          role: "roles/storage.objectViewer", members: ["user:reader@example.test"],
+          condition: { title: "limited", expression: "request.time < timestamp('2030-01-01T00:00:00Z')" },
+        }] },
+      }),
+    });
+    renderModal(api, { provider: "gcp_gcs" });
+    expect(await screen.findByText("Conditional bindings preserved")).toBeInTheDocument();
+    const shortcut = screen.getByRole("checkbox", { name: "Public read access" });
+    expect(shortcut).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Binding 1 members" })).toHaveValue("user:reader@example.test");
+  });
+
   it("labels GCS binding controls by row in the mobile card layout", async () => {
     mockViewportWidth(390);
     const api = createApi({
@@ -531,7 +548,7 @@ describe("BucketPolicyModal", () => {
     renderModal(api);
 
     const validateButton = await screen.findByRole("button", {
-      name: "Validate with provider",
+      name: "Run static checks",
     });
     await act(async () => {
       fireEvent.click(validateButton);
@@ -553,7 +570,7 @@ describe("BucketPolicyModal", () => {
     const successSpy = vi.spyOn(message, "success").mockImplementation(() => undefined as never);
     const warningSpy = vi.spyOn(message, "warning").mockImplementation(() => undefined as never);
     renderModal(api);
-    fireEvent.click(await screen.findByRole("button", { name: "Validate with provider" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Run static checks" }));
     await waitFor(() => expect(api.buckets.validateBucketPolicy).toHaveBeenCalledOnce());
     const editor = screen.getByRole("textbox", { name: "Raw policy JSON" });
     const nextText = JSON.stringify({ Version: "2012-10-17", Statement: [], Id: "new-draft" });
@@ -562,9 +579,9 @@ describe("BucketPolicyModal", () => {
       if (outcome === "success") pending.resolve({ ok: true, provider: "aws_s3", errors: [], warnings: [] });
       else pending.reject(new Error("old validation unavailable"));
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Validate with provider" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run static checks" })).toBeEnabled());
     expect(editor).toHaveValue(nextText);
-    expect(screen.queryByText("Server validation OK")).not.toBeInTheDocument();
+    expect(screen.queryByText("Static checks passed")).not.toBeInTheDocument();
     expect(screen.queryByText(/old validation unavailable/)).not.toBeInTheDocument();
     expect(successSpy).not.toHaveBeenCalled();
     expect(warningSpy).not.toHaveBeenCalled();
@@ -589,7 +606,7 @@ describe("BucketPolicyModal", () => {
     renderModal(api);
 
     const validateButton = await screen.findByRole("button", {
-      name: "Validate with provider",
+      name: "Run static checks",
     });
     await act(async () => {
       fireEvent.click(validateButton);
@@ -666,8 +683,53 @@ describe("BucketPolicyModal", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: queryKeys.buckets.governance("profile-1", "demo-bucket", "token"),
         exact: true,
-      }),
+      }, { throwOnError: true }),
     );
+  });
+
+  it("refreshes policy after a failed save without retrying or losing the draft", async () => {
+    const api = createApi({ putBucketPolicy: vi.fn().mockRejectedValue(new Error("response lost")) });
+    const onClose = vi.fn();
+    renderModal(api, { onClose });
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    const draft = JSON.stringify({ Version: "2012-10-17", Statement: [], Id: "keep-draft" });
+    fireEvent.change(editor, { target: { value: draft } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.buckets.getBucketPolicy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
+    expect(api.buckets.putBucketPolicy).toHaveBeenCalledTimes(1);
+    expect(editor).toHaveValue(draft);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keeps the editor open when a successful save cannot be read back", async () => {
+    const successSpy = vi.spyOn(message, "success");
+    const api = createApi({
+      getBucketPolicy: vi.fn()
+        .mockResolvedValueOnce({ bucket: "demo-bucket", exists: true, policy: {} })
+        .mockRejectedValue(new Error("read unavailable")),
+      putBucketPolicy: vi.fn().mockResolvedValue(undefined),
+    });
+    const onClose = vi.fn();
+    renderModal(api, { onClose });
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    const draft = JSON.stringify({ Statement: [], Id: "retain-after-read-failure" });
+    fireEvent.change(editor, { target: { value: draft } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/Change request accepted, but current policy could not be read/)).toBeInTheDocument();
+    expect(api.buckets.putBucketPolicy).toHaveBeenCalledTimes(1);
+    expect(editor).toHaveValue(draft);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(successSpy).not.toHaveBeenCalled();
+  });
+
+  it("opens malformed GCS policy in JSON without discarding members", async () => {
+    const policy = { version: 3, bindings: [{ role: "roles/storage.objectViewer", members: ["allUsers", 42] }] };
+    const api = createApi({ getBucketPolicy: vi.fn().mockResolvedValue({ bucket: "demo-bucket", exists: true, policy }) });
+    renderModal(api, { provider: "gcp_gcs" });
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    expect(editor).toHaveValue(JSON.stringify(policy, null, 2));
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   it("shows an Azure controls shortcut", async () => {
@@ -837,6 +899,18 @@ describe("BucketPolicyModal", () => {
     expect(successSpy).not.toHaveBeenCalled();
   });
 
+  it("ignores delete confirmation after the policy draft changes", async () => {
+    const api = createApi({ deleteBucketPolicy: vi.fn().mockResolvedValue(undefined) });
+    renderModal(api);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete policy" }));
+    const confirmation = confirmDangerActionMock.mock.calls.at(-1)![0];
+    fireEvent.change(screen.getByRole("textbox", { name: "Raw policy JSON" }), {
+      target: { value: JSON.stringify({ Id: "edited-after-confirmation", Statement: [] }) },
+    });
+    await act(async () => { await confirmation.onConfirm(); });
+    expect(api.buckets.deleteBucketPolicy).not.toHaveBeenCalled();
+  });
+
   it("ignores stale delete confirmations after closing and reopening the modal", async () => {
     mockViewportWidth(1280);
     const api = createApi({
@@ -910,7 +984,7 @@ describe("BucketPolicyModal", () => {
     const view = renderModal(api);
 
     const validateButton = await screen.findByRole("button", {
-      name: "Validate with provider",
+      name: "Run static checks",
     });
     await act(async () => {
       fireEvent.click(validateButton);

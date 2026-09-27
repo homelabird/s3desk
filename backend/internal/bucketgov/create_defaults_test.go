@@ -2,6 +2,8 @@ package bucketgov
 
 import (
 	"context"
+	"encoding/json"
+	"s3desk/internal/gcsiam"
 	"testing"
 
 	"s3desk/internal/models"
@@ -137,4 +139,40 @@ func (s *stubCreateDefaultsAdapter) PutSharing(context.Context, models.ProfileSe
 
 func bucketObjectOwnershipPtr(mode models.BucketObjectOwnershipMode) *models.BucketObjectOwnershipMode {
 	return &mode
+}
+
+func TestGCSCreateDefaultsUsesInitialPolicyETag(t *testing.T) {
+	for _, etag := range []string{"initial-revision", ""} {
+		writes := 0
+		adapter := &gcsAdapter{
+			getPolicy: func(context.Context, models.ProfileSecrets, string) (gcsiam.Response, error) {
+				body, _ := json.Marshal(gcsIAMPolicy{Version: 1, ETag: etag})
+				return gcsiam.Response{Status: 200, Body: body}, nil
+			},
+			putPolicy: func(_ context.Context, _ models.ProfileSecrets, _ string, body []byte) (gcsiam.Response, error) {
+				writes++
+				var policy gcsIAMPolicy
+				if err := json.Unmarshal(body, &policy); err != nil {
+					t.Fatal(err)
+				}
+				if policy.ETag != "initial-revision" {
+					t.Fatalf("etag=%q", policy.ETag)
+				}
+				return gcsiam.Response{Status: 200}, nil
+			},
+		}
+		registry := NewRegistry()
+		registry.Register(models.ProfileProviderGcpGcs, adapter)
+		defaults := &models.BucketCreateDefaults{Access: &models.BucketAccessPutRequest{}}
+		err := ApplyCreateDefaults(context.Background(), NewService(registry), models.ProfileSecrets{Provider: models.ProfileProviderGcpGcs}, "demo", defaults)
+		if (err != nil) != (etag == "") {
+			t.Fatalf("etag=%q err=%v", etag, err)
+		}
+		if (writes == 1) != (etag != "") {
+			t.Fatalf("etag=%q writes=%d", etag, writes)
+		}
+		if defaults.Access.ETag != "" {
+			t.Fatal("caller defaults mutated")
+		}
+	}
 }

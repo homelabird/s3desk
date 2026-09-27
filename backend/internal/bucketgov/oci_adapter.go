@@ -162,6 +162,9 @@ func (a *ociAdapter) GetPublicExposure(ctx context.Context, profile models.Profi
 	}
 
 	mode, visibility := fromOCIPublicAccessType(state.PublicAccessType)
+	if visibility == "" {
+		return models.BucketPublicExposureView{}, UpstreamOperationError("bucket_public_exposure_error", "unrecognized OCI visibility response", bucket, errors.New("missing or unknown public access type"))
+	}
 	view := models.BucketPublicExposureView{
 		Provider:   models.ProfileProviderOciObjectStorage,
 		Bucket:     strings.TrimSpace(bucket),
@@ -180,7 +183,16 @@ func (a *ociAdapter) PutPublicExposure(ctx context.Context, profile models.Profi
 		return err
 	}
 	_, err = a.updateOCIBucket(ctx, profile, bucket, publicAccessType, "", "put OCI bucket public exposure", "bucket_public_exposure_error")
-	return err
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, readErr := a.getOCIBucket(readCtx, profile, bucket, "confirm OCI bucket public exposure", "bucket_public_exposure_error")
+	if err != nil {
+		return err
+	}
+	if readErr != nil || observed.PublicAccessType != publicAccessType {
+		return UpstreamOperationError("bucket_public_exposure_unconfirmed", "OCI visibility update was accepted but current state did not confirm the request; reload before retrying", bucket, errors.New("visibility readback failed or differed"))
+	}
+	return nil
 }
 
 func (a *ociAdapter) GetProtection(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketProtectionView, error) {
@@ -375,16 +387,27 @@ func (a *ociAdapter) GetVersioning(ctx context.Context, profile models.ProfileSe
 		Bucket:   strings.TrimSpace(bucket),
 		Status:   models.BucketVersioningStatusDisabled,
 	}
-	if strings.EqualFold(strings.TrimSpace(state.Versioning), "Enabled") {
+	switch state.Versioning {
+	case "Enabled":
 		view.Status = models.BucketVersioningStatusEnabled
+	case "Suspended":
+		view.Status = models.BucketVersioningStatusSuspended
+	case "Disabled":
+	default:
+		return models.BucketVersioningView{}, UpstreamOperationError("bucket_versioning_error", "unrecognized OCI versioning state", bucket, errors.New("missing or unknown versioning status"))
 	}
 	return view, nil
 }
 
 func (a *ociAdapter) PutVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
-	versioning := "Disabled"
-	if req.Status == models.BucketVersioningStatusEnabled {
+	var versioning string
+	switch req.Status {
+	case models.BucketVersioningStatusEnabled:
 		versioning = "Enabled"
+	case models.BucketVersioningStatusSuspended:
+		versioning = "Suspended"
+	default:
+		return InvalidEnumFieldError("status", string(req.Status), "enabled", "suspended")
 	}
 	_, err := a.updateOCIBucket(ctx, profile, bucket, "", versioning, "put OCI bucket versioning", "bucket_versioning_error")
 	return err
@@ -709,8 +732,10 @@ func fromOCIPublicAccessType(value string) (models.BucketPublicExposureMode, str
 		return models.BucketPublicExposureModePublic, "object_read"
 	case "objectreadwithoutlist":
 		return models.BucketPublicExposureModePublic, "object_read_without_list"
-	default:
+	case "nopublicaccess":
 		return models.BucketPublicExposureModePrivate, "private"
+	default:
+		return "", ""
 	}
 }
 

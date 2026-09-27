@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -80,6 +81,13 @@ func (svc bucketPolicyHTTPService) preparePutBucketPolicy(r *http.Request) (mode
 	}
 	if len(req.Policy) == 0 || strings.TrimSpace(string(req.Policy)) == "" {
 		return models.ProfileSecrets{}, "", models.BucketPolicyPutRequest{}, newBucketPolicyHTTPError(http.StatusBadRequest, "invalid_request", "policy is required", nil)
+	}
+	var policy any
+	if err := json.Unmarshal(req.Policy, &policy); err != nil {
+		return models.ProfileSecrets{}, "", models.BucketPolicyPutRequest{}, newBucketPolicyHTTPError(http.StatusBadRequest, "invalid_json", "policy must be valid JSON", nil)
+	}
+	if errs, _ := validateBucketPolicyStatic(secrets.Provider, bucket, policy); len(errs) > 0 {
+		return models.ProfileSecrets{}, "", models.BucketPolicyPutRequest{}, newBucketPolicyHTTPError(http.StatusBadRequest, "invalid_request", "policy validation failed", map[string]any{"errors": errs})
 	}
 	return secrets, bucket, req, nil
 }

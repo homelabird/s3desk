@@ -13,6 +13,7 @@ export function GcsPolicyStructuredEditor(props: {
   nextKey: () => string
   setGcsBindings: Dispatch<SetStateAction<GcsBindingRow[]>>
 }) {
+  const hasConditions = props.gcsBindings.some((binding) => binding.original?.condition !== undefined)
   return (
     <Space orientation="vertical" className={styles.fullWidth} size="middle">
       <Space align="center" wrap className={styles.controlRow}>
@@ -20,6 +21,7 @@ export function GcsPolicyStructuredEditor(props: {
           <input
             type="checkbox"
             checked={props.gcsPublicRead}
+            disabled={hasConditions}
             onChange={(event) => {
               const checked = event.target.checked
               props.setGcsBindings((prev) => {
@@ -50,12 +52,21 @@ export function GcsPolicyStructuredEditor(props: {
         </Typography.Text>
       </Space>
 
+      {hasConditions ? (
+        <Alert
+          type="info"
+          showIcon
+          title="Conditional bindings preserved"
+          description="This policy contains IAM conditions. Review or edit them in JSON. The public access shortcut is disabled because it cannot represent conditional grants."
+        />
+      ) : null}
+
       {props.gcsEtag.trim() === '' ? (
         <Alert
           type="warning"
           showIcon
           title="etag missing"
-          description="GCS IAM policy updates are safest when preserving etag. Reload policy before saving if you hit conflicts."
+          description="GCS IAM policy edits require the loaded policy etag. Reload the policy before saving."
         />
       ) : (
         <Alert

@@ -3,8 +3,10 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"s3desk/internal/bucketgov"
@@ -526,7 +528,7 @@ func TestHandleGetBucketVersioningAWS(t *testing.T) {
 func TestHandlePutBucketVersioningAWS(t *testing.T) {
 	t.Parallel()
 
-	adapter := &fakeGovernanceAdapter{}
+	adapter := &fakeGovernanceAdapter{versioning: models.BucketVersioningView{Status: models.BucketVersioningStatusEnabled}}
 	srv := &server{
 		bucketGov: newGovernanceTestService(models.ProfileProviderAwsS3, adapter),
 	}
@@ -1034,5 +1036,39 @@ func TestHandleGetBucketLifecycleUnsupportedProviderIncludesReason(t *testing.T)
 	}
 	if got := errResp.Error.Details["reason"]; got == nil || got == "" {
 		t.Fatalf("reason=%v, want populated reason", got)
+	}
+}
+
+func TestGovernanceUnconfirmedReadbackErrorsReachHTTP(t *testing.T) {
+	for _, tc := range []struct{ section, body, code string }{
+		{"access", `{"objectOwnership":"object_writer"}`, "bucket_access_unconfirmed"},
+		{"public-exposure", `{"mode":"private"}`, "bucket_public_exposure_unconfirmed"},
+		{"lifecycle", `{"rules":[]}`, "bucket_lifecycle_unconfirmed"},
+	} {
+		t.Run(tc.section, func(t *testing.T) {
+			failure := &bucketgov.OperationError{Status: 502, Code: tc.code, Message: "Update accepted but current state is unconfirmed; reload before retrying"}
+			adapter := &fakeGovernanceAdapter{putAccessErr: failure, putReqErr: failure, putLifecycleErr: failure}
+			registry := bucketgov.NewRegistry()
+			registry.Register(models.ProfileProviderAwsS3, adapter)
+			srv := &server{bucketGov: bucketgov.NewService(registry)}
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/governance/"+tc.section, strings.NewReader(tc.body))
+			req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3}), "demo")
+			rec := httptest.NewRecorder()
+			switch tc.section {
+			case "access":
+				srv.handlePutBucketAccess(rec, req)
+			case "public-exposure":
+				srv.handlePutBucketPublicExposure(rec, req)
+			case "lifecycle":
+				srv.handlePutBucketLifecycle(rec, req)
+			}
+			var body models.ErrorResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if rec.Code != 502 || body.Error.Code != tc.code || body.Error.Message != failure.Message {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }

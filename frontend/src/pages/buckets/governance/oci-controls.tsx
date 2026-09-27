@@ -60,7 +60,7 @@ function OCIControlsDraft(props: GovernanceControlsCommonProps & {
     "private" | "object_read" | "object_read_without_list"
   >(draft.visibility);
   const [versioningStatus, setVersioningStatus] = useState<
-    "enabled" | "disabled"
+    "enabled" | "suspended"
   >(draft.versioningStatus);
   const [retentionRules, setRetentionRules] = useState<OCIRetentionRuleDraft[]>(
     draft.retentionRules,
@@ -166,7 +166,7 @@ function OCIControlsDraft(props: GovernanceControlsCommonProps & {
           {
             testId: "bucket-governance-versioning",
             title: "Versioning",
-            description: "Toggle OCI bucket versioning directly.",
+            description: "Enable or suspend OCI bucket versioning. Once enabled, versioning cannot be disabled.",
             saveLoading: versioningMutation.isPending,
             onSave: () => versioningMutation.mutate(),
             content: (

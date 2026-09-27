@@ -371,3 +371,30 @@ func containerBaseURL(profile models.ProfileSecrets, container string) string {
 		url.PathEscape(strings.TrimSpace(container)),
 	)
 }
+
+// GetBlobServiceProperties reads account-level settings through ARM.
+func (c *Client) GetBlobServiceProperties(ctx context.Context, profile models.ProfileSecrets) (Response, error) {
+	token, err := c.getToken(ctx, profile)
+	if err != nil {
+		return Response{}, err
+	}
+	return c.do(ctx, http.MethodGet, blobServiceURL(profile), token, "", nil)
+}
+
+// PutBlobVersioning updates only versioning; false must remain explicit in JSON.
+func (c *Client) PutBlobVersioning(ctx context.Context, profile models.ProfileSecrets, enabled bool) (Response, error) {
+	token, err := c.getToken(ctx, profile)
+	if err != nil {
+		return Response{}, err
+	}
+	body, err := json.Marshal(map[string]any{"properties": map[string]any{"isVersioningEnabled": enabled}})
+	if err != nil {
+		return Response{}, err
+	}
+	return c.do(ctx, http.MethodPut, blobServiceURL(profile), token, "", body)
+}
+
+func blobServiceURL(profile models.ProfileSecrets) string {
+	return fmt.Sprintf("%s/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts/%s/blobServices/default?api-version=%s",
+		baseURL, url.PathEscape(strings.TrimSpace(profile.AzureSubscriptionID)), url.PathEscape(strings.TrimSpace(profile.AzureResourceGroup)), url.PathEscape(strings.TrimSpace(profile.AzureAccountName)), apiVersion)
+}

@@ -1,11 +1,15 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"s3desk/internal/bucketgov"
+	"s3desk/internal/logging"
 	"s3desk/internal/models"
 )
 
@@ -93,8 +97,37 @@ func (svc bucketVersioningHTTPService) executePut(r *http.Request) (*models.Buck
 		return nil, false, "", "", newBucketVersioningHTTPError(http.StatusInternalServerError, "internal_error", "bucket governance service is not configured", nil)
 	}
 
-	if err := svc.server.bucketGov.PutVersioning(r.Context(), prepared.secrets, prepared.bucket, prepared.putReq); err != nil {
+	validation := bucketgov.ValidationContext{Provider: prepared.secrets.Provider, Bucket: prepared.bucket, Capabilities: bucketgov.ProviderGovernanceCapabilities(prepared.secrets.Provider)}
+	if err := bucketgov.ValidateVersioningPut(validation, prepared.putReq); err != nil {
 		return nil, false, prepared.secrets.Provider, prepared.bucket, err
+	}
+	before, err := svc.server.bucketGov.GetVersioning(r.Context(), prepared.secrets, prepared.bucket)
+	if err != nil {
+		return nil, false, prepared.secrets.Provider, prepared.bucket, err
+	}
+	writeErr := svc.server.bucketGov.PutVersioning(r.Context(), prepared.secrets, prepared.bucket, prepared.putReq)
+	// A disconnected caller does not establish whether the provider applied the write.
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
+	defer cancel()
+	after, readErr := svc.server.bucketGov.GetVersioning(readCtx, prepared.secrets, prepared.bucket)
+	fields := svc.server.policyAuditFields(r, 0)
+	delete(fields, "http_status")
+	fields["event"] = "bucket.policy.versioning.observation"
+	fields["before_status"] = string(before.Status)
+	fields["requested_status"] = string(prepared.putReq.Status)
+	fields["outcome"] = "unconfirmed"
+	if readErr == nil {
+		fields["after_status"] = string(after.Status)
+		if writeErr == nil && after.Status == prepared.putReq.Status {
+			fields["outcome"] = "observed_match"
+		}
+	}
+	logging.InfoFields("bucket versioning change observation", fields)
+	if writeErr != nil {
+		return nil, false, prepared.secrets.Provider, prepared.bucket, writeErr
+	}
+	if readErr != nil || after.Status != prepared.putReq.Status {
+		return nil, false, "", "", newBucketVersioningHTTPError(http.StatusBadGateway, "bucket_versioning_unconfirmed", "Versioning update was accepted but current state did not confirm the request; reload before retrying", nil)
 	}
 	return nil, true, "", "", nil
 }

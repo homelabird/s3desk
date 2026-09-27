@@ -24,7 +24,7 @@ Section status terms used below:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | AWS S3 | Typed | Typed | Unsupported | Typed | Typed | Typed | Unsupported | Advanced raw bucket policy editing remains available. Object Lock is not part of the typed flow yet. |
 | S3-compatible | Partial | Unsupported | Unsupported | Partial | Partial | Partial | Unsupported | Support is intentionally conservative because capability coverage varies across targets. |
-| Azure Blob Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | Stored access policies, immutability, and legal-hold tags are typed. These protection edits require Azure ARM credentials. |
+| Azure Blob Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | Stored access policies, immutability, and legal-hold tags are typed. Versioning, immutability edits, and legal-hold edits require Azure ARM credentials. |
 | Google Cloud Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | IAM bindings and IAM conditions are typed. Uniform bucket-level access and retention are typed. |
 | OCI Object Storage | Unsupported | Typed | Typed | Typed | Unsupported | Unsupported | Typed | Bucket visibility, multi-rule retention, and PAR create/delete are typed. Existing PARs are immutable in-place and must be deleted/recreated to change. |
 
@@ -34,11 +34,12 @@ Section status terms used below:
 
 - IAM bindings and IAM conditions are edited through a typed structured editor.
 - Retention lock behavior is surfaced, but destructive changes on locked buckets remain intentionally blocked in the UI.
-- Live validation should confirm that `etag` preservation behaves correctly across concurrent edits.
+- Typed and raw IAM policy edits require the loaded policy `etag`; missing values are rejected before writing. Reload after a conflict. Live validation must still confirm concurrent-edit behavior.
 
 ### Azure Blob Storage
 
 - Stored access policies are typed, but SAS issuance itself remains outside the governance modal.
+- Versioning reads and writes require Azure ARM credentials in addition to storage account credentials and apply to the entire storage account. Without ARM configuration, versioning is unavailable, not assumed disabled.
 - Container immutability editing requires Azure ARM credentials in addition to storage account credentials.
 - Legal hold tags are edited through Azure ARM; saving an empty tag list clears all current legal hold tags.
 - Versioning and soft delete remain account-scoped Azure features even though they are surfaced from the container-oriented governance UI.
@@ -61,7 +62,7 @@ Section status terms used below:
 Provider-specific requirements that matter in practice:
 
 - Azure Blob: when `useEmulator=true` and `endpoint` is empty, S3Desk resolves the default emulator endpoint to `http://azurite:10000/<account>`.
-- Azure Blob immutability editing: add `subscriptionId`, `resourceGroup`, `tenantId`, `clientId`, and `clientSecret` to the profile. Without them, immutability stays visible but read-only.
+- Azure Blob versioning, immutability editing, and legal-hold editing: add `subscriptionId`, `resourceGroup`, `tenantId`, `clientId`, and `clientSecret` to the profile. Without them, immutability stays visible but read-only.
 - GCS: `projectNumber` is required on profiles. Bucket list/create/delete and benchmark flows depend on it.
 - GCS anonymous mode: IAM policy management is supported only when the profile has credentials, or when anonymous mode is paired with a custom endpoint that explicitly allows unauthenticated access.
 - OCI Object Storage: the native backend requires `region`, `namespace`, and `compartment`.

@@ -81,8 +81,8 @@ export function AzureProtectionControlsBody({
         <Alert
           type="info"
           showIcon
-          title="Azure ARM credentials required for container immutability editing"
-          description="Add subscription ID, resource group, tenant ID, client ID, and client secret to the Azure profile to create, update, lock, or delete container immutability policies."
+          title="Container immutability editing is unavailable"
+          description="Check the lookup warnings and Azure ARM profile configuration, then reload the current policy before editing. Soft delete settings remain available."
         />
       ) : null}
       <div className={styles.toggleRow}>

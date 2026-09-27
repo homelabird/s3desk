@@ -228,3 +228,41 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
 }
+
+func TestConditionalPolicyReadWritePreservesVersionAndCondition(t *testing.T) {
+	t.Parallel()
+	const policy = `{"version":3,"etag":"revision-1","bindings":[{"role":"roles/storage.objectViewer","members":["user:reader@example.test"],"condition":{"title":"limited","expression":"request.time < timestamp('2030-01-01T00:00:00Z')"}}]}`
+	var wrote bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Query().Get("optionsRequestedPolicyVersion") != "3" {
+				http.Error(w, "conditional policy requires version 3", http.StatusBadRequest)
+				return
+			}
+		case http.MethodPut:
+			body, err := io.ReadAll(r.Body)
+			if err != nil || string(body) != policy {
+				t.Errorf("policy changed during roundtrip: %s, err=%v", body, err)
+			}
+			if r.URL.Query().Has("optionsRequestedPolicyVersion") {
+				t.Error("read-only version query sent with PUT")
+			}
+			wrote = true
+		default:
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(policy))
+	}))
+	defer srv.Close()
+	profile := models.ProfileSecrets{GcpAnonymous: true, GcpEndpoint: srv.URL}
+	got, err := GetBucketIamPolicy(t.Context(), profile, "demo")
+	if err != nil || got.Status != http.StatusOK || string(got.Body) != policy {
+		t.Fatalf("read: status=%d err=%v body=%s", got.Status, err, got.Body)
+	}
+	put, err := PutBucketIamPolicy(t.Context(), profile, "demo", got.Body)
+	if err != nil || put.Status != http.StatusOK || !wrote {
+		t.Fatalf("write: status=%d err=%v wrote=%v", put.Status, err, wrote)
+	}
+}

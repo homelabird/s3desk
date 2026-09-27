@@ -56,3 +56,28 @@ func TestBucketLifecycleHTTPService_HandlePutBucketLifecycle_ReturnsInvalidJSON(
 		t.Fatalf("resp.Error.Code=%q, want invalid_json", resp.Error.Code)
 	}
 }
+
+func TestLifecycleHTTPRejectsInvalidRulesBeforeProvider(t *testing.T) {
+	t.Parallel()
+	for _, rules := range []string{
+		`null`,
+		`[{"status":"enabled","expiration":{"days":1,"unknown":true}}]`,
+		`[{"status":"enabled","expiration":{"days":1,"date":"2030-01-01T00:00:00Z"}}]`,
+		`[{"status":"enabled","filter":{"and":{"objectSizeGreaterThan":10,"objectSizeLessThan":1}},"expiration":{"days":30}}]`,
+		`[{"status":"enabled","noncurrentVersionExpiration":{"noncurrentDays":1,"newerNoncurrentVersions":101}}]`,
+	} {
+		t.Run(rules, func(t *testing.T) {
+			adapter := &fakeGovernanceAdapter{}
+			registry := bucketgov.NewRegistry()
+			registry.Register(models.ProfileProviderAwsS3, adapter)
+			svc := newBucketLifecycleHTTPService(&server{bucketGov: bucketgov.NewService(registry)})
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/governance/lifecycle", bytes.NewBufferString(`{"rules":`+rules+`}`))
+			req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3}), "demo")
+			rec := httptest.NewRecorder()
+			svc.handlePutBucketLifecycle(rec, req)
+			if rec.Code != http.StatusBadRequest || adapter.putLifecycle != nil {
+				t.Fatalf("status=%d providerCalled=%v body=%s", rec.Code, adapter.putLifecycle != nil, rec.Body.String())
+			}
+		})
+	}
+}

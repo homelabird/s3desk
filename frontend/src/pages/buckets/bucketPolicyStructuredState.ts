@@ -54,6 +54,7 @@ export function getInitialStructuredState(
       .filter(isRecord)
       .map((binding, index) => ({
         key: `gcs-${index}`,
+        original: binding,
         role: typeof binding.role === "string" ? binding.role : "",
         members: Array.isArray(binding.members)
           ? binding.members.filter(
@@ -86,6 +87,7 @@ export function getInitialStructuredState(
       .filter(isRecord)
       .map((policy, index) => ({
         key: `azure-${index}`,
+        original: policy,
         id: typeof policy.id === "string" ? policy.id : "",
         start: typeof policy.start === "string" ? policy.start : undefined,
         expiry: typeof policy.expiry === "string" ? policy.expiry : undefined,
@@ -124,20 +126,25 @@ export function buildStructuredPolicyText(params: {
 
   if (policyKind === "gcs") {
     const obj: Record<string, unknown> = {
-      version: gcsVersion || 1,
+      ...parsePolicyText(policyText).value,
+      version: gcsVersion,
       bindings: gcsBindings.map((binding) => ({
+        ...binding.original,
         role: binding.role,
         members: binding.members,
       })),
     };
     if (gcsEtag.trim() !== "") obj.etag = gcsEtag.trim();
+    else delete obj.etag;
     return JSON.stringify(obj, null, 2);
   }
 
   if (policyKind === "azure") {
     const obj: Record<string, unknown> = {
+      ...parsePolicyText(policyText).value,
       publicAccess: azurePublicAccess,
       storedAccessPolicies: azureStoredPolicies.map((policy) => ({
+        ...policy.original,
         id: policy.id,
         start: policy.start || undefined,
         expiry: policy.expiry || undefined,
@@ -164,7 +171,7 @@ export function parseStructuredStateFromText(
   nextKey: () => string,
 ): ParsedStructuredPolicyState | null {
   const nextParsed = parsePolicyText(text);
-  if (!nextParsed.ok) return null;
+  if (!nextParsed.ok || !canUseStructuredPolicy(policyKind, text)) return null;
   const value = nextParsed.value;
 
   if (policyKind === "gcs") {
@@ -175,6 +182,7 @@ export function parseStructuredStateFromText(
       .filter(isRecord)
       .map((binding) => ({
         key: nextKey(),
+        original: binding,
         role: typeof binding.role === "string" ? binding.role : "",
         members: Array.isArray(binding.members)
           ? binding.members.filter(
@@ -198,6 +206,7 @@ export function parseStructuredStateFromText(
       .filter(isRecord)
       .map((policy) => ({
         key: nextKey(),
+        original: policy,
         id: typeof policy.id === "string" ? policy.id : "",
         start: typeof policy.start === "string" ? policy.start : undefined,
         expiry: typeof policy.expiry === "string" ? policy.expiry : undefined,
@@ -213,4 +222,24 @@ export function parseStructuredStateFromText(
   }
 
   return null;
+}
+
+export function canUseStructuredPolicy(policyKind: PolicyKind, text: string): boolean {
+  const parsed = parsePolicyText(text);
+  if (!parsed.ok) return false;
+  const value = parsed.value;
+  if (policyKind === "gcs") {
+    return (value.version === undefined || (typeof value.version === "number" && [0, 1, 3].includes(value.version))) &&
+      (value.etag === undefined || typeof value.etag === "string") &&
+      Array.isArray(value.bindings) && value.bindings.every((binding) =>
+        isRecord(binding) && typeof binding.role === "string" &&
+        Array.isArray(binding.members) && binding.members.every((member) => typeof member === "string"));
+  }
+  if (policyKind === "azure") {
+    return ["private", "blob", "container"].includes(value.publicAccess as string) &&
+      Array.isArray(value.storedAccessPolicies) && value.storedAccessPolicies.every((policy) =>
+        isRecord(policy) && typeof policy.id === "string" &&
+        ["start", "expiry", "permission"].every((field) => policy[field] === undefined || typeof policy[field] === "string"));
+  }
+  return false;
 }

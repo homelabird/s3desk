@@ -86,7 +86,15 @@ func ApplyCreateDefaults(ctx context.Context, svc *Service, profile models.Profi
 		}
 	}
 	if defaults.Access != nil {
-		if err := svc.PutAccess(ctx, profile, bucket, *defaults.Access); err != nil {
+		access := *defaults.Access
+		if profile.Provider == models.ProfileProviderGcpGcs && strings.TrimSpace(access.ETag) == "" {
+			current, err := svc.GetAccess(ctx, profile, bucket)
+			if err != nil {
+				return &CreateDefaultsApplyError{Section: "access", Err: err}
+			}
+			access.ETag = current.ETag
+		}
+		if err := svc.PutAccess(ctx, profile, bucket, access); err != nil {
 			return &CreateDefaultsApplyError{Section: "access", Err: err}
 		}
 	}

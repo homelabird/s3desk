@@ -11,7 +11,7 @@ export const bucketsFeedbackCopy = {
 	bucketDeleted: 'Bucket deleted',
 	policySaved: 'Policy saved',
 	policyDeleted: 'Policy deleted',
-	policyValidationOk: 'Validation OK',
+	policyValidationOk: 'Static checks passed; provider acceptance and access effects are unverified',
 	policyValidationFoundIssues: 'Validation found issues',
 	policyValidationUnavailable: 'Policy validation unavailable',
 	invalidPolicyJson: 'Invalid policy JSON',

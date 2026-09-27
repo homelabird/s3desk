@@ -119,7 +119,7 @@ const awsGovernanceGuide: BucketDecisionGuide = {
   advancedItems: [
     "Cross-account principals",
     "IAM conditions and raw policy presets",
-    "Provider validation and diff review",
+    "Static checks and diff review",
   ],
   riskBadges: [
     { label: "Public access", tone: "warning" },
@@ -173,7 +173,7 @@ const azureGovernanceGuide: BucketDecisionGuide = {
   advancedItems: [
     "Raw container ACL JSON",
     "Preset-based stored policy composition",
-    "Provider validation and diff review",
+    "Static checks and diff review",
   ],
   riskBadges: [
     { label: "Container public", tone: "warning" },

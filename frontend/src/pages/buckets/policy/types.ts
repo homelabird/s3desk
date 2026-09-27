@@ -2,9 +2,10 @@ export type ParsedPolicy =
   | { ok: true; error: null; value: Record<string, unknown> }
   | { ok: false; error: string; value: null }
 
-export type GcsBindingRow = { key: string; role: string; members: string[] }
+export type GcsBindingRow = { key: string; role: string; members: string[]; original?: Record<string, unknown> }
 
 export type AzureStoredPolicyRow = {
+	original?: Record<string, unknown>
   key: string
   id: string
   start?: string

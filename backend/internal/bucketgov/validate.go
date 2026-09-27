@@ -17,7 +17,7 @@ func ValidateVersioningPut(ctx ValidationContext, req models.BucketVersioningPut
 		})
 	}
 	switch ctx.Provider {
-	case models.ProfileProviderAwsS3:
+	case models.ProfileProviderAwsS3, models.ProfileProviderOciObjectStorage:
 		switch req.Status {
 		case models.BucketVersioningStatusEnabled, models.BucketVersioningStatusSuspended:
 			return nil
@@ -27,7 +27,7 @@ func ValidateVersioningPut(ctx ValidationContext, req models.BucketVersioningPut
 				string(models.BucketVersioningStatusSuspended),
 			)
 		}
-	case models.ProfileProviderGcpGcs, models.ProfileProviderAzureBlob, models.ProfileProviderOciObjectStorage:
+	case models.ProfileProviderGcpGcs, models.ProfileProviderAzureBlob:
 		switch req.Status {
 		case models.BucketVersioningStatusEnabled, models.BucketVersioningStatusDisabled:
 			return nil

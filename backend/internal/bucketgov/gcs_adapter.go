@@ -28,7 +28,7 @@ type GCSAdapterOptions struct {
 type gcsIAMPolicy struct {
 	Version  int             `json:"version,omitempty"`
 	ETag     string          `json:"etag,omitempty"`
-	Bindings []gcsIAMBinding `json:"bindings,omitempty"`
+	Bindings []gcsIAMBinding `json:"bindings"`
 }
 
 type gcsIAMBinding struct {
@@ -154,6 +154,9 @@ func (a *gcsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecret
 }
 
 func (a *gcsAdapter) PutAccess(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
+	if strings.TrimSpace(req.ETag) == "" {
+		return InvalidFieldError("etag", "GCS IAM edits require the loaded policy ETag; reload the policy before saving", nil)
+	}
 
 	current, err := a.getIAMPolicy(ctx, profile, bucket, "read current GCS IAM policy", "bucket_access_error")
 	if err != nil {
@@ -164,9 +167,6 @@ func (a *gcsAdapter) PutAccess(ctx context.Context, profile models.ProfileSecret
 		Version:  gcsPolicyVersionForBindings(req.Bindings, current.Version),
 		ETag:     strings.TrimSpace(req.ETag),
 		Bindings: make([]gcsIAMBinding, 0, len(req.Bindings)),
-	}
-	if next.ETag == "" {
-		next.ETag = strings.TrimSpace(current.ETag)
 	}
 	for _, binding := range req.Bindings {
 		next.Bindings = append(next.Bindings, gcsIAMBinding{
@@ -252,6 +252,14 @@ func (a *gcsAdapter) PutPublicExposure(ctx context.Context, profile models.Profi
 			},
 		}
 		if err := a.patchBucketMetadata(ctx, profile, bucket, patch, "put GCS public access prevention", "bucket_public_exposure_error"); err != nil {
+			if targetMode != "" {
+				return &OperationError{
+					Status:  http.StatusBadGateway,
+					Code:    "bucket_public_exposure_partial",
+					Message: "GCS accepted the IAM policy update but public access prevention could not be confirmed; reload both settings before retrying",
+					Details: map[string]any{"bucket": bucket, "iamPolicyUpdateAccepted": true, "publicAccessPreventionState": "unknown", "cause": err.Error()},
+				}
+			}
 			return err
 		}
 	}
@@ -374,7 +382,7 @@ func (a *gcsAdapter) PutSharing(context.Context, models.ProfileSecrets, string, 
 
 func (a *gcsAdapter) getBucketMetadata(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (gcsBucketMetadata, error) {
 	if a.getBucket == nil {
-		return gcsBucketMetadata{}, nil
+		return gcsBucketMetadata{}, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("gcs bucket metadata client is not configured"))
 	}
 	resp, err := a.getBucket(ctx, profile, strings.TrimSpace(bucket))
 	if err != nil {
@@ -382,11 +390,14 @@ func (a *gcsAdapter) getBucketMetadata(ctx context.Context, profile models.Profi
 	}
 	switch resp.Status {
 	case http.StatusOK:
-		var metadata gcsBucketMetadata
+		var metadata *gcsBucketMetadata
 		if err := json.Unmarshal(resp.Body, &metadata); err != nil {
 			return gcsBucketMetadata{}, UpstreamOperationError(code, "failed to decode GCS bucket metadata", bucket, err)
 		}
-		return metadata, nil
+		if metadata == nil {
+			return gcsBucketMetadata{}, UpstreamOperationError(code, "failed to decode GCS bucket metadata", bucket, fmt.Errorf("expected a bucket metadata object, received null"))
+		}
+		return *metadata, nil
 	case http.StatusNotFound:
 		return gcsBucketMetadata{}, BucketNotFoundError(bucket)
 	default:
@@ -418,7 +429,7 @@ func (a *gcsAdapter) patchBucketMetadata(ctx context.Context, profile models.Pro
 
 func (a *gcsAdapter) getIAMPolicy(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (gcsIAMPolicy, error) {
 	if a.getPolicy == nil {
-		return gcsIAMPolicy{}, nil
+		return gcsIAMPolicy{}, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("gcs IAM policy client is not configured"))
 	}
 	resp, err := a.getPolicy(ctx, profile, strings.TrimSpace(bucket))
 	if err != nil {
@@ -426,11 +437,27 @@ func (a *gcsAdapter) getIAMPolicy(ctx context.Context, profile models.ProfileSec
 	}
 	switch resp.Status {
 	case http.StatusOK:
-		var policy gcsIAMPolicy
+		var policy *gcsIAMPolicy
 		if err := json.Unmarshal(resp.Body, &policy); err != nil {
 			return gcsIAMPolicy{}, UpstreamOperationError(code, "failed to decode GCS IAM policy", bucket, err)
 		}
-		return policy, nil
+		if policy == nil {
+			return gcsIAMPolicy{}, UpstreamOperationError(code, "failed to decode GCS IAM policy", bucket, fmt.Errorf("expected a policy object, received null"))
+		}
+		if policy.Version != 0 && policy.Version != 1 && policy.Version != 3 {
+			return gcsIAMPolicy{}, UpstreamOperationError(code, "unsupported GCS IAM policy version", bucket, fmt.Errorf("policy version %d is not supported", policy.Version))
+		}
+		bindings := make([]models.BucketAccessBinding, 0, len(policy.Bindings))
+		for _, binding := range policy.Bindings {
+			if len(binding.Condition) > 0 && policy.Version != 3 {
+				return gcsIAMPolicy{}, UpstreamOperationError(code, "invalid GCS IAM policy", bucket, fmt.Errorf("conditional bindings require version 3"))
+			}
+			bindings = append(bindings, models.BucketAccessBinding{Role: binding.Role, Members: binding.Members, Condition: binding.Condition})
+		}
+		if err := ValidateAccessPut(newValidationContext(models.ProfileProviderGcpGcs, bucket), models.BucketAccessPutRequest{Bindings: bindings}); err != nil {
+			return gcsIAMPolicy{}, UpstreamOperationError(code, "invalid GCS IAM policy bindings", bucket, err)
+		}
+		return *policy, nil
 	case http.StatusNotFound:
 		return gcsIAMPolicy{}, BucketNotFoundError(bucket)
 	default:
@@ -439,6 +466,9 @@ func (a *gcsAdapter) getIAMPolicy(ctx context.Context, profile models.ProfileSec
 }
 
 func (a *gcsAdapter) putIAMPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string, policy gcsIAMPolicy, operation, code string) error {
+	if strings.TrimSpace(policy.ETag) == "" {
+		return InvalidFieldError("etag", "GCS IAM writes require a policy ETag; reload the policy before saving", nil)
+	}
 	if a.putPolicy == nil {
 		return UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("gcs IAM policy client is not configured"))
 	}
@@ -453,6 +483,13 @@ func (a *gcsAdapter) putIAMPolicy(ctx context.Context, profile models.ProfileSec
 	switch resp.Status {
 	case http.StatusOK:
 		return nil
+	case http.StatusConflict, http.StatusPreconditionFailed:
+		return &OperationError{
+			Status:  http.StatusConflict,
+			Code:    "bucket_policy_conflict",
+			Message: "GCS IAM policy changed; reload and review the current policy before retrying",
+			Details: map[string]any{"bucket": bucket, "upstreamStatus": resp.Status},
+		}
 	case http.StatusNotFound:
 		return BucketNotFoundError(bucket)
 	default:
@@ -516,7 +553,7 @@ func gcsEnsurePublicRead(bindings []gcsIAMBinding) []gcsIAMBinding {
 
 	next := append([]gcsIAMBinding(nil), bindings...)
 	for i := range next {
-		if strings.TrimSpace(next[i].Role) != publicViewerRole {
+		if strings.TrimSpace(next[i].Role) != publicViewerRole || len(trimJSON(next[i].Condition)) > 0 {
 			continue
 		}
 		for _, member := range next[i].Members {

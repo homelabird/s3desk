@@ -67,7 +67,8 @@ export function getLocalValidationErrors(
         errors.push(`Azure stored access policy #${index + 1}: id is required.`);
       }
       if (id) {
-        const idKey = id.toLowerCase();
+        const idKey = id;
+        if ([...id].length > 64) errors.push(`Azure stored access policy ${label}: id must not exceed 64 characters.`);
         if (seenIDs.has(idKey)) {
           errors.push(`Azure stored access policy id "${id}" is duplicated.`);
         }
@@ -75,9 +76,9 @@ export function getLocalValidationErrors(
       }
       const permission =
         typeof policy.permission === "string" ? policy.permission.trim() : "";
-      if (permission !== "" && !/^[rwdlacup]+$/i.test(permission)) {
+      if (permission !== "" && (!/^[racwdxyltfmeopi]+$/.test(permission) || new Set(permission).size !== permission.length)) {
         errors.push(
-          `Azure stored access policy ${label}: permission must use only r/w/d/l/a/c/u/p.`,
+          `Azure stored access policy ${label}: permission must use distinct lowercase Blob permission letters: r/a/c/w/d/x/y/l/t/f/m/e/o/p/i.`,
         );
       }
     });

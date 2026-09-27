@@ -44,16 +44,16 @@ export function useBucketPolicyMutations(props: {
     };
   }, []);
 
-  const invalidatePolicyQueries = async () => {
+  const invalidatePolicyQueries = async (throwOnError = false) => {
     await queryClient.invalidateQueries({
       queryKey: queryKeys.buckets.policy(props.profileId, props.bucket, props.apiToken),
       exact: true,
-    });
+    }, { throwOnError });
     if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.buckets.governance(props.profileId, props.bucket, props.apiToken),
         exact: true,
-      });
+      }, { throwOnError });
     }
   };
 
@@ -65,18 +65,24 @@ export function useBucketPolicyMutations(props: {
       return { requestToken: putRequestTokenRef.current };
     },
     onSuccess: async (_, __, context) => {
-      await invalidatePolicyQueries();
+      const refreshed = await invalidatePolicyQueries(true).then(() => true, () => false);
       if (
         !isActiveRef.current ||
         context?.requestToken !== putRequestTokenRef.current
       ) {
         return;
       }
+      if (!refreshed) {
+        bucketsFeedback.error(new Error("Change request accepted, but current policy could not be read. Reload to verify before retrying."));
+        return;
+      }
       bucketsFeedback.policySaved();
       props.setLastProviderError(null);
       props.onClose();
     },
-    onError: (err, _vars, context) => {
+    onError: async (err, _vars, context) => {
+      // A lost response does not prove that the provider rejected the write.
+      await invalidatePolicyQueries();
       if (
         !isActiveRef.current ||
         context?.requestToken !== putRequestTokenRef.current
@@ -97,18 +103,24 @@ export function useBucketPolicyMutations(props: {
       return { requestToken: deleteRequestTokenRef.current };
     },
     onSuccess: async (_, __, context) => {
-      await invalidatePolicyQueries();
+      const refreshed = await invalidatePolicyQueries(true).then(() => true, () => false);
       if (
         !isActiveRef.current ||
         context?.requestToken !== deleteRequestTokenRef.current
       ) {
         return;
       }
+      if (!refreshed) {
+        bucketsFeedback.error(new Error("Change request accepted, but current policy could not be read. Reload to verify before retrying."));
+        return;
+      }
       bucketsFeedback.policyDeleted();
       props.setLastProviderError(null);
       props.onClose();
     },
-    onError: (err, _vars, context) => {
+    onError: async (err, _vars, context) => {
+      // A lost response does not prove that the provider rejected the write.
+      await invalidatePolicyQueries();
       if (
         !isActiveRef.current ||
         context?.requestToken !== deleteRequestTokenRef.current

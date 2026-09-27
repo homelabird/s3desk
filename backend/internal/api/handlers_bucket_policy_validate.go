@@ -2,10 +2,11 @@ package api
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
-	"time"
+	"unicode/utf8"
 
+	"s3desk/internal/azureacl"
+	"s3desk/internal/gcsiam"
 	"s3desk/internal/models"
 )
 
@@ -34,8 +35,8 @@ func validateS3BucketPolicyStatic(bucket string, policy any) (errs []string, war
 
 	// Version (optional but recommended)
 	if v, ok := obj["Version"]; ok {
-		if _, ok := v.(string); !ok {
-			errs = append(errs, "S3 policy Version must be a string")
+		if version, ok := v.(string); !ok || (version != "2008-10-17" && version != "2012-10-17") {
+			errs = append(errs, "S3 policy Version must be 2008-10-17 or 2012-10-17")
 		}
 	} else {
 		warns = append(warns, "S3 policy should include a Version string (e.g. 2012-10-17)")
@@ -43,7 +44,7 @@ func validateS3BucketPolicyStatic(bucket string, policy any) (errs []string, war
 
 	st, hasStmt := obj["Statement"]
 	if !hasStmt {
-		warns = append(warns, "S3 policy has no Statement; it will not grant any permissions")
+		errs = append(errs, "S3 policy Statement is required")
 		return errs, warns
 	}
 
@@ -67,23 +68,76 @@ func validateS3BucketPolicyStatic(bucket string, policy any) (errs []string, war
 			continue
 		}
 
-		if eff, ok := stmt["Effect"]; ok {
-			if s, ok := eff.(string); !ok || strings.TrimSpace(s) == "" {
-				errs = append(errs, "S3 policy Statement.Effect must be a non-empty string")
-			}
-		} else {
-			warns = append(warns, "S3 policy Statement is missing Effect")
+		if effect, ok := stmt["Effect"].(string); !ok || (effect != "Allow" && effect != "Deny") {
+			errs = append(errs, "S3 policy Statement "+itoa(i)+".Effect is required and must be Allow or Deny (case-sensitive)")
 		}
 
-		// Action / Resource / Principal are provider-validated, but we can lint common mistakes.
-		if _, ok := stmt["Action"]; !ok {
-			warns = append(warns, "S3 policy Statement is missing Action")
+		for _, field := range []string{"Action", "Resource", "Principal"} {
+			_, positive := stmt[field]
+			_, negative := stmt["Not"+field]
+			if positive == negative {
+				errs = append(errs, "S3 policy Statement "+itoa(i)+" must include exactly one of "+field+" or Not"+field)
+			}
 		}
-		if _, ok := stmt["Resource"]; !ok {
-			warns = append(warns, "S3 policy Statement is missing Resource")
+
+		for _, field := range []string{"Action", "NotAction", "Resource", "NotResource"} {
+			if value, present := stmt[field]; present && !isPolicyStringList(value) {
+				errs = append(errs, "S3 policy Statement "+itoa(i)+"."+field+" must be a non-empty string or array of non-empty strings")
+			}
 		}
-		if _, ok := stmt["Principal"]; !ok {
-			warns = append(warns, "S3 policy Statement is missing Principal")
+		for _, field := range []string{"Principal", "NotPrincipal"} {
+			value, present := stmt[field]
+			if !present {
+				continue
+			}
+			if wildcard, ok := value.(string); ok && wildcard == "*" {
+				continue
+			}
+			principals, ok := value.(map[string]any)
+			if !ok || len(principals) == 0 {
+				errs = append(errs, "S3 policy Statement "+itoa(i)+"."+field+" must be * or a non-empty principal map")
+				continue
+			}
+			for kind, ids := range principals {
+				switch kind {
+				case "AWS", "Service", "Federated", "CanonicalUser":
+				default:
+					errs = append(errs, "S3 policy Statement "+itoa(i)+"."+field+" contains an unsupported principal type: "+kind)
+				}
+				if !isPolicyStringList(ids) {
+					errs = append(errs, "S3 policy Statement "+itoa(i)+"."+field+"."+kind+" must be a non-empty string or array of non-empty strings")
+				}
+			}
+		}
+
+		if raw, present := stmt["Condition"]; present {
+			conditions, ok := raw.(map[string]any)
+			if !ok || len(conditions) == 0 {
+				errs = append(errs, "S3 policy Statement.Condition must be a non-empty object")
+			}
+			for operator, rawKeys := range conditions {
+				keys, ok := rawKeys.(map[string]any)
+				if strings.TrimSpace(operator) == "" || !ok || len(keys) == 0 {
+					errs = append(errs, "S3 policy Condition operators must name non-empty condition key objects")
+					continue
+				}
+				for key, value := range keys {
+					values, array := value.([]any)
+					if !array {
+						values = []any{value}
+					}
+					if strings.TrimSpace(key) == "" || len(values) == 0 {
+						errs = append(errs, "S3 policy Condition keys and value lists must not be empty")
+					}
+					for _, item := range values {
+						switch item.(type) {
+						case string, float64, int, bool:
+						default:
+							errs = append(errs, "S3 policy Condition values must be strings, numbers, booleans, or arrays of these values")
+						}
+					}
+				}
+			}
 		}
 
 		// Bucket-aware resource lint.
@@ -91,8 +145,8 @@ func validateS3BucketPolicyStatic(bucket string, policy any) (errs []string, war
 			resources := extractStringList(res)
 			if bucket != "" {
 				for _, r := range resources {
-					if strings.Contains(r, "arn:aws:s3:::") && !strings.Contains(r, ":::"+bucket) {
-						warns = append(warns, "Statement "+itoa(i)+" Resource does not reference this bucket: "+r)
+					if resource, ok := strings.CutPrefix(r, "arn:aws:s3:::"); ok && resource != bucket && !strings.HasPrefix(resource, bucket+"/") {
+						warns = append(warns, "Statement "+itoa(i)+" Resource does not explicitly reference this bucket: "+r)
 					}
 				}
 			}
@@ -108,11 +162,23 @@ func validateGCSIamPolicyStatic(policy any) (errs []string, warns []string) {
 		return []string{"GCS IAM policy must be a JSON object"}, nil
 	}
 
+	version := float64(0)
+	if raw, present := obj["version"]; present {
+		var numeric bool
+		version, numeric = raw.(float64)
+		if integer, ok := raw.(int); ok {
+			version, numeric = float64(integer), true
+		}
+		if !numeric || (version != 0 && version != 1 && version != 3) {
+			errs = append(errs, "GCS IAM policy version must be the integer 0, 1, or 3")
+		}
+	}
+
 	if et, ok := obj["etag"]; !ok {
-		warns = append(warns, "GCS IAM policy usually includes an etag. Preserve it to avoid update conflicts.")
+		errs = append(errs, "GCS IAM policy edits require the loaded policy etag; reload the policy before saving")
 	} else {
 		if s, ok := et.(string); !ok || strings.TrimSpace(s) == "" {
-			warns = append(warns, "GCS IAM policy etag should be a non-empty string")
+			errs = append(errs, "GCS IAM policy etag must be a non-empty string when provided")
 		}
 	}
 
@@ -130,6 +196,14 @@ func validateGCSIamPolicyStatic(policy any) (errs []string, warns []string) {
 			errs = append(errs, "GCS IAM policy binding must be an object")
 			continue
 		}
+		if rawCondition, present := bm["condition"]; present {
+			if version != 3 {
+				errs = append(errs, "GCS IAM conditions require policy version 3")
+			}
+			if err := gcsiam.ValidateCondition(rawCondition); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
 		role, ok := bm["role"].(string)
 		if !ok || strings.TrimSpace(role) == "" {
 			errs = append(errs, "GCS IAM policy binding.role must be a non-empty string")
@@ -139,11 +213,20 @@ func validateGCSIamPolicyStatic(policy any) (errs []string, warns []string) {
 			errs = append(errs, "GCS IAM policy binding.members is required")
 			continue
 		}
-		members := extractStringList(membersRaw)
-		if len(members) == 0 {
-			warns = append(warns, "GCS IAM policy binding has no members")
+		members, ok := membersRaw.([]any)
+		if !ok {
+			errs = append(errs, "GCS IAM policy binding.members must be an array of strings")
+			continue
 		}
-		for _, m := range members {
+		if len(members) == 0 {
+			errs = append(errs, "GCS IAM policy binding.members must include at least one member")
+		}
+		for _, member := range members {
+			m, ok := member.(string)
+			if !ok || strings.TrimSpace(m) == "" {
+				errs = append(errs, "GCS IAM policy binding.members entries must be non-empty strings")
+				continue
+			}
 			if m == "allUsers" || m == "allAuthenticatedUsers" {
 				warns = append(warns, "GCS IAM policy grants public access via "+m+" (review carefully)")
 			}
@@ -158,6 +241,12 @@ func validateAzureContainerPolicyStatic(policy any) (errs []string, warns []stri
 		return []string{"Azure container policy must be a JSON object"}, nil
 	}
 
+	for field := range obj {
+		if field != "publicAccess" && field != "storedAccessPolicies" {
+			errs = append(errs, "Azure policy contains unsupported field: "+field)
+		}
+	}
+
 	pa := "private"
 	if v, ok := obj["publicAccess"]; ok {
 		if s, ok := v.(string); ok {
@@ -166,10 +255,7 @@ func validateAzureContainerPolicyStatic(policy any) (errs []string, warns []stri
 			errs = append(errs, "Azure publicAccess must be a string")
 		}
 	} else {
-		warns = append(warns, "Azure policy publicAccess is missing; it defaults to private")
-	}
-	if pa == "" {
-		pa = "private"
+		errs = append(errs, "Azure publicAccess is required; specify private explicitly to disable public access")
 	}
 	if pa != "private" && pa != "blob" && pa != "container" {
 		errs = append(errs, "Azure publicAccess must be one of: private, blob, container")
@@ -177,7 +263,7 @@ func validateAzureContainerPolicyStatic(policy any) (errs []string, warns []stri
 
 	polRaw, ok := obj["storedAccessPolicies"]
 	if !ok {
-		warns = append(warns, "Azure storedAccessPolicies is missing; it defaults to an empty list")
+		errs = append(errs, "Azure storedAccessPolicies is required; specify an empty array explicitly to remove stored policies")
 		return errs, warns
 	}
 	pols, ok := polRaw.([]any)
@@ -189,36 +275,52 @@ func validateAzureContainerPolicyStatic(policy any) (errs []string, warns []stri
 		errs = append(errs, "Azure allows a maximum of 5 stored access policies")
 	}
 
-	permRe := regexp.MustCompile(`^[rwdlacup]*$`)
+	seenIDs := make(map[string]bool)
 	for _, pr := range pols {
 		pm, ok := pr.(map[string]any)
 		if !ok {
 			errs = append(errs, "Azure storedAccessPolicies entries must be objects")
 			continue
 		}
+		for field := range pm {
+			if field != "id" && field != "start" && field != "expiry" && field != "permission" {
+				errs = append(errs, "Azure stored access policy contains unsupported field: "+field)
+			}
+		}
 		id, _ := pm["id"].(string)
 		id = strings.TrimSpace(id)
 		if id == "" {
 			errs = append(errs, "Azure stored access policy id is required")
 		}
-		if len(id) > 64 {
-			warns = append(warns, "Azure stored access policy id is long; Azure recommends <= 64 chars")
+		if utf8.RuneCountInString(id) > 64 {
+			errs = append(errs, "Azure stored access policy id must not exceed 64 characters")
+		}
+		if seenIDs[id] {
+			errs = append(errs, "Azure stored access policy ids must be unique")
+		}
+		seenIDs[id] = true
+
+		for _, field := range []string{"start", "expiry", "permission"} {
+			if value, present := pm[field]; present {
+				if _, ok := value.(string); !ok {
+					errs = append(errs, "Azure stored access policy "+field+" must be a string when provided")
+				}
+			}
 		}
 
 		if start, ok := pm["start"].(string); ok && strings.TrimSpace(start) != "" {
-			if _, err := time.Parse(time.RFC3339, strings.TrimSpace(start)); err != nil {
-				errs = append(errs, "Azure stored access policy start must be RFC3339 (e.g. 2026-01-14T00:00:00Z)")
+			if err := azureacl.ValidateStoredPolicyTime(strings.TrimSpace(start)); err != nil {
+				errs = append(errs, "Azure stored access policy start must be an ISO 8601 date or timestamp with timezone (e.g. 2026-01-14T00:00:00Z)")
 			}
 		}
 		if exp, ok := pm["expiry"].(string); ok && strings.TrimSpace(exp) != "" {
-			if _, err := time.Parse(time.RFC3339, strings.TrimSpace(exp)); err != nil {
-				errs = append(errs, "Azure stored access policy expiry must be RFC3339 (e.g. 2026-01-15T00:00:00Z)")
+			if err := azureacl.ValidateStoredPolicyTime(strings.TrimSpace(exp)); err != nil {
+				errs = append(errs, "Azure stored access policy expiry must be an ISO 8601 date or timestamp with timezone (e.g. 2026-01-15T00:00:00Z)")
 			}
 		}
 		if perm, ok := pm["permission"].(string); ok {
-			p := strings.ToLower(strings.TrimSpace(perm))
-			if p != "" && !permRe.MatchString(p) {
-				errs = append(errs, "Azure stored access policy permission must be a combination of r,w,d,l,a,c,u,p")
+			if err := azureacl.ValidateStoredPolicyPermission(perm); err != nil {
+				errs = append(errs, err.Error())
 			}
 		}
 	}
@@ -267,4 +369,23 @@ func itoa(i int) string {
 		buf[pos] = '-'
 	}
 	return string(buf[pos:])
+}
+
+func isPolicyStringList(value any) bool {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v) != ""
+	case []any:
+		if len(v) == 0 {
+			return false
+		}
+		for _, item := range v {
+			if text, ok := item.(string); !ok || strings.TrimSpace(text) == "" {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }

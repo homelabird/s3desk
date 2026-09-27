@@ -200,7 +200,7 @@ function buildAzureItems(args: BuildProfileProviderChecklistArgs): ProfileCheckl
 					section: 'basic',
 					configured: armConfigured,
 					complete: armComplete,
-					optionalDetail: 'Only needed for management-plane features such as immutability editing.',
+					optionalDetail: 'Required for versioning, immutability editing, and legal hold editing.',
 					configuredDetail: editMode ? 'ARM fields are configured; saved client secret can be retained.' : 'ARM fields and client secret are configured.',
 					incompleteDetail: 'Fill Subscription ID, Resource Group, Tenant ID, Client ID, and Client Secret together.',
 					errors,

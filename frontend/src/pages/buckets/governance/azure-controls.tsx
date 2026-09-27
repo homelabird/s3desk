@@ -1,3 +1,4 @@
+import { Alert } from "antd";
 import { useState } from "react";
 
 import type { BucketPublicExposureMode } from "../../../api/types";
@@ -116,6 +117,8 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
       ),
   });
 
+  const versioningAvailable = props.governance.capabilities.bucket_versioning?.enabled === true && props.governance.versioning != null;
+
   const versioningMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Versioning updated",
     mutationFn: () =>
@@ -188,8 +191,11 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
             description:
               "Azure Blob versioning is configured at the storage-account level and affects every container in the account.",
             saveLoading: versioningMutation.isPending,
-            onSave: () => versioningMutation.mutate(),
-            content: (
+            saveDisabled: !versioningAvailable,
+            onSave: () => { if (versioningAvailable) versioningMutation.mutate(); },
+            content: !versioningAvailable ? (
+              <Alert type="info" title="Versioning unavailable" description={props.governance.capabilities.bucket_versioning?.reason ?? "Reload the current versioning state before editing."} />
+            ) : (
               <AzureVersioningControlBody
                 versioningStatus={versioningStatus}
                 setVersioningStatus={setVersioningStatus}

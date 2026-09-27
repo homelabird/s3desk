@@ -28,6 +28,27 @@ func TestParseXMLErrorBoundsDeserialization(t *testing.T) {
 	}
 }
 
+func TestBucketPolicyPutRejectsInvalidPolicyBeforeProviderCall(t *testing.T) {
+	for _, provider := range []models.ProfileProvider{
+		models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible,
+		models.ProfileProviderGcpGcs, models.ProfileProviderAzureBlob,
+		models.ProfileProviderOciObjectStorage, "unknown",
+	} {
+		t.Run(string(provider), func(t *testing.T) {
+			// A nil provider service would panic if validation allowed the request through.
+			svc := bucketPolicyHTTPService{server: &server{}}
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(`{"policy":[]}`))
+			req = withProfileSecrets(req, models.ProfileSecrets{Provider: provider})
+			req = withBucketParam(req, "demo")
+			rec := httptest.NewRecorder()
+			svc.handlePutBucketPolicy(rec, req)
+			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "policy validation failed") {
+				t.Fatalf("status=%d, body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestBucketPolicyHTTPService_HandleGetBucketPolicy_ReturnsUnsupportedProvider(t *testing.T) {
 	t.Parallel()
 
@@ -180,5 +201,148 @@ func TestBucketPolicyHTTPService_ExecuteGetThreadsAllowRemoteToProviderHelpers(t
 				t.Fatalf("callErr=%v, want loopback rejection", callErr)
 			}
 		})
+	}
+}
+
+func TestBucketPolicyPutRejectsGCSConditionWithoutVersion(t *testing.T) {
+	// No provider service: the invalid request must stop before external mutation.
+	svc := bucketPolicyHTTPService{server: &server{}}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(`{"policy":{"bindings":[{"role":"roles/storage.objectViewer","members":["user:reader@example.test"],"condition":{"title":"limited","expression":"true"}}]}}`))
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderGcpGcs})
+	req = withBucketParam(req, "demo")
+	rec := httptest.NewRecorder()
+	svc.handlePutBucketPolicy(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "conditions require policy version 3") {
+		t.Fatalf("status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBucketPolicyPutRejectsAzureNullFields(t *testing.T) {
+	for _, field := range []string{"start", "expiry", "permission"} {
+		t.Run(field, func(t *testing.T) {
+			svc := bucketPolicyHTTPService{server: &server{}}
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(`{"policy":{"publicAccess":"private","storedAccessPolicies":[{"id":"reader","`+field+`":null}]}}`))
+			req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAzureBlob})
+			req = withBucketParam(req, "demo")
+			rec := httptest.NewRecorder()
+			svc.handlePutBucketPolicy(rec, req)
+			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), field+" must be a string") {
+				t.Fatalf("status=%d, body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestBucketPolicyPutRejectsInvalidS3Effect(t *testing.T) {
+	for _, effect := range []string{`null`, `"allow"`, `"Permit"`} {
+		svc := bucketPolicyHTTPService{server: &server{}}
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(`{"policy":{"Statement":[{"Effect":`+effect+`,"Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::demo/*"}]}}`))
+		req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+		req = withBucketParam(req, "demo")
+		rec := httptest.NewRecorder()
+		svc.handlePutBucketPolicy(rec, req)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), ".Effect") {
+			t.Fatalf("effect=%s status=%d body=%s", effect, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestRawGCSPolicyConflictMapping(t *testing.T) {
+	for _, status := range []int{http.StatusConflict, http.StatusPreconditionFailed} {
+		rec := httptest.NewRecorder()
+		(&server{}).writeGenericPolicyUpstreamError(rec, "put", "demo", status, http.Header{}, []byte(`{"error":{"message":"etag mismatch"}}`), "gcs")
+		var response models.ErrorResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != http.StatusConflict || response.Error.Code != "bucket_policy_conflict" {
+			t.Fatalf("status=%d code=%s", rec.Code, response.Error.Code)
+		}
+	}
+}
+
+func TestRawGCSPolicyHTTPPreservesETagAndDoesNotRetryConflict(t *testing.T) {
+	calls := 0
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodPut || r.URL.Path != "/storage/v1/b/demo/iam" {
+			t.Errorf("unexpected provider request: %s %s", r.Method, r.URL.Path)
+		}
+		var policy map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
+			t.Error(err)
+		}
+		if policy["etag"] != "edited-revision" {
+			t.Errorf("etag changed: %v", policy["etag"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPreconditionFailed)
+		_, _ = w.Write([]byte(`{"error":{"code":412,"message":"etag mismatch"}}`))
+	}))
+	defer provider.Close()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(`{"policy":{"version":3,"etag":"edited-revision","bindings":[]}}`))
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderGcpGcs, GcpAnonymous: true, GcpEndpoint: provider.URL})
+	req = withBucketParam(req, "demo")
+	rec := httptest.NewRecorder()
+	newBucketPolicyHTTPService(&server{}).handlePutBucketPolicy(rec, req)
+	var response models.ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusConflict || response.Error.Code != "bucket_policy_conflict" || calls != 1 {
+		t.Fatalf("status=%d code=%s provider calls=%d", rec.Code, response.Error.Code, calls)
+	}
+}
+
+func TestS3ConditionValidationOnPut(t *testing.T) {
+	for _, provider := range []models.ProfileProvider{models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible} {
+		for _, condition := range []string{`null`, `[]`, `{"Bool":false}`, `{"StringEquals":{"s3:prefix":[]}}`} {
+			svc := bucketPolicyHTTPService{server: &server{}}
+			body := `{"policy":{"Statement":{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"*","Condition":` + condition + `}}}`
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(body))
+			req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{Provider: provider}), "demo")
+			rec := httptest.NewRecorder()
+			// Missing provider service ensures invalid inputs never reach mutation.
+			svc.handlePutBucketPolicy(rec, req)
+			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Condition") {
+				t.Fatalf("provider=%s condition=%s status=%d body=%s", provider, condition, rec.Code, rec.Body.String())
+			}
+		}
+		body := `{"policy":{"Statement":{"Effect":"Deny","Principal":"*","Action":"s3:*","Resource":"*","Condition":{"Bool":{"aws:SecureTransport":false}}}}}`
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(body))
+		req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{Provider: provider}), "demo")
+		_, _, parsed, err := (bucketPolicyHTTPService{server: &server{}}).preparePutBucketPolicy(req)
+		if err != nil || !strings.Contains(string(parsed.Policy), `"aws:SecureTransport":false`) {
+			t.Fatalf("valid policy rejected or altered: provider=%s err=%v policy=%s", provider, err, parsed.Policy)
+		}
+	}
+}
+
+func TestGCSRawPolicyMissingETagRejectedBeforeProviderCall(t *testing.T) {
+	for _, policy := range []string{`{"bindings":[]}`, `{"etag":"","bindings":[]}`, `{"etag":"  ","bindings":[]}`} {
+		svc := bucketPolicyHTTPService{server: &server{}}
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(`{"policy":`+policy+`}`))
+		req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderGcpGcs}), "demo")
+		rec := httptest.NewRecorder()
+		svc.handlePutBucketPolicy(rec, req)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "etag") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestS3PrincipalKindsRejectedBeforePolicyWrite(t *testing.T) {
+	for _, provider := range []models.ProfileProvider{models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible} {
+		for _, field := range []string{"Principal", "NotPrincipal"} {
+			svc := bucketPolicyHTTPService{server: &server{}}
+			body := `{"policy":{"Statement":{"Effect":"Deny","` + field + `":{"User":"example"},"Action":"s3:GetObject","Resource":"arn:aws:s3:::demo/*"}}}`
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/policy", strings.NewReader(body))
+			req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{Provider: provider}), "demo")
+			rec := httptest.NewRecorder()
+			svc.handlePutBucketPolicy(rec, req)
+			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "unsupported principal type") {
+				t.Fatalf("provider=%s field=%s status=%d body=%s", provider, field, rec.Code, rec.Body.String())
+			}
+		}
 	}
 }

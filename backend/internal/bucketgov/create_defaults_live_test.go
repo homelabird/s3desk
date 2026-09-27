@@ -121,7 +121,7 @@ func TestApplyCreateDefaultsGCSLiveRoundTrip(t *testing.T) {
 				{
 					Role:      "roles/storage.objectAdmin",
 					Members:   []string{"user:alice@example.com"},
-					Condition: []byte(`{"title":"if-approved"}`),
+					Condition: []byte(`{"title":"if-approved","expression":"true"}`),
 				},
 			},
 		},
@@ -162,7 +162,7 @@ func TestApplyCreateDefaultsGCSLiveRoundTrip(t *testing.T) {
 	if got := view.Access.Bindings[0].Members; len(got) != 1 || got[0] != "user:alice@example.com" {
 		t.Fatalf("members=%v, want user:alice@example.com", got)
 	}
-	if string(view.Access.Bindings[0].Condition) != `{"title":"if-approved"}` {
+	if string(view.Access.Bindings[0].Condition) != `{"title":"if-approved","expression":"true"}` {
 		t.Fatalf("condition=%s, want preserved condition", string(view.Access.Bindings[0].Condition))
 	}
 	if fakeGCS.putCount != 2 {

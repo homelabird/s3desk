@@ -1,5 +1,5 @@
 import { Grid } from "antd";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { APIError, type APIClientShape } from "../../api/client";
 import type {
@@ -20,6 +20,7 @@ import {
 } from "./bucketPolicyDiff";
 import {
   buildStructuredPolicyText,
+  canUseStructuredPolicy,
   computeGcsPublicRead,
   getInitialStructuredState,
   parseStructuredStateFromText,
@@ -152,7 +153,7 @@ function BucketPolicyEditor(props: {
 
   // Editor mode: S3 stays JSON-only for now. GCS/Azure default to Form.
   const [editorMode, setEditorMode] = useState<"form" | "json">(
-    policyKind === "s3" ? "json" : "form",
+    canUseStructuredPolicy(policyKind, initialPolicyText) ? "form" : "json",
   );
 
   const [serverValidation, setServerValidation] =
@@ -392,7 +393,10 @@ function BucketPolicyEditor(props: {
 
   const updateStructuredStateFromText = (text: string) => {
     const nextState = parseStructuredStateFromText(policyKind, text, nextKey);
-    if (!nextState) return;
+    if (!nextState) {
+      bucketsFeedback.invalidPolicyJson("This policy cannot be represented safely in Form mode. Keep editing the original JSON.");
+      return false;
+    }
     if (nextState.gcsState) {
       setGcsVersion(nextState.gcsState.version);
       setGcsEtag(nextState.gcsState.etag);
@@ -402,6 +406,7 @@ function BucketPolicyEditor(props: {
       setAzurePublicAccess(nextState.azureState.publicAccess);
       setAzureStoredPolicies(nextState.azureState.policies);
     }
+    return true;
   };
 
   const applyPolicyPreset = (key: string) => {
@@ -469,6 +474,11 @@ function BucketPolicyEditor(props: {
     putMutation.mutate({ policy: parsed.value } as BucketPolicyPutRequest);
   };
 
+  const currentDeleteContextRef = useRef({ effectivePolicyText, isBusy });
+  useLayoutEffect(() => {
+    currentDeleteContextRef.current = { effectivePolicyText, isBusy };
+  }, [effectivePolicyText, isBusy]);
+
   const handleClose = () => {
     runIfActionIdle(isBusy, props.onClose);
   };
@@ -487,7 +497,11 @@ function BucketPolicyEditor(props: {
       onCancel={handleClose}
       onSave={handleSave}
       onDelete={() => {
-        if (!editorActiveRef.current) return Promise.resolve();
+        if (!editorActiveRef.current || currentDeleteContextRef.current.isBusy) return Promise.resolve();
+        if (currentDeleteContextRef.current.effectivePolicyText !== effectivePolicyText) {
+          bucketsFeedback.error(new Error("Policy changed. Review it and confirm deletion again."));
+          return Promise.resolve();
+        }
         return deleteMutation.mutateAsync();
       }}
     />

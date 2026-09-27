@@ -68,7 +68,7 @@ export function buildAzureSummaryTags(
   );
   items.push(`Policies: ${governance.access?.storedAccessPolicies?.length ?? 0}`);
   items.push(
-    `Versioning: ${governance.versioning?.status ?? fallback.versioningStatus}`,
+    `Versioning: ${governance.versioning?.status ?? "unavailable"}`,
   );
   items.push(
     `Soft delete: ${governance.protection?.softDelete?.enabled ? "on" : "off"}`,

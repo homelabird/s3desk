@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -45,8 +47,8 @@ type awsLifecycleAndPayload struct {
 }
 
 type awsLifecycleTagPayload struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key   string  `json:"key"`
+	Value *string `json:"value,omitempty"`
 }
 
 type awsLifecycleExpirationPayload struct {
@@ -91,6 +93,9 @@ func (a *awsAdapter) GetLifecycle(ctx context.Context, profile models.ProfileSec
 		return models.BucketLifecycleView{}, mapAWSLifecycleError(err, bucket, "get")
 	}
 
+	if out == nil {
+		return models.BucketLifecycleView{}, mapAWSLifecycleError(errors.New("missing lifecycle response"), bucket, "get")
+	}
 	rulesJSON, err := marshalAWSLifecycleRules(out.Rules)
 	if err != nil {
 		return models.BucketLifecycleView{}, err
@@ -112,20 +117,48 @@ func (a *awsAdapter) PutLifecycle(ctx context.Context, profile models.ProfileSec
 		_, deleteErr := client.DeleteBucketLifecycle(ctx, &s3.DeleteBucketLifecycleInput{
 			Bucket: &bucket,
 		})
+		readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		observed, readErr := client.GetBucketLifecycleConfiguration(readCtx, &s3.GetBucketLifecycleConfigurationInput{Bucket: &bucket})
 		if deleteErr != nil {
 			return mapAWSLifecycleError(deleteErr, bucket, "delete")
+		}
+		if !isAWSAPICode(readErr, "NoSuchLifecycleConfiguration") && (readErr != nil || observed == nil || len(observed.Rules) != 0) {
+			return &OperationError{
+				Status: http.StatusBadGateway, Code: "bucket_lifecycle_unconfirmed",
+				Message: "Lifecycle deletion was accepted but current state did not confirm removal; reload before retrying",
+				Details: map[string]any{"bucket": bucket},
+			}
 		}
 		return nil
 	}
 
+	current, readErr := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{Bucket: &bucket})
+	var minimumSize s3types.TransitionDefaultMinimumObjectSize
+	if readErr != nil {
+		if !isAWSAPICode(readErr, "NoSuchLifecycleConfiguration") {
+			return mapAWSLifecycleError(readErr, bucket, "get")
+		}
+	} else if current == nil {
+		return mapAWSLifecycleError(errors.New("missing lifecycle response"), bucket, "get")
+	} else {
+		minimumSize = current.TransitionDefaultMinimumObjectSize
+	}
 	_, putErr := client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
-		Bucket: &bucket,
+		Bucket:                             &bucket,
+		TransitionDefaultMinimumObjectSize: minimumSize,
 		LifecycleConfiguration: &s3types.BucketLifecycleConfiguration{
 			Rules: rules,
 		},
 	})
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, observeErr := client.GetBucketLifecycleConfiguration(readCtx, &s3.GetBucketLifecycleConfigurationInput{Bucket: &bucket})
 	if putErr != nil {
 		return mapAWSLifecycleError(putErr, bucket, "put")
+	}
+	if observeErr != nil || observed == nil || !awsLifecycleRulesMatch(rules, observed.Rules) || (minimumSize != "" && observed.TransitionDefaultMinimumObjectSize != minimumSize) {
+		return &OperationError{Status: http.StatusBadGateway, Code: "bucket_lifecycle_unconfirmed", Message: "Lifecycle update was accepted but current state did not confirm the request; reload before retrying", Details: map[string]any{"bucket": bucket}}
 	}
 	return nil
 }
@@ -178,15 +211,33 @@ func parseAWSLifecycleRulesJSON(raw json.RawMessage) ([]s3types.LifecycleRule, e
 	}
 
 	var payload []awsLifecycleRulePayload
-	if err := json.Unmarshal(raw, &payload); err != nil {
+	if !json.Valid(raw) {
+		return nil, InvalidFieldError("rules", "rules must be a single valid JSON array", nil)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
 		return nil, InvalidFieldError("rules", "rules must be a JSON array of AWS lifecycle rules", map[string]any{
 			"section": "lifecycle",
 			"error":   err.Error(),
 		})
 	}
+	if payload == nil {
+		return nil, InvalidFieldError("rules", "rules must be an array; use [] explicitly to delete lifecycle rules", nil)
+	}
 
+	if len(payload) > 1000 {
+		return nil, InvalidFieldError("rules", "at most 1000 lifecycle rules are allowed", nil)
+	}
+	ids := make(map[string]struct{}, len(payload))
 	rules := make([]s3types.LifecycleRule, 0, len(payload))
 	for idx, item := range payload {
+		if item.ID != "" {
+			if _, exists := ids[item.ID]; exists {
+				return nil, lifecycleFieldError(idx, "id", "rule IDs must be unique", nil)
+			}
+			ids[item.ID] = struct{}{}
+		}
 		rule, err := item.toS3(idx)
 		if err != nil {
 			return nil, err
@@ -206,11 +257,14 @@ func (p awsLifecycleRulePayload) toS3(ruleIndex int) (s3types.LifecycleRule, err
 	}
 
 	rule := s3types.LifecycleRule{Status: status}
-	if id := strings.TrimSpace(p.ID); id != "" {
+	if utf8.RuneCountInString(p.ID) > 255 {
+		return s3types.LifecycleRule{}, lifecycleFieldError(ruleIndex, "id", "rule ID must not exceed 255 characters", nil)
+	}
+	if id := p.ID; id != "" {
 		rule.ID = &id
 	}
 
-	if strings.TrimSpace(p.Prefix) != "" && p.Filter != nil {
+	if p.Prefix != "" && p.Filter != nil {
 		return s3types.LifecycleRule{}, lifecycleFieldError(ruleIndex, "filter", "filter cannot be used together with prefix", nil)
 	}
 
@@ -226,8 +280,8 @@ func (p awsLifecycleRulePayload) toS3(ruleIndex int) (s3types.LifecycleRule, err
 		} else {
 			rule.Filter = filter
 		}
-	case strings.TrimSpace(p.Prefix) != "":
-		prefix := strings.TrimSpace(p.Prefix)
+	case p.Prefix != "":
+		prefix := p.Prefix
 		rule.Filter = &s3types.LifecycleRuleFilter{Prefix: &prefix}
 	default:
 		emptyPrefix := ""
@@ -280,6 +334,22 @@ func (p awsLifecycleRulePayload) toS3(ruleIndex int) (s3types.LifecycleRule, err
 		}
 	}
 
+	hasDays, hasDate := false, false
+	if rule.Expiration != nil {
+		hasDays = rule.Expiration.Days != nil
+		hasDate = rule.Expiration.Date != nil
+	}
+	for _, transition := range rule.Transitions {
+		hasDays = hasDays || transition.Days != nil
+		hasDate = hasDate || transition.Date != nil
+	}
+	if hasDays && hasDate {
+		return s3types.LifecycleRule{}, lifecycleFieldError(ruleIndex, "schedule", "date and days cannot be combined in the same rule", nil)
+	}
+	hasTags := rule.Filter != nil && (rule.Filter.Tag != nil || (rule.Filter.And != nil && len(rule.Filter.And.Tags) > 0))
+	if hasTags && (rule.AbortIncompleteMultipartUpload != nil || (rule.Expiration != nil && rule.Expiration.ExpiredObjectDeleteMarker != nil)) {
+		return s3types.LifecycleRule{}, lifecycleFieldError(ruleIndex, "filter", "tag filters cannot be combined with abortIncompleteMultipartUpload or expiredObjectDeleteMarker", nil)
+	}
 	return rule, nil
 }
 
@@ -291,11 +361,14 @@ func awsLifecycleRuleFromS3(rule s3types.LifecycleRule, ruleIndex int) (awsLifec
 		return awsLifecycleRulePayload{}, lifecycleFieldError(ruleIndex, "status", "status is required", nil)
 	}
 	if rule.ID != nil {
-		payload.ID = strings.TrimSpace(*rule.ID)
+		payload.ID = *rule.ID
+	}
+	if rule.Filter == nil && rule.Prefix != nil {
+		payload.Prefix = *rule.Prefix
 	}
 	if rule.Filter != nil {
-		if rule.Filter.Prefix != nil && strings.TrimSpace(*rule.Filter.Prefix) != "" {
-			prefix := strings.TrimSpace(*rule.Filter.Prefix)
+		if rule.Filter.Prefix != nil && *rule.Filter.Prefix != "" {
+			prefix := *rule.Filter.Prefix
 			payload.Prefix = prefix
 		} else {
 			filterPayload, err := awsLifecycleFilterFromS3(rule.Filter, ruleIndex)
@@ -334,8 +407,11 @@ func (p *awsLifecycleFilterPayload) toS3(ruleIndex int) (*s3types.LifecycleRuleF
 		return nil, true, nil
 	}
 
+	if err := validateLifecycleSizes(ruleIndex, "filter", p.ObjectSizeGreaterThan, p.ObjectSizeLessThan); err != nil {
+		return nil, false, err
+	}
 	count := 0
-	if strings.TrimSpace(p.Prefix) != "" {
+	if p.Prefix != "" {
 		count++
 	}
 	if p.Tag != nil {
@@ -358,8 +434,8 @@ func (p *awsLifecycleFilterPayload) toS3(ruleIndex int) (*s3types.LifecycleRuleF
 	}
 
 	switch {
-	case strings.TrimSpace(p.Prefix) != "":
-		prefix := strings.TrimSpace(p.Prefix)
+	case p.Prefix != "":
+		prefix := p.Prefix
 		return &s3types.LifecycleRuleFilter{Prefix: &prefix}, false, nil
 	case p.Tag != nil:
 		tag, err := p.Tag.toS3(ruleIndex, "filter.tag")
@@ -407,9 +483,12 @@ func (p *awsLifecycleAndPayload) toS3(ruleIndex int) (s3types.LifecycleRuleAndOp
 	if p == nil {
 		return s3types.LifecycleRuleAndOperator{}, lifecycleFieldError(ruleIndex, "filter.and", "and filter is required", nil)
 	}
+	if err := validateLifecycleSizes(ruleIndex, "filter.and", p.ObjectSizeGreaterThan, p.ObjectSizeLessThan); err != nil {
+		return s3types.LifecycleRuleAndOperator{}, err
+	}
 	operator := s3types.LifecycleRuleAndOperator{}
-	if strings.TrimSpace(p.Prefix) != "" {
-		prefix := strings.TrimSpace(p.Prefix)
+	if p.Prefix != "" {
+		prefix := p.Prefix
 		operator.Prefix = &prefix
 	}
 	if p.ObjectSizeGreaterThan != nil {
@@ -420,7 +499,12 @@ func (p *awsLifecycleAndPayload) toS3(ruleIndex int) (s3types.LifecycleRuleAndOp
 	}
 	if len(p.Tags) > 0 {
 		operator.Tags = make([]s3types.Tag, 0, len(p.Tags))
+		keys := make(map[string]struct{}, len(p.Tags))
 		for idx, item := range p.Tags {
+			if _, exists := keys[item.Key]; exists {
+				return s3types.LifecycleRuleAndOperator{}, lifecycleFieldError(ruleIndex, "filter.and.tags["+itoa(idx)+"].key", "tag keys must be unique", nil)
+			}
+			keys[item.Key] = struct{}{}
 			tag, err := item.toS3(ruleIndex, "filter.and.tags["+itoa(idx)+"]")
 			if err != nil {
 				return s3types.LifecycleRuleAndOperator{}, err
@@ -428,8 +512,18 @@ func (p *awsLifecycleAndPayload) toS3(ruleIndex int) (s3types.LifecycleRuleAndOp
 			operator.Tags = append(operator.Tags, tag)
 		}
 	}
-	if operator.Prefix == nil && operator.ObjectSizeGreaterThan == nil && operator.ObjectSizeLessThan == nil && len(operator.Tags) == 0 {
-		return s3types.LifecycleRuleAndOperator{}, lifecycleFieldError(ruleIndex, "filter.and", "and filter must define at least one predicate", nil)
+	count := len(operator.Tags)
+	if operator.Prefix != nil {
+		count++
+	}
+	if operator.ObjectSizeGreaterThan != nil {
+		count++
+	}
+	if operator.ObjectSizeLessThan != nil {
+		count++
+	}
+	if count < 2 {
+		return s3types.LifecycleRuleAndOperator{}, lifecycleFieldError(ruleIndex, "filter.and", "and filter must define at least two predicates", nil)
 	}
 	return operator, nil
 }
@@ -437,7 +531,7 @@ func (p *awsLifecycleAndPayload) toS3(ruleIndex int) (s3types.LifecycleRuleAndOp
 func awsLifecycleAndFromS3(value s3types.LifecycleRuleAndOperator) awsLifecycleAndPayload {
 	out := awsLifecycleAndPayload{}
 	if value.Prefix != nil {
-		out.Prefix = strings.TrimSpace(*value.Prefix)
+		out.Prefix = *value.Prefix
 	}
 	if value.ObjectSizeGreaterThan != nil {
 		size := *value.ObjectSizeGreaterThan
@@ -457,27 +551,23 @@ func awsLifecycleAndFromS3(value s3types.LifecycleRuleAndOperator) awsLifecycleA
 }
 
 func (p awsLifecycleTagPayload) toS3(ruleIndex int, field string) (s3types.Tag, error) {
-	key := strings.TrimSpace(p.Key)
-	value := strings.TrimSpace(p.Value)
+	key := p.Key
 	if key == "" {
 		return s3types.Tag{}, lifecycleFieldError(ruleIndex, field+".key", "tag key is required", nil)
 	}
-	if value == "" {
-		return s3types.Tag{}, lifecycleFieldError(ruleIndex, field+".value", "tag value is required", nil)
-	}
 	return s3types.Tag{
 		Key:   &key,
-		Value: &value,
+		Value: p.Value,
 	}, nil
 }
 
 func awsLifecycleTagFromS3(value s3types.Tag) awsLifecycleTagPayload {
 	out := awsLifecycleTagPayload{}
 	if value.Key != nil {
-		out.Key = strings.TrimSpace(*value.Key)
+		out.Key = *value.Key
 	}
 	if value.Value != nil {
-		out.Value = strings.TrimSpace(*value.Value)
+		out.Value = value.Value
 	}
 	return out
 }
@@ -495,8 +585,8 @@ func (p *awsLifecycleExpirationPayload) toS3(ruleIndex int) (*s3types.LifecycleE
 	}
 	if strings.TrimSpace(p.Date) != "" {
 		date, err := parseRFC3339Field(p.Date)
-		if err != nil {
-			return nil, lifecycleFieldError(ruleIndex, "expiration.date", "expiration date must be a valid RFC3339 timestamp", map[string]any{"value": p.Date})
+		if err != nil || !date.Equal(date.Truncate(24*time.Hour)) {
+			return nil, lifecycleFieldError(ruleIndex, "expiration.date", "expiration date must be a valid RFC3339 timestamp at midnight UTC", map[string]any{"value": p.Date})
 		}
 		out.Date = &date
 	}
@@ -538,15 +628,15 @@ func (p *awsLifecycleTransitionPayload) toS3(ruleIndex int, transitionIndex int)
 		StorageClass: s3types.TransitionStorageClass(storageClass),
 	}
 	if p.Days != nil {
-		if *p.Days <= 0 {
-			return s3types.Transition{}, lifecycleFieldError(ruleIndex, "transitions["+itoa(transitionIndex)+"].days", "days must be greater than zero", nil)
+		if *p.Days < 0 {
+			return s3types.Transition{}, lifecycleFieldError(ruleIndex, "transitions["+itoa(transitionIndex)+"].days", "days must be zero or greater", nil)
 		}
 		out.Days = p.Days
 	}
 	if strings.TrimSpace(p.Date) != "" {
 		date, err := parseRFC3339Field(p.Date)
-		if err != nil {
-			return s3types.Transition{}, lifecycleFieldError(ruleIndex, "transitions["+itoa(transitionIndex)+"].date", "date must be a valid RFC3339 timestamp", map[string]any{"value": p.Date})
+		if err != nil || !date.Equal(date.Truncate(24*time.Hour)) {
+			return s3types.Transition{}, lifecycleFieldError(ruleIndex, "transitions["+itoa(transitionIndex)+"].date", "date must be a valid RFC3339 timestamp at midnight UTC", map[string]any{"value": p.Date})
 		}
 		out.Date = &date
 	}
@@ -595,8 +685,8 @@ func (p *awsNoncurrentVersionExpirationPayload) toS3(ruleIndex int) (*s3types.No
 	if p.NoncurrentDays != nil && *p.NoncurrentDays <= 0 {
 		return nil, lifecycleFieldError(ruleIndex, "noncurrentVersionExpiration.noncurrentDays", "noncurrentDays must be greater than zero", nil)
 	}
-	if p.NewerNoncurrentVersions != nil && *p.NewerNoncurrentVersions < 0 {
-		return nil, lifecycleFieldError(ruleIndex, "noncurrentVersionExpiration.newerNoncurrentVersions", "newerNoncurrentVersions must be zero or greater", nil)
+	if p.NewerNoncurrentVersions != nil && (*p.NewerNoncurrentVersions < 0 || *p.NewerNoncurrentVersions > 100) {
+		return nil, lifecycleFieldError(ruleIndex, "noncurrentVersionExpiration.newerNoncurrentVersions", "newerNoncurrentVersions must be between 0 and 100", nil)
 	}
 	return &s3types.NoncurrentVersionExpiration{
 		NoncurrentDays:          p.NoncurrentDays,
@@ -628,8 +718,8 @@ func (p *awsNoncurrentVersionTransitionPayload) toS3(ruleIndex int, transitionIn
 	if p.NoncurrentDays != nil && *p.NoncurrentDays <= 0 {
 		return s3types.NoncurrentVersionTransition{}, lifecycleFieldError(ruleIndex, "noncurrentVersionTransitions["+itoa(transitionIndex)+"].noncurrentDays", "noncurrentDays must be greater than zero", nil)
 	}
-	if p.NewerNoncurrentVersions != nil && *p.NewerNoncurrentVersions < 0 {
-		return s3types.NoncurrentVersionTransition{}, lifecycleFieldError(ruleIndex, "noncurrentVersionTransitions["+itoa(transitionIndex)+"].newerNoncurrentVersions", "newerNoncurrentVersions must be zero or greater", nil)
+	if p.NewerNoncurrentVersions != nil && (*p.NewerNoncurrentVersions < 0 || *p.NewerNoncurrentVersions > 100) {
+		return s3types.NoncurrentVersionTransition{}, lifecycleFieldError(ruleIndex, "noncurrentVersionTransitions["+itoa(transitionIndex)+"].newerNoncurrentVersions", "newerNoncurrentVersions must be between 0 and 100", nil)
 	}
 	return s3types.NoncurrentVersionTransition{
 		NoncurrentDays:          p.NoncurrentDays,
@@ -719,4 +809,69 @@ func isValidTransitionStorageClass(value string) bool {
 
 func itoa(value int) string {
 	return strconv.Itoa(value)
+}
+
+func validateLifecycleSizes(ruleIndex int, field string, minimum, maximum *int64) error {
+	if minimum != nil && *minimum < 0 {
+		return lifecycleFieldError(ruleIndex, field+".objectSizeGreaterThan", "size must be nonnegative", nil)
+	}
+	if maximum != nil && *maximum < 0 {
+		return lifecycleFieldError(ruleIndex, field+".objectSizeLessThan", "size must be nonnegative", nil)
+	}
+	if minimum != nil && maximum != nil && *minimum >= *maximum {
+		return lifecycleFieldError(ruleIndex, field, "objectSizeGreaterThan must be less than objectSizeLessThan", nil)
+	}
+	return nil
+}
+
+// Compare explicit IDs first; an omitted ID may be generated by S3.
+func awsLifecycleRulesMatch(expected, observed []s3types.LifecycleRule) bool {
+	if len(expected) != len(observed) {
+		return false
+	}
+	remaining := make(map[string]int, len(observed))
+	anonymous := make(map[string]int, len(observed))
+	for _, rule := range observed {
+		raw, err := marshalAWSLifecycleRules([]s3types.LifecycleRule{rule})
+		if err != nil {
+			return false
+		}
+		remaining[string(raw)]++
+	}
+	for _, rule := range expected {
+		if rule.ID == nil {
+			continue
+		}
+		raw, err := marshalAWSLifecycleRules([]s3types.LifecycleRule{rule})
+		if err != nil || remaining[string(raw)] == 0 {
+			return false
+		}
+		remaining[string(raw)]--
+	}
+	for raw, count := range remaining {
+		if count == 0 {
+			continue
+		}
+		var payload []awsLifecycleRulePayload
+		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			return false
+		}
+		payload[0].ID = ""
+		normalized, err := json.Marshal(payload)
+		if err != nil {
+			return false
+		}
+		anonymous[string(normalized)] += count
+	}
+	for _, rule := range expected {
+		if rule.ID != nil {
+			continue
+		}
+		raw, err := marshalAWSLifecycleRules([]s3types.LifecycleRule{rule})
+		if err != nil || anonymous[string(raw)] == 0 {
+			return false
+		}
+		anonymous[string(raw)]--
+	}
+	return true
 }

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"s3desk/internal/bucketgov"
 	"s3desk/internal/config"
 	"s3desk/internal/models"
 )
@@ -53,5 +54,30 @@ func TestBucketHTTPService_HandleDeleteBucket_ReturnsMissingBucket(t *testing.T)
 	}
 	if resp.Error.Code != "invalid_request" {
 		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	}
+}
+
+func TestBucketHTTPService_CreateAzureVersioningRequiresARMBeforeCreate(t *testing.T) {
+	t.Parallel()
+	svc := newBucketHTTPService(&server{
+		cfg:       config.Config{DataDir: t.TempDir()},
+		bucketGov: bucketgov.NewService(bucketgov.NewDefaultRegistry()),
+	})
+	// A nil bucket service ensures this request cannot reach bucket creation.
+	svc.service = nil
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/buckets", bytes.NewBufferString(`{"name":"example","defaults":{"versioning":{"status":"enabled"}}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAzureBlob})
+	rec := httptest.NewRecorder()
+	svc.handleCreateBucket(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp models.ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Error.Details["field"] != "defaults.versioning" {
+		t.Fatalf("unexpected error: %+v", resp.Error)
 	}
 }

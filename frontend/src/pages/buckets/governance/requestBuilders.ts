@@ -86,9 +86,12 @@ export function buildGCSAccessRequest(
   bindings: GCSBindingDraft[],
   etag: string,
 ): BucketAccessPutRequest {
+  if (!etag.trim()) {
+    throw new Error("GCS IAM edits require the loaded policy ETag. Reload the policy before saving.");
+  }
   return {
     bindings: serializeGCSBindings(bindings),
-    etag: etag.trim() || undefined,
+    etag: etag.trim(),
   };
 }
 

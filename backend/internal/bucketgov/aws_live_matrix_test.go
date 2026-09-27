@@ -52,8 +52,8 @@ func TestAWSAdapterLiveMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAccess err=%v", err)
 	}
-	if accessBefore.ObjectOwnership == nil || accessBefore.ObjectOwnership.Mode != models.BucketObjectOwnershipBucketOwnerEnforced {
-		t.Fatalf("access=%+v, want implicit bucket_owner_enforced", accessBefore.ObjectOwnership)
+	if accessBefore.ObjectOwnership != nil || len(accessBefore.Warnings) == 0 {
+		t.Fatalf("access=%+v, want unconfigured ownership warning", accessBefore)
 	}
 
 	versioningBefore, err := adapter.GetVersioning(context.Background(), secrets, "demo")

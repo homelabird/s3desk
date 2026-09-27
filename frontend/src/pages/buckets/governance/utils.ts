@@ -1,3 +1,4 @@
+import { isAzurePolicyTime } from "../create/types";
 import type {
   BucketAccessBinding,
   BucketAdvancedView,
@@ -20,6 +21,7 @@ import type {
   OCIRetentionView,
   OCISharingView,
 } from "./types";
+
 import { azureStoredAccessPermissionOptions } from "./types";
 
 const fallbackPublicAccessBlock: BucketBlockPublicAccess = {
@@ -103,7 +105,7 @@ export function buildGCSConditionDraft(value: unknown): GCSConditionDraft {
     ("expression" in raw && typeof raw.expression !== "string");
 
   return {
-    conditionEnabled: keys.length > 0,
+    conditionEnabled: true,
     conditionTitle: typeof raw.title === "string" ? raw.title : "",
     conditionDescription:
       typeof raw.description === "string" ? raw.description : "",
@@ -123,19 +125,7 @@ export function createEmptyAzureStoredAccessPolicyDraft(): AzureStoredAccessPoli
 }
 
 export function normalizeAzureStoredAccessPermissions(value: string): string {
-  const allowed = new Set<AzureStoredAccessPermission>(
-    azureStoredAccessPermissionOptions.map((option) => option.value),
-  );
-  const selected = new Set<AzureStoredAccessPermission>();
-  for (const char of value.toLowerCase()) {
-    if (allowed.has(char as AzureStoredAccessPermission)) {
-      selected.add(char as AzureStoredAccessPermission);
-    }
-  }
-  return azureStoredAccessPermissionOptions
-    .map((option) => option.value)
-    .filter((item) => selected.has(item))
-    .join("");
+  return value.trim();
 }
 
 export function toggleAzureStoredAccessPermission(
@@ -153,10 +143,11 @@ export function toggleAzureStoredAccessPermission(
   } else {
     next.delete(permission);
   }
-  return azureStoredAccessPermissionOptions
-    .map((option) => option.value)
-    .filter((value) => next.has(value))
-    .join("");
+  const known = azureStoredAccessPermissionOptions.map((option) => option.value);
+  return [
+    ...known.filter((value) => next.has(value)),
+    ...Array.from(next).filter((value) => !known.includes(value)),
+  ].join("");
 }
 
 export function serializeGCSBindings(bindings: GCSBindingDraft[]): BucketAccessBinding[] {
@@ -166,6 +157,9 @@ export function serializeGCSBindings(bindings: GCSBindingDraft[]): BucketAccessB
       throw new Error(`Binding ${index + 1} role is required.`);
     }
     const members = parseLineSeparatedValues(binding.membersText);
+    if (members.length === 0) {
+      throw new Error(`Binding ${index + 1} requires at least one member.`);
+    }
     let condition: BucketAccessBindingCondition | undefined;
     if (binding.conditionEnabled) {
       if (binding.unsupportedConditionJSON.trim()) {
@@ -203,13 +197,22 @@ export function serializeAzureStoredAccessPolicies(
   if (policies.length > 5) {
     throw new Error("Azure stored access policies are limited to five entries.");
   }
+  const seenIDs = new Set<string>();
   return policies.map((policy, index) => {
     const id = policy.id.trim();
     if (!id) {
       throw new Error(`Stored access policy ${index + 1} identifier is required.`);
     }
+    if ([...id].length > 64) throw new Error("Stored access policy identifier must not exceed 64 characters.");
+    if (seenIDs.has(id)) throw new Error("Stored access policy identifiers must be unique.");
+    seenIDs.add(id);
     const start = policy.start.trim();
     const expiry = policy.expiry.trim();
+    for (const [field, value] of [["start", start], ["expiry", expiry]]) {
+      if (value && !isAzurePolicyTime(value)) {
+        throw new Error(`Stored access policy ${id}: ${field} must be an ISO 8601 date or timestamp with timezone.`);
+      }
+    }
     const permission = normalizeAzureStoredAccessPermissions(policy.permission);
     return {
       id,
@@ -279,7 +282,7 @@ export function buildGovernanceDraft(
     publicAccessBlock:
       governance.publicExposure?.blockPublicAccess ?? fallbackPublicAccessBlock,
     objectOwnership:
-      governance.access?.objectOwnership?.mode ?? "bucket_owner_enforced",
+      governance.access?.objectOwnership?.mode ?? "",
     versioningStatus:
       governance.versioning?.status === "suspended" ? "suspended" : "enabled",
     encryptionMode:
@@ -381,7 +384,7 @@ export function buildOCIDraft(governance: BucketGovernanceView): OCIGovernanceDr
         ? visibility
         : "private",
     versioningStatus:
-      governance.versioning?.status === "enabled" ? "enabled" : "disabled",
+      governance.versioning?.status === "suspended" ? "suspended" : "enabled",
     retentionRules,
   };
 }

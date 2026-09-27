@@ -68,6 +68,12 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, bucket strin
 
 	u := *baseURL
 	u.Path = strings.TrimRight(u.Path, "/") + "/b/" + url.PathEscape(bucket) + "/iam"
+	if method == http.MethodGet {
+		// Conditional IAM bindings require policy version 3 on reads as well as writes.
+		query := u.Query()
+		query.Set("optionsRequestedPolicyVersion", "3")
+		u.RawQuery = query.Encode()
+	}
 
 	client, err := newHTTPClient(profile, opts)
 	if err != nil {
@@ -305,4 +311,25 @@ func parseRSAPrivateKey(pemText string) (*rsa.PrivateKey, error) {
 		return k, nil
 	}
 	return nil, errors.New("failed to parse rsa private key")
+}
+
+// ValidateCondition checks the JSON shape; it does not evaluate CEL or access effects.
+func ValidateCondition(value any) error {
+	condition, ok := value.(map[string]any)
+	if !ok {
+		return errors.New("GCS IAM binding.condition must be an object")
+	}
+	for _, field := range []string{"title", "expression"} {
+		if text, ok := condition[field].(string); !ok || strings.TrimSpace(text) == "" {
+			return fmt.Errorf("GCS IAM binding.condition.%s must be a non-empty string", field)
+		}
+	}
+	for _, field := range []string{"description", "location"} {
+		if value, present := condition[field]; present {
+			if _, ok := value.(string); !ok {
+				return fmt.Errorf("GCS IAM binding.condition.%s must be a string", field)
+			}
+		}
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package bucketgov
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -21,11 +22,18 @@ func (a *awsAdapter) GetVersioning(ctx context.Context, profile models.ProfileSe
 	if err != nil {
 		return models.BucketVersioningView{}, mapAWSVersioningError(err, bucket, "get")
 	}
+	if out == nil {
+		return models.BucketVersioningView{}, mapAWSVersioningError(errors.New("missing versioning response"), bucket, "get")
+	}
+	status := fromS3VersioningStatus(out.Status)
+	if status == "" {
+		return models.BucketVersioningView{}, mapAWSVersioningError(errors.New("unknown versioning status"), bucket, "get")
+	}
 
 	view := models.BucketVersioningView{
 		Provider: models.ProfileProviderAwsS3,
 		Bucket:   strings.TrimSpace(bucket),
-		Status:   fromS3VersioningStatus(out.Status),
+		Status:   status,
 	}
 	if out.MFADelete == s3types.MFADeleteStatusEnabled {
 		view.Warnings = append(view.Warnings, "MFA Delete is enabled and cannot be managed by this client.")
@@ -61,8 +69,10 @@ func fromS3VersioningStatus(status s3types.BucketVersioningStatus) models.Bucket
 		return models.BucketVersioningStatusEnabled
 	case s3types.BucketVersioningStatusSuspended:
 		return models.BucketVersioningStatusSuspended
-	default:
+	case "":
 		return models.BucketVersioningStatusDisabled
+	default:
+		return ""
 	}
 }
 

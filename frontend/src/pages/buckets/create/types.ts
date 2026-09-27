@@ -100,8 +100,11 @@ export function parseMembersInput(value: string): string[] {
 	)
 }
 
-export function isRFC3339(value: string): boolean {
-	return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+export function isAzurePolicyTime(value: string): boolean {
+	if (!/^\d{4}-\d{2}-\d{2}(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/.test(value)) return false
+	const date = value.slice(0, 10)
+	const midnight = Date.parse(`${date}T00:00:00Z`)
+	return Number.isFinite(midnight) && new Date(midnight).toISOString().slice(0, 10) === date && Number.isFinite(Date.parse(value))
 }
 
 export function normalizeGCSBindings(rows: GCSBindingRow[]): BucketAccessBinding[] {
@@ -128,17 +131,18 @@ export function normalizeAzureStoredPolicies(rows: AzureStoredPolicyRow[]): Buck
 		const permission = row.permission.trim()
 		if (!id && !start && !expiry && !permission) return
 		if (!id) throw new Error(`Azure stored access policy #${index + 1}: id is required.`)
-		const key = id.toLowerCase()
+		if ([...id].length > 64) throw new Error(`Azure stored access policy ${id}: id must not exceed 64 characters.`)
+		const key = id
 		if (seen.has(key)) throw new Error(`Azure stored access policy id "${id}" is duplicated.`)
 		seen.add(key)
-		if (start && !isRFC3339(start)) {
-			throw new Error(`Azure stored access policy ${id}: start must be RFC3339.`)
+		if (start && !isAzurePolicyTime(start)) {
+			throw new Error(`Azure stored access policy ${id}: start must be an ISO 8601 date or timestamp with timezone.`)
 		}
-		if (expiry && !isRFC3339(expiry)) {
-			throw new Error(`Azure stored access policy ${id}: expiry must be RFC3339.`)
+		if (expiry && !isAzurePolicyTime(expiry)) {
+			throw new Error(`Azure stored access policy ${id}: expiry must be an ISO 8601 date or timestamp with timezone.`)
 		}
-		if (permission && !/^[rwdlacup]+$/i.test(permission)) {
-			throw new Error(`Azure stored access policy ${id}: permission must use only r/w/d/l/a/c/u/p.`)
+		if (permission && (!/^[racwdxyltfmeopi]+$/.test(permission) || new Set(permission).size !== permission.length)) {
+			throw new Error(`Azure stored access policy ${id}: permission must use distinct lowercase Blob permission letters: r/a/c/w/d/x/y/l/t/f/m/e/o/p/i.`)
 		}
 		out.push({
 			id,
