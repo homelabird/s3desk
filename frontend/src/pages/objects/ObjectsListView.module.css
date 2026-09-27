@@ -730,6 +730,8 @@
 
 .listControlsSearchInput {
   width: min(100%, 320px);
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .listControlsCompactFooter {
@@ -751,8 +753,8 @@
 
 .listControlsDesktopRow {
   width: 100%;
-  display: grid;
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: start;
   gap: 10px 12px;
 }
@@ -770,20 +772,6 @@
   line-height: 1.5;
   white-space: nowrap;
   justify-self: end;
-}
-
-@media (min-width: 1201px) {
-  .listControlsSection[data-compact='false'] {
-    display: grid;
-    grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
-    gap: 12px 16px;
-    align-items: start;
-  }
-
-  .listControlsSection[data-compact='false'] > .breadcrumbRow,
-  .listControlsSection[data-compact='false'] > .listControlsStack {
-    min-width: 0;
-  }
 }
 
 @media (max-width: 768px) {

@@ -112,6 +112,13 @@
 	padding: 18px 16px 14px;
 }
 
+.sidebarToggleRow {
+	display: flex;
+	align-items: center;
+	min-height: 52px;
+	padding: 4px 8px;
+}
+
 .header {
 	background: var(--s3d-color-bg-glass);
 	border-bottom: 1px solid var(--s3d-color-border-strong);

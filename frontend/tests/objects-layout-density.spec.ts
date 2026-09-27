@@ -709,23 +709,62 @@ test.describe('Objects adaptive desktop workflows', () => {
 })
 
 test.describe('Dense object grid and sidebar', () => {
+	test('keeps controls usable while toggling Details and navigation at a fixed viewport', async ({ page }) => {
+		await page.setViewportSize({ width: 1920, height: 960 })
+		await stubObjectsAdaptiveApi(page, { rootObjects: { items: buildSearchCapItems(30) } })
+		await openObjectsPage(page, { objectsUIMode: 'advanced', objectsDetailsOpen: true })
+		const controls = page.getByTestId('objects-list-controls-root')
+		for (let iteration = 0; iteration < 4; iteration++) {
+			await expect(page.getByRole('button', { name: 'Hide', exact: true })).toBeVisible()
+			await expect.poll(() => controls.evaluate((root) => {
+				const bounds = root.getBoundingClientRect() // e2e-geometry-allow Details changes available pane width without viewport resize
+				const rects = Array.from(root.querySelectorAll('button, input')).map((control) => control.getBoundingClientRect()).filter((rect) => rect.width > 0) // e2e-geometry-allow control overlap and boundary check
+				return rects.every((rect, index) => rect.left >= bounds.left && rect.right <= bounds.right && rect.bottom <= bounds.bottom &&
+					rects.slice(index + 1).every((other) => rect.right <= other.left || other.right <= rect.left || rect.bottom <= other.top || other.bottom <= rect.top))
+			})).toBe(true)
+			await controls.getByRole('button', { name: iteration % 2 ? /List$/ : /Grid$/ }).click()
+			await page.getByRole('button', { name: 'Hide', exact: true }).click()
+			await page.getByTestId('app-navigation-toggle').click()
+			await page.getByRole('button', { name: 'Show details', exact: true }).click()
+		}
+		await controls.scrollIntoViewIfNeeded()
+		await page.screenshot({ path: '/tmp/s3desk-issue39-details.png', fullPage: true })
+	})
+
 	for (const width of [1280, 1366, 1440, 1920]) {
 		for (const mode of ['simple', 'advanced'] as const) {
-			test(`keeps eight or more cards per row at ${width}px in ${mode} mode`, async ({ page }) => {
+			test(`keeps six cards per row at ${width}px in ${mode} mode`, async ({ page }) => {
 				await page.setViewportSize({ width, height: 900 })
 				await stubObjectsAdaptiveApi(page, { rootObjects: { items: buildSearchCapItems(200) } })
 				await openObjectsPage(page, { objectsUIMode: mode, objectsDetailsOpen: true })
 				await page.getByRole('button', { name: /Grid$/ }).click()
 				const grid = page.getByTestId('objects-grid-content')
-				await expect.poll(() => grid.locator('[data-index="0"] > [role="listitem"]').count()).toBeGreaterThanOrEqual(8)
+				await expect.poll(() => grid.locator('[data-index="0"] > [role="listitem"]').count()).toBe(6)
+				await expect(grid.locator('[data-index="1"] > [role="listitem"]')).toHaveCount(6)
+				await expect(page.locator('#app-navigation-sidebar').getByTestId('app-navigation-toggle')).toBeVisible()
+				await expect(page.getByTestId('app-header').getByTestId('app-navigation-toggle')).toHaveCount(0)
+				const controls = page.getByTestId('objects-list-controls-root')
+				await expect.poll(() => controls.evaluate((root) => {
+					const bounds = root.getBoundingClientRect() // e2e-geometry-allow checks actual pane containment with Details open
+					return Array.from(root.querySelectorAll('button, input')).every((control) => {
+						const rect = control.getBoundingClientRect() // e2e-geometry-allow detects clipped or overflowing controls
+						return !rect.width || (rect.left >= bounds.left && rect.right <= bounds.right && rect.bottom <= bounds.bottom)
+					})
+				})).toBe(true)
 				const geometry = await grid.locator('[data-index="0"] > [role="listitem"]').evaluateAll((items) => items.map((item) => {
-					const rect = item.getBoundingClientRect() // e2e-geometry-allow explicit eight-column density contract at 100% CSS viewport
+					const rect = item.getBoundingClientRect() // e2e-geometry-allow explicit six-column density contract at 100% CSS viewport
 					return { top: Math.round(rect.top), right: rect.right }
 				}))
 				expect(new Set(geometry.map((rect) => rect.top)).size).toBe(1)
 				expect(Math.max(...geometry.map((rect) => rect.right))).toBeLessThanOrEqual(width)
 				// Virtualization remains enabled; density is not achieved by rendering all objects.
 				expect(await grid.getByRole('listitem').count()).toBeLessThan(200)
+				if (width === 1280 && mode === 'simple') {
+					await grid.getByRole('checkbox').first().click()
+					await expect(grid.getByRole('checkbox').first()).toBeChecked()
+					await expect(grid.getByText('✓', { exact: true })).toHaveCount(0)
+					await page.screenshot({ path: '/tmp/s3desk-issue39-grid.png', fullPage: true })
+				}
 			})
 		}
 	}
@@ -738,12 +777,12 @@ test.describe('Dense object grid and sidebar', () => {
 		const grid = page.getByTestId('objects-grid-content')
 		const toggle = page.getByTestId('app-navigation-toggle')
 		await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-		const before = Number(await grid.evaluate((element) => getComputedStyle(element).getPropertyValue('--objects-grid-columns')))
+		const before = await grid.locator('[data-index="0"] > [role="listitem"]').first().evaluate((element) => element.getBoundingClientRect().width) // e2e-geometry-allow cards expand while retaining six columns
 		await toggle.click()
 		await expect(toggle).toBeFocused()
 		await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 		await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(0)
-		await expect.poll(() => grid.evaluate((element) => Number(getComputedStyle(element).getPropertyValue('--objects-grid-columns')))).toBeGreaterThan(before)
+		await expect.poll(() => grid.locator('[data-index="0"] > [role="listitem"]').first().evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(before) // e2e-geometry-allow verifies card expansion without increasing the six-column count
 		await expect(page.getByRole('button', { name: 'Select object search-log-0001.txt' })).toBeVisible()
 		await page.reload()
 		await expect(toggle).toHaveAttribute('aria-expanded', 'false')

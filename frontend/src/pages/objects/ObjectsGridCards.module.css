@@ -142,8 +142,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 64px;
-  min-height: 64px;
+  height: 120px;
+  min-height: 120px;
   padding: 4px;
   border-radius: 6px;
   border: 1px solid var(--s3d-color-border);
@@ -262,7 +262,6 @@
   justify-content: flex-end;
 }
 
-.gridContent[data-grid-density='narrow'] .gridCardCheckboxWrap,
 .gridContent[data-grid-density='narrow'] .gridCardKindLabel,
 .gridContent[data-grid-density='narrow'] .gridCardIconButton[data-grid-favorite-action='true'],
 .gridContent[data-grid-density='narrow'] .gridCardModified,
@@ -287,7 +286,6 @@
    Selection remains on the full filename/size button (aria-pressed), and
    Favorite is also present in the object's action menu. */
 @media (max-width: 991px), (pointer: coarse) {
-  .gridContent .gridCardCheckboxWrap,
   .gridContent .gridCardIconButton[data-grid-favorite-action='true'] {
     display: none;
   }
@@ -324,24 +322,12 @@
 /* Mobile object tools live in the selection bar: no invisible overlapping hit targets.
    Folder cards retain their own menu because opening a folder is not selection. */
 .gridCardCompactName { display: none; }
-.gridCardSelectionMark {
-  position: absolute;
-  inset-block-start: 4px;
-  inset-inline-start: 4px;
-  pointer-events: none;
-  z-index: 1;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
-  text-align: center;
-  background: var(--s3d-color-primary);
-  color: var(--s3d-color-bg-elevated);
-}
+
 .gridContent[data-grid-density='narrow'] .gridCardFullName { display: none; }
 .gridContent[data-grid-density='narrow'] .gridCardCompactName { display: inline; }
 @media (max-width: 991px), (pointer: coarse) {
-  .gridContent .gridCard[data-object-key] .gridCardTopRow { display: none; }
+  .gridContent .gridCard[data-object-key] .gridCardTopActions { display: none; }
+  .gridContent .gridCard[data-object-key] .gridCardTopRow { justify-content: flex-start; }
   .gridCard:hover { transform: none; }
 }
 

@@ -19,4 +19,4 @@ export const COMPACT_ROW_HEIGHT_PX = 52
 export const WIDE_ROW_HEIGHT_PX = 44
 export const COMPACT_LIST_THUMBNAIL_PX = 24
 export const WIDE_LIST_THUMBNAIL_PX = 28
-export const GRID_CARD_THUMBNAIL_PX = 48
+export const GRID_CARD_THUMBNAIL_PX = 160

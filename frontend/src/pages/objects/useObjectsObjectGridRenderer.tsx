@@ -190,7 +190,6 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 							</div>
 						</div>
 
-						{isSelected ? <span className={gridStyles.gridCardSelectionMark} aria-hidden="true">✓</span> : null}
 						<div className={gridStyles.gridCardMedia}>
 							{canShowThumbnail ? (
 								<button

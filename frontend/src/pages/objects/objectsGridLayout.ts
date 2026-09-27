@@ -12,11 +12,10 @@ export function getObjectsGridLayout(containerWidth: number) {
 	// reduce the number of columns as more space becomes available.
 	const preferredCardWidth = 100
 	const naturalColumns = Math.max(1, Math.floor((contentWidth + gap) / (preferredCardWidth + gap)))
-	// Four cards at the supported 320px mobile viewport; eight once the actual
-	// list has 760px (including a 1280px desktop with the default docked tree).
+	// Keep six columns on desktop and preserve the compact mobile layout.
 	// Extremely narrow embeds may use fewer columns rather than overflow.
-	const minimumColumns = width >= 760 ? 8 : width >= 280 ? 4 : 1
-	const columns = Math.max(minimumColumns, naturalColumns)
+	const minimumColumns = width >= 760 ? 6 : width >= 280 ? 4 : 1
+	const columns = Math.min(6, Math.max(minimumColumns, naturalColumns))
 	return {
 		density,
 		columns,

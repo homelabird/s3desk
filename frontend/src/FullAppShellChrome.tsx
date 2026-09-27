@@ -134,6 +134,20 @@ export function FullAppShellChrome({
 		.filter(Boolean)
 		.join(' ')
 
+	const navigationToggle = (
+		<Button
+			type="text"
+			icon={<MenuOutlined />}
+			onClick={isDesktop ? toggleSidebar : navOpen ? closeNav : openNav}
+			aria-label={navigationLabel}
+			title={navigationLabel}
+			aria-haspopup={isDesktop ? undefined : 'dialog'}
+			aria-expanded={navigationOpen}
+			aria-controls={isDesktop ? APP_NAVIGATION_SIDEBAR_ID : APP_NAVIGATION_DRAWER_ID}
+			data-testid="app-navigation-toggle"
+		/>
+	)
+
 	return (
 		<Layout className={styles.appLayout}>
 			<a className={styles.skipLink} href="#main">
@@ -145,27 +159,24 @@ export function FullAppShellChrome({
 					width={192}
 					collapsible
 					collapsed={sidebarCollapsed}
-					collapsedWidth={0}
+					collapsedWidth={48}
 					trigger={null}
 					theme={theme.mode}
 					className={`${styles.desktopSider} ${sidebarCollapsed ? styles.desktopSiderCollapsed : ''}`}
-					aria-hidden={sidebarCollapsed}
 				>
-					{sidebarCollapsed ? null : (
-						<>
-							<div className={styles.brandBlock}>
-								<Link
-									to={profileId ? '/objects' : '/profiles'}
-									className={styles.desktopBrandButton}
-									aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
-									title={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
-								>
-									<BrandLockup variant="sidebar" />
-								</Link>
-							</div>
-							<AppNavigation selectedKey={selectedKey} />
-						</>
-					)}
+					<div className={styles.sidebarToggleRow}>
+						{navigationToggle}
+						{sidebarCollapsed ? null : (
+							<Link
+								to={profileId ? '/objects' : '/profiles'}
+								className={styles.desktopBrandButton}
+								aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
+							>
+								<BrandLockup variant="sidebar" />
+							</Link>
+						)}
+					</div>
+					{sidebarCollapsed ? null : <AppNavigation selectedKey={selectedKey} />}
 				</Sider>
 			) : null}
 
@@ -173,17 +184,7 @@ export function FullAppShellChrome({
 				<Header className={headerClassName} data-testid="app-header">
 					<div className={styles.headerTopRow}>
 						<div className={styles.headerLeading}>
-							<Button
-								type="text"
-								icon={<MenuOutlined />}
-								onClick={isDesktop ? toggleSidebar : navOpen ? closeNav : openNav}
-								aria-label={navigationLabel}
-								title={navigationLabel}
-								aria-haspopup={isDesktop ? undefined : 'dialog'}
-								aria-expanded={navigationOpen}
-								aria-controls={isDesktop ? APP_NAVIGATION_SIDEBAR_ID : APP_NAVIGATION_DRAWER_ID}
-								data-testid="app-navigation-toggle"
-							/>
+							{!isDesktop ? navigationToggle : null}
 							{isDesktop && !sidebarCollapsed ? null : (
 								<Link
 									to={profileId ? '/objects' : '/profiles'}
