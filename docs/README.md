@@ -17,6 +17,7 @@ that need to stay close to the codebase.
 - [OBJECT_STORAGE_COST_OPTIMIZATION.ko.md](OBJECT_STORAGE_COST_OPTIMIZATION.ko.md): prioritized cost optimization recommendations, including first-time bucket analysis and cloud/on-prem safeguards
 - [Grafana object-storage cost dashboard](../charts/s3desk/files/grafana-object-storage-cost.json): importable panels for provider page calls, fallback scans, logical operations, errors, and latency; the Helm chart can publish it as an opt-in ConfigMap
 - [PORTABLE_BACKUP.md](PORTABLE_BACKUP.md): portable backup/import scope, workflow, validation, and limits
+- [BUCKET_GOVERNANCE_VALIDATION_MATRIX.md](BUCKET_GOVERNANCE_VALIDATION_MATRIX.md): provider field, unit, combination checks and evidence gaps
 - [BUCKET_GOVERNANCE.md](BUCKET_GOVERNANCE.md): shipped governance scope, live validation workflow, and remaining gaps
 - [OBJECTS_DENSITY.md](OBJECTS_DENSITY.md): dense object grid/list geometry, desktop sidebar toggle, mobile touch targets, and validation boundaries
 - [MOBILE_UX_AUDIT.md](MOBILE_UX_AUDIT.md): prioritized mobile-friendly UI/UX audit findings and follow-up focus areas

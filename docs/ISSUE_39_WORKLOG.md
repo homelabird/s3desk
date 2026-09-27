@@ -19,7 +19,7 @@
 
 ## 현재 완료 판정과 다음 작업
 
-사용자 요청으로 추가 구현을 여기서 중단한다. 아래 잔여 목록을 재개 시 기준으로 사용한다. 마지막 백엔드 전체 테스트와 `git diff --check`는 통과했으며, 커밋·푸시·배포는 하지 않았다.
+이전 중단 이후 사용자 요청으로 작업을 재개했다. 아래 잔여 목록과 문서 끝의 추가 기록을 기준으로 진행한다. 마지막 백엔드 전체 테스트와 `git diff --check`는 통과했으며, 커밋·푸시·배포는 하지 않았다.
 
 2026-09-27 현재 코드를 다시 대조했다. 이슈 전체는 **미완료**이며 아래는 완료 증거를 대체하지 않는 잔여 작업 목록이다.
 
@@ -28,15 +28,15 @@
 | 업로드·Favorites·선택·레이아웃 | 코드 수정, 단위/API 테스트, 기록된 Chromium 렌더 증거 | 다국어 업로드의 실제 공급자 저장·재조회·복구 확인 |
 | WebSocket 복구 | timeout/late-open 단위 테스트 | 느린 실제 handshake와 화면 전환에서 경고 원인 및 Transfers 상태 갱신 재현 |
 | MP4·메타데이터 | 합성 768,531,432바이트 tail-index 영상의 48/360px 디코딩, 늦은 폴더 응답 차단 테스트, null stat 차단 | 원본 영상, 실제 415 본문과 stat 결과로 제보 원인 확인 |
-| 공급자별 입력 검증 | raw PUT 검증 강제, typed validator, AWS/GCS/Azure/OCI 보완 및 HTTP 우회 회귀 테스트 | 필드·단위·조합별 공식 규칙 매트릭스 완성, 실제 제품/버전 식별; Ceph는 AWS로 대체 불가 |
-| 저장 결과 비교 | versioning HTTP 전후 조회·상태 비교; AWS lifecycle 교체/삭제·ownership·public access, OCI visibility, Azure ACL 공개 범위/저장 정책은 adapter에서 제한 시간 재조회 및 비교 | encryption/protection 및 나머지 제공자 변경 경로의 결과 비교가 남음. Azure ACL은 정책 목록 완전성·날짜 정규화·보존 필드도 확인하지만 실제 권한 효과와 동시 수정 방지는 별도 |
-| UI 완료 표시 | useScopedGovernanceMutation은 재조회 실패 시 성공 알림을 막음 | 재조회 성공 자체는 요청값 일치나 권한 효과를 입증하지 않음. 항목별 확인 결과와 표시 연결 필요 |
-| 동시 수정·승인 | GCS IAM ETag 필수와 409/412 처리, draft/scope 변경에 대한 기존 검증 무효화 | 다른 변경 항목의 승인 대상/기존 상태 재확인 및 조건부 변경 지원 여부; 지원 없는 경쟁 조건 명시 |
-| 감사 추적 | policy_audit.go에 actor credential fingerprint/대상/request ID/rule version/접수 결과, versioning 상태 관찰 로그 | 나머지 정책 변경의 민감값 제외 전후 차이·최종 관찰 상태. 개인 사용자 식별과 로그 보존은 현 배포 인증/로그 설정 범위 확인 필요 |
-| 저장소 검사 | 전체 backend, frontend 267 files/1366 tests 통과 기록 | fast는 SeaweedFS 데모 기본 호스트/테스트 불일치로 실패; 전체 local gate 통과로 표시 불가. 최신 변경에 맞는 browser 검증 별도 |
+| 공급자별 입력 검증 | raw PUT/typed validator, HTTP 우회 회귀, 공식 근거 매트릭스 및 rules r21 | 실제 제품/버전 식별과 계정·조직·replication·lifecycle 조합의 공급자 수락/거부 검증; Ceph는 AWS로 대체 불가 |
+| 저장 결과 비교 | versioning HTTP 전후 조회·상태 비교; AWS lifecycle 교체/삭제·ownership·public access, OCI visibility, Azure ACL 공개 범위/저장 정책은 adapter에서 제한 시간 재조회 및 비교 | AWS encryption, GCS typed IAM 및 metadata(protection/versioning/PAP), Azure soft delete의 재조회 비교를 추가했다. Azure immutability/legal hold도 최종 상태 재조회 비교를 추가했다. OCI retention/PAR 최종 목록 비교도 추가했다. raw policy 변경 경로도 최종 조회 비교와 본문 없는 관측 로그를 추가했다. raw 정규화와 typed 항목별 변경 전후 감사 관측도 연결했다. Azure ACL은 정책 목록 완전성·날짜 정규화·보존 필드도 확인하지만 실제 권한 효과와 동시 수정 방지는 별도 |
+| UI 완료 표시 | raw/typed 쓰기 오류와 adapter의 unconfirmed를 오류로 전달하며 UI 재조회 실패도 성공 알림을 막음. 승인 화면은 설정 확인과 실효 권한을 구분 | 실제 공급자의 전파 지연·부분 적용·권한 효과와 UI 결과를 연결해 검증 |
+| 동시 수정·승인 | GCS IAM ETag 필수와 409/412 처리, draft/scope 변경에 대한 기존 검증 무효화 | typed 19개 변경의 대상/전후값 승인, 고정된 요청, 승인 후 기준 상태 조회를 추가했다. raw 저장의 대상/diff 승인과 PUT/DELETE 기준 상태 재확인도 연결했다. provider 조건부 쓰기 범위 확대는 남음; CAS 없는 경쟁 조건은 유지된다. |
+| 감사 추적 | policy_audit.go에 actor credential fingerprint/대상/request ID/rule version/접수 결과, versioning 상태 관찰 로그 | raw 및 typed 6개 항목에 민감값 제외 전후 요약·최종 관측을 연결했다. 요약에 없는 상세 차이, 개인 사용자 식별과 로그 보존은 현 배포 인증/로그 설정 범위 확인 필요 |
+| 저장소 검사 | r21 전체 gate exit 0: backend/security/notices, frontend 269 files/1394 tests, build, Chromium smoke 2개 통과 | `/tmp/s3desk-issue39-r21-full.log`; 배포/공급자 증거는 아님 |
 | 실환경·효과 | 로컬/가짜 공급자/합성 fixture 증거만 확보 | 승인된 격리 대상과 권한으로 허용·거부 동작, 저장 결과, 실패·충돌 시나리오 검증 |
 
-우선순위는 남은 개별 입력 경계값만 늘리는 대신 **항목별 저장 결과 비교와 UI 결과 구분**, 이어서 승인/동시 수정과 감사 전후 차이를 연결하는 것이다. 실환경 자격이 없어도 이 서버·UI 작업은 진행 가능하다.
+다음 단계는 **격리된 실제 공급자 환경과 원본 장애 대상에서 남은 완료 조건을 확인하는 것**이다. 설정 경로, 제보 서비스 주소 및 원본 MP4 위치를 요청했으나 아직 확보되지 않았다. 로컬 fixture 성공으로 이 증거를 대체하지 않는다. 공식 매트릭스의 환경별 제약과 경쟁 조건은 계속 미검증으로 유지한다.
 
 ## S3D-002 추가 수정
 
@@ -888,3 +888,212 @@ Raw GCS PUT의 409/412도 typed 경로와 동일한 bucket_policy_conflict(409) 
 - 변경 전 불완전 응답은 쓰기를 차단하고, 변경 후 불완전 응답은 `bucket_access_unconfirmed`로 반환한다. 빈 정책으로 삭제하는 요청도 불완전 응답을 성공 증거로 사용하지 않는다.
 - 검증: `cd backend && go test ./internal/bucketgov -count=1` 통과. 누락/null 각각 변경 전후 회귀 검사 포함. `git diff --check` 통과.
 - 추가 검증: 최근 Azure ACL 공통 재조회·날짜 정규화·목록 완전성 변경을 포함한 `cd backend && go test ./... -count=1` 전체 통과. 상단 저장 결과 비교 현황도 현재 코드에 맞게 갱신했다.
+
+### AWS 암호화 저장 결과 확인
+
+- PutEncryption의 기존 사전 조회/보존 로직에 저장 후 독립적인 10초 제한 조회를 추가했다. 요청 취소 후에도 조회하며 쓰기 오류가 있으면 그 오류를 우선 반환한다.
+- 알고리즘(DSSE 포함), KMS 식별자, Bucket Key, 보존된 SSE-C 제한이 요청과 다르거나 응답이 누락/조회 실패이면 502 `bucket_encryption_unconfirmed`를 반환한다. Bucket Key 생략/false는 동일하게 비교한다. 자동 쓰기 재시도는 없다.
+- 기존 HTTP 오류 전달과 governance UI 오류/재조회 처리를 사용한다. KMS alias/ID/ARN의 실제 동일 키 여부를 추정하지 않으므로 표현이 바뀌면 미확인으로 남긴다. KMS 권한, 실제 객체 암호화 효과, 동시 변경 방지 및 감사 전후 차이 구현은 별도다.
+- 계약 근거: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketEncryption.html 및 https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketEncryption.html (2026-09-27 확인).
+- 회귀 검사는 일치, 알고리즘/키/Bucket Key/제한 불일치, 응답 누락, 읽기/쓰기 실패, 취소 후 조회와 호출 횟수를 확인한다. 기존 가짜 클라이언트의 성공 저장은 이후 조회에 제출 설정을 반환하도록 수정했다.
+- 검증: `cd backend && go test ./internal/bucketgov ./internal/api -count=1` 모두 통과(API 29.880초), `git diff --check` 통과. 최초 루트에서 실행한 Go 명령은 모듈 위치 오류로 종료했고 backend에서 재실행했다. 실제 AWS·브라우저·전체 local gate는 이번 작업에서 실행하지 않았다.
+
+### GCS metadata 저장 결과 비교 및 전체 검사 재개
+
+- 공통 `patchBucketMetadata`가 protection(uniform access/retention), versioning, Public Access Prevention의 저장 후 독립적인 10초 제한 재조회를 수행한다. 쓰기 오류를 우선 반환하며 자동 재시도하지 않는다.
+- 원본 응답에서 요청한 필드만 비교한다. 누락된 false를 false 확인으로 취급하지 않고, retention은 반올림된 일수 대신 정확한 초 문자열을 비교한다. 명시적 retention 삭제는 응답의 필드 부재/null과 비교한다.
+- 불일치/조회 실패는 항목별 `bucket_*_unconfirmed`; IAM 성공 후 PAP 미확인은 기존 partial 경로로 전달된다. 저장 상태 관측이며 권한 효과·동시 수정 방지 증거는 아니다.
+- 공식 근거: https://docs.cloud.google.com/storage/docs/json_api/v1/buckets/patch (2026-09-27 확인). 문서도 저장 직후 조회 가능성과 효과 전파 지연을 구분한다.
+- `cd backend && go test ./internal/bucketgov ./internal/api -count=1` 통과(API 22.128초). 정상 fixture 두 개를 실제 저장값 재조회 방식으로 수정했고, 누락/불일치/취소/오류 우선순위 회귀를 추가했다.
+- SeaweedFS 검사에서 미지정 host 거부 기대를 현재 `docs/SEAWEEDFS_DEMO.md`와 wrapper의 `0.0.0.0` 기본값에 맞췄다. 잘못된 URL/포트/path 거부는 유지하며 `python3 scripts/check_demo_seaweedfs_test.py` 34개 통과.
+- live preflight를 다시 실행했으나 AWS/Azure/Ceph/GCS/OCI 필수 설정 모두 누락(exit 1). 실제 대상 및 원본 MP4 서비스 위치를 사용자에게 요청했다. 코드 작업은 계속 가능하므로 전체 목표를 중단하거나 완료 처리하지 않는다.
+
+### 전체 local gate에서 확인한 추가 정리
+
+- `./scripts/check.sh full`은 frontend 267개 파일/1,367개 단위 테스트, 빌드, Chromium smoke 2개를 통과했다. 전체 backend Go 테스트도 통과했지만 호스트 Go 1.26.8과 Go 1.25 빌드 staticcheck의 불일치로 보안 lane이 실패하여 전체 gate는 실패다. 로그: `/tmp/s3desk-issue39-full-check.log`.
+- CI 및 go.mod가 지정한 `GOTOOLCHAIN=go1.25.13`으로 보안 검사를 재개했다. 발견한 미사용 내부 함수 4개(다운로드 metadata helper 2개, auth limiter reset, S3 HTTP client helper)를 호출 검색 후 삭제했다. Azure 오류 문자열 첫 글자를 소문자로 바꿨다.
+- AWS legacy lifecycle Prefix는 실제 응답 보존에 필요하므로 해당 두 줄과 회귀 fixture에만 SA1019 사유를 명시했다. 보안 검사 전체 규칙을 끄지 않았다.
+- native S3 ListPage는 int32 변환 전에 1..1000 범위를 직접 검사한다. nil client를 사용한 잘못된 limit 회귀로 공급자 요청 전 거부를 확인한다. operationreceipt 파일 접근은 서버 설정 디렉터리와 내부 SHA-256 hex ID로만 구성됨을 호출 경로에서 확인하고 해당 G304 경고 3곳에 사유를 기록했다.
+- 다음 구현 대상은 GCS IAM 저장 결과 비교, Azure/OCI protection의 최종 상태 확인, raw policy 결과 및 감사 전후 차이와 UI 연결이다. 전체 목표는 미완료 상태로 유지한다.
+- 정리 후 Go 1.25.13 기준 s3client/operationreceipt/bucketgov/azureacl/API 전체 테스트 통과(API 24.648초), staticcheck·gosec 통과. govulncheck는 호출 경로 취약점 0개이며 미호출 import 패키지 취약점 3개를 별도로 보고했다. 같은 toolchain으로 full gate 재실행 중(`/tmp/s3desk-issue39-full-go125.log`).
+
+### GCS IAM 및 Azure soft delete 확인 확대
+
+- GCS typed IAM 공통 writer에 독립적인 10초 제한 재조회를 추가했다. Access 편집 및 공개 접근 read/modify/write 모두 binding/구성원/condition 보존을 비교한다. 구성원·binding 순서와 갱신된 ETag는 동등 비교에서 제외하되 응답 ETag는 필수이며 조건부 version 3 검증을 유지한다. 불일치/조회 실패는 항목별 unconfirmed, 공급자 409/412는 기존 conflict를 우선 반환한다.
+- Azure soft delete 공통 writer는 적용 및 기존 rollback 쓰기 후 활성 상태와 활성 시 보존 일수를 확인한다. readback 실패/불일치는 `bucket_protection_unconfirmed`이며 자동 쓰기 재시도하지 않는다. 변경 전 정책 자체가 없으면 쓰기를 차단해 값이 생략된 no-op rollback을 예방한다.
+- Azure XML 및 내부 JSON의 soft delete enabled 누락을 명시적인 false와 구분한다. 공식 Set Blob Service Properties 문서의 생략된 root 설정 보존 계약을 확인했다: https://learn.microsoft.com/en-us/rest/api/storageservices/set-blob-service-properties .
+- GCS 회귀 추가 후 bucketgov 전체 통과. Azure 첫 readback 변경까지 bucketgov/API 전체 통과(API 21.325초), enabled 누락 경계 변경 후 bucketgov/azureacl 전체 통과. XML 경계 회귀를 추가하여 재검증한다.
+- 앞서 시작한 `GOTOOLCHAIN=go1.25.13 CHECK_FRONTEND_DEPS_READY=1 ./scripts/check.sh full`은 exit 0 / `[check] ok`로 끝났다. 로그 `/tmp/s3desk-issue39-full-go125.log`. 실행 중 GCS IAM/Azure 변경을 진행했으므로 이 결과를 그 후속 변경 전체의 full gate 증거로 사용하지 않는다. 최신 변경에는 별도 집중 검사 결과를 적용한다.
+- 최신 GCS IAM/Azure soft delete/XML 경계 변경 검증: Go 1.25.13으로 bucketgov/azureacl/API 전체 통과(API 25.555초), 두 변경 패키지 staticcheck 및 `git diff --check` 통과. 다음은 Azure immutability/legal hold와 OCI retention/PAR 확인, raw 정책 비교 및 감사/UI 연결이다.
+
+### Azure 불변성 및 legal hold 최종 관측
+
+- 불변성 생성/수정/잠금/연장/삭제와 legal hold 태그 수정 후 독립적인 10초 제한 재조회를 수행한다. 불변성의 존재 여부, mode, days, append flags 및 legal hold 전체 태그 집합/활성 여부가 요청과 일치해야 성공한다.
+- 쓰기 오류는 재조회 결과보다 우선한다. 실패 후 기존 rollback 경로도 유지하며 재조회 일치 자체를 rollback 보장이나 실제 Blob 동작 효과로 해석하지 않는다.
+- 기존 불변성 정책 변경은 편집 당시 ETag를 요구한다. current와 다르거나 그 정책이 사라졌으면 soft delete 등 다른 쓰기 전에 409 `bucket_policy_conflict`로 중단한다. 최신 ETag 자동 대체를 제거했고 ARM 409/412도 같은 충돌 코드로 전달한다. 생성/수정 응답에 ETag가 없으면 후속 lock 요청을 차단한다.
+- 불변성 생성의 부재 확인~생성 구간 및 legal hold/soft delete는 아직 조건부 변경 보장이 없다. 이 경쟁 조건을 BUCKET_GOVERNANCE.md에 명시했다. 실제 환경 동시 수정/권한 효과는 미검증이다.
+- OpenAPI ETag 계약 설명과 생성 타입을 갱신하고 validation rules version을 2026-09-27.11로 올렸다. 프런트엔드 기존 요청 builder는 조회한 immutability ETag를 전달한다.
+- bucketgov 전체 테스트 통과. 생성/삭제/연장/잠금 각각 정상·불일치·읽기 실패·쓰기 실패, legal hold 태그 순서/대소문자 정규화·실패, 호출 횟수, 취소와 분리된 deadline, stale/missing/removed revision 및 missing lock ETag를 검사한다.
+
+- API 전체 실행의 유일한 실패는 올린 rules version의 이전 기대값이었다. JSON 결과에서 해당 테스트 1개만 실패했음을 확인하고 2026-09-27.11로 갱신했다. 이후 `go test ./internal/api -run 'PolicyAudit|BucketGovernance' -count=1` 통과. bucketgov staticcheck, OpenAPI 생성/일치 검사 및 `git diff --check` 통과.
+- Azure 요청 builder가 locked 모드에서 append flags를 무조건 false로 보내는 오류를 수정했다. 기존 readonly 설정과 편집 당시 ETag를 그대로 보내며 서버는 잠긴 설정 변경을 계속 거부한다. 프런트엔드 Azure 회귀 7개와 typecheck 통과. 이는 로컬 요청 보존 검사이며 실제 Azure 검증은 아니다.
+
+### OCI retention 및 PAR 최종 목록 확인
+
+- OCI 실제 계약에서 `time-rule-locked`는 boolean이 아닌 RFC3339 날짜/null이다. Go 모델을 `*time.Time`으로 수정하고 현재 시각과 비교하여 미래 잠금 예약과 이미 잠긴 상태를 구분한다. 기존 잘못된 boolean fixture를 실제 계약 형태로 교체했다.
+- 공식 근거: https://docs.oracle.com/en-us/iaas/tools/python/latest/api/object_storage/models/oci.object_storage.models.RetentionRule.html 및 https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/usingretentionrules_topic-To_create_a_retention_rule.htm (2026-09-27 확인).
+- retention 적용 후 독립적인 10초 제한 목록 조회로 전체 ID/이름/기간/잠금 시각을 비교한다. 새 ID를 요청 복사본에 연결하며 caller draft를 수정하지 않는다. 기존 기간을 바꾸지 않은 규칙은 원래 단위까지 그대로 보존됐는지 확인한다.
+- PAR 최종 조회도 취소와 분리된 deadline을 사용하고, ID/이름/접근 종류/대상/목록 허용/만료를 요청과 비교한다. 읽기 실패나 불일치만으로 새 PAR을 자동 삭제하지 않고 `bucket_sharing_unconfirmed`를 반환한다. URI는 확인 성공 시 기존 응답 경로에서만 반환하며 로그/오류에 넣지 않는다.
+- retention/PAR 목록의 data 누락/null, ID 누락/중복은 불완전 응답 오류다. 명시적인 빈 배열만 삭제 확인에 사용한다. validation rules version은 2026-09-27.12.
+- 아직 OCI mutation 간 부분 실패 후 모든 최종 상태의 감사 관측, ETag 기반 경쟁 조건, 실제 공급자 확인은 미완료다. 현재 비교는 설정 관측이며 권한 효과를 입증하지 않는다.
+- 검증: Go 1.25.13으로 bucketgov/API 전체 통과, 추가 기간/단위/이름/예약 잠금·ID 경계 회귀 후 bucketgov 재검증 및 staticcheck 통과. `git diff --check` 통과. 증거는 로컬 fixture이며 실서비스 호환 완료가 아니다.
+
+### Raw 정책 변경의 최종 조회 확인
+
+- raw PUT/DELETE 후 취소와 분리된 10초 제한으로 기존 GET owner를 호출한다. S3 삭제는 실제 NoSuchBucketPolicy만 확인 성공이며 NoSuchBucket/AccessDenied는 성공이 아니다. Azure 삭제는 private + 빈 저장 정책 목록을 비교한다.
+- PUT은 JSON 객체 전체를 비교하고 GCS의 갱신되는 ETag만 제외하되 조회 ETag는 필수다. 숫자는 float64로 반올림하지 않는다. null/잘못된 JSON/추가 JSON 문서는 일치로 취급하지 않는다.
+- 저장 오류 및 공급자 충돌 응답을 우선 유지하면서 오류 뒤에도 최종 상태를 조회한다. 성공 응답 뒤 불일치/읽기 실패는 502 bucket_policy_unconfirmed. 자동 쓰기 재시도는 하지 않는다.
+- bucket.policy.observed 감사 이벤트에 기존 actor/대상/request ID/rules version과 configuration_confirmed 또는 unconfirmed를 남긴다. 정책 본문·구성원·서명 URI는 로그에 넣지 않는다. 변경 전후 차이 및 사용자별 식별은 아직 미완료다.
+- 현 비교는 보수적으로 배열 순서/날짜 표현/공급자 기본값 정규화를 동일시하지 않는다. 따라서 공급자가 의미상 같은 정책을 정규화해도 미확인일 수 있으며 이 비교 개선은 후속 작업이다. 조회 일치는 실효 권한이나 동시 변경 방지를 증명하지 않는다.
+- OpenAPI의 성공/미확인 의미와 생성 타입을 갱신했다. 규칙 버전 2026-09-27.13.
+- 검증: Go 1.25.13 API 전체 통과(25.393초), 이후 S3 삭제/JSON 숫자 경계 및 최신 규칙 버전을 포함한 집중 회귀 통과. OpenAPI 생성/일치 검사 통과. 실제 공급자와 최신 전체 local gate는 실행하지 않았다.
+
+### Raw 정책 정규화와 전후 감사 요약
+
+- raw 비교에서 GCS bindings/members 순서, S3 Statement/Action/NotAction/Resource/NotResource/Principal 값의 배열 순서를 정규화한다. S3의 단일 statement 객체 및 문자열/단일 배열 표현도 비교한다. 알 수 없는 필드와 중복은 제거하지 않는다.
+- Azure 저장 정책 순서를 정규화하고 기존 azureacl.ParseStoredPolicyTime을 재사용해 같은 시각의 날짜/시간대 표현을 비교한다. 공급자 기본값이나 모든 선택 필드 정규화를 완료한 것은 아니다.
+- raw 변경 전에도 최대 10초의 조회를 수행한다. 조회 실패가 변경을 차단하지는 않으며 감사 before를 known=false로 남긴다. 변경 후에는 기존 독립 조회를 유지한다.
+- 감사 이벤트에 before/after의 known, exists 및 Statement/bindings/storedAccessPolicies 개수와 configuration_matches_before를 기록한다. principal, resource, policy ID, URI, 정책 본문은 기록하지 않는다. 이전 상태와 일치하지 않는다는 관측은 해당 요청만이 변경 원인이라는 증거가 아니다.
+- 규칙 버전 2026-09-27.14. Go 1.25.13 API 전체 테스트 통과(25.659초), 최신 정규화/감사 민감값 제외/규칙 버전 집중 회귀 통과. git diff --check 통과. 실제 공급자 및 최신 full gate 증거는 아니다.
+- typed 항목별 전후 감사, 승인 대상/동시 수정/UI 연결, 공급자 공식 규칙 매트릭스 및 실환경 검증은 계속 남아 있다.
+
+### Typed governance 전후 감사 관측 연결
+
+- access/public exposure/protection/encryption/lifecycle/sharing HTTP 변경 경로에 공통 전후 관측을 연결했다. versioning은 기존 요청값 비교 감사 경로를 유지한다. 입력 검증을 먼저 수행해 잘못된 요청으로 공급자 조회를 발생시키지 않는다.
+- 변경 전 조회는 요청 취소를 따르는 최대 10초, 변경 후 조회는 요청 취소와 분리된 최대 10초다. adapter의 저장 결과 확인에 추가되는 감사 조회이며 권한 부족 등 감사 조회 실패가 기존 저장 결과나 오류를 덮어쓰지 않는다. 따라서 성공·실패 모두 최대 두 번의 추가 읽기가 발생한다.
+- before/after known, ownership/public exposure/encryption mode, protection 활성·일수·잠금 상태 및 binding/policy/rule/PAR 개수를 명시적 허용 목록으로 기록한다. 변경된 요약 필드 이름과 반환 view 전체의 정확한 동일 여부만 추가하며 본문/식별자/키/URI/태그 값은 기록하지 않는다.
+- outcome=state_observed는 조회 성공만 의미한다. adapter의 요청값 일치 판단, 실효 권한, 요청이 변경 원인이라는 보장과 구분한다. 같은 개수에서 구성원이 바뀌는 경우 반환 view 동일 여부가 달라질 수 있지만 민감값별 전후 내용을 제공하지는 않는다.
+- 회귀는 민감값 제외, 오류 응답 제외, 변경 요약 필드 및 취소된 쓰기 뒤 제한 시간 조회를 포함한다. 최신 API 전체 검사 결과는 아래 후속 기록에 남긴다.
+- 검증: Go 1.25.13 API 전체 테스트 통과(26.717초), git diff --check 통과. 최신 full gate와 실제 공급자 검증은 아직 실행하지 않았다. 승인/동시 수정/UI 결과 연결과 공식 규칙 매트릭스 작업은 계속 남아 있다.
+
+### Typed UI 저장 전 기준 상태 확인
+
+- 네 공급자의 기존 공통 mutation runner에 저장 전 governance 조회를 연결했다. 편집 시작 view와 다르거나 조회 실패 시 쓰기를 보내지 않는다. 이 실패에서는 cache refresh/remount를 하지 않아 draft를 유지한다.
+- 사전 조회 후 scope를 다시 검사해 창 닫기·대상/세션 변경 뒤 저장을 차단한다. scope key는 구분자 연결 대신 JSON 배열로 만들어 값에 콜론이 포함된 경우의 충돌을 피한다.
+- 조회는 30초 제한이며 자동 mutation 재시도를 명시적으로 끈다. 실제 쓰기 실패 뒤에는 기존 refresh를 유지해 부분 적용 상태를 다시 읽는다.
+- 비교는 기존 전체 view draft key를 재사용하므로 다른 항목/경고/표현 변경도 보수적으로 차단할 수 있다. 조회 이후 경쟁은 막지 못하며 ETag 없는 공급자의 원자적 변경 보장을 추가한 것이 아니다. 확인 창의 변경 diff·승인 UX는 아직 후속 작업이다.
+- 사전 상태 변경/읽기 실패/조회 대기 중 창 닫기 회귀를 추가했다. 기존 부분 실패/readback fixture는 사전 조회와 변경 후 조회를 구분하도록 수정했다. 초기 31개 modal 테스트 및 최신 typecheck 통과; 관련 bucket UI 전체 검사 결과는 후속 기록에 남긴다.
+- 최신 검증: bucket UI 22개 파일/123개 테스트 통과, typecheck 및 git diff --check 통과. 브라우저·실제 공급자·최신 full gate 검증은 이번 변경에서 실행하지 않았다.
+
+### Typed 정책 변경 확인 화면
+
+- 네 공급자의 19개 typed 변경에 공통 확인 화면을 연결했다. 버킷·공급자·프로필, 제출 필드별 현재/제안 값을 표시하고 Cancel 또는 Apply changes로 결정한다. 보존 설정에는 잠금의 비가역성을 안내한다.
+- 요청 builder를 확인 전에 실행하고 요청을 복사해 고정한다. 승인 대기 중 draft가 바뀌어도 화면에서 검토한 요청만 제출한다. 승인 후 최신 governance 기준 상태와 scope를 다시 검사한다. 취소/창 닫기/대상 변경은 오류 알림이나 쓰기를 발생시키지 않는다.
+- 기존 DialogModal의 focus trap/Escape/모바일 overlay 처리를 재사용하고 초기 포커스는 Cancel이다. PAR URL은 검토 JSON에서 숨긴다. 요청에 없는 필드는 표시하지 않으며 현재 조회값과 요청 표현을 구분한다.
+- UI 전체 관련 22개 파일/124개 테스트, 추가 snapshot 회귀를 포함한 modal 33개 테스트, typecheck 및 변경 owner eslint 통과. Chromium governance 8개 흐름 통과. 1280/390px 확인 화면의 Cancel 초기 포커스와 screenshot도 검사했고 390px 렌더를 직접 확인했다. 모두 mock/local UI 증거다.
+- raw 정책의 기존 승인 흐름은 이번 typed 확인 화면 변경에 포함하지 않았다. 공식 규칙 매트릭스, 원본 WS/MP4 재현, 실환경 효과 및 최신 전체 gate 검증은 여전히 남아 있다.
+
+### 공식 규칙 매트릭스와 제한 오류 수정
+
+- `BUCKET_GOVERNANCE_VALIDATION_MATRIX.md`에 AWS/GCS/Azure/OCI의 편집 항목별 필드·단위·조합·owner·공식 근거와 남은 증거를 정리했다. Ceph/S3-compatible은 제품/버전 미확정으로 AWS 결과를 대입하지 않는다. 매트릭스 작성이 모든 규칙 구현 완료를 뜻하지는 않는다.
+- 공식 OCI PAR 문서는 개수 제한이 없다고 명시한다. 잘못된 API/UI 100개 제한을 삭제했다. retention 규칙 100개 제한과 PAR 목록의 기존 `--all` pagination은 유지한다. 중복 ID 검사는 유지한다.
+- GCS 활성 retention은 1..36525일(3155760000초), Azure 활성 soft delete는 1..365일, immutability는 1..146000일로 제한했다. GCS 초 변환은 플랫폼 int 폭과 분리된 int64를 사용한다. OpenAPI 설명·생성 타입·규칙 버전 2026-09-27.15를 갱신했다.
+- Azure versioning/soft delete는 선택한 컨테이너만의 설정이 아니므로 typed 승인 화면에 계정 전체 영향 범위를 명시했다.
+- Go 1.25.13 bucketgov/API 전체 테스트 통과(API 25.320초), PAR 101번째 추가 UI 회귀 통과, OpenAPI 생성/일치 및 typecheck 통과. 변경 UI owner eslint와 git diff --check 통과. account scope 표시 회귀는 후속 검사한다.
+- 매트릭스 대조로 OCI YEARS/indefinite의 손실 없는 표현, retention/versioning 조합 사전 검사, lifecycle 세부 조합 등의 잔여를 구체화했다. 실제 공급자 효과와 제품/버전 증거는 여전히 없다.
+- Azure 승인 화면 account scope 집중 회귀 통과. 상단 잔여 표의 오래된 gate/감사/승인 상태도 현재 기록에 맞게 갱신했다.
+
+### OCI retention/versioning 조합 사전 검사
+
+- OCI 공식 retention/versioning 상호 제약을 adapter 공통 쓰기 경로에 반영했다. versioning 활성화 전 retention 목록이 명시적인 빈 배열이어야 하며, 하나라도 있거나 조회 실패/목록 누락이면 쓰지 않는다.
+- 비어 있지 않은 retention 설정을 적용하기 전 versioning을 조회한다. Disabled/Suspended만 허용하며 Enabled, 누락, 알 수 없는 값, 조회 실패는 쓰기 전에 중단한다. 기존 입력/잠금 검증 이후 실행해 유효하지 않은 요청은 먼저 거부한다.
+- versioning 중단과 retention 전체 삭제는 이 추가 조합 조회를 요구하지 않는다. 읽기~쓰기 경쟁이나 replication 대상/계정 제약을 모두 해결한 것은 아니다.
+- 기존 rollback fixture에 실제로 허용되는 versioning 상태를 추가했다. 누락된 클라이언트 오류가 원래의 생성 실패 회귀를 대신 통과시키지 않도록 create-failure fixture도 보완했다. 새 회귀는 양방향 충돌/읽기 실패/누락/정상 상태와 쓰기 횟수를 확인한다.
+- 규칙 버전 2026-09-27.16. bucketgov 전체 테스트 통과. API 전체 검사 결과는 후속 기록에 남긴다. 공급자 live 증거는 아니다.
+- 최신 검증: Go 1.25.13 bucketgov/API 전체 통과(API 24.453초), git diff --check 통과. 최신 전체 local gate와 실환경 검증은 아직 남았다.
+
+### OCI 기간 단위와 무기한 규칙 보존
+
+- 기존 YEARS→365일 환산을 제거했다. rule 모델/OpenAPI에 years와 indefinite를 추가하고 days/years/indefinite=true 중 정확히 하나를 요구한다. 양수 기간만 허용하며 provider의 빈 duration은 무기한으로 표현한다. 잘못된 단위/0 기간/기간 없는 잠금 응답은 읽기 오류다.
+- UI에서 Days/Years/Indefinite를 선택하고 해당 요청만 보낸다. 조회한 연도는 일수로 바꾸지 않으며 무기한 규칙도 다른 규칙과 함께 유지/수정할 수 있다. 잠긴 규칙의 단위 변경/기간 단축/무기한 전환을 거부한다. 잠금 예약 생성/해제 기능은 추가하지 않았다.
+- OCI CLI writer에 단위를 직접 전달한다. 무기한 생성은 기간 옵션을 생략하고, 기존 기간 해제는 공식 update의 빈 --time-amount 인수를 사용한다. 인수 생성 공통 helper 회귀가 실제 빈 인수와 잘못된 조합 거부를 확인한다. 최종 목록에서는 단위/수량/null과 잠금 시각을 그대로 비교한다.
+- 공식 근거: https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/os/retention-rule/create.html 및 https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/os/retention-rule/update.html . 문서 확인 버전과 배포 OCI CLI 버전 일치는 아직 live 증거가 없다.
+- 규칙 버전 2026-09-27.17. Go 1.25.13 bucketgov/ocicli/API 전체 통과(API 27.676초), bucket UI 24개 파일/130개 테스트 통과, OpenAPI 생성/일치·typecheck·변경 UI eslint·git diff --check 통과.
+- Chromium 1280/390px에서 연도 수정과 무기한 규칙 보존·승인·제출·재조회 흐름 2개 통과. mock/provider 함수 fixture 증거이며 실제 OCI 적용은 미검증이다. 최신 전체 gate, 원본 WS/MP4, 실제 provider 허용/거부 및 남은 규칙 조합 검증은 계속 남았다.
+
+### 누적 변경 전체 local gate와 raw 변경 전 재확인
+
+- OCI 기간 표현 변경까지 코드를 고정한 상태에서 `GOTOOLCHAIN=go1.25.13 CHECK_FRONTEND_DEPS_READY=1 ./scripts/check.sh full` 실행: exit 0, `[check] ok`. 로그 `/tmp/s3desk-issue39-current-full.log`. 프런트엔드 269개 파일/1378개 테스트, 빌드, Chromium smoke 2개, backend/security/third-party notices lane이 완료됐다. govulncheck는 호출 취약점 0, 미호출 import 패키지 취약점 3개를 별도로 보고했다.
+- live 환경 preflight를 재실행했으나 AWS/Azure/Ceph/GCS/OCI 필수 설정은 모두 누락(exit 1). 실제 공급자 검증으로 대체하지 않았다. 원본 #39의 S3D-009 A~D 요구와 완료 기준을 다시 읽었고 raw 저장의 기준 상태 재확인이 아직 빠져 있음을 확인했다.
+- full gate 종료 후 raw PUT/DELETE에 최대 30초의 최신 정책 조회를 추가했다. 편집 시작 정책을 고정하고 존재 여부·정책·버킷을 비교한다. 외부 변경, 조회 실패, 대기 중 편집/화면 변경은 쓰기를 막는다. preflight 오류에서는 query refresh를 건너뛰어 draft를 유지한다. 실제 쓰기 실패에는 기존 재조회를 유지한다.
+- 비교는 보수적인 JSON 비교라 표현/순서 변경도 충돌로 볼 수 있다. provider CAS 없는 조회~쓰기 경쟁은 남는다. raw Save의 별도 승인 화면은 아직 후속 작업이다.
+- 후속 raw modal 28개 테스트 통과. 기존 readback 실패 fixture는 사전 조회와 후속 조회를 분리했고 외부 변경 시 PUT/DELETE 차단 회귀를 추가했다. 이 후속 코드는 위 full gate 이후 변경이므로 그 gate의 검증 범위에 포함시키지 않는다.
+
+### Raw 정책 저장 승인 화면
+
+- raw Save에 기존 DialogModal과 unifiedDiff를 재사용한 승인 화면을 추가했다. 버킷/공급자/프로필, 정책 diff, 전체 문서 교체와 접근 권한 영향 안내를 표시한다. Cancel에 초기 포커스를 두고 취소하면 draft를 유지한다.
+- 검토 요청을 복사해 고정하며 승인 대기 중 draft가 변경되면 저장을 거부한다. 승인 후 기존 preflight가 최신 정책과 편집 기준을 다시 비교한다. 화면 scope key도 JSON 배열로 구성해 구분자 포함 값의 충돌을 피한다.
+- raw modal 31개 테스트, typecheck, 변경 owner eslint 및 diff check 통과. Chromium에서 재연결 실패 후 draft 보존/재시도와 1280/390px 승인·취소·저장 흐름 3개 통과. 이는 로컬 mock UI 증거다.
+- 최신 전체 gate를 `/tmp/s3desk-issue39-raw-review-full.log`에 실행 중이다. 공급자 조합의 잔여 검증, 원본 WS/MP4 및 실제 공급자 효과는 계속 미완료다.
+
+### Raw 승인 포함 전체 gate 및 AWS lifecycle 잔여 검증
+
+- `/tmp/s3desk-issue39-raw-review-full2.log`: 전체 gate exit 0, `[check] ok`. frontend 269개 파일/1383개 테스트, build, Chromium smoke 2개 및 backend/security/notices 통과. 첫 실행은 새 브라우저 테스트의 직접 scrollWidth/clientWidth 측정이 저장소 authoring 규칙에 걸려 종료됐으며, 불필요한 측정을 제거한 뒤 재실행했다.
+- 이후 AWS lifecycle 공통 parser에서 newerNoncurrentVersions의 0 허용을 1..100으로 수정하고 동작 없는 enabled/disabled 규칙을 거부했다. 빈 전체 rules 배열의 삭제 의미는 유지한다. 기존 Filter 정규화가 noncurrent 보존 개수 사용 시 필수 Filter도 제공함을 회귀로 확인했다.
+- 공식 근거: https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html 및 https://docs.aws.amazon.com/AmazonS3/latest/userguide/ErrorCodeBilling.html . 2026년 7월 폐지된 IA 전환의 30일 제한은 도입하지 않았으며 days=0의 STANDARD_IA/ONEZONE_IA 수락을 검사한다.
+- 테스트에서 텍스트/태그/ID만 검사하던 action 없는 fixture는 정상 expiration을 포함하도록 보완했다. HTTP 우회 입력에서 0 보존 개수 및 action 누락이 provider 쓰기 전 400으로 차단됨을 확인한다.
+- 규칙 버전 2026-09-27.18. Go 1.25.13 bucketgov/API 전체 통과(API 24.137초), OpenAPI 생성/일치 및 git diff --check 통과. 이 lifecycle 후속 수정은 앞서 기록한 full gate 이후이므로 그 gate 범위로 주장하지 않는다.
+- 다음 코드 대조 항목은 GCS uniform access 해제의 lockedTime/조건부 IAM 결합이다. 실제 환경/원본 WS·MP4 증거는 계속 미확보다.
+
+### GCS uniform access 해제 사전 검사
+
+- protection adapter의 공통 쓰기 전에 현재 enabled 상태를 명시적으로 확인한다. hierarchical namespace 사용 버킷은 해제를 차단하며, 활성 상태에서는 lockedTime이 읽을 수 있는 미래 시각이어야 한다. 만료/누락/잘못된 시각이면 쓰지 않는다.
+- 활성 상태의 해제는 IAM 정책을 조회하고 revision 및 조건부 binding 부재를 확인한다. 읽기 실패/불완전 정책/조건부 binding은 retention을 함께 요청한 경우에도 전체 patch 전에 중단한다. 이미 비활성인 설정은 추가 IAM 조회를 요구하지 않는다.
+- typed 승인 화면에 활성화 시 object ACL만으로 얻던 접근의 제거와 90일 후 해제 불가, 비활성화 시 기존 ACL 접근 복원 가능성을 표시했다.
+- 규칙 버전 2026-09-27.19. 계층형 namespace, 미래/과거/누락/잘못된 deadline, IAM 읽기 실패/revision 누락/조건부 정책, 정상/이미 비활성의 10개 경로를 검사한다. Go 1.25.13 bucketgov/API 전체 통과(API 23.909초), UI 안내 회귀 2개, OpenAPI 생성/일치·typecheck·변경 owner eslint·git diff --check 통과.
+- 근거: https://docs.cloud.google.com/storage/docs/uniform-bucket-level-access 및 https://docs.cloud.google.com/storage/docs/json_api/v1/buckets . 조직 정책/managed folder 제약은 공급자가 판정하며, metadata/IAM 조회 이후 경쟁과 실제 ACL 권한 효과는 이 검사로 증명하지 않는다. 최신 전체 gate 재검증 및 실환경 증거는 남아 있다.
+
+### r19 전체 gate 및 OCI PAR 대상 보존
+
+- AWS lifecycle 경계/필수 action과 GCS uniform access preflight까지 포함해 코드를 고정하고 full gate를 실행했다. `/tmp/s3desk-issue39-r19-full.log`: exit 0, `[check] ok`, frontend 269개 파일/1385개 테스트, build, Chromium smoke 2개 및 backend/security/notices 통과.
+- 원본 S3D-009의 A~D와 10개 완료 기준을 재대조했다. 실제 제품/버전, 공급자별 허용·거부·복구, 원본 업로드/WS/MP4 검증은 현재 증거로 완료 판정할 수 없다. live 환경 preflight를 재실행했고 AWS/Azure/Ceph/GCS/OCI 필수 설정 모두 누락(exit 1). 운영 대상에 쓰기는 하지 않았다.
+- gate 이후 OCI PAR ObjectName의 TrimSpace를 UI builder, adapter 생성/조회/비교, CLI 인수에서 제거했다. 공백만 있는 prefix를 빈 값으로 바꾸면 bucket-wide로 범위가 확대되는 결함이다. 이제 공백·한글·+/%·탭을 원문대로 전달하며 readback도 정확히 비교한다. 빈 문자열만 기존 bucket-wide 의미를 유지한다.
+- bucketgov/ocicli 전체 테스트 통과. 가짜 CLI 실행의 실제 argv, adapter 생성→목록→비교와 UI builder 5개 테스트가 공백 보존을 확인한다. 이 증거는 OCI 실서비스의 URL 효과를 증명하지 않는다. 후속 OCI 수정은 위 full gate 범위에 포함되지 않는다.
+- 추가로 확인한 잔여 코드 대조: OCI UI가 기존 ObjectRead/ObjectWrite 계열을 AnyObjectRead로 치환하는지, 신규 write-only PAR의 ListObjects 조합 처리. 새로운 접근 기능 확장보다 기존 대상/권한의 손실 없는 보존부터 확인한다.
+
+### OCI PAR 권한 유형 보존과 목록 조회 조합
+
+- 기존 PAR을 draft 및 생성 결과 view로 옮길 때 ObjectRead/ObjectWrite/ObjectReadWrite 등을 AnyObjectRead로 치환하던 경로를 제거했다. 알려지지 않은 기존 유형도 원문으로 표시·보존하고 기존 항목은 계속 읽기 전용이다. 신규 생성 지원 범위는 기존 AnyObject 3종을 유지한다.
+- 새 AnyObjectWrite PAR에서 ListObjects를 서버 validator가 거부한다. UI는 write-only 선택 시 Deny로 명시적으로 변경하고 목록 선택을 비활성화한다. 기존 PAR은 생성 규칙을 재적용해 덮어쓰지 않는다.
+- 근거: https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/os/preauth-request/create.html 의 bucket-listing-action 계약. 규칙 버전 2026-09-27.20 및 OpenAPI 설명/생성 타입을 갱신했다.
+- 기존 권한 4종 보존(미지 유형 포함), 대상 공백 보존, write-only 전환 등의 UI 10개 테스트 통과. Go 1.25.13 bucketgov/API 전체 통과(API 24.790초), 추가 직접 HTTP 우회 거부 회귀 통과. OpenAPI 생성/일치, typecheck, 변경 owner eslint 및 diff check 통과. 기존 governance modal을 함께 실행한 결과는 후속 기록한다.
+- 실환경 권한 효과와 최신 전체 gate는 아직 이 후속 코드의 증거에 포함되지 않는다.
+
+- 후속 UI 통합 회귀: BucketGovernanceModal + ociSharingLimit 2개 파일/46개 테스트 통과(`/tmp/s3desk-oci-sharing-ui.log`).
+
+### OCI PAR 시각 정규화와 ID 비교
+
+- OCI PAR readback과 기존 항목 불변성 검사에서 만료 시각을 문자열 비교하던 경로를 RFC3339 파싱 후 시각 비교로 변경했다. Z/+00:00/다른 시간대 및 0 소수초 표현은 같은 시각으로 처리하며, 실제 마이크로초 차이·누락·잘못된 값은 불일치다.
+- PAR ID의 대소문자 무시 중복 검사를 제거하고 현재 inventory map/공급자 ID와 같은 정확한 비교를 사용한다. 실제 동일 ID 중복 거부는 유지한다. 규칙 버전 2026-09-27.21.
+- 집중 회귀는 같은 시각의 표현 차이, 1마이크로초 차이, 누락/오류, 대소문자만 다른 ID와 정확히 중복된 ID를 포함한다. 최신 전체 검사 결과는 후속 기록한다.
+
+### 완료 조건 재대조 (r21)
+
+| 원본 요구 | 현재 로컬 근거 | 완료 판정에 남은 증거 |
+|---|---|---|
+| S3D-001 이름/상대경로/Retry | UTF-8 헤더 encode/decode 및 회귀 | 실제 공급자의 ASCII/다국어 업로드·키 재조회·Retry |
+| S3D-002 실시간/정리/복구 | timeout/late-open 및 cleanup 단위 회귀 | 제보 환경의 handshake·전환·Transfers 상태와 서버 로그 |
+| S3D-003 썸네일/메타데이터 | 실제 ffmpeg 합성 영상·seek fallback·선택 경합 회귀 | 원본 객체의 415·stat·작은/큰 실제 렌더 |
+| S3D-004~008 Favorites/선택/Grid/Details/Navbar | 소유 코드 수정 및 기록된 API/브라우저/레이아웃/키보드 회귀 | 배포 환경 결과로 확대 해석하지 않음 |
+| S3D-009 A 편집 범위/규칙 근거 | BUCKET_GOVERNANCE_VALIDATION_MATRIX.md와 owner 매핑 | 실제 제품/API·배포 버전·대상 환경 식별 |
+| S3D-009 B 서버 검증/보존/결과 | 공통 validator·공급자 adapter·최종 readback·직접 HTTP 우회 회귀 | 실제 계정·권한·조직/replication 제약과 다단계 lifecycle 효과 |
+| S3D-009 C 검증/승인/충돌/감사 | static-only 표시, raw/typed 승인·snapshot·기준 상태 조회, ETag 경로, 자동 재시도 제거, 전후 요약 감사 | CAS 없는 경쟁 및 실효 권한, 배포 인증의 개인 식별·로그 보존 |
+| S3D-009 D 정상/실패/경계/회귀 | 공급자 fixture·단위/API·브라우저 로컬 검사 | 격리된 실제 공급자에서 허용/거부/실패/충돌/복구 |
+
+- GCS 조건부 IAM의 uniform-access 및 조직 제약은 실제 GCS 변경 API의 수락/거부가 최종 판정한다. 공통 쓰기 경로는 거부/충돌/읽기 실패를 성공으로 바꾸지 않지만, 이를 공급자 호환 테스트 통과로 계산하지 않는다. 모든 계정·프로젝트·제품 조합을 로컬 fixture만으로 인증할 수 없다.
+- 운영 적용 게이트는 여전히 미완료다. 로컬 코드와 검사 완료를 실제 제공자 통합 결과/원본 재현의 대체 근거로 사용하지 않는다.
+
+- r21 최신 전체 gate: `GOTOOLCHAIN=go1.25.13 CHECK_FRONTEND_DEPS_READY=1 ./scripts/check.sh full` exit 0, `[check] ok`. 로그 `/tmp/s3desk-issue39-r21-full.log`; frontend 269개 파일/1394개 테스트, build, Chromium smoke 2개 및 backend/security/notices 통과. 해당 실행 중 제품 코드를 변경하지 않았다. 마지막 diff check도 통과했다.
+- 남은 실제 환경 증거를 위해 격리 테스트 설정 경로와 제보 S3Desk 주소·원본 MP4 위치를 요청했다. 비밀값 자체는 요청하지 않았다. 현재 자격/대상은 확보되지 않았고 커밋·푸시·배포·외부 정책 변경은 하지 않았다.
+
+- 환경 대기 재확인: `/tmp/s3desk-issue39-live-preflight-final.md`에서 5개 공급자 필수 설정 누락을 다시 확인했다(exit 1). 기존 전체 gate는 `[check] ok`로 종료됐으며 실행 중인 검사를 기다리는 상태가 아니다. 요청한 격리 환경/원본 대상 정보 없이는 남은 실제 환경 증거를 추가할 수 없다. 상단의 오래된 검사 수치와 UI 결과 연결 상태를 r21 기준으로 정리했다.

@@ -132,3 +132,73 @@ AWS encryption writes read the current rule and preserve `BlockedEncryptionTypes
 The current KMS editor represents both SSE-KMS and DSSE-KMS in its KMS mode. For an existing DSSE-KMS bucket, saving in that mode preserves DSSE-KMS while applying the requested key. Selecting SSE-S3 explicitly changes the algorithm. Creating DSSE-KMS or switching DSSE-KMS to standard SSE-KMS is not exposed by this editor.
 
 AWS lifecycle rule updates first read and preserve the existing `TransitionDefaultMinimumObjectSize` setting. An explicit no-configuration response permits creation; read failures block replacement. This prerequisite read does not eliminate concurrent external update races.
+
+Azure immutability edits require the revision loaded with the draft. The adapter
+checks it against the current policy before any protection writes and sends it
+as If-Match; 409/412 are conflicts. Creation from observed absence still has a
+read-to-create race because this client has no conditional-create contract.
+Legal hold and account soft delete have no conditional-write guard in this
+client. Readback observes settings; it cannot attribute a concurrent change or
+prove blob delete/append enforcement. Immutability and legal hold mutations use
+bounded independent readback, preserve write errors, and report unconfirmed
+state when the requested mode/duration/append flags or tag set do not match.
+
+Azure contract: [Create or Update Immutability Policy](https://learn.microsoft.com/en-us/rest/api/storagerp/blob-containers/create-or-update-immutability-policy?view=rest-storagerp-2024-01-01).
+
+### Typed editor stale-state check
+
+Typed control saves fetch the current governance view before sending a mutation.
+The fetched view must exactly match the view used to initialize the editor. A changed
+view, failed read, or changed/closed editor scope prevents the write and retains the
+local draft. The read has a 30-second timeout and does not replace the query cache on
+failure. Reopen the controls to load the new baseline before reapplying a draft.
+This is a conservative whole-view comparison, including warnings and revisions;
+equivalent provider formatting or a change in another section can require reopening.
+It does not make the subsequent write atomic. Provider ETags remain necessary where
+supported, and providers without conditional writes retain a read-to-write race.
+
+Typed saves show a review dialog containing the profile, provider, bucket, and
+current/proposed values for submitted fields. The request is copied before review;
+Apply changes sends that reviewed copy only after the stale-state check. Cancel,
+closing the controls, or changing scope prevents submission. This review is a user
+confirmation, not a multi-user approval workflow. PAR access URLs are omitted from
+the preview. Retention lock warnings do not imply that a lock can be reversed.
+
+Field, unit, combination and evidence coverage is tracked in [the validation matrix](BUCKET_GOVERNANCE_VALIDATION_MATRIX.md).
+
+OCI now checks retention/versioning incompatibility before mutations. Enabling
+versioning requires an explicitly empty retention-rule list. Writing a nonempty
+retention configuration requires observed Disabled or Suspended versioning.
+Missing/unknown state or read errors block the write. Suspending versioning and
+removing all retention rules do not require this additional cross-setting read.
+These preflight reads do not prevent another writer changing the other setting
+between the read and mutation; the provider remains authoritative.
+
+### OCI retention duration representation
+
+Each rule uses exactly one of positive `days`, positive `years`, or
+`indefinite: true`. The API no longer converts YEARS into 365-day approximations.
+The UI preserves the original unit and can explicitly choose indefinite duration.
+Existing day-based requests remain accepted. Locked rules can only increase their
+amount in the same unit; converting a pending/active lock to indefinite is rejected.
+The UI does not create or cancel lock schedules.
+
+The OCI CLI receives native DAYS/YEARS arguments. Creating an indefinite rule
+omits duration arguments; updating to indefinite uses an empty `--time-amount`,
+as specified in the [CLI update contract](https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/os/retention-rule/update.html).
+Final readback compares the exact unit/amount or absent duration and preserves the
+lock timestamp. Local argument/adapter/browser checks are not real OCI evidence.
+
+### GCS uniform access preflight
+
+Disabling uniform access first checks the current metadata. Hierarchical namespace,
+unknown enabled state, or an expired/unreadable lock deadline blocks the write.
+For an enabled bucket with a future deadline, its IAM policy must be readable with
+an ETag and contain no conditional bindings. No protection patch is sent if any
+check fails, including when retention is part of the same request.
+
+The approval dialog describes ACL revocation when enabling and restored ACL grants
+when disabling. Organization policy and managed-folder constraints are still
+enforced by GCS; these local checks are not a complete provider policy evaluation.
+Metadata and IAM reads are not an atomic snapshot and do not prove effective access.
+[Provider requirements](https://docs.cloud.google.com/storage/docs/uniform-bucket-level-access).
