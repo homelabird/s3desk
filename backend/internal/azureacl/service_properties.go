@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -33,8 +34,8 @@ type storageServicePropertiesEnvelope struct {
 }
 
 type storageDeleteRetentionPolicyXML struct {
-	Enabled bool `xml:"Enabled"`
-	Days    *int `xml:"Days,omitempty"`
+	Enabled *bool `xml:"Enabled"`
+	Days    *int  `xml:"Days,omitempty"`
 }
 
 func GetBlobServiceProperties(ctx context.Context, profile models.ProfileSecrets) (Response, error) {
@@ -57,8 +58,11 @@ func GetBlobServicePropertiesWithOptions(ctx context.Context, profile models.Pro
 
 	payload := ServiceProperties{}
 	if env.DeleteRetentionPolicy != nil {
+		if env.DeleteRetentionPolicy.Enabled == nil {
+			return Response{}, errors.New("missing Azure soft delete enabled state")
+		}
 		payload.DeleteRetentionPolicy = &DeleteRetentionPolicy{
-			Enabled: env.DeleteRetentionPolicy.Enabled,
+			Enabled: *env.DeleteRetentionPolicy.Enabled,
 			Days:    env.DeleteRetentionPolicy.Days,
 		}
 	}
@@ -80,7 +84,7 @@ func PutBlobServicePropertiesWithOptions(ctx context.Context, profile models.Pro
 	env := storageServicePropertiesEnvelope{}
 	if props.DeleteRetentionPolicy != nil {
 		env.DeleteRetentionPolicy = &storageDeleteRetentionPolicyXML{
-			Enabled: props.DeleteRetentionPolicy.Enabled,
+			Enabled: &props.DeleteRetentionPolicy.Enabled,
 			Days:    props.DeleteRetentionPolicy.Days,
 		}
 	}

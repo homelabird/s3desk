@@ -56,3 +56,17 @@ func TestBucketSharingHTTPService_HandlePutBucketSharing_ReturnsInvalidJSON(t *t
 		t.Fatalf("resp.Error.Code=%q, want invalid_json", resp.Error.Code)
 	}
 }
+
+func TestSharingHTTPRejectsWriteOnlyListingBeforeProvider(t *testing.T) {
+	adapter := &fakeGovernanceAdapter{}
+	registry := bucketgov.NewRegistry()
+	registry.Register(models.ProfileProviderOciObjectStorage, adapter)
+	svc := newBucketSharingHTTPService(&server{bucketGov: bucketgov.NewService(registry)})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/governance/sharing", bytes.NewBufferString(`{"preauthenticatedRequests":[{"name":"invalid","accessType":"AnyObjectWrite","bucketListingAction":"ListObjects","timeExpires":"2030-01-01T00:00:00Z"}]}`))
+	req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderOciObjectStorage}), "demo")
+	rec := httptest.NewRecorder()
+	svc.handlePutBucketSharing(rec, req)
+	if rec.Code != http.StatusBadRequest || adapter.putSharing != nil {
+		t.Fatalf("status=%d providerCalled=%v", rec.Code, adapter.putSharing != nil)
+	}
+}

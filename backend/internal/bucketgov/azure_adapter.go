@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -357,6 +358,9 @@ func (a *azureAdapter) PutProtection(ctx context.Context, profile models.Profile
 			return err
 		}
 		originalServiceProperties = props
+		if originalServiceProperties.DeleteRetentionPolicy == nil {
+			return UpstreamOperationError("bucket_protection_error", "Azure soft delete state is missing; reload before editing", bucket, fmt.Errorf("missing delete retention policy"))
+		}
 		props.DeleteRetentionPolicy = &azureacl.DeleteRetentionPolicy{
 			Enabled: req.SoftDelete.Enabled,
 			Days:    req.SoftDelete.Days,
@@ -568,6 +572,14 @@ func (a *azureAdapter) getBlobServiceProperties(ctx context.Context, profile mod
 		if props == nil {
 			return azureacl.ServiceProperties{}, UpstreamOperationError(code, "failed to decode Azure Blob service properties", bucket, fmt.Errorf("expected a service properties object, received null"))
 		}
+		var required struct {
+			Policy *struct {
+				Enabled *bool `json:"enabled"`
+			} `json:"deleteRetentionPolicy"`
+		}
+		if err := json.Unmarshal(resp.Body, &required); err != nil || (required.Policy != nil && required.Policy.Enabled == nil) {
+			return azureacl.ServiceProperties{}, UpstreamOperationError(code, "invalid Azure soft delete state", bucket, fmt.Errorf("missing enabled flag"))
+		}
 		return *props, nil
 	default:
 		return azureacl.ServiceProperties{}, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
@@ -583,11 +595,18 @@ func (a *azureAdapter) putBlobServiceProperties(ctx context.Context, profile mod
 		return UpstreamOperationError(code, "failed to encode Azure Blob service properties", bucket, err)
 	}
 	resp, err := a.putServiceProperties(ctx, profile, body)
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, readErr := a.getBlobServiceProperties(readCtx, profile, bucket, "confirm Azure Blob service properties", code)
 	if err != nil {
 		return UpstreamOperationError(code, "failed to "+operation, bucket, err)
 	}
 	switch resp.Status {
 	case http.StatusOK, http.StatusAccepted, http.StatusNoContent:
+		want, got := props.DeleteRetentionPolicy, observed.DeleteRetentionPolicy
+		if readErr != nil || (want != nil && (got == nil || want.Enabled != got.Enabled || (want.Enabled && !reflect.DeepEqual(want.Days, got.Days)))) {
+			return UpstreamOperationError("bucket_protection_unconfirmed", "Azure soft delete update was accepted but current state did not confirm the request; reload before retrying", bucket, fmt.Errorf("soft delete readback failed or differed"))
+		}
 		return nil
 	default:
 		return UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
@@ -714,7 +733,7 @@ func (a *azureAdapter) getAzureLegalHold(ctx context.Context, profile models.Pro
 	}
 }
 
-func (a *azureAdapter) putAzureLegalHold(ctx context.Context, profile models.ProfileSecrets, bucket string, current *azureLegalHold, desired []string) error {
+func (a *azureAdapter) putAzureLegalHold(ctx context.Context, profile models.ProfileSecrets, bucket string, current *azureLegalHold, desired []string) (result error) {
 	if current == nil {
 		return UpstreamOperationError("bucket_protection_error", "failed to update Azure container legal hold", bucket, fmt.Errorf("current Azure legal hold is unavailable"))
 	}
@@ -726,6 +745,25 @@ func (a *azureAdapter) putAzureLegalHold(ctx context.Context, profile models.Pro
 	if err != nil {
 		return err
 	}
+	defer func() {
+		readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		observed, readErr := a.getAzureLegalHold(readCtx, profile, bucket, "confirm Azure legal hold", "bucket_protection_error")
+		if result != nil {
+			return
+		}
+		matches := false
+		if readErr == nil && observed != nil {
+			actual, err := normalizeAzureLegalHoldTags(observed.Tags)
+			if err == nil {
+				removed, added := diffAzureLegalHoldTags(actual, normalizedDesired)
+				matches = len(removed) == 0 && len(added) == 0 && observed.HasLegalHold == (len(normalizedDesired) > 0)
+			}
+		}
+		if !matches {
+			result = UpstreamOperationError("bucket_protection_unconfirmed", "Azure legal hold update did not confirm the requested state; reload before retrying", bucket, fmt.Errorf("legal hold readback failed or differed"))
+		}
+	}()
 	clearTags, setTags := diffAzureLegalHoldTags(normalizedCurrent, normalizedDesired)
 	if len(clearTags) == 0 && len(setTags) == 0 {
 		return nil
@@ -835,7 +873,7 @@ func diffAzureLegalHoldTags(current, desired []string) (clear, set []string) {
 	return clear, set
 }
 
-func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profile models.ProfileSecrets, bucket string, current *azurearmimmutability.Policy, req models.BucketImmutabilityView) error {
+func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profile models.ProfileSecrets, bucket string, current *azurearmimmutability.Policy, req models.BucketImmutabilityView) (result error) {
 	if err := validateAzureImmutabilityChange(current, req); err != nil {
 		return err
 	}
@@ -844,6 +882,25 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 	if mode == "" {
 		mode = "unlocked"
 	}
+
+	defer func() {
+		readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		observed, readErr := a.getAzureImmutabilityPolicy(readCtx, profile, bucket, "confirm Azure immutability policy", "bucket_protection_error")
+		if result != nil {
+			return
+		}
+		matches := readErr == nil && observed == nil && !req.Enabled
+		if readErr == nil && observed != nil && req.Enabled && req.Days != nil {
+			matches = normalizeAzureImmutabilityState(observed.Properties.State) == mode &&
+				observed.Properties.ImmutabilityPeriodSinceCreationInDays == *req.Days &&
+				observed.Properties.AllowProtectedAppendWrites == req.AllowProtectedAppendWrites &&
+				observed.Properties.AllowProtectedAppendWritesAll == req.AllowProtectedAppendWritesAll
+		}
+		if !matches {
+			result = UpstreamOperationError("bucket_protection_unconfirmed", "Azure immutability update did not confirm the requested state; reload before retrying", bucket, fmt.Errorf("immutability readback failed or differed"))
+		}
+	}()
 
 	if !req.Enabled {
 		if current == nil {
@@ -856,9 +913,6 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 			})
 		}
 		ifMatch := strings.TrimSpace(req.ETag)
-		if ifMatch == "" {
-			ifMatch = strings.TrimSpace(current.ETag)
-		}
 		return a.deleteAzureImmutability(ctx, profile, bucket, ifMatch, "delete Azure immutability policy", "bucket_protection_error")
 	}
 
@@ -906,9 +960,6 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 			return nil
 		}
 		ifMatch := strings.TrimSpace(req.ETag)
-		if ifMatch == "" {
-			ifMatch = strings.TrimSpace(current.ETag)
-		}
 		return a.extendAzureImmutability(ctx, profile, bucket, azurearmimmutability.ExtendPolicyRequest{
 			Days:    *req.Days,
 			IfMatch: ifMatch,
@@ -916,9 +967,6 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 	}
 
 	ifMatch := strings.TrimSpace(req.ETag)
-	if ifMatch == "" {
-		ifMatch = strings.TrimSpace(current.ETag)
-	}
 	policy, err := a.putAzureImmutability(ctx, profile, bucket, azurearmimmutability.PutPolicyRequest{
 		Days:                          *req.Days,
 		IfMatch:                       ifMatch,
@@ -935,6 +983,14 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 }
 
 func validateAzureImmutabilityChange(current *azurearmimmutability.Policy, req models.BucketImmutabilityView) error {
+	revision := strings.TrimSpace(req.ETag)
+	if current != nil && revision == "" {
+		return InvalidFieldError("immutability.etag", "Azure immutability edits require the loaded policy ETag; reload before saving", nil)
+	}
+	if (current == nil && revision != "") || (current != nil && (strings.TrimSpace(current.ETag) == "" || revision != strings.TrimSpace(current.ETag))) {
+		return &OperationError{Status: http.StatusConflict, Code: "bucket_policy_conflict", Message: "Azure immutability policy changed or its revision is unavailable; reload and review before retrying"}
+	}
+
 	mode := normalizeAzureImmutabilityState(req.Mode)
 	if mode == "" {
 		mode = "unlocked"
@@ -999,6 +1055,8 @@ func (a *azureAdapter) putAzureImmutability(ctx context.Context, profile models.
 			policy.ETag = strings.TrimSpace(resp.Headers.Get("Etag"))
 		}
 		return policy, nil
+	case http.StatusConflict, http.StatusPreconditionFailed:
+		return nil, &OperationError{Status: http.StatusConflict, Code: "bucket_policy_conflict", Message: "Azure immutability policy changed; reload and review before retrying"}
 	default:
 		return nil, UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure arm returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
 	}
@@ -1015,12 +1073,17 @@ func (a *azureAdapter) deleteAzureImmutability(ctx context.Context, profile mode
 	switch resp.Status {
 	case http.StatusOK, http.StatusNoContent:
 		return nil
+	case http.StatusConflict, http.StatusPreconditionFailed:
+		return &OperationError{Status: http.StatusConflict, Code: "bucket_policy_conflict", Message: "Azure immutability policy changed; reload and review before retrying"}
 	default:
 		return UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure arm returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
 	}
 }
 
 func (a *azureAdapter) lockAzureImmutability(ctx context.Context, profile models.ProfileSecrets, bucket string, ifMatch string, operation, code string) error {
+	if strings.TrimSpace(ifMatch) == "" {
+		return UpstreamOperationError("bucket_protection_unconfirmed", "Azure policy update returned no revision; reload before locking", bucket, fmt.Errorf("missing policy ETag"))
+	}
 	if a.lockImmutabilityPolicy == nil {
 		return UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure immutability client is not configured"))
 	}
@@ -1031,6 +1094,8 @@ func (a *azureAdapter) lockAzureImmutability(ctx context.Context, profile models
 	switch resp.Status {
 	case http.StatusOK:
 		return nil
+	case http.StatusConflict, http.StatusPreconditionFailed:
+		return &OperationError{Status: http.StatusConflict, Code: "bucket_policy_conflict", Message: "Azure immutability policy changed; reload and review before retrying"}
 	default:
 		return UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure arm returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
 	}
@@ -1047,6 +1112,8 @@ func (a *azureAdapter) extendAzureImmutability(ctx context.Context, profile mode
 	switch resp.Status {
 	case http.StatusOK:
 		return nil
+	case http.StatusConflict, http.StatusPreconditionFailed:
+		return &OperationError{Status: http.StatusConflict, Code: "bucket_policy_conflict", Message: "Azure immutability policy changed; reload and review before retrying"}
 	default:
 		return UpstreamOperationError(code, "failed to "+operation, bucket, fmt.Errorf("azure arm returned status %d: %s", resp.Status, strings.TrimSpace(string(resp.Body))))
 	}

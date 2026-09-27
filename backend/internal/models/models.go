@@ -411,6 +411,8 @@ type BucketRetentionView struct {
 }
 
 type BucketRetentionRuleView struct {
+	Years        *int   `json:"years,omitempty"`
+	Indefinite   bool   `json:"indefinite,omitempty"`
 	ID           string `json:"id,omitempty"`
 	DisplayName  string `json:"displayName,omitempty"`
 	Days         *int   `json:"days,omitempty"`

@@ -215,6 +215,9 @@ func TestGCSAdapterPutAccessPreservesVersionAndEditedETag(t *testing.T) {
 	var body []byte
 	adapter := &gcsAdapter{
 		getPolicy: func(context.Context, models.ProfileSecrets, string) (gcsiam.Response, error) {
+			if len(body) > 0 {
+				return gcsiam.Response{Status: 200, Body: body}, nil
+			}
 			return gcsiam.Response{
 				Status: 200,
 				Body:   []byte(`{"version":3,"etag":"etag-current","bindings":[]}`),
@@ -232,7 +235,7 @@ func TestGCSAdapterPutAccessPreservesVersionAndEditedETag(t *testing.T) {
 			{
 				Role:      "roles/storage.objectViewer",
 				Members:   []string{"user:alice@example.com"},
-				Condition: []byte(`{"title":"if-approved"}`),
+				Condition: []byte(`{"title":"if-approved","expression":"true"}`),
 			},
 		},
 	})
@@ -261,6 +264,9 @@ func TestGCSAdapterPutPublicExposurePrivateRemovesPublicMembers(t *testing.T) {
 	var body []byte
 	adapter := &gcsAdapter{
 		getPolicy: func(context.Context, models.ProfileSecrets, string) (gcsiam.Response, error) {
+			if len(body) > 0 {
+				return gcsiam.Response{Status: 200, Body: body}, nil
+			}
 			return gcsiam.Response{
 				Status: 200,
 				Body: []byte(`{
@@ -304,6 +310,9 @@ func TestGCSAdapterPutPublicExposureAllowsPAPOnly(t *testing.T) {
 	policyCalls := 0
 	var patchBody []byte
 	adapter := &gcsAdapter{
+		getBucket: func(context.Context, models.ProfileSecrets, string) (gcsbucket.Response, error) {
+			return gcsbucket.Response{Status: 200, Body: patchBody}, nil
+		},
 		getPolicy: func(context.Context, models.ProfileSecrets, string) (gcsiam.Response, error) {
 			policyCalls++
 			return gcsiam.Response{Status: 200, Body: []byte(`{"bindings":[]}`)}, nil
@@ -405,6 +414,12 @@ func TestGCSAdapterPutProtectionAndVersioning(t *testing.T) {
 	adapter := &gcsAdapter{
 		getBucket: func(context.Context, models.ProfileSecrets, string) (gcsbucket.Response, error) {
 			callCount++
+			if len(versioningBody) > 0 {
+				return gcsbucket.Response{Status: 200, Body: versioningBody}, nil
+			}
+			if len(protectionBody) > 0 {
+				return gcsbucket.Response{Status: 200, Body: protectionBody}, nil
+			}
 			if callCount == 1 {
 				return gcsbucket.Response{
 					Status: 200,
@@ -766,6 +781,9 @@ func TestAzureAdapterPutProtectionUpdatesLegalHoldTagSet(t *testing.T) {
 	var set []string
 	adapter := &azureAdapter{
 		getContainer: func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error) {
+			if len(set) > 0 {
+				return azurearmimmutability.Response{Status: 200, Body: []byte(`{"properties":{"legalHold":{"hasLegalHold":true,"tags":[{"tag":"tag2"},{"tag":"tag3"}]}}}`)}, nil
+			}
 			return azurearmimmutability.Response{
 				Status: 200,
 				Body:   []byte(`{"properties":{"legalHold":{"hasLegalHold":true,"tags":[{"tag":"tag1"},{"tag":"tag2"}]}}}`),
@@ -863,6 +881,9 @@ func TestAzureAdapterPutProtectionRollsBackSoftDeleteWhenLegalHoldFails(t *testi
 			return azurearmimmutability.Response{}, errors.New("set legal hold failed")
 		},
 		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			if len(servicePropertyBodies) > 0 {
+				return azureacl.Response{Status: 200, Body: servicePropertyBodies[len(servicePropertyBodies)-1]}, nil
+			}
 			return azureacl.Response{Status: 200, Body: []byte(`{"isVersioningEnabled":true,"deleteRetentionPolicy":{"enabled":false}}`)}, nil
 		},
 		putServiceProperties: func(_ context.Context, _ models.ProfileSecrets, body []byte) (azureacl.Response, error) {
@@ -934,6 +955,9 @@ func TestAzureAdapterPutProtectionAndVersioning(t *testing.T) {
 
 	adapter := &azureAdapter{
 		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			if len(protectionBody) > 0 {
+				return azureacl.Response{Status: 200, Body: protectionBody}, nil
+			}
 			return azureacl.Response{
 				Status: 200,
 				Body:   []byte(`{"isVersioningEnabled":false,"deleteRetentionPolicy":{"enabled":false}}`),
@@ -1074,6 +1098,7 @@ func TestAzureAdapterPutProtectionPreflightsLockedImmutabilityBeforeSoftDelete(t
 			}
 
 			days := 7
+			tc.immutability.ETag = "etag-current"
 			err := adapter.PutProtection(context.Background(), profile, "demo", models.BucketProtectionPutRequest{
 				SoftDelete:   &models.BucketSoftDeleteView{Enabled: true, Days: &days},
 				Immutability: &tc.immutability,
@@ -1107,6 +1132,9 @@ func TestAzureAdapterPutProtectionRollsBackSoftDeleteWhenImmutabilityFails(t *te
 			return azurearmimmutability.Response{}, errors.New("arm immutability failed")
 		},
 		getServiceProperties: func(context.Context, models.ProfileSecrets) (azureacl.Response, error) {
+			if len(servicePropertyBodies) > 0 {
+				return azureacl.Response{Status: 200, Body: servicePropertyBodies[len(servicePropertyBodies)-1]}, nil
+			}
 			return azureacl.Response{
 				Status: 200,
 				Body:   []byte(`{"isVersioningEnabled":true,"deleteRetentionPolicy":{"enabled":false}}`),
@@ -1163,7 +1191,7 @@ func TestOCIAdapterGetGovernanceIncludesTypedControls(t *testing.T) {
 		},
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
 			retentionCalls++
-			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-1","time-rule-locked":true,"duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
+			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-1","time-rule-locked":"2020-01-01T00:00:00Z","duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
 		},
 		listPreauthenticatedRequests: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
 			sharingCalls++
@@ -1202,7 +1230,7 @@ func TestOCIAdapterPutPublicExposureVersioningAndProtection(t *testing.T) {
 	var createdDays int
 	adapter := &ociAdapter{
 		getBucket: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
-			return ocicli.Response{Body: []byte(`{"data":{"public-access-type":"ObjectRead"}}`)}, nil
+			return ocicli.Response{Body: []byte(`{"data":{"public-access-type":"ObjectRead","versioning":"Suspended"}}`)}, nil
 		},
 		updateBucket: func(_ context.Context, _ models.ProfileSecrets, _ string, publicAccessType string, versioning string) (ocicli.Response, error) {
 			if publicAccessType != "" {
@@ -1214,9 +1242,12 @@ func TestOCIAdapterPutPublicExposureVersioningAndProtection(t *testing.T) {
 			return ocicli.Response{Body: []byte(`{"data":{"public-access-type":"NoPublicAccess","versioning":"Disabled"}}`)}, nil
 		},
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			if createdDays > 0 {
+				return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-1","display-name":"Retention Rule 1","duration":{"time-amount":7,"time-unit":"DAYS"}}]}`)}, nil
+			}
 			return ocicli.Response{Body: []byte(`{"data":[]}`)}, nil
 		},
-		createRetentionRule: func(_ context.Context, _ models.ProfileSecrets, _ string, days int, _ string) (ocicli.Response, error) {
+		createRetentionRule: func(_ context.Context, _ models.ProfileSecrets, _ string, days int, _ string, _ string) (ocicli.Response, error) {
 			createdDays = days
 			return ocicli.Response{Body: []byte(`{"data":{"id":"rule-1","duration":{"time-amount":7,"time-unit":"DAYS"}}}`)}, nil
 		},
@@ -1261,10 +1292,13 @@ func TestOCIAdapterPutProtectionKeepsExistingRulesWhenCreateFails(t *testing.T) 
 
 	deleteCalls := 0
 	adapter := &ociAdapter{
-		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
-			return ocicli.Response{Body: []byte("{\"data\":[{\"id\":\"rule-old\",\"time-rule-locked\":false,\"duration\":{\"time-amount\":30,\"time-unit\":\"DAYS\"}}]}")}, nil
+		getBucket: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":{"versioning":"Suspended"}}`)}, nil
 		},
-		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error) {
+		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte("{\"data\":[{\"id\":\"rule-old\",\"time-rule-locked\":null,\"duration\":{\"time-amount\":30,\"time-unit\":\"DAYS\"}}]}")}, nil
+		},
+		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string, string) (ocicli.Response, error) {
 			return ocicli.Response{}, errors.New("create failed")
 		},
 		deleteRetentionRule: func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error) {
@@ -1298,17 +1332,20 @@ func TestOCIAdapterPutProtectionRollsBackCreatedRulesWhenLaterCreateFails(t *tes
 	createCalls := 0
 	updateCalls := 0
 	adapter := &ociAdapter{
+		getBucket: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":{"versioning":"Suspended"}}`)}, nil
+		},
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
 			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-existing","display-name":"existing","duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
 		},
-		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error) {
+		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string, string) (ocicli.Response, error) {
 			createCalls++
 			if createCalls == 1 {
 				return ocicli.Response{Body: []byte(`{"data":{"id":"rule-new"}}`)}, nil
 			}
 			return ocicli.Response{}, errors.New("create failed")
 		},
-		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error) {
+		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string, string) (ocicli.Response, error) {
 			updateCalls++
 			return ocicli.Response{Body: []byte(`{"data":{}}`)}, nil
 		},
@@ -1346,13 +1383,16 @@ func TestOCIAdapterPutProtectionRollsBackCreatedRulesWhenExistingUpdateFails(t *
 
 	var deletedIDs []string
 	adapter := &ociAdapter{
+		getBucket: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":{"versioning":"Suspended"}}`)}, nil
+		},
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
 			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-existing","duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
 		},
-		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error) {
+		createRetentionRule: func(context.Context, models.ProfileSecrets, string, int, string, string) (ocicli.Response, error) {
 			return ocicli.Response{Body: []byte(`{"data":{"id":"rule-new"}}`)}, nil
 		},
-		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error) {
+		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string, string) (ocicli.Response, error) {
 			return ocicli.Response{}, errors.New("update failed")
 		},
 		deleteRetentionRule: func(_ context.Context, _ models.ProfileSecrets, _ string, id string) (ocicli.Response, error) {
@@ -1386,9 +1426,9 @@ func TestOCIAdapterPutProtectionValidatesNewRulesBeforeMutation(t *testing.T) {
 	updateCalls := 0
 	adapter := &ociAdapter{
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
-			return ocicli.Response{Body: []byte("{\"data\":[{\"id\":\"rule-existing\",\"time-rule-locked\":false,\"duration\":{\"time-amount\":30,\"time-unit\":\"DAYS\"}}]}")}, nil
+			return ocicli.Response{Body: []byte("{\"data\":[{\"id\":\"rule-existing\",\"time-rule-locked\":null,\"duration\":{\"time-amount\":30,\"time-unit\":\"DAYS\"}}]}")}, nil
 		},
-		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error) {
+		updateRetentionRule: func(context.Context, models.ProfileSecrets, string, string, int, string, string) (ocicli.Response, error) {
 			updateCalls++
 			return ocicli.Response{Body: []byte("{\"data\":{}}")}, nil
 		},
@@ -1878,12 +1918,17 @@ func TestGCSPublicExposureReportsAcceptedIAMWhenMetadataFails(t *testing.T) {
 
 func TestGCSAccessClearSendsExplicitEmptyBindings(t *testing.T) {
 	writes := 0
+	var stored []byte
 	adapter := &gcsAdapter{
 		getPolicy: func(context.Context, models.ProfileSecrets, string) (gcsiam.Response, error) {
+			if stored != nil {
+				return gcsiam.Response{Status: 200, Body: stored}, nil
+			}
 			return gcsiam.Response{Status: 200, Body: []byte(`{"version":3,"etag":"revision","bindings":[{"role":"roles/storage.objectViewer","members":["allUsers"]}]}`)}, nil
 		},
 		putPolicy: func(_ context.Context, _ models.ProfileSecrets, _ string, body []byte) (gcsiam.Response, error) {
 			writes++
+			stored = append([]byte(nil), body...)
 			var policy map[string]json.RawMessage
 			if err := json.Unmarshal(body, &policy); err != nil {
 				t.Fatal(err)

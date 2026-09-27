@@ -128,7 +128,7 @@ func PutContainerPolicyWithOptions(ctx context.Context, profile models.ProfileSe
 	}
 
 	if len(pol.StoredAccessPolicies) > 5 {
-		return Response{}, errors.New("Azure allows a maximum of 5 stored access policies")
+		return Response{}, errors.New("azure allows a maximum of 5 stored access policies")
 	}
 	seenIDs := make(map[string]bool)
 	// Build XML body for signed identifiers.

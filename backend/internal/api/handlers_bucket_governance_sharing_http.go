@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"s3desk/internal/bucketgov"
 	"s3desk/internal/models"
 )
 
@@ -93,7 +94,13 @@ func (svc bucketSharingHTTPService) executePut(r *http.Request) (*models.BucketS
 		return nil, "", "", newBucketSharingHTTPError(http.StatusInternalServerError, "internal_error", "bucket governance service is not configured", nil)
 	}
 
+	validation := bucketgov.ValidationContext{Provider: prepared.secrets.Provider, Bucket: prepared.bucket, Capabilities: bucketgov.ProviderGovernanceCapabilities(prepared.secrets.Provider)}
+	if err := bucketgov.ValidateSharingPut(validation, prepared.putReq); err != nil {
+		return nil, prepared.secrets.Provider, prepared.bucket, err
+	}
+	finishAudit := beginGovernanceAudit(svc.server, r, prepared.secrets, prepared.bucket, "sharing", svc.server.bucketGov.GetSharing)
 	view, err := svc.server.bucketGov.PutSharing(r.Context(), prepared.secrets, prepared.bucket, prepared.putReq)
+	finishAudit(err)
 	if err != nil {
 		return nil, prepared.secrets.Provider, prepared.bucket, err
 	}

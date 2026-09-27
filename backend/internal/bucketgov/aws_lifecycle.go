@@ -334,6 +334,10 @@ func (p awsLifecycleRulePayload) toS3(ruleIndex int) (s3types.LifecycleRule, err
 		}
 	}
 
+	if rule.Expiration == nil && rule.AbortIncompleteMultipartUpload == nil && rule.NoncurrentVersionExpiration == nil && len(rule.Transitions) == 0 && len(rule.NoncurrentVersionTransitions) == 0 {
+		return s3types.LifecycleRule{}, lifecycleFieldError(ruleIndex, "actions", "at least one lifecycle action is required", nil)
+	}
+
 	hasDays, hasDate := false, false
 	if rule.Expiration != nil {
 		hasDays = rule.Expiration.Days != nil
@@ -363,7 +367,9 @@ func awsLifecycleRuleFromS3(rule s3types.LifecycleRule, ruleIndex int) (awsLifec
 	if rule.ID != nil {
 		payload.ID = *rule.ID
 	}
+	//lint:ignore SA1019 Legacy S3 responses still use Prefix; preserve their scope on edits.
 	if rule.Filter == nil && rule.Prefix != nil {
+		//lint:ignore SA1019 Preserve legacy rule prefixes rather than widening their scope.
 		payload.Prefix = *rule.Prefix
 	}
 	if rule.Filter != nil {
@@ -685,8 +691,8 @@ func (p *awsNoncurrentVersionExpirationPayload) toS3(ruleIndex int) (*s3types.No
 	if p.NoncurrentDays != nil && *p.NoncurrentDays <= 0 {
 		return nil, lifecycleFieldError(ruleIndex, "noncurrentVersionExpiration.noncurrentDays", "noncurrentDays must be greater than zero", nil)
 	}
-	if p.NewerNoncurrentVersions != nil && (*p.NewerNoncurrentVersions < 0 || *p.NewerNoncurrentVersions > 100) {
-		return nil, lifecycleFieldError(ruleIndex, "noncurrentVersionExpiration.newerNoncurrentVersions", "newerNoncurrentVersions must be between 0 and 100", nil)
+	if p.NewerNoncurrentVersions != nil && (*p.NewerNoncurrentVersions < 1 || *p.NewerNoncurrentVersions > 100) {
+		return nil, lifecycleFieldError(ruleIndex, "noncurrentVersionExpiration.newerNoncurrentVersions", "newerNoncurrentVersions must be between 1 and 100", nil)
 	}
 	return &s3types.NoncurrentVersionExpiration{
 		NoncurrentDays:          p.NoncurrentDays,
@@ -718,8 +724,8 @@ func (p *awsNoncurrentVersionTransitionPayload) toS3(ruleIndex int, transitionIn
 	if p.NoncurrentDays != nil && *p.NoncurrentDays <= 0 {
 		return s3types.NoncurrentVersionTransition{}, lifecycleFieldError(ruleIndex, "noncurrentVersionTransitions["+itoa(transitionIndex)+"].noncurrentDays", "noncurrentDays must be greater than zero", nil)
 	}
-	if p.NewerNoncurrentVersions != nil && (*p.NewerNoncurrentVersions < 0 || *p.NewerNoncurrentVersions > 100) {
-		return s3types.NoncurrentVersionTransition{}, lifecycleFieldError(ruleIndex, "noncurrentVersionTransitions["+itoa(transitionIndex)+"].newerNoncurrentVersions", "newerNoncurrentVersions must be between 0 and 100", nil)
+	if p.NewerNoncurrentVersions != nil && (*p.NewerNoncurrentVersions < 1 || *p.NewerNoncurrentVersions > 100) {
+		return s3types.NoncurrentVersionTransition{}, lifecycleFieldError(ruleIndex, "noncurrentVersionTransitions["+itoa(transitionIndex)+"].newerNoncurrentVersions", "newerNoncurrentVersions must be between 1 and 100", nil)
 	}
 	return s3types.NoncurrentVersionTransition{
 		NoncurrentDays:          p.NoncurrentDays,

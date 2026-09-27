@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -46,8 +48,15 @@ func (a *awsAdapter) PutEncryption(ctx context.Context, profile models.ProfileSe
 			Rules: []s3types.ServerSideEncryptionRule{rule},
 		},
 	})
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	out, readErr := client.GetBucketEncryption(readCtx, &s3.GetBucketEncryptionInput{Bucket: &bucket})
 	if putErr != nil {
 		return mapAWSEncryptionError(putErr, bucket, "put")
+	}
+	observed, decodeErr := firstS3EncryptionRule(out)
+	if readErr != nil || decodeErr != nil || !sameAWSEncryptionRule(rule, *observed) {
+		return &OperationError{Status: http.StatusBadGateway, Code: "bucket_encryption_unconfirmed", Message: "Encryption update was accepted but current state did not confirm the request; reload before retrying", Details: map[string]any{"bucket": bucket}}
 	}
 	return nil
 }
@@ -171,4 +180,14 @@ func mapAWSEncryptionError(err error, bucket string, op string) error {
 		return AccessDeniedError(bucket, op)
 	}
 	return UpstreamOperationError("bucket_encryption_error", "failed to "+op+" bucket encryption", bucket, err)
+}
+
+// Compare stored configuration only; this does not verify KMS permissions or object encryption.
+func sameAWSEncryptionRule(want, got s3types.ServerSideEncryptionRule) bool {
+	// An omitted Bucket Key flag and explicit false both disable Bucket Keys.
+	wantBucketKey := want.BucketKeyEnabled != nil && *want.BucketKeyEnabled
+	gotBucketKey := got.BucketKeyEnabled != nil && *got.BucketKeyEnabled
+	return wantBucketKey == gotBucketKey &&
+		reflect.DeepEqual(want.ApplyServerSideEncryptionByDefault, got.ApplyServerSideEncryptionByDefault) &&
+		reflect.DeepEqual(want.BlockedEncryptionTypes, got.BlockedEncryptionTypes)
 }

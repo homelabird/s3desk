@@ -61,6 +61,10 @@ func TestLifecycleHTTPRejectsInvalidRulesBeforeProvider(t *testing.T) {
 	t.Parallel()
 	for _, rules := range []string{
 		`null`,
+		`[{"status":"enabled"}]`,
+		`[{"status":"disabled","transitions":[]}]`,
+		`[{"status":"enabled","noncurrentVersionExpiration":{"noncurrentDays":1,"newerNoncurrentVersions":0}}]`,
+		`[{"status":"enabled","noncurrentVersionTransitions":[{"noncurrentDays":1,"newerNoncurrentVersions":0,"storageClass":"GLACIER"}]}]`,
 		`[{"status":"enabled","expiration":{"days":1,"unknown":true}}]`,
 		`[{"status":"enabled","expiration":{"days":1,"date":"2030-01-01T00:00:00Z"}}]`,
 		`[{"status":"enabled","filter":{"and":{"objectSizeGreaterThan":10,"objectSizeLessThan":1}},"expiration":{"days":30}}]`,

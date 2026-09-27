@@ -819,6 +819,10 @@ paths:
       summary: Put bucket access policy
       description: |
         Applies provider-specific bucket access policy JSON.
+        Success requires a subsequent configuration readback match. A failed read or
+        mismatch returns `502 bucket_policy_unconfirmed`; the change may already
+        be applied. Reload and compare before retrying. This does not verify effective
+        access permissions or prevent concurrent changes.
 
         - S3 providers: PutBucketPolicy.
         - GCS: Set bucket IAM policy.
@@ -853,6 +857,10 @@ paths:
       summary: Delete or reset bucket access policy
       description: |
         Removes or resets provider-specific access policy state.
+        Success requires a subsequent configuration readback match. A failed read or
+        mismatch returns `502 bucket_policy_unconfirmed`; the change may already
+        be applied. Reload and compare before retrying. This does not verify effective
+        access permissions or prevent concurrent changes.
 
         - S3 providers: deletes bucket policy.
         - Azure: resets container ACL/public access to private + clears stored access policies.
@@ -3147,7 +3155,9 @@ components:
       properties:
         enabled: { type: boolean }
         mode: { type: string }
-        days: { type: integer }
+        days:
+          type: integer
+          description: Whole days. Enabled GCS retention accepts 1 through 36525 days (3155760000 seconds). OCI uses positive whole days for time-bound rules.
         retainUntil: { type: string }
         locked: { type: boolean }
         rules:
@@ -3158,6 +3168,14 @@ components:
     BucketRetentionRuleView:
       type: object
       properties:
+        years:
+          type: integer
+          minimum: 1
+          description: OCI duration in original YEARS units. Choose exactly one of days, years, or indefinite=true when submitting a rule.
+        indefinite:
+          type: boolean
+          description: OCI rule has no expiration. Mutually exclusive with days and years. Pending or active locks must not be converted to indefinite.
+
         id: { type: string }
         displayName: { type: string }
         days: { type: integer }
@@ -3179,7 +3197,9 @@ components:
       required: [enabled]
       properties:
         enabled: { type: boolean }
-        days: { type: integer }
+        days:
+          type: integer
+          description: Enabled Azure soft delete accepts 1 through 365 days.
 
     BucketImmutabilityView:
       type: object
@@ -3188,8 +3208,12 @@ components:
         enabled: { type: boolean }
         mode: { type: string }
         until: { type: string }
-        days: { type: integer }
-        etag: { type: string }
+        days:
+          type: integer
+          description: Enabled Azure time-based immutability accepts 1 through 146000 days.
+        etag:
+          type: string
+          description: Loaded Azure policy revision. Required when editing an existing immutability policy; stale or removed revisions are rejected. Omit only when creating a policy that does not exist.
         editable: { type: boolean }
         legalHold: { type: boolean, readOnly: true }
         legalHoldTags:
@@ -3228,7 +3252,9 @@ components:
       type: object
       additionalProperties: false
       properties:
-        uniformAccess: { type: boolean }
+        uniformAccess:
+          type: boolean
+          description: GCS uniform access. Disabling an enabled setting requires a readable future lock deadline and an IAM policy without conditions. Organization policy and managed-folder constraints remain provider-enforced.
         retention:
           $ref: "#/components/schemas/BucketRetentionView"
         objectLock:
@@ -3345,6 +3371,7 @@ components:
           items: { type: string }
 
     BucketLifecyclePutRequest:
+      description: AWS lifecycle rules require at least one action per rule. When supplied, newerNoncurrentVersions must be between 1 and 100. An empty rules array removes the lifecycle configuration.
       type: object
       additionalProperties: false
       required: [rules]
@@ -3362,7 +3389,9 @@ components:
         name: { type: string }
         accessType: { type: string }
         bucketListingAction: { type: string }
-        objectName: { type: string }
+        objectName:
+          type: string
+          description: Exact OCI object name or prefix. Whitespace is significant; only an omitted or empty value selects bucket-wide scope for an AnyObject access type.
         timeCreated: { type: string }
         timeExpires: { type: string }
         accessUri: { type: string }
@@ -3388,6 +3417,7 @@ components:
           items: { type: string }
 
     BucketSharingPutRequest:
+      description: OCI existing PAR IDs retain their immutable attributes. New PARs support AnyObjectRead, AnyObjectWrite and AnyObjectReadWrite; ListObjects requires a read-capable access type.
       type: object
       additionalProperties: false
       properties:

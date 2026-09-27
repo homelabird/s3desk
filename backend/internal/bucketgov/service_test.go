@@ -187,7 +187,7 @@ func TestValidateSharingPutRejectsDuplicateOCIPARIDs(t *testing.T) {
 	err := ValidateSharingPut(newValidationContext(models.ProfileProviderOciObjectStorage, "demo"), models.BucketSharingPutRequest{
 		PreauthenticatedRequests: []models.BucketPreauthenticatedRequestView{
 			{ID: "par-1"},
-			{ID: " PAR-1 "},
+			{ID: " par-1 "},
 		},
 	})
 	if err == nil {

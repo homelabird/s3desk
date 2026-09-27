@@ -21,7 +21,7 @@ func TestPolicyAuditFieldsExcludeSecretsAndDoNotClaimApplied(t *testing.T) {
 	req = withBucketParam(withProfileSecrets(req, models.ProfileSecrets{ID: "authorized-profile", Provider: models.ProfileProviderAwsS3, SecretAccessKey: "provider-secret"}), "demo")
 	for status, expected := range map[int]string{0: "started", 200: "accepted_unverified", 400: "unconfirmed", 502: "unconfirmed"} {
 		fields := srv.policyAuditFields(req, status)
-		if fields["validation_rules_version"] != "2026-09-27.10" || fields["app_version"] == "" {
+		if fields["validation_rules_version"] != "2026-09-27.21" || fields["app_version"] == "" {
 			t.Fatal("missing validation/build provenance")
 		}
 		if fields["outcome"] != expected || fields["profile_id"] != "authorized-profile" || fields["bucket"] != "demo" {

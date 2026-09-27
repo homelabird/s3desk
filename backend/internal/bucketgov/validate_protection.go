@@ -1,7 +1,6 @@
 package bucketgov
 
 import (
-	"strconv"
 	"strings"
 
 	"s3desk/internal/models"
@@ -40,11 +39,9 @@ func ValidateProtectionPut(ctx ValidationContext, req models.BucketProtectionPut
 						"section": "protection",
 					})
 				}
-				for index, rule := range req.Retention.Rules {
-					if rule.Days == nil || *rule.Days <= 0 {
-						return InvalidFieldError("retention.rules["+strconv.Itoa(index)+"].days", "retention rule days must be greater than zero when retention is enabled", map[string]any{
-							"section": "protection",
-						})
+				for _, rule := range req.Retention.Rules {
+					if _, err := ociDesiredRetentionDuration(rule); err != nil {
+						return err
 					}
 				}
 			} else if req.Retention.Days == nil || *req.Retention.Days <= 0 {
@@ -58,12 +55,18 @@ func ValidateProtectionPut(ctx ValidationContext, req models.BucketProtectionPut
 			})
 		}
 	}
+	if ctx.Provider == models.ProfileProviderGcpGcs && req.Retention != nil && req.Retention.Enabled && req.Retention.Days != nil && *req.Retention.Days > 36525 {
+		return InvalidFieldError("retention.days", "GCS retention must not exceed 36525 days (3155760000 seconds)", map[string]any{"section": "protection"})
+	}
 	if req.SoftDelete != nil && req.SoftDelete.Enabled {
 		if req.SoftDelete.Days == nil || *req.SoftDelete.Days <= 0 {
 			return InvalidFieldError("softDelete.days", "softDelete.days must be greater than zero when soft delete is enabled", map[string]any{
 				"section": "protection",
 			})
 		}
+	}
+	if ctx.Provider == models.ProfileProviderAzureBlob && req.SoftDelete != nil && req.SoftDelete.Enabled && req.SoftDelete.Days != nil && *req.SoftDelete.Days > 365 {
+		return InvalidFieldError("softDelete.days", "Azure soft delete must not exceed 365 days", map[string]any{"section": "protection"})
 	}
 	if ctx.Provider == models.ProfileProviderAzureBlob && req.Immutability != nil {
 		mode := strings.ToLower(strings.TrimSpace(req.Immutability.Mode))
@@ -74,6 +77,9 @@ func ValidateProtectionPut(ctx ValidationContext, req models.BucketProtectionPut
 			return InvalidFieldError("immutability.days", "immutability.days must be greater than zero when Azure immutability is enabled", map[string]any{
 				"section": "protection",
 			})
+		}
+		if req.Immutability.Enabled && req.Immutability.Days != nil && *req.Immutability.Days > 146000 {
+			return InvalidFieldError("immutability.days", "Azure immutability must not exceed 146000 days", map[string]any{"section": "protection"})
 		}
 		if req.Immutability.AllowProtectedAppendWrites && req.Immutability.AllowProtectedAppendWritesAll {
 			return InvalidFieldError("immutability.allowProtectedAppendWritesAll", "allowProtectedAppendWrites and allowProtectedAppendWritesAll are mutually exclusive", map[string]any{

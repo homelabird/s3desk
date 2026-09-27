@@ -171,3 +171,38 @@ func writeTestExecutableWithScript(t *testing.T, dir, name string, script string
 	}
 	return path
 }
+
+func TestCreatePARPreservesExactObjectTarget(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(t.TempDir(), "args")
+	writeTestExecutableWithScript(t, dir, "oci", `#!/bin/sh
+printf '%s\000' "$@" > "$OCI_TEST_ARGS"
+printf '{}'
+`)
+	t.Setenv("PATH", dir)
+	t.Setenv("OCI_CLI_PATH", "")
+	t.Setenv("OCI_TEST_ARGS", argsPath)
+	for _, target := range []string{"", " ", " 보고서/ ", "docs/+%2F\t"} {
+		_, err := CreatePreauthenticatedRequest(context.Background(), models.ProfileSecrets{OciNamespace: "namespace"}, "bucket", "name", "AnyObjectRead", "2030-01-01T00:00:00Z", target, "Deny")
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := os.ReadFile(argsPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		args := strings.Split(string(raw), "\x00")
+		found := false
+		for i, arg := range args {
+			if arg == "--object-name" {
+				found = true
+				if i+1 >= len(args) || args[i+1] != target {
+					t.Fatalf("target=%q args=%q", target, args)
+				}
+			}
+		}
+		if found != (target != "") {
+			t.Fatalf("target=%q present=%v", target, found)
+		}
+	}
+}

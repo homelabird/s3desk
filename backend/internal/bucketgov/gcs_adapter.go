@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"s3desk/internal/gcsbucket"
 	"s3desk/internal/gcsiam"
@@ -38,6 +41,7 @@ type gcsIAMBinding struct {
 }
 
 type gcsBucketMetadata struct {
+	fields     map[string]any `json:"-"`
 	Versioning struct {
 		Enabled bool `json:"enabled"`
 	} `json:"versioning,omitempty"`
@@ -48,6 +52,9 @@ type gcsBucketMetadata struct {
 		} `json:"uniformBucketLevelAccess,omitempty"`
 		PublicAccessPrevention string `json:"publicAccessPrevention,omitempty"`
 	} `json:"iamConfiguration,omitempty"`
+	HierarchicalNamespace struct {
+		Enabled bool `json:"enabled"`
+	} `json:"hierarchicalNamespace,omitempty"`
 	RetentionPolicy *gcsRetentionPolicy `json:"retentionPolicy,omitempty"`
 }
 
@@ -288,6 +295,37 @@ func (a *gcsAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 		return err
 	}
 
+	if req.UniformAccess != nil && !*req.UniformAccess {
+		if current.HierarchicalNamespace.Enabled {
+			return InvalidFieldError("uniformAccess", "hierarchical namespace requires uniform bucket-level access", nil)
+		}
+		uniform := current.IAMConfiguration.UniformBucketLevelAccess
+		if !gcsMetadataMatchesPatch(current, map[string]any{"iamConfiguration": map[string]any{"uniformBucketLevelAccess": map[string]any{"enabled": uniform.Enabled}}}) {
+			return UpstreamOperationError("bucket_protection_error", "cannot confirm current uniform access setting", bucket, fmt.Errorf("uniform access enabled field is missing"))
+		}
+		if uniform.Enabled {
+			lockedTime, err := time.Parse(time.RFC3339, uniform.LockedTime)
+			if err != nil {
+				return UpstreamOperationError("bucket_protection_error", "cannot confirm uniform access lock deadline", bucket, fmt.Errorf("missing or invalid lockedTime"))
+			}
+			if !time.Now().Before(lockedTime) {
+				return InvalidFieldError("uniformAccess", "uniform bucket-level access is permanently locked and cannot be disabled", nil)
+			}
+			policy, err := a.getIAMPolicy(ctx, profile, bucket, "check IAM conditions before disabling uniform access", "bucket_protection_error")
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(policy.ETag) == "" {
+				return UpstreamOperationError("bucket_protection_error", "cannot confirm current IAM policy", bucket, fmt.Errorf("IAM policy etag is missing"))
+			}
+			for _, binding := range policy.Bindings {
+				if len(trimJSON(binding.Condition)) > 0 {
+					return InvalidFieldError("uniformAccess", "remove bucket IAM conditions before disabling uniform bucket-level access", nil)
+				}
+			}
+		}
+	}
+
 	patch := map[string]any{}
 	if req.UniformAccess != nil {
 		patch["iamConfiguration"] = map[string]any{
@@ -321,7 +359,7 @@ func (a *gcsAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 				})
 			}
 			patch["retentionPolicy"] = map[string]any{
-				"retentionPeriod": strconv.Itoa(days * 24 * 60 * 60),
+				"retentionPeriod": strconv.FormatInt(int64(days)*86400, 10),
 			}
 		}
 	}
@@ -397,6 +435,9 @@ func (a *gcsAdapter) getBucketMetadata(ctx context.Context, profile models.Profi
 		if metadata == nil {
 			return gcsBucketMetadata{}, UpstreamOperationError(code, "failed to decode GCS bucket metadata", bucket, fmt.Errorf("expected a bucket metadata object, received null"))
 		}
+		if err := json.Unmarshal(resp.Body, &metadata.fields); err != nil {
+			return gcsBucketMetadata{}, UpstreamOperationError(code, "failed to decode GCS bucket metadata", bucket, err)
+		}
 		return *metadata, nil
 	case http.StatusNotFound:
 		return gcsBucketMetadata{}, BucketNotFoundError(bucket)
@@ -414,11 +455,17 @@ func (a *gcsAdapter) patchBucketMetadata(ctx context.Context, profile models.Pro
 		return UpstreamOperationError(code, "failed to encode GCS bucket metadata patch", bucket, err)
 	}
 	resp, err := a.patchBucket(ctx, profile, strings.TrimSpace(bucket), body)
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, readErr := a.getBucketMetadata(readCtx, profile, bucket, "confirm GCS bucket metadata", code)
 	if err != nil {
 		return UpstreamOperationError(code, "failed to "+operation, bucket, err)
 	}
 	switch resp.Status {
 	case http.StatusOK:
+		if readErr != nil || !gcsMetadataMatchesPatch(observed, patch) {
+			return &OperationError{Status: http.StatusBadGateway, Code: strings.TrimSuffix(code, "_error") + "_unconfirmed", Message: "GCS metadata update was accepted but current state did not confirm the request; reload before retrying", Details: map[string]any{"bucket": bucket}}
+		}
 		return nil
 	case http.StatusNotFound:
 		return BucketNotFoundError(bucket)
@@ -477,11 +524,17 @@ func (a *gcsAdapter) putIAMPolicy(ctx context.Context, profile models.ProfileSec
 		return UpstreamOperationError(code, "failed to encode GCS IAM policy", bucket, err)
 	}
 	resp, err := a.putPolicy(ctx, profile, strings.TrimSpace(bucket), body)
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	observed, readErr := a.getIAMPolicy(readCtx, profile, bucket, "confirm GCS IAM policy", code)
 	if err != nil {
 		return UpstreamOperationError(code, "failed to "+operation, bucket, err)
 	}
 	switch resp.Status {
 	case http.StatusOK:
+		if readErr != nil || strings.TrimSpace(observed.ETag) == "" || !gcsIAMBindingsMatch(policy.Bindings, observed.Bindings) {
+			return &OperationError{Status: http.StatusBadGateway, Code: strings.TrimSuffix(code, "_error") + "_unconfirmed", Message: "GCS IAM update was accepted but current policy did not confirm the request; reload before retrying", Details: map[string]any{"bucket": bucket}}
+		}
 		return nil
 	case http.StatusConflict, http.StatusPreconditionFailed:
 		return &OperationError{
@@ -639,4 +692,53 @@ func trimJSON(value json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return value
+}
+
+// Compare only the fields sent by our metadata writers, retaining exact retention seconds.
+func gcsMetadataMatchesPatch(observed gcsBucketMetadata, patch map[string]any) bool {
+	return gcsPatchFieldsMatch(observed.fields, patch)
+}
+
+func gcsPatchFieldsMatch(observed, patch map[string]any) bool {
+	for key, want := range patch {
+		got := observed[key]
+		if child, ok := want.(map[string]any); ok {
+			actual, ok := got.(map[string]any)
+			if !ok || !gcsPatchFieldsMatch(actual, child) {
+				return false
+			}
+		} else if !reflect.DeepEqual(got, want) {
+			return false
+		}
+	}
+	return true
+}
+
+// IAM revisions may change after writes; binding/member order does not change grants.
+// Conditional policies are validated as version 3 by getIAMPolicy before comparison.
+func gcsIAMBindingsMatch(want, got []gcsIAMBinding) bool {
+	canonical := func(bindings []gcsIAMBinding) ([]string, bool) {
+		result := make([]string, 0, len(bindings))
+		for _, binding := range bindings {
+			binding.Members = slices.Clone(binding.Members)
+			slices.Sort(binding.Members)
+			if len(binding.Condition) > 0 {
+				var condition map[string]any
+				if json.Unmarshal(binding.Condition, &condition) != nil || condition == nil {
+					return nil, false
+				}
+				binding.Condition, _ = json.Marshal(condition)
+			}
+			encoded, err := json.Marshal(binding)
+			if err != nil {
+				return nil, false
+			}
+			result = append(result, string(encoded))
+		}
+		slices.Sort(result)
+		return result, true
+	}
+	left, leftOK := canonical(want)
+	right, rightOK := canonical(got)
+	return leftOK && rightOK && slices.Equal(left, right)
 }

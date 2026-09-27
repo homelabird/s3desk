@@ -265,6 +265,10 @@ func TestRawGCSPolicyHTTPPreservesETagAndDoesNotRetryConflict(t *testing.T) {
 	calls := 0
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
 		if r.Method != http.MethodPut || r.URL.Path != "/storage/v1/b/demo/iam" {
 			t.Errorf("unexpected provider request: %s %s", r.Method, r.URL.Path)
 		}
@@ -289,7 +293,7 @@ func TestRawGCSPolicyHTTPPreservesETagAndDoesNotRetryConflict(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if rec.Code != http.StatusConflict || response.Error.Code != "bucket_policy_conflict" || calls != 1 {
+	if rec.Code != http.StatusConflict || response.Error.Code != "bucket_policy_conflict" || calls != 3 {
 		t.Fatalf("status=%d code=%s provider calls=%d", rec.Code, response.Error.Code, calls)
 	}
 }

@@ -254,3 +254,20 @@ func TestPutContainerPolicyRejectsInvalidTimesBeforeClientSetup(t *testing.T) {
 		}
 	}
 }
+
+func TestSoftDeleteReadRequiresExplicitEnabled(t *testing.T) {
+	for _, state := range []string{"", "<Enabled>false</Enabled>", "<Enabled>true</Enabled>"} {
+		t.Run(state, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte("<StorageServiceProperties><DeleteRetentionPolicy>" + state + "</DeleteRetentionPolicy></StorageServiceProperties>"))
+			}))
+			defer srv.Close()
+			profile := loopbackAzureProfile()
+			profile.AzureEndpoint = srv.URL
+			_, err := GetBlobServiceProperties(t.Context(), profile)
+			if (err != nil) != (state == "") {
+				t.Fatalf("state=%q err=%v", state, err)
+			}
+		})
+	}
+}

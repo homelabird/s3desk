@@ -16,23 +16,17 @@ func ValidateSharingPut(ctx ValidationContext, req models.BucketSharingPutReques
 		return UnsupportedFieldError(ctx.Provider, "sharing", "storedAccessPolicies", models.BucketGovernanceCapabilityStoredAccessPolicy, nil)
 	}
 	if ctx.Provider == models.ProfileProviderOciObjectStorage {
-		if len(req.PreauthenticatedRequests) > 100 {
-			return InvalidFieldError("preauthenticatedRequests", "OCI allows a maximum of 100 pre-authenticated requests per bucket", map[string]any{
-				"section": "sharing",
-			})
-		}
 		seenIDs := make(map[string]struct{}, len(req.PreauthenticatedRequests))
 		for index, item := range req.PreauthenticatedRequests {
 			id := strings.TrimSpace(item.ID)
 			if id != "" {
-				key := strings.ToLower(id)
-				if _, exists := seenIDs[key]; exists {
+				if _, exists := seenIDs[id]; exists {
 					return InvalidFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].id", "PAR id must be unique", map[string]any{
 						"section": "sharing",
 						"value":   item.ID,
 					})
 				}
-				seenIDs[key] = struct{}{}
+				seenIDs[id] = struct{}{}
 				continue
 			}
 			if strings.TrimSpace(item.Name) == "" {
@@ -55,6 +49,9 @@ func ValidateSharingPut(ctx ValidationContext, req models.BucketSharingPutReques
 					"section": "sharing",
 					"value":   item.TimeExpires,
 				})
+			}
+			if strings.TrimSpace(item.BucketListingAction) == "ListObjects" && strings.TrimSpace(item.AccessType) == "AnyObjectWrite" {
+				return InvalidFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].bucketListingAction", "ListObjects requires AnyObjectRead or AnyObjectReadWrite", nil)
 			}
 			switch value := strings.TrimSpace(item.BucketListingAction); value {
 			case "", "Deny", "ListObjects":

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,8 +19,8 @@ type ociAdapter struct {
 	getBucket                     func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
 	updateBucket                  func(context.Context, models.ProfileSecrets, string, string, string) (ocicli.Response, error)
 	listRetentionRules            func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
-	createRetentionRule           func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error)
-	updateRetentionRule           func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error)
+	createRetentionRule           func(context.Context, models.ProfileSecrets, string, int, string, string) (ocicli.Response, error)
+	updateRetentionRule           func(context.Context, models.ProfileSecrets, string, string, int, string, string) (ocicli.Response, error)
 	deleteRetentionRule           func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error)
 	listPreauthenticatedRequests  func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
 	createPreauthenticatedRequest func(context.Context, models.ProfileSecrets, string, string, string, string, string, string) (ocicli.Response, error)
@@ -46,14 +47,16 @@ type ociRetentionRulesResponse struct {
 }
 
 type ociRetentionRule struct {
-	ID             string `json:"id"`
-	DisplayName    string `json:"display-name"`
-	TimeRuleLocked bool   `json:"time-rule-locked"`
-	TimeModified   string `json:"time-modified"`
-	Duration       struct {
-		TimeAmount int    `json:"time-amount"`
-		TimeUnit   string `json:"time-unit"`
-	} `json:"duration"`
+	ID             string                `json:"id"`
+	DisplayName    string                `json:"display-name"`
+	TimeRuleLocked *time.Time            `json:"time-rule-locked"`
+	TimeModified   string                `json:"time-modified"`
+	Duration       *ociRetentionDuration `json:"duration"`
+}
+
+type ociRetentionDuration struct {
+	TimeAmount int    `json:"time-amount"`
+	TimeUnit   string `json:"time-unit"`
 }
 
 type ociPreauthenticatedRequestsResponse struct {
@@ -86,11 +89,11 @@ func NewOCIAdapterWithOptions(opts OCIAdapterOptions) Adapter {
 		listRetentionRules: func(ctx context.Context, profile models.ProfileSecrets, bucket string) (ocicli.Response, error) {
 			return ocicli.ListRetentionRulesWithOptions(ctx, profile, bucket, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
 		},
-		createRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, displayName string) (ocicli.Response, error) {
-			return ocicli.CreateRetentionRuleWithOptions(ctx, profile, bucket, days, displayName, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		createRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, unit, displayName string) (ocicli.Response, error) {
+			return ocicli.CreateRetentionRuleWithOptions(ctx, profile, bucket, days, unit, displayName, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
 		},
-		updateRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, displayName string) (ocicli.Response, error) {
-			return ocicli.UpdateRetentionRuleWithOptions(ctx, profile, bucket, ruleID, days, displayName, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		updateRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, unit, displayName string) (ocicli.Response, error) {
+			return ocicli.UpdateRetentionRuleWithOptions(ctx, profile, bucket, ruleID, days, unit, displayName, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
 		},
 		deleteRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string) (ocicli.Response, error) {
 			return ocicli.DeleteRetentionRuleWithOptions(ctx, profile, bucket, ruleID, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
@@ -230,7 +233,7 @@ func (a *ociAdapter) GetProtection(ctx context.Context, profile models.ProfileSe
 	return view, nil
 }
 
-func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketProtectionPutRequest) error {
+func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketProtectionPutRequest) (result error) {
 	if req.Retention == nil {
 		return UnsupportedOperationError{Provider: models.ProfileProviderOciObjectStorage, Section: "protection"}
 	}
@@ -270,21 +273,16 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 	}
 
 	createdRules := make([]ociRetentionRule, 0, len(desiredRules))
-	for index, desired := range desiredRules {
-		if strings.TrimSpace(desired.ID) != "" {
-			continue
-		}
-		if desired.Days == nil || *desired.Days <= 0 {
-			return InvalidFieldError("retention.rules["+fmt.Sprintf("%d", index)+"].days", "retention rule days must be greater than zero", map[string]any{
-				"section": "protection",
-			})
+	for _, desired := range desiredRules {
+		if _, err := ociDesiredRetentionDuration(desired); err != nil {
+			return err
 		}
 	}
 
 	for _, current := range rules {
 		desired, exists := desiredByID[current.ID]
 		if !exists {
-			if current.TimeRuleLocked {
+			if ociRetentionRuleLocked(current) {
 				return InvalidFieldError("retention.rules", "locked OCI retention rules cannot be removed", map[string]any{
 					"section": "protection",
 					"id":      current.ID,
@@ -292,36 +290,55 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 			}
 			continue
 		}
-		if desired.Days == nil || *desired.Days <= 0 {
-			return InvalidFieldError("retention.rules", "retention rule days must be greater than zero", map[string]any{
-				"section": "protection",
-				"id":      current.ID,
-			})
-		}
-		currentDays := ociRetentionRuleDays(current)
-		desiredDays := *desired.Days
+		desiredDuration, _ := ociDesiredRetentionDuration(desired)
 		currentName := strings.TrimSpace(current.DisplayName)
 		desiredName := strings.TrimSpace(desired.DisplayName)
 		if desiredName == "" {
 			desiredName = currentName
 		}
-		if current.TimeRuleLocked {
+		if desiredDuration == nil && current.TimeRuleLocked != nil {
+			return InvalidFieldError("retention.rules", "an OCI rule with a pending or active lock cannot become indefinite", nil)
+		}
+		if ociRetentionRuleLocked(current) {
 			if desiredName != currentName {
 				return InvalidFieldError("retention.rules", "locked OCI retention rule names cannot be changed", map[string]any{
 					"section": "protection",
 					"id":      current.ID,
 				})
 			}
-			if desiredDays < currentDays {
+			if desiredDuration == nil || current.Duration == nil || desiredDuration.TimeUnit != current.Duration.TimeUnit || desiredDuration.TimeAmount < current.Duration.TimeAmount {
 				return InvalidFieldError("retention.rules", "locked OCI retention rules can only be extended", map[string]any{
-					"section":     "protection",
-					"id":          current.ID,
-					"currentDays": currentDays,
+					"section": "protection",
+					"id":      current.ID,
+					"reason":  "locked duration must retain its unit and cannot decrease",
 				})
 			}
 		}
 	}
 
+	if len(desiredRules) > 0 {
+		versioning, err := a.GetVersioning(ctx, profile, bucket)
+		if err != nil {
+			return err
+		}
+		if versioning.Status == models.BucketVersioningStatusEnabled {
+			return InvalidFieldError("retention", "OCI retention cannot be applied while bucket versioning is enabled; suspend versioning first", map[string]any{"section": "protection"})
+		}
+	}
+
+	// Copy before assigning provider IDs; the caller's draft must remain unchanged.
+	desiredRules = append([]models.BucketRetentionRuleView(nil), desiredRules...)
+	defer func() {
+		readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		observed, readErr := a.getOCIRetentionRules(readCtx, profile, bucket, "confirm OCI retention rules", "bucket_protection_error")
+		if result != nil {
+			return
+		}
+		if readErr != nil || !ociRetentionRulesMatch(desiredRules, currentByID, observed) {
+			result = UpstreamOperationError("bucket_protection_unconfirmed", "OCI retention update did not confirm the requested rules; reload before retrying", bucket, errors.New("retention readback failed or differed"))
+		}
+	}()
 	for index, desired := range desiredRules {
 		if strings.TrimSpace(desired.ID) != "" {
 			continue
@@ -330,10 +347,13 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 		if displayName == "" {
 			displayName = defaultOCIRetentionRuleName(index + 1)
 		}
-		createdRule, err := a.createOCIRetentionRule(ctx, profile, bucket, *desired.Days, displayName, "create OCI retention rule", "bucket_protection_error")
+		duration, _ := ociDesiredRetentionDuration(desired)
+		createdRule, err := a.createOCIRetentionRule(ctx, profile, bucket, duration, displayName, "create OCI retention rule", "bucket_protection_error")
 		if err != nil {
 			return a.rollbackCreatedOCIRetentionRules(ctx, profile, bucket, createdRules, err)
 		}
+		desiredRules[index].ID = strings.TrimSpace(createdRule.ID)
+		desiredRules[index].DisplayName = displayName
 		createdRules = append(createdRules, createdRule)
 	}
 
@@ -342,26 +362,25 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 		if !exists {
 			continue
 		}
-		currentDays := ociRetentionRuleDays(current)
-		desiredDays := *desired.Days
+		desiredDuration, _ := ociDesiredRetentionDuration(desired)
 		currentName := strings.TrimSpace(current.DisplayName)
 		desiredName := strings.TrimSpace(desired.DisplayName)
 		if desiredName == "" {
 			desiredName = currentName
 		}
-		if current.TimeRuleLocked {
-			if desiredDays == currentDays {
+		if ociRetentionRuleLocked(current) {
+			if reflect.DeepEqual(desiredDuration, current.Duration) {
 				continue
 			}
-			if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDays, currentName, "extend OCI retention rule", "bucket_protection_error"); err != nil {
+			if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDuration, currentName, "extend OCI retention rule", "bucket_protection_error"); err != nil {
 				return a.rollbackCreatedOCIRetentionRules(ctx, profile, bucket, createdRules, err)
 			}
 			continue
 		}
-		if desiredDays == currentDays && desiredName == currentName {
+		if reflect.DeepEqual(desiredDuration, current.Duration) && desiredName == currentName {
 			continue
 		}
-		if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDays, desiredName, "update OCI retention rule", "bucket_protection_error"); err != nil {
+		if _, err := a.updateOCIRetentionRule(ctx, profile, bucket, current.ID, desiredDuration, desiredName, "update OCI retention rule", "bucket_protection_error"); err != nil {
 			return a.rollbackCreatedOCIRetentionRules(ctx, profile, bucket, createdRules, err)
 		}
 	}
@@ -408,6 +427,15 @@ func (a *ociAdapter) PutVersioning(ctx context.Context, profile models.ProfileSe
 		versioning = "Suspended"
 	default:
 		return InvalidEnumFieldError("status", string(req.Status), "enabled", "suspended")
+	}
+	if req.Status == models.BucketVersioningStatusEnabled {
+		rules, err := a.getOCIRetentionRules(ctx, profile, bucket, "check retention before enabling versioning", "bucket_versioning_error")
+		if err != nil {
+			return err
+		}
+		if len(rules) > 0 {
+			return InvalidFieldError("status", "OCI versioning cannot be enabled while retention rules exist", map[string]any{"section": "versioning"})
+		}
 	}
 	_, err := a.updateOCIBucket(ctx, profile, bucket, "", versioning, "put OCI bucket versioning", "bucket_versioning_error")
 	return err
@@ -505,7 +533,7 @@ func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecre
 			name,
 			strings.TrimSpace(item.AccessType),
 			strings.TrimSpace(item.TimeExpires),
-			strings.TrimSpace(item.ObjectName),
+			item.ObjectName,
 			bucketListingAction,
 			"create OCI pre-authenticated request",
 			"bucket_sharing_error",
@@ -513,6 +541,10 @@ func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecre
 		if err != nil {
 			return models.BucketSharingView{}, a.rollbackCreatedOCIPreauthenticatedRequests(ctx, profile, bucket, created, err)
 		}
+		item.ID = strings.TrimSpace(createdItem.ID)
+		item.Name = name
+		item.BucketListingAction = bucketListingAction
+		desiredByID[item.ID] = item
 		created = append(created, toBucketPreauthenticatedRequest(createdItem))
 	}
 
@@ -525,9 +557,21 @@ func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecre
 		}
 	}
 
-	view, err := a.GetSharing(ctx, profile, bucket)
-	if err != nil {
-		return models.BucketSharingView{}, a.rollbackCreatedOCIPreauthenticatedRequests(ctx, profile, bucket, created, err)
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	view, err := a.GetSharing(readCtx, profile, bucket)
+	matches := err == nil && len(view.PreauthenticatedRequests) == len(desiredByID)
+	seen := make(map[string]bool, len(view.PreauthenticatedRequests))
+	for _, actual := range view.PreauthenticatedRequests {
+		want, ok := desiredByID[actual.ID]
+		current := ociPreauthenticatedRequest{ID: actual.ID, Name: actual.Name, AccessType: actual.AccessType, BucketListingAction: actual.BucketListingAction, ObjectName: actual.ObjectName, TimeExpires: actual.TimeExpires}
+		if !ok || actual.ID == "" || seen[actual.ID] || existingPARChanged(current, want) {
+			matches = false
+		}
+		seen[actual.ID] = true
+	}
+	if !matches {
+		return models.BucketSharingView{}, UpstreamOperationError("bucket_sharing_unconfirmed", "OCI sharing update did not confirm the requested links; reload before retrying", bucket, errors.New("sharing readback failed or differed"))
 	}
 	if len(created) > 0 {
 		createdByID := make(map[string]models.BucketPreauthenticatedRequestView, len(created))
@@ -644,6 +688,23 @@ func (a *ociAdapter) getOCIRetentionRules(ctx context.Context, profile models.Pr
 	if err := json.Unmarshal(resp.Body, &payload); err != nil {
 		return nil, UpstreamOperationError(code, "failed to decode OCI retention rules", bucket, err)
 	}
+	if payload.Data == nil {
+		return nil, UpstreamOperationError(code, "incomplete OCI retention rules response", bucket, errors.New("missing data array"))
+	}
+	seen := make(map[string]bool, len(payload.Data))
+	for _, item := range payload.Data {
+		if strings.TrimSpace(item.ID) == "" || seen[item.ID] {
+			return nil, UpstreamOperationError(code, "invalid OCI retention rules response", bucket, errors.New("missing or duplicate item ID"))
+		}
+		if item.Duration == nil && item.TimeRuleLocked != nil {
+			return nil, UpstreamOperationError(code, "invalid OCI retention lock", bucket, errors.New("lock without duration"))
+		}
+		if item.Duration != nil && (item.Duration.TimeAmount <= 0 || (item.Duration.TimeUnit != "DAYS" && item.Duration.TimeUnit != "YEARS")) {
+			return nil, UpstreamOperationError(code, "invalid OCI retention duration", bucket, errors.New("non-positive amount or unknown unit"))
+		}
+		seen[item.ID] = true
+	}
+
 	return payload.Data, nil
 }
 
@@ -659,6 +720,17 @@ func (a *ociAdapter) getOCIPreauthenticatedRequests(ctx context.Context, profile
 	if err := json.Unmarshal(resp.Body, &payload); err != nil {
 		return nil, UpstreamOperationError(code, "failed to decode OCI pre-authenticated requests", bucket, err)
 	}
+	if payload.Data == nil {
+		return nil, UpstreamOperationError(code, "incomplete OCI pre-authenticated requests response", bucket, errors.New("missing data array"))
+	}
+	seen := make(map[string]bool, len(payload.Data))
+	for _, item := range payload.Data {
+		if strings.TrimSpace(item.ID) == "" || seen[item.ID] {
+			return nil, UpstreamOperationError(code, "invalid OCI pre-authenticated requests response", bucket, errors.New("missing or duplicate item ID"))
+		}
+		seen[item.ID] = true
+	}
+
 	return payload.Data, nil
 }
 
@@ -690,8 +762,12 @@ func (a *ociAdapter) deleteOCIPreauthenticatedRequest(ctx context.Context, profi
 	return resp, nil
 }
 
-func (a *ociAdapter) createOCIRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, displayName, operation, code string) (ociRetentionRule, error) {
-	resp, err := a.createRetentionRule(ctx, profile, strings.TrimSpace(bucket), days, strings.TrimSpace(displayName))
+func (a *ociAdapter) createOCIRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, duration *ociRetentionDuration, displayName, operation, code string) (ociRetentionRule, error) {
+	amount, unit := 0, ""
+	if duration != nil {
+		amount, unit = duration.TimeAmount, duration.TimeUnit
+	}
+	resp, err := a.createRetentionRule(ctx, profile, strings.TrimSpace(bucket), amount, unit, strings.TrimSpace(displayName))
 	if err != nil {
 		return ociRetentionRule{}, mapOCIError(err, bucket, code, operation)
 	}
@@ -704,8 +780,12 @@ func (a *ociAdapter) createOCIRetentionRule(ctx context.Context, profile models.
 	return payload.Data, nil
 }
 
-func (a *ociAdapter) updateOCIRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket, ruleID string, days int, displayName, operation, code string) (ociRetentionRule, error) {
-	resp, err := a.updateRetentionRule(ctx, profile, strings.TrimSpace(bucket), strings.TrimSpace(ruleID), days, strings.TrimSpace(displayName))
+func (a *ociAdapter) updateOCIRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket, ruleID string, duration *ociRetentionDuration, displayName, operation, code string) (ociRetentionRule, error) {
+	amount, unit := 0, ""
+	if duration != nil {
+		amount, unit = duration.TimeAmount, duration.TimeUnit
+	}
+	resp, err := a.updateRetentionRule(ctx, profile, strings.TrimSpace(bucket), strings.TrimSpace(ruleID), amount, unit, strings.TrimSpace(displayName))
 	if err != nil {
 		return ociRetentionRule{}, mapOCIError(err, bucket, code, operation)
 	}
@@ -761,29 +841,47 @@ func toOCIPublicAccessType(req models.BucketPublicExposurePutRequest) (string, e
 	}
 }
 
-func ociRetentionRuleDays(rule ociRetentionRule) int {
-	amount := rule.Duration.TimeAmount
-	if amount <= 0 {
-		return 0
+func ociRetentionRuleLocked(rule ociRetentionRule) bool {
+	return rule.TimeRuleLocked != nil && !rule.TimeRuleLocked.After(time.Now())
+}
+
+func ociDesiredRetentionDuration(rule models.BucketRetentionRuleView) (*ociRetentionDuration, error) {
+	count := 0
+	if rule.Days != nil {
+		count++
 	}
-	switch strings.ToUpper(strings.TrimSpace(rule.Duration.TimeUnit)) {
-	case "YEARS":
-		return amount * 365
-	default:
-		return amount
+	if rule.Years != nil {
+		count++
 	}
+	if rule.Indefinite {
+		count++
+	}
+	if count != 1 {
+		return nil, InvalidFieldError("retention.rules", "each OCI rule requires exactly one of days, years or indefinite", nil)
+	}
+	if rule.Indefinite {
+		return nil, nil
+	}
+	amount, unit := rule.Days, "DAYS"
+	if rule.Years != nil {
+		amount, unit = rule.Years, "YEARS"
+	}
+	if *amount <= 0 {
+		return nil, InvalidFieldError("retention.rules", "retention duration must be greater than zero", nil)
+	}
+	return &ociRetentionDuration{TimeAmount: *amount, TimeUnit: unit}, nil
 }
 
 func toBucketRetentionRule(rule ociRetentionRule) models.BucketRetentionRuleView {
-	days := ociRetentionRuleDays(rule)
-	view := models.BucketRetentionRuleView{
-		ID:           strings.TrimSpace(rule.ID),
-		DisplayName:  strings.TrimSpace(rule.DisplayName),
-		Locked:       rule.TimeRuleLocked,
-		TimeModified: strings.TrimSpace(rule.TimeModified),
-	}
-	if days > 0 {
-		view.Days = &days
+	view := models.BucketRetentionRuleView{ID: strings.TrimSpace(rule.ID), DisplayName: strings.TrimSpace(rule.DisplayName), Locked: ociRetentionRuleLocked(rule), TimeModified: strings.TrimSpace(rule.TimeModified)}
+	if rule.Duration == nil {
+		view.Indefinite = true
+	} else if rule.Duration.TimeUnit == "DAYS" {
+		amount := rule.Duration.TimeAmount
+		view.Days = &amount
+	} else if rule.Duration.TimeUnit == "YEARS" {
+		amount := rule.Duration.TimeAmount
+		view.Years = &amount
 	}
 	return view
 }
@@ -794,7 +892,7 @@ func toBucketPreauthenticatedRequest(item ociPreauthenticatedRequest) models.Buc
 		Name:                strings.TrimSpace(item.Name),
 		AccessType:          strings.TrimSpace(item.AccessType),
 		BucketListingAction: strings.TrimSpace(item.BucketListingAction),
-		ObjectName:          strings.TrimSpace(item.ObjectName),
+		ObjectName:          item.ObjectName,
 		TimeCreated:         strings.TrimSpace(item.TimeCreated),
 		TimeExpires:         strings.TrimSpace(item.TimeExpires),
 		AccessURI:           strings.TrimSpace(item.AccessURI),
@@ -802,11 +900,12 @@ func toBucketPreauthenticatedRequest(item ociPreauthenticatedRequest) models.Buc
 }
 
 func existingPARChanged(current ociPreauthenticatedRequest, desired models.BucketPreauthenticatedRequestView) bool {
-	return strings.TrimSpace(current.Name) != strings.TrimSpace(desired.Name) ||
+	currentExpiry, currentErr := time.Parse(time.RFC3339, strings.TrimSpace(current.TimeExpires))
+	desiredExpiry, desiredErr := time.Parse(time.RFC3339, strings.TrimSpace(desired.TimeExpires))
+	return currentErr != nil || desiredErr != nil || !currentExpiry.Equal(desiredExpiry) || strings.TrimSpace(current.Name) != strings.TrimSpace(desired.Name) ||
 		strings.TrimSpace(current.AccessType) != strings.TrimSpace(desired.AccessType) ||
 		strings.TrimSpace(current.BucketListingAction) != normalizePARBucketListingAction(desired.BucketListingAction) ||
-		strings.TrimSpace(current.ObjectName) != strings.TrimSpace(desired.ObjectName) ||
-		strings.TrimSpace(current.TimeExpires) != strings.TrimSpace(desired.TimeExpires)
+		current.ObjectName != desired.ObjectName
 }
 
 func normalizePARBucketListingAction(value string) string {
@@ -868,4 +967,47 @@ func mapOCIError(err error, bucket, code, operation string) error {
 	default:
 		return UpstreamOperationError(code, "failed to "+operation, bucket, err)
 	}
+}
+
+func ociRetentionRulesMatch(desired []models.BucketRetentionRuleView, before map[string]ociRetentionRule, observed []ociRetentionRule) bool {
+	if len(desired) != len(observed) {
+		return false
+	}
+	actual := make(map[string]ociRetentionRule, len(observed))
+	for _, rule := range observed {
+		if rule.ID == "" {
+			return false
+		}
+		if _, duplicate := actual[rule.ID]; duplicate {
+			return false
+		}
+		actual[rule.ID] = rule
+	}
+	for _, want := range desired {
+		got, ok := actual[want.ID]
+		if !ok {
+			return false
+		}
+		delete(actual, want.ID)
+		name := strings.TrimSpace(want.DisplayName)
+		original, existed := before[want.ID]
+		if name == "" && existed {
+			name = strings.TrimSpace(original.DisplayName)
+		}
+		if strings.TrimSpace(got.DisplayName) != name {
+			return false
+		}
+		duration, err := ociDesiredRetentionDuration(want)
+		if err != nil || !reflect.DeepEqual(duration, got.Duration) {
+			return false
+		}
+
+		if (got.TimeRuleLocked == nil) != (original.TimeRuleLocked == nil) {
+			return false
+		}
+		if got.TimeRuleLocked != nil && !got.TimeRuleLocked.Equal(*original.TimeRuleLocked) {
+			return false
+		}
+	}
+	return true
 }

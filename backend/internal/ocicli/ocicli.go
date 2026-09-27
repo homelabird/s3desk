@@ -123,42 +123,64 @@ func ListRetentionRulesWithOptions(ctx context.Context, profile models.ProfileSe
 	)
 }
 
-func CreateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, displayName string) (Response, error) {
-	return CreateRetentionRuleWithOptions(ctx, profile, bucket, days, displayName, ClientOptions{})
+func CreateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, unit, displayName string) (Response, error) {
+	return CreateRetentionRuleWithOptions(ctx, profile, bucket, days, unit, displayName, ClientOptions{})
 }
 
-func CreateRetentionRuleWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, displayName string, opts ClientOptions) (Response, error) {
+func CreateRetentionRuleWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, unit, displayName string, opts ClientOptions) (Response, error) {
 	args := []string{
 		"os", "retention-rule", "create",
 		"-bn", strings.TrimSpace(bucket),
 		"-ns", strings.TrimSpace(profile.OciNamespace),
-		"--time-amount", fmt.Sprintf("%d", days),
-		"--time-unit", "DAYS",
 	}
+	durationArgs, err := retentionDurationArgs(days, unit, false)
+	if err != nil {
+		return Response{}, err
+	}
+	args = append(args, durationArgs...)
 	if value := strings.TrimSpace(displayName); value != "" {
 		args = append(args, "--display-name", value)
 	}
 	return run(ctx, profile, opts, args...)
 }
 
-func UpdateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, displayName string) (Response, error) {
-	return UpdateRetentionRuleWithOptions(ctx, profile, bucket, ruleID, days, displayName, ClientOptions{})
+func UpdateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, unit, displayName string) (Response, error) {
+	return UpdateRetentionRuleWithOptions(ctx, profile, bucket, ruleID, days, unit, displayName, ClientOptions{})
 }
 
-func UpdateRetentionRuleWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, displayName string, opts ClientOptions) (Response, error) {
+func UpdateRetentionRuleWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, unit, displayName string, opts ClientOptions) (Response, error) {
 	args := []string{
 		"os", "retention-rule", "update",
 		"-bn", strings.TrimSpace(bucket),
 		"-ns", strings.TrimSpace(profile.OciNamespace),
 		"--retention-rule-id", strings.TrimSpace(ruleID),
-		"--time-amount", fmt.Sprintf("%d", days),
-		"--time-unit", "DAYS",
 		"--force",
 	}
+	durationArgs, err := retentionDurationArgs(days, unit, true)
+	if err != nil {
+		return Response{}, err
+	}
+	args = append(args, durationArgs...)
 	if value := strings.TrimSpace(displayName); value != "" {
 		args = append(args, "--display-name", value)
 	}
 	return run(ctx, profile, opts, args...)
+}
+
+func retentionDurationArgs(amount int, unit string, update bool) ([]string, error) {
+	if unit == "" {
+		if amount != 0 {
+			return nil, errors.New("indefinite retention cannot include an amount")
+		}
+		if update {
+			return []string{"--time-amount", ""}, nil
+		}
+		return nil, nil
+	}
+	if (unit != "DAYS" && unit != "YEARS") || amount <= 0 {
+		return nil, errors.New("invalid retention duration")
+	}
+	return []string{"--time-amount", fmt.Sprintf("%d", amount), "--time-unit", unit}, nil
 }
 
 func DeleteRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string) (Response, error) {
@@ -199,8 +221,8 @@ func CreatePreauthenticatedRequestWithOptions(ctx context.Context, profile model
 		"--access-type", strings.TrimSpace(accessType),
 		"--time-expires", strings.TrimSpace(timeExpires),
 	}
-	if value := strings.TrimSpace(objectName); value != "" {
-		args = append(args, "--object-name", value)
+	if objectName != "" {
+		args = append(args, "--object-name", objectName)
 	}
 	if value := strings.TrimSpace(bucketListingAction); value != "" {
 		args = append(args, "--bucket-listing-action", value)

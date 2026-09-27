@@ -150,7 +150,12 @@ func (svc bucketPolicyHTTPService) executePut(r *http.Request) (string, error, b
 		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", err
 	}
 
+	before := svc.readRawPolicyBeforeChange(r, secrets.Provider)
 	resp, err := svc.policy.Put(r.Context(), secrets, bucket, putReq.Policy)
+	confirmationErr := svc.confirmRawPolicy(r, secrets.Provider, putReq.Policy, before, resp, err)
+	if confirmationErr != nil {
+		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", confirmationErr
+	}
 	callErr, requestErr := policyCallErrors(err)
 	if requestErr != nil {
 		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", requestErr
@@ -185,7 +190,12 @@ func (svc bucketPolicyHTTPService) executeDelete(r *http.Request) (string, error
 		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", err
 	}
 
+	before := svc.readRawPolicyBeforeChange(r, secrets.Provider)
 	resp, err := svc.policy.Delete(r.Context(), secrets, bucket)
+	confirmationErr := svc.confirmRawPolicy(r, secrets.Provider, nil, before, resp, err)
+	if confirmationErr != nil {
+		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", confirmationErr
+	}
 	callErr, requestErr := policyCallErrors(err)
 	if requestErr != nil {
 		return "", nil, bucketpolicy.Response{}, 0, nil, nil, "", requestErr

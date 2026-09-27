@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"s3desk/internal/bucketgov"
 	"s3desk/internal/models"
 )
 
@@ -84,7 +85,14 @@ func (svc bucketProtectionHTTPService) executePut(r *http.Request) (*models.Buck
 		return nil, false, "", "", newBucketProtectionHTTPError(http.StatusInternalServerError, "internal_error", "bucket governance service is not configured", nil)
 	}
 
-	if err := svc.server.bucketGov.PutProtection(r.Context(), secrets, bucket, putReq); err != nil {
+	validation := bucketgov.ValidationContext{Provider: secrets.Provider, Bucket: bucket, Capabilities: bucketgov.ProviderGovernanceCapabilities(secrets.Provider)}
+	if err := bucketgov.ValidateProtectionPut(validation, putReq); err != nil {
+		return nil, false, secrets.Provider, bucket, err
+	}
+	finishAudit := beginGovernanceAudit(svc.server, r, secrets, bucket, "protection", svc.server.bucketGov.GetProtection)
+	writeErr := svc.server.bucketGov.PutProtection(r.Context(), secrets, bucket, putReq)
+	finishAudit(writeErr)
+	if err := writeErr; err != nil {
 		return nil, false, secrets.Provider, bucket, err
 	}
 	return nil, true, "", "", nil

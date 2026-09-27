@@ -86,6 +86,9 @@ func (f *fakePublicAccessBlockClient) PutBucketVersioning(_ context.Context, inp
 
 func (f *fakePublicAccessBlockClient) GetBucketEncryption(_ context.Context, _ *s3.GetBucketEncryptionInput, _ ...func(*s3.Options)) (*s3.GetBucketEncryptionOutput, error) {
 	f.getCalls = append(f.getCalls, "encryption")
+	if f.putEncryption != nil && f.putEncryptionErr == nil {
+		return &s3.GetBucketEncryptionOutput{ServerSideEncryptionConfiguration: f.putEncryption.ServerSideEncryptionConfiguration}, nil
+	}
 	return f.encryptionOutput, f.encryptionErr
 }
 
@@ -807,8 +810,9 @@ func TestAWSLifecyclePreservesFilterText(t *testing.T) {
 		t.Run(prefix, func(t *testing.T) {
 			for _, legacy := range []bool{false, true} {
 				id := " rule "
-				original := s3types.LifecycleRule{ID: &id, Status: s3types.ExpirationStatusEnabled}
+				original := s3types.LifecycleRule{ID: &id, Status: s3types.ExpirationStatusEnabled, Expiration: &s3types.LifecycleExpiration{Days: int32Ptr(30)}}
 				if legacy {
+					//lint:ignore SA1019 Exercise legacy provider responses explicitly.
 					original.Prefix = &prefix
 				} else {
 					original.Filter = &s3types.LifecycleRuleFilter{Prefix: &prefix}
@@ -827,7 +831,7 @@ func TestAWSLifecyclePreservesFilterText(t *testing.T) {
 			}
 		})
 	}
-	raw := json.RawMessage(`[{"status":"enabled","filter":{"and":{"prefix":" ","tags":[{"key":" key ","value":" value "}]}}}]`)
+	raw := json.RawMessage(`[{"status":"enabled","expiration":{"days":30},"filter":{"and":{"prefix":" ","tags":[{"key":" key ","value":" value "}]}}}]`)
 	rules, err := parseAWSLifecycleRulesJSON(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -947,8 +951,8 @@ func TestAWSLifecycleFilterSizeBounds(t *testing.T) {
 
 func TestAWSLifecycleTagValueAndUniqueness(t *testing.T) {
 	for _, raw := range []string{
-		`[{"status":"enabled","filter":{"tag":{"key":"empty"}}}]`,
-		`[{"status":"enabled","filter":{"tag":{"key":"empty","value":""}}}]`,
+		`[{"status":"enabled","expiration":{"days":30},"filter":{"tag":{"key":"empty"}}}]`,
+		`[{"status":"enabled","expiration":{"days":30},"filter":{"tag":{"key":"empty","value":""}}}]`,
 	} {
 		rules, err := parseAWSLifecycleRulesJSON(json.RawMessage(raw))
 		if err != nil {
@@ -973,7 +977,7 @@ func TestAWSLifecycleTagValueAndUniqueness(t *testing.T) {
 		second string
 		valid  bool
 	}{{"key", false}, {"Key", true}, {" key", true}} {
-		raw := `[{"status":"enabled","filter":{"and":{"tags":[{"key":"key"},{"key":"` + tc.second + `"}]}}}]`
+		raw := `[{"status":"enabled","expiration":{"days":30},"filter":{"and":{"tags":[{"key":"key"},{"key":"` + tc.second + `"}]}}}]`
 		_, err := parseAWSLifecycleRulesJSON(json.RawMessage(raw))
 		if (err == nil) != tc.valid {
 			t.Fatalf("key=%q err=%v", tc.second, err)
@@ -981,16 +985,16 @@ func TestAWSLifecycleTagValueAndUniqueness(t *testing.T) {
 	}
 }
 
-func TestAWSLifecycleNoncurrentRetentionUpperBound(t *testing.T) {
-	for _, versions := range []int32{99, 100, 101} {
+func TestAWSLifecycleNoncurrentRetentionBounds(t *testing.T) {
+	for _, versions := range []int32{-1, 0, 1, 99, 100, 101} {
 		expiration := awsNoncurrentVersionExpirationPayload{NoncurrentDays: int32Ptr(1), NewerNoncurrentVersions: &versions}
 		_, err := expiration.toS3(0)
-		if (err != nil) != (versions > 100) {
+		if (err != nil) != (versions < 1 || versions > 100) {
 			t.Fatalf("expiration versions=%d err=%v", versions, err)
 		}
 		transition := awsNoncurrentVersionTransitionPayload{NoncurrentDays: int32Ptr(1), NewerNoncurrentVersions: &versions, StorageClass: "GLACIER"}
 		_, err = transition.toS3(0, 0)
-		if (err != nil) != (versions > 100) {
+		if (err != nil) != (versions < 1 || versions > 100) {
 			t.Fatalf("transition versions=%d err=%v", versions, err)
 		}
 	}
@@ -1016,12 +1020,12 @@ func TestAWSLifecycleRuleCountAndIDs(t *testing.T) {
 		for i := 0; i < n; i++ {
 			id += "한"
 		}
-		_, err := (awsLifecycleRulePayload{ID: id, Status: "enabled"}).toS3(0)
+		_, err := (awsLifecycleRulePayload{ID: id, Status: "enabled", Expiration: &awsLifecycleExpirationPayload{Days: int32Ptr(30)}}).toS3(0)
 		if (err == nil) != (n == 255) {
 			t.Fatalf("ID length=%d err=%v", n, err)
 		}
 	}
-	_, err := parseAWSLifecycleRulesJSON(json.RawMessage(`[{"id":"same","status":"enabled"},{"id":"same","status":"disabled"}]`))
+	_, err := parseAWSLifecycleRulesJSON(json.RawMessage(`[{"id":"same","status":"enabled","expiration":{"days":30}},{"id":"same","status":"disabled","expiration":{"days":30}}]`))
 	if err == nil {
 		t.Fatal("duplicate IDs accepted")
 	}
@@ -1214,6 +1218,30 @@ func TestAWSPublicAccessBlockMissingFlagIsUnknown(t *testing.T) {
 		view, err := adapter.GetPublicExposure(context.Background(), models.ProfileSecrets{}, "demo")
 		if err == nil || view.BlockPublicAccess != nil {
 			t.Fatalf("missing flag=%d view=%+v err=%v", missing, view, err)
+		}
+	}
+}
+
+func TestAWSLifecycleRequiresActionAndPreservesNoncurrentFilter(t *testing.T) {
+	for _, status := range []string{"enabled", "disabled"} {
+		if _, err := parseAWSLifecycleRulesJSON(json.RawMessage(`[{"status":"` + status + `","transitions":[]}]`)); err == nil {
+			t.Fatalf("actionless %s rule accepted", status)
+		}
+	}
+	for _, action := range []string{
+		`"expiration":{"days":1}`,
+		`"transitions":[{"days":0,"storageClass":"STANDARD_IA"}]`,
+		`"transitions":[{"days":0,"storageClass":"ONEZONE_IA"}]`,
+		`"abortIncompleteMultipartUpload":{"daysAfterInitiation":1}`,
+		`"noncurrentVersionExpiration":{"noncurrentDays":1,"newerNoncurrentVersions":1}`,
+		`"noncurrentVersionTransitions":[{"noncurrentDays":1,"newerNoncurrentVersions":100,"storageClass":"GLACIER"}]`,
+	} {
+		rules, err := parseAWSLifecycleRulesJSON(json.RawMessage(`[{"status":"enabled",` + action + `}]`))
+		if err != nil {
+			t.Fatalf("%s: %v", action, err)
+		}
+		if rules[0].Filter == nil {
+			t.Fatalf("required Filter missing: %s", action)
 		}
 	}
 }

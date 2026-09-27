@@ -13,7 +13,7 @@ import (
 
 // Bump when raw policy, typed governance, or shared provider validation rules change.
 // This identifies application checks, not the provider API version or live validation.
-const policyValidationRulesVersion = "2026-09-27.10"
+const policyValidationRulesVersion = "2026-09-27.21"
 
 // policyAudit runs after API-token and profile authorization. Bodies are never logged.
 func (s *server) policyAudit(next http.Handler) http.Handler {
