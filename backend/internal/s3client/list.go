@@ -2,6 +2,7 @@ package s3client
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -17,6 +18,9 @@ import (
 // HEAD call is needed for metadata already included in ListObjectsV2.
 func ListPage(client *s3.Client) objectlisting.Fetch {
 	return func(ctx context.Context, req objectlisting.Request) (objectlisting.Page, error) {
+		if req.MaxKeys < 1 || req.MaxKeys > 1000 {
+			return objectlisting.Page{}, errors.New("maxKeys must be between 1 and 1000")
+		}
 		input := &s3.ListObjectsV2Input{Bucket: aws.String(req.Bucket), Prefix: aws.String(req.Prefix),
 			MaxKeys: aws.Int32(int32(req.MaxKeys)), EncodingType: types.EncodingTypeUrl}
 		if req.Delimiter != "" {
