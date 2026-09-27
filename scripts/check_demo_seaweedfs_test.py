@@ -320,8 +320,13 @@ class ComposeWrapperTests(unittest.TestCase):
         result = self.run_wrapper("192.168.1.20", "192.168.1.20")
         self.assertEqual(json.loads(result.stdout)["bind"], "192.168.1.20")
 
-    def test_missing_or_invalid_public_host_is_rejected(self):
-        for host in (None, "http://localhost", "localhost:8080", "localhost/path"):
+    def test_missing_public_host_uses_documented_default(self):
+        result = self.run_wrapper(None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["bind"], "0.0.0.0")
+
+    def test_invalid_public_host_is_rejected(self):
+        for host in ("http://localhost", "localhost:8080", "localhost/path"):
             self.assertNotEqual(self.run_wrapper(host).returncode, 0)
 
 

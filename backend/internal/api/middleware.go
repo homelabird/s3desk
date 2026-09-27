@@ -113,16 +113,6 @@ func (l *authFailureLimiter) recordFailure(key string, now time.Time) time.Durat
 	return 0
 }
 
-func (l *authFailureLimiter) reset(key string) {
-	if l == nil || key == "" {
-		return
-	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	delete(l.entries, key)
-}
-
 func (l *authFailureLimiter) pruneLocked(now time.Time) {
 	staleAfter := l.window
 	if l.lockout > staleAfter {

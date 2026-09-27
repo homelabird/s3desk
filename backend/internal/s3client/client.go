@@ -1,8 +1,6 @@
 package s3client
 
 import (
-	"crypto/tls"
-	"net/http"
 	"strings"
 	"time"
 
@@ -95,13 +93,6 @@ func (r observedRetryer) RetryDelay(attempt int, err error) (time.Duration, erro
 		r.onRetry()
 	}
 	return delay, retryErr
-}
-
-func newHTTPClient(tlsCfg *tls.Config, allowRemote bool) *http.Client {
-	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
-		AllowRemote: allowRemote,
-		TLSConfig:   tlsCfg,
-	})
 }
 
 func derefString(value *string) string {

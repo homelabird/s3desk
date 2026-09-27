@@ -41,21 +41,6 @@ func parseDownloadProxyMetadataHints(sizeRaw, contentType, lastModified string) 
 	return size, contentType, lastModified, nil
 }
 
-func downloadProxyHasEmbeddedMetadata(token downloadProxyToken) bool {
-	return token.Size > 0 || token.ContentType != "" || token.LastModified != ""
-}
-
-func downloadProxyEntryFromToken(token downloadProxyToken) (rcloneListEntry, bool) {
-	if !downloadProxyHasEmbeddedMetadata(token) {
-		return rcloneListEntry{}, false
-	}
-	return rcloneListEntry{
-		Size:     token.Size,
-		MimeType: token.ContentType,
-		ModTime:  token.LastModified,
-	}, true
-}
-
 func resolveProxySecret(apiToken string) []byte {
 	trimmed := strings.TrimSpace(apiToken)
 	if trimmed != "" {

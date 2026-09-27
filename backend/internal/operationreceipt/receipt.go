@@ -155,6 +155,7 @@ func (s *Store) reserve(id, digest string) (*receipt, bool, error) {
 		return nil, false, err
 	}
 	name := filepath.Join(s.dir, id+".json")
+	// #nosec G304 -- name is the configured receipt directory plus an internal SHA-256 hex ID.
 	data, err := os.ReadFile(name)
 	if err == nil {
 		var rec receipt
@@ -199,6 +200,7 @@ func (s *Store) reserve(id, digest string) (*receipt, bool, error) {
 		return nil, false, errors.New("receipt capacity exhausted")
 	}
 	raw, _ := json.Marshal(receipt{Digest: digest, Created: s.now()})
+	// #nosec G304 -- name contains only the configured directory and an internal SHA-256 hex ID.
 	f, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, false, err
@@ -239,6 +241,7 @@ func (s *Store) finish(id string, rec *receipt) error {
 	return syncDir(s.dir)
 }
 func syncDir(dir string) error {
+	// #nosec G304 -- callers pass only Store.dir, configured by the server, to fsync its directory.
 	f, e := os.Open(dir)
 	if e != nil {
 		return e
