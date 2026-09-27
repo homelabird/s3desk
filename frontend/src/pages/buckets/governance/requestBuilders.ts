@@ -166,12 +166,8 @@ export function buildAzureProtectionRequest(options: {
           ),
           mode: options.immutabilityMode,
           etag: options.immutability?.etag,
-          allowProtectedAppendWrites:
-            options.immutabilityMode === "unlocked" &&
-            options.allowProtectedAppendWrites,
-          allowProtectedAppendWritesAll:
-            options.immutabilityMode === "unlocked" &&
-            options.allowProtectedAppendWritesAll,
+          allowProtectedAppendWrites: options.allowProtectedAppendWrites,
+          allowProtectedAppendWritesAll: options.allowProtectedAppendWritesAll,
         }
       : {
           enabled: false,
@@ -200,10 +196,9 @@ export function buildOCIProtectionRequest(
       rules: retentionRules.map((rule, index) => ({
         id: rule.id.trim() || undefined,
         displayName: rule.displayName.trim() || `Retention Rule ${index + 1}`,
-        days: parsePositiveDays(
-          rule.days,
-          `Retention rule ${index + 1} days`,
-        ),
+        ...(rule.unit === "INDEFINITE" ? { indefinite: true }
+          : rule.unit === "YEARS" ? { years: parsePositiveDays(rule.days, `Retention rule ${index + 1} years`) }
+          : { days: parsePositiveDays(rule.days, `Retention rule ${index + 1} days`) }),
         locked: rule.locked,
         timeModified: rule.timeModified || undefined,
       })),
@@ -221,7 +216,7 @@ export function buildOCISharingRequest(
       name: item.name.trim() || undefined,
       accessType: item.accessType,
       bucketListingAction: item.bucketListingAction,
-      objectName: item.objectName.trim() || undefined,
+      objectName: item.objectName || undefined,
       timeExpires: item.timeExpires.trim() || undefined,
     })),
   };
@@ -244,13 +239,8 @@ export function buildCreatedOCIPreauthenticatedRequests(
     .map((item) => ({
       id: item.id ?? "",
       name: item.name ?? "",
-      accessType:
-        item.accessType === "AnyObjectWrite" ||
-        item.accessType === "AnyObjectReadWrite"
-          ? item.accessType
-          : "AnyObjectRead",
-      bucketListingAction:
-        item.bucketListingAction === "ListObjects" ? "ListObjects" : "Deny",
+      accessType: item.accessType ?? "",
+      bucketListingAction: item.bucketListingAction ?? "Deny",
       objectName: item.objectName ?? "",
       timeCreated: item.timeCreated ?? "",
       timeExpires: item.timeExpires ?? "",

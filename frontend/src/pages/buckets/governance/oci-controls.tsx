@@ -74,42 +74,30 @@ function OCIControlsDraft(props: GovernanceControlsCommonProps & {
 
   const publicExposureMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Public exposure updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketPublicExposure(
-        props.profileId,
-        props.bucket,
-        buildOCIPublicExposureRequest(visibility),
-      ),
+    section: "publicExposure",
+    buildRequest: () => buildOCIPublicExposureRequest(visibility),
+    mutationFn: (request) => props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, request),
   });
 
   const versioningMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Versioning updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketVersioning(
-        props.profileId,
-        props.bucket,
-        buildVersioningRequest(versioningStatus),
-      ),
+    section: "versioning",
+    buildRequest: () => buildVersioningRequest(versioningStatus),
+    mutationFn: (request) => props.api.buckets.putBucketVersioning(props.profileId, props.bucket, request),
   });
 
   const protectionMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Retention rules updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketProtection(
-        props.profileId,
-        props.bucket,
-        buildOCIProtectionRequest(retentionRules),
-      ),
+    section: "protection",
+    buildRequest: () => buildOCIProtectionRequest(retentionRules),
+    mutationFn: (request) => props.api.buckets.putBucketProtection(props.profileId, props.bucket, request),
   });
 
   const sharingMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Sharing updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketSharing(
-        props.profileId,
-        props.bucket,
-        buildOCISharingRequest(preauthenticatedRequests),
-      ),
+    section: "sharing",
+    buildRequest: () => buildOCISharingRequest(preauthenticatedRequests),
+    mutationFn: (request) => props.api.buckets.putBucketSharing(props.profileId, props.bucket, request),
     onSuccess: (view) => {
       setCreatedPARs((previous) =>
         buildCreatedOCIPreauthenticatedRequests(
@@ -144,6 +132,7 @@ function OCIControlsDraft(props: GovernanceControlsCommonProps & {
       warnings={props.governance}
       loadErrorAlert={props.loadErrorAlert}
     >
+      {mutationRunner.approvalDialog}
       <GovernanceControlSections
         sections={[
           {

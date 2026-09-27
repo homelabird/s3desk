@@ -108,6 +108,8 @@ export type BucketProtectionPutRequestWithAzureImmutability =
   };
 
 export type OCIRetentionRuleView = {
+  years?: number;
+  indefinite?: boolean;
   id?: string;
   displayName?: string;
   days?: number;
@@ -123,6 +125,7 @@ export type OCIRetentionView = {
 };
 
 export type OCIRetentionRuleDraft = {
+  unit?: "DAYS" | "YEARS" | "INDEFINITE";
   id: string;
   displayName: string;
   days: string;
@@ -145,8 +148,8 @@ export type OCISharingView = {
 export type OCIPreauthenticatedRequestDraft = {
   id: string;
   name: string;
-  accessType: "AnyObjectRead" | "AnyObjectWrite" | "AnyObjectReadWrite";
-  bucketListingAction: "Deny" | "ListObjects";
+  accessType: string;
+  bucketListingAction: string;
   objectName: string;
   timeCreated: string;
   timeExpires: string;

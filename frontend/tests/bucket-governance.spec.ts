@@ -12,6 +12,7 @@ async function seedBucketsPage(args: {
 	profile: Record<string, unknown>
 	governance: Record<string, unknown>
 	onPutAccess?: (body: unknown) => void
+	onPutProtection?: (body: unknown) => void
 	onPutPolicy?: (body: unknown) => void
 	onPutSharing?: (body: unknown) => Record<string, unknown>
 	onValidatePolicy?: (body: unknown) => Promise<Record<string, unknown>>
@@ -76,6 +77,15 @@ async function seedBucketsPage(args: {
 			handler: () => args.settingsUnavailable?.()
 				? { status: 503, json: { error: { code: 'upstream_unavailable', message: 'Settings temporarily unavailable' } } }
 				: { json: currentGovernance },
+		},
+		{
+			method: 'PUT', path: `/buckets/${bucket}/governance/protection`,
+			handler: (ctx) => {
+				const body = ctx.request.postDataJSON()
+				args.onPutProtection?.(body)
+				currentGovernance = { ...currentGovernance, protection: { provider: args.profile.provider, bucket, ...body } }
+				return { status: 204 }
+			},
 		},
 		{
 			method: 'PUT',
@@ -195,6 +205,7 @@ test('GCS governance access uses the structured IAM bindings editor', async ({ p
 		.getByRole('textbox', { name: 'Condition expression' })
 		.fill('request.time < timestamp("2026-12-31T00:00:00Z")')
 	await accessSection.getByRole('button', { name: 'Save' }).click()
+	await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
 
 	await expect.poll(() => accessBodies.length).toBe(1)
 	expect(accessBodies[0]).toEqual({
@@ -280,6 +291,7 @@ test('Azure governance access uses the structured stored access policy editor', 
 	await policyCard.getByLabel('Read').check()
 	await policyCard.getByLabel('Write').check()
 	await accessSection.getByRole('button', { name: 'Save' }).click()
+	await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
 
 	await expect.poll(() => accessBodies.length).toBe(1)
 	expect(accessBodies[0]).toEqual({
@@ -298,7 +310,7 @@ test('Azure governance access uses the structured stored access policy editor', 
 
 
 for (const width of [1280, 390]) {
-	test(`OCI sharing retains active creation URLs across saves and clears them when closed (${width}px)`, async ({ page }) => {
+	test(`OCI sharing retains active creation URLs across saves and clears them when closed (${width}px)`, async ({ page }, testInfo) => {
 		await page.setViewportSize({ width, height: 844 })
 		let submitted: unknown
 		let createdCount = 0
@@ -329,6 +341,12 @@ for (const width of [1280, 390]) {
 		await section.getByRole('textbox', { name: 'Name', exact: true }).fill('Download link')
 		await section.getByRole('textbox', { name: 'Expires at (RFC3339)' }).fill('2027-01-01T00:00:00Z')
 		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		const review = page.getByRole('dialog', { name: 'Review bucket changes' })
+		await expect(review).toContainText(bucket)
+		await expect(review).toContainText(profileId)
+		await expect(review.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
+		await review.screenshot({ path: testInfo.outputPath('governance-change-review.png') })
+		await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
 		await expect(section.getByRole('textbox', { name: 'Name', exact: true })).toBeDisabled()
 		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
 		await expect(section.getByText(accessUri, { exact: true })).toBeVisible()
@@ -340,12 +358,14 @@ for (const width of [1280, 390]) {
 		await section.getByRole('textbox', { name: 'Name', exact: true }).last().fill('Second link')
 		await section.getByRole('textbox', { name: 'Expires at (RFC3339)' }).last().fill('2027-01-01T00:00:00Z')
 		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
 		await expect(section.getByRole('textbox', { name: 'Name', exact: true }).last()).toBeDisabled()
 		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
 		const secondUri = 'https://example.com/test-created-par-2'
 		await expect(section.getByText(accessUri, { exact: true })).toBeVisible()
 		await expect(section.getByText(secondUri, { exact: true })).toBeVisible()
 		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
 		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
 		await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
 		await section.getByRole('button', { name: 'Copy PAR URL for Download link' }).click()
@@ -354,6 +374,7 @@ for (const width of [1280, 390]) {
 		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secondUri)
 		await section.getByRole('button', { name: 'Remove', exact: true }).first().click()
 		await section.getByRole('button', { name: 'Save', exact: true }).click()
+		await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
 		await expect(section.getByText(accessUri, { exact: true })).toHaveCount(0)
 		await expect(section.getByText(secondUri, { exact: true })).toBeVisible()
 		await expect(page.getByText('Refreshing', { exact: true })).toHaveCount(0)
@@ -449,6 +470,65 @@ test('policy draft survives a failed reconnect refresh and retry', async ({ page
 	await expect(retry).toHaveCount(0)
 	await expect(editor).toHaveValue(draft)
 	await page.getByRole('button', { name: 'Save', exact: true }).click()
+	await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
 	await expect(editor).toHaveCount(0)
 	expect(savedPolicy).toEqual({ policy: JSON.parse(draft) })
 })
+
+for (const width of [1280, 390]) {
+ test(`OCI retention preserves years and indefinite duration (${width}px)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 })
+  let submitted: unknown
+  await seedBucketsPage({ page,
+   profile: { id: profileId, provider: 'oci_object_storage', name: 'Test OCI', createdAt: now, updatedAt: now },
+   governance: { provider: 'oci_object_storage', bucket, capabilities: { bucket_retention: { enabled: true } },
+    protection: { provider: 'oci_object_storage', bucket, retention: { enabled: true, rules: [
+     { id: 'years-rule', displayName: 'Annual retention', years: 2 },
+     { id: 'indefinite-rule', displayName: 'Indefinite retention', indefinite: true },
+    ] } },
+   }, onPutProtection: (body) => { submitted = body },
+  })
+  await openControls(page)
+  const section = page.getByTestId('bucket-governance-protection')
+  await expect(section.getByRole('textbox', { name: 'Retention years', exact: true })).toHaveValue('2')
+  await expect(section.getByRole('combobox', { name: 'Retention duration unit for rule 2' })).toHaveValue('INDEFINITE')
+  await section.getByRole('textbox', { name: 'Retention years', exact: true }).fill('3')
+  await section.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click()
+  await expect.poll(() => submitted).toEqual({ retention: { enabled: true, rules: [
+   { id: 'years-rule', displayName: 'Annual retention', years: 3, locked: false },
+   { id: 'indefinite-rule', displayName: 'Indefinite retention', indefinite: true, locked: false },
+  ] } })
+  await expect(section.getByRole('textbox', { name: 'Retention years', exact: true })).toHaveValue('3')
+ })
+}
+
+for (const width of [1280, 390]) {
+ test(`raw policy approval shows diff and preserves cancelled edits (${width}px)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 })
+  const requests: unknown[] = []
+  await seedBucketsPage({ page,
+   profile: { id: profileId, provider: 'aws_s3', name: 'Test AWS', createdAt: now, updatedAt: now },
+   governance: { provider: 'aws_s3', bucket }, onPutPolicy: (body) => { requests.push(body) },
+  })
+  await gotoBucketsPage(page, { ready: (scope) => scope.getByText(bucket) })
+  await clickBucketCardManageAction(page, page.locator('body'), bucket, /Policy editor/)
+  const editor = page.getByRole('textbox', { name: 'Raw policy JSON' })
+  const draft = { Id: 'review-this-change', Statement: [] }
+  await editor.fill(JSON.stringify(draft))
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  const review = page.getByRole('dialog', { name: 'Review policy changes' })
+  await expect(review).toContainText(bucket)
+  await expect(review).toContainText(profileId)
+  await expect(review).toContainText('review-this-change')
+  await expect(review.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
+  expect(requests).toEqual([])
+  await review.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(editor).toHaveValue(JSON.stringify(draft))
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(review).toBeVisible()
+  await review.getByRole('button', { name: 'Apply changes', exact: true }).click()
+  await expect(editor).toHaveCount(0)
+  expect(requests).toEqual([{ policy: draft }])
+ })
+}

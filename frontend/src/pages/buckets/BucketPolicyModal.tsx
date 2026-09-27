@@ -1,4 +1,5 @@
-import { Grid } from "antd";
+import { Button, Grid } from "antd";
+import { DialogModal } from "../../components/DialogModal";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { APIError, type APIClientShape } from "../../api/client";
@@ -97,7 +98,7 @@ export function BucketPolicyModal(props: {
     >
       {(policyData, loadErrorAlert) => (
         <BucketPolicyEditor
-          key={`${props.profileId}:${props.apiToken}:${bucket}:${policyKind}`}
+          key={JSON.stringify([props.profileId, props.apiToken, bucket, policyKind])}
           api={props.api}
           apiToken={props.apiToken}
           profileId={props.profileId}
@@ -132,9 +133,10 @@ function BucketPolicyEditor(props: {
 }) {
   const { bucket, policyKind, policyData } = props;
   const useStructuredCards = props.mobile;
+  const [editBaseline] = useState(() => structuredClone(policyData));
 
-  const baseText = policyData.policy
-    ? JSON.stringify(policyData.policy, null, 2)
+  const baseText = editBaseline.policy
+    ? JSON.stringify(editBaseline.policy, null, 2)
     : "";
   const originalText = baseText;
   const initialPolicyText = policyData.exists
@@ -281,6 +283,7 @@ function BucketPolicyEditor(props: {
       bucket,
       provider: props.provider,
       validationKey: effectivePolicyText,
+      baseline: editBaseline,
       onClose: props.onClose,
       setActiveTab,
       setLastProviderError,
@@ -459,6 +462,8 @@ function BucketPolicyEditor(props: {
     getProviderErrorDetails(lastProviderError);
   const serverValidationMessages = getServerValidationMessages(serverValidation);
 
+  const [saveReview, setSaveReview] = useState<{ request: BucketPolicyPutRequest; text: string; diff: string } | null>(null);
+
   const handleSave = () => {
     if (!editorActiveRef.current) return;
     if (isBusy) return;
@@ -471,7 +476,11 @@ function BucketPolicyEditor(props: {
       setActiveTab("validate");
       return;
     }
-    putMutation.mutate({ policy: parsed.value } as BucketPolicyPutRequest);
+    setSaveReview({
+      request: structuredClone({ policy: parsed.value } as BucketPolicyPutRequest),
+      text: effectivePolicyText,
+      diff: unifiedDiff((originalText ?? "").trimEnd(), normalizedPolicyText.trimEnd()),
+    });
   };
 
   const currentDeleteContextRef = useRef({ effectivePolicyText, isBusy });
@@ -515,6 +524,27 @@ function BucketPolicyEditor(props: {
       footer={footerContent}
       closeDisabled={isBusy}
     >
+      {saveReview ? (
+        <DialogModal open title="Review policy changes" width="min(96vw, 760px)"
+          onClose={() => setSaveReview(null)} initialFocusSelector="[data-policy-review-cancel]"
+          footer={<>
+            <Button data-policy-review-cancel onClick={() => setSaveReview(null)}>Cancel</Button>
+            <Button type="primary" onClick={() => {
+              if (!editorActiveRef.current || isBusy) return;
+              setSaveReview(null);
+              if (saveReview.text !== effectivePolicyText) {
+                bucketsFeedback.error(new Error("Policy changed. Review it and confirm saving again."));
+                return;
+              }
+              putMutation.mutate(saveReview.request);
+            }}>Apply changes</Button>
+          </>}>
+          <p><strong>{bucket}</strong> · {props.provider ?? policyKind} · Profile: {props.profileId}</p>
+          <p>This replaces the policy document. Removed permissions may revoke access; public grants may expose data. Current settings will be checked again before saving.</p>
+          <p>Configuration confirmation does not verify effective access permissions.</p>
+          <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{saveReview.diff}</pre>
+        </DialogModal>
+      ) : null}
       {props.loadErrorAlert}
       <BucketPolicyWorkspaceHeader
         policyKind={policyKind}

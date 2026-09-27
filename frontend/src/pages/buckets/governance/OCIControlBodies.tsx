@@ -148,7 +148,6 @@ export function OCIRetentionRulesControlBody({
 }
 
 export function OCIPreauthenticatedRequestsActions({
-  preauthenticatedRequests,
   setPreauthenticatedRequests,
 }: {
   preauthenticatedRequests: OCIPreauthenticatedRequestDraft[];
@@ -158,7 +157,6 @@ export function OCIPreauthenticatedRequestsActions({
 }) {
   return (
     <Button
-      disabled={preauthenticatedRequests.length >= 100}
       onClick={() =>
         setPreauthenticatedRequests((current) => [
           ...current,

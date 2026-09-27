@@ -53,3 +53,18 @@ it('validates dates when serializing existing Azure policies', () => {
  expect(serializeAzureStoredAccessPolicies([{ id: 'reader', start: '2026-09-27', expiry: '2026-09-28T12:30Z', permission: 'r' }])[0])
   .toEqual({ id: 'reader', start: '2026-09-27', expiry: '2026-09-28T12:30Z', permission: 'r' })
 })
+
+it('preserves the loaded revision and locked append settings when extending protection', () => {
+ for (const all of [false, true]) {
+  const request = buildAzureProtectionRequest({
+   softDeleteEnabled: false, softDeleteDays: '', immutabilityEnabled: true,
+   immutabilityDays: '30', immutabilityMode: 'locked', immutabilityEditable: true,
+   allowProtectedAppendWrites: !all, allowProtectedAppendWritesAll: all,
+   immutability: { enabled: true, etag: 'edited-revision' },
+  })
+  expect(request.immutability).toMatchObject({
+   enabled: true, days: 30, mode: 'locked', etag: 'edited-revision',
+   allowProtectedAppendWrites: !all, allowProtectedAppendWritesAll: all,
+  })
+ }
+})

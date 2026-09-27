@@ -21,6 +21,7 @@ export function OCIPreauthenticatedRequestEditorCard({
   setPreauthenticatedRequests,
 }: OCIPreauthenticatedRequestEditorCardProps) {
   const existing = request.id.trim().length > 0;
+  const listingAllowed = request.accessType === "AnyObjectRead" || request.accessType === "AnyObjectReadWrite";
 
   const updateRequest = (patch: Partial<OCIPreauthenticatedRequestDraft>) => {
     setPreauthenticatedRequests((current) =>
@@ -74,6 +75,7 @@ export function OCIPreauthenticatedRequestEditorCard({
           value={request.accessType}
           onChange={(value) =>
             updateRequest({
+              ...(value === "AnyObjectWrite" ? { bucketListingAction: "Deny" } : {}),
               accessType:
                 value === "AnyObjectWrite" || value === "AnyObjectReadWrite"
                   ? value
@@ -81,7 +83,7 @@ export function OCIPreauthenticatedRequestEditorCard({
             })
           }
           disabled={existing}
-          options={[
+          options={existing ? [{ value: request.accessType, label: request.accessType || "Not reported" }] : [
             { value: "AnyObjectRead", label: "Any object read" },
             { value: "AnyObjectWrite", label: "Any object write" },
             { value: "AnyObjectReadWrite", label: "Any object read/write" },
@@ -114,8 +116,8 @@ export function OCIPreauthenticatedRequestEditorCard({
               bucketListingAction: value === "ListObjects" ? "ListObjects" : "Deny",
             })
           }
-          disabled={existing}
-          options={[
+          disabled={existing || !listingAllowed}
+          options={existing ? [{ value: request.bucketListingAction, label: request.bucketListingAction }] : [
             { value: "Deny", label: "Deny" },
             { value: "ListObjects", label: "List objects" },
           ]}

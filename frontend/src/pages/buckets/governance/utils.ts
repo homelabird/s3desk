@@ -363,7 +363,8 @@ export function buildOCIDraft(governance: BucketGovernanceView): OCIGovernanceDr
       ? retention.rules.map((rule, index) => ({
           id: rule.id ?? "",
           displayName: rule.displayName ?? `Retention Rule ${index + 1}`,
-          days: formatOptionalDays(rule.days),
+          days: formatOptionalDays(rule.years ?? rule.days),
+          unit: (rule.indefinite ? "INDEFINITE" : rule.years != null ? "YEARS" : "DAYS") as "DAYS" | "YEARS" | "INDEFINITE",
           locked: rule.locked === true,
           timeModified: rule.timeModified ?? "",
         }))
@@ -397,13 +398,8 @@ export function buildOCISharingDraft(
     ? sharing.preauthenticatedRequests.map((item) => ({
         id: item.id ?? "",
         name: item.name ?? "",
-        accessType:
-          item.accessType === "AnyObjectWrite" ||
-          item.accessType === "AnyObjectReadWrite"
-            ? item.accessType
-            : "AnyObjectRead",
-        bucketListingAction:
-          item.bucketListingAction === "ListObjects" ? "ListObjects" : "Deny",
+        accessType: item.accessType ?? "",
+        bucketListingAction: item.bucketListingAction ?? "Deny",
         objectName: item.objectName ?? "",
         timeCreated: item.timeCreated ?? "",
         timeExpires: item.timeExpires ?? "",

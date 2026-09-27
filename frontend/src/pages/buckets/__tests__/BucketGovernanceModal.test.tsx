@@ -370,6 +370,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(publicExposureSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
@@ -390,15 +391,122 @@ describe("BucketGovernanceModal", () => {
   it("reports accepted but unverified changes when governance readback fails", async () => {
     const api = createApi("aws_s3", {
       getBucketGovernance: vi.fn().mockResolvedValueOnce(createGovernance("aws_s3"))
+        .mockResolvedValueOnce(createGovernance("aws_s3"))
         .mockRejectedValue(new Error("read unavailable")),
     });
     renderModal(api, { provider: "aws_s3" });
     const section = await screen.findByTestId("bucket-governance-public-exposure");
     fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(message.error).toHaveBeenCalled());
     expect(JSON.stringify(vi.mocked(message.error).mock.calls)).toContain("Change request accepted, but current settings could not be read");
     expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledTimes(1);
     expect(message.success).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale governance before writing and retains the edited draft", async () => {
+    const loaded = createGovernance("aws_s3");
+    const changed = { ...loaded, encryption: { ...loaded.encryption, mode: "sse_kms", kmsKeyId: "changed-key" } };
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(loaded).mockResolvedValue(changed),
+    });
+    renderModal(api);
+    const section = await screen.findByTestId("bucket-governance-public-exposure");
+    const toggle = within(section).getByRole("switch", { name: "Block public bucket policies" });
+    fireEvent.click(toggle);
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(message.error).toHaveBeenCalledWith(expect.stringContaining("settings changed since")));
+    expect(api.buckets.putBucketPublicExposure).not.toHaveBeenCalled();
+    expect(toggle).not.toBeChecked();
+    expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2);
+    expect(message.success).not.toHaveBeenCalled();
+  });
+
+  it("does not write when the current settings cannot be checked", async () => {
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(createGovernance("aws_s3")).mockRejectedValue(new Error("read denied")),
+    });
+    renderModal(api);
+    const section = await screen.findByTestId("bucket-governance-public-exposure");
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(message.error).toHaveBeenCalledWith(expect.stringContaining("read denied")));
+    expect(api.buckets.putBucketPublicExposure).not.toHaveBeenCalled();
+    expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not write after controls close during the preflight read", async () => {
+    const loaded = createGovernance("aws_s3");
+    const pending = deferred<typeof loaded>();
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(loaded).mockImplementationOnce(() => pending.promise),
+    });
+    const view = renderModal(api);
+    const section = await screen.findByTestId("bucket-governance-public-exposure");
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2));
+    view.unmount();
+    await act(async () => { pending.resolve(loaded); await pending.promise; });
+    expect(api.buckets.putBucketPublicExposure).not.toHaveBeenCalled();
+  });
+
+  it("shows the exact target and proposed fields and cancels without saving", async () => {
+    const api = createApi("aws_s3");
+    renderModal(api);
+    const section = await screen.findByTestId("bucket-governance-public-exposure");
+    fireEvent.click(within(section).getByRole("switch", { name: "Block public bucket policies" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    const dialog = await screen.findByRole("dialog", { name: "Review bucket changes" });
+    expect(within(dialog).getByText(/Profile: profile-1/)).toBeInTheDocument();
+    expect(within(dialog).getByText("demo-bucket")).toBeInTheDocument();
+    expect(within(dialog).getByText("Proposed")).toBeInTheDocument();
+    expect(dialog.textContent).toContain('"blockPublicPolicy": false');
+    expect(api.buckets.putBucketPublicExposure).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Review bucket changes" })).not.toBeInTheDocument());
+    expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(1);
+    expect(api.buckets.putBucketPublicExposure).not.toHaveBeenCalled();
+    expect(message.error).not.toHaveBeenCalled();
+  });
+
+  it("submits the reviewed snapshot even if the underlying draft changes", async () => {
+    const api = createApi("aws_s3");
+    renderModal(api);
+    const section = await screen.findByTestId("bucket-governance-public-exposure");
+    const toggle = within(section).getByRole("switch", { name: "Block public bucket policies" });
+    fireEvent.click(toggle);
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    const apply = await screen.findByRole("button", { name: "Apply changes" });
+    fireEvent.click(toggle);
+    fireEvent.click(apply);
+    await waitFor(() => expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
+      "profile-1", "demo-bucket", expect.objectContaining({ blockPublicAccess: expect.objectContaining({ blockPublicPolicy: false }) }),
+    ));
+  });
+
+  it.each([true, false])("shows ACL effects before setting GCS uniform access to %s", async (enabled) => {
+    const api = createApi("gcp_gcs");
+    renderModal(api, { provider: "gcp_gcs" });
+    const section = await screen.findByTestId("bucket-governance-protection");
+    if (!enabled) fireEvent.click(within(section).getByRole("switch", { name: "GCS uniform bucket-level access" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    const dialog = await screen.findByRole("dialog", { name: "Review bucket changes" });
+    expect(within(dialog).getByText(enabled ? /revokes access granted only by object ACLs/ : /restores saved object ACLs/)).toBeInTheDocument();
+    expect(api.buckets.putBucketProtection).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  });
+
+  it("shows the account scope before approving Azure versioning", async () => {
+    const api = createApi("azure_blob");
+    renderModal(api, { provider: "azure_blob" });
+    const section = await screen.findByTestId("bucket-governance-versioning");
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    const dialog = await screen.findByRole("dialog", { name: "Review bucket changes" });
+    expect(within(dialog).getByText(/Account scope:.*other containers/)).toBeInTheDocument();
+    expect(api.buckets.putBucketVersioning).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   });
 
   it("requires an explicit ownership choice when AWS controls are unconfigured", async () => {
@@ -418,6 +526,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.change(select, { target: { value: "bucket_owner_preferred" } });
     expect(save).toBeEnabled();
     fireEvent.click(save);
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(api.buckets.putBucketAccess).toHaveBeenCalledWith(
       "profile-1", "demo-bucket", { objectOwnership: "bucket_owner_preferred" },
     ));
@@ -530,6 +639,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(encryptionSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketEncryption).toHaveBeenCalledWith(
@@ -558,8 +668,9 @@ describe("BucketGovernanceModal", () => {
     const section = await screen.findByTestId("bucket-governance-lifecycle");
     fireEvent.change(within(section).getByRole("textbox", { name: /lifecycle rules json/i }), { target: { value: "[]" } });
     fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(message.error).toHaveBeenCalledWith(expect.stringContaining(errorMessage)));
-    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(3));
     expect(api.buckets.putBucketLifecycle).toHaveBeenCalledExactlyOnceWith("profile-1", "demo-bucket", { rules: [] });
     expect(message.success).not.toHaveBeenCalled();
     expect(screen.getByTestId("bucket-governance-lifecycle")).toBeInTheDocument();
@@ -616,6 +727,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(lifecycleSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketLifecycle).toHaveBeenCalledWith(
@@ -662,6 +774,7 @@ describe("BucketGovernanceModal", () => {
       fireEvent.click(
         within(publicExposureSection).getByRole("button", { name: "Save" }),
       );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
       await waitFor(() =>
         expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledTimes(1),
@@ -707,6 +820,7 @@ describe("BucketGovernanceModal", () => {
       fireEvent.click(
         within(publicExposureSection).getByRole("button", { name: "Save" }),
       );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
       await waitFor(() =>
         expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledTimes(1),
@@ -771,7 +885,7 @@ describe("BucketGovernanceModal", () => {
       },
     };
     const api = createApi("oci_object_storage", {
-      getBucketGovernance: vi.fn().mockResolvedValueOnce(governance).mockResolvedValue(refreshed),
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(governance).mockResolvedValueOnce(governance).mockResolvedValue(refreshed),
       putBucketProtection: vi.fn().mockRejectedValue(new Error("second retention update failed")),
     });
     renderModal(api, { provider: "oci_object_storage" });
@@ -780,6 +894,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.change(days[0], { target: { value: "60" } });
     fireEvent.change(days[1], { target: { value: "90" } });
     fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(api.buckets.putBucketProtection).toHaveBeenCalledOnce());
     await waitFor(() => expect(within(screen.getByTestId("bucket-governance-protection"))
       .getAllByRole("textbox", { name: /retention days/i })[1]).toHaveValue("45"));
@@ -808,7 +923,7 @@ describe("BucketGovernanceModal", () => {
     };
     const errorMessage = "GCS accepted the IAM policy update but public access prevention could not be confirmed; reload both settings before retrying";
     const api = createApi("gcp_gcs", {
-      getBucketGovernance: vi.fn().mockResolvedValueOnce(governance).mockResolvedValue(refreshed),
+      getBucketGovernance: vi.fn().mockResolvedValueOnce(governance).mockResolvedValueOnce(governance).mockResolvedValue(refreshed),
       putBucketPublicExposure: vi.fn().mockRejectedValue(new APIError({
         status: 502, code: "bucket_public_exposure_partial", message: errorMessage,
         details: { iamPolicyUpdateAccepted: true, publicAccessPreventionState: "unknown" },
@@ -819,8 +934,9 @@ describe("BucketGovernanceModal", () => {
     fireEvent.change(within(section).getByRole("combobox", { name: "GCS public exposure mode" }), { target: { value: "public" } });
     fireEvent.click(within(section).getByRole("switch", { name: "GCS public access prevention" }));
     fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(message.error).toHaveBeenCalledWith(expect.stringContaining(errorMessage)));
-    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.buckets.getBucketGovernance).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(within(screen.getByTestId("bucket-governance-public-exposure"))
       .getByRole("switch", { name: "GCS public access prevention" })).not.toBeChecked());
     expect(within(screen.getByTestId("bucket-governance-public-exposure"))
@@ -933,6 +1049,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(accessSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketAccess).toHaveBeenCalledWith(
@@ -980,6 +1097,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(publicExposureSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
@@ -1003,6 +1121,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(protectionSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketProtection).toHaveBeenNthCalledWith(
@@ -1029,6 +1148,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(versioningSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketVersioning).toHaveBeenCalledWith(
@@ -1054,6 +1174,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(retentionSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketProtection).toHaveBeenNthCalledWith(
@@ -1106,6 +1227,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(publicExposureSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
@@ -1149,6 +1271,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(accessSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketAccess).toHaveBeenCalledWith(
@@ -1181,6 +1304,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(versioningSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketVersioning).toHaveBeenCalledWith(
@@ -1209,6 +1333,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(protectionSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketProtection).toHaveBeenCalledWith(
@@ -1243,6 +1368,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(legalHoldSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketProtection).toHaveBeenCalledWith(
@@ -1274,6 +1400,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(publicExposureSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
@@ -1299,6 +1426,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(versioningSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketVersioning).toHaveBeenCalledWith(
@@ -1324,6 +1452,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(protectionSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketProtection).toHaveBeenCalledWith(
@@ -1368,6 +1497,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(sharingSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketSharing).toHaveBeenCalledWith(
@@ -1416,6 +1546,7 @@ describe("BucketGovernanceModal", () => {
     const api = createApi("oci_object_storage", {
       getBucketGovernance: vi.fn()
         .mockResolvedValueOnce(governance)
+        .mockResolvedValueOnce(governance)
         .mockResolvedValue(refreshed),
       putBucketSharing: vi.fn().mockResolvedValue({
         ...refreshed.sharing,
@@ -1425,6 +1556,7 @@ describe("BucketGovernanceModal", () => {
     const { client, rerender } = renderModal(api, { provider: "oci_object_storage" });
     const section = await screen.findByTestId("bucket-governance-sharing");
     fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(client.getQueryData(
       queryKeys.buckets.governance("profile-1", "demo-bucket", "token"),
     )).toEqual(refreshed));
@@ -1435,6 +1567,7 @@ describe("BucketGovernanceModal", () => {
       ...refreshed.sharing, provider: "oci_object_storage", bucket: "demo-bucket",
     });
     fireEvent.click(within(screen.getByTestId("bucket-governance-sharing")).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(api.buckets.putBucketSharing).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(message.success).toHaveBeenCalledTimes(2));
     expect(screen.getByText(created.accessUri)).toBeInTheDocument();
@@ -1480,6 +1613,7 @@ describe("BucketGovernanceModal", () => {
     fireEvent.click(
       within(sharingSection).getByRole("button", { name: "Save" }),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
 
     await waitFor(() =>
       expect(api.buckets.putBucketSharing).toHaveBeenCalledTimes(1),

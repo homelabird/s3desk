@@ -79,31 +79,22 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
 
   const publicExposureMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Anonymous access updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketPublicExposure(
-        props.profileId,
-        props.bucket,
-        buildAzurePublicExposureRequest(publicMode),
-      ),
+    section: "publicExposure",
+    buildRequest: () => buildAzurePublicExposureRequest(publicMode),
+    mutationFn: (request) => props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, request),
   });
 
   const accessMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Stored access policies updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketAccess(
-        props.profileId,
-        props.bucket,
-        buildAzureAccessRequest(storedAccessPolicies),
-      ),
+    section: "access",
+    buildRequest: () => buildAzureAccessRequest(storedAccessPolicies),
+    mutationFn: (request) => props.api.buckets.putBucketAccess(props.profileId, props.bucket, request),
   });
 
   const protectionMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Protection updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketProtection(
-        props.profileId,
-        props.bucket,
-        buildAzureProtectionRequest({
+    section: "protection",
+    buildRequest: () => buildAzureProtectionRequest({
           softDeleteEnabled,
           softDeleteDays,
           immutabilityEnabled,
@@ -114,29 +105,23 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
           allowProtectedAppendWritesAll,
           immutability,
         }),
-      ),
+    mutationFn: (request) => props.api.buckets.putBucketProtection(props.profileId, props.bucket, request),
   });
 
   const versioningAvailable = props.governance.capabilities.bucket_versioning?.enabled === true && props.governance.versioning != null;
 
   const versioningMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Versioning updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketVersioning(
-        props.profileId,
-        props.bucket,
-        buildVersioningRequest(versioningStatus),
-      ),
+    section: "versioning",
+    buildRequest: () => buildVersioningRequest(versioningStatus),
+    mutationFn: (request) => props.api.buckets.putBucketVersioning(props.profileId, props.bucket, request),
   });
 
   const legalHoldMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Legal hold updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketProtection(
-        props.profileId,
-        props.bucket,
-        buildAzureLegalHoldRequest(legalHoldTagsText),
-      ),
+    section: "protection",
+    buildRequest: () => buildAzureLegalHoldRequest(legalHoldTagsText),
+    mutationFn: (request) => props.api.buckets.putBucketProtection(props.profileId, props.bucket, request),
   });
 
   const headerTags = buildAzureSummaryTags(props.governance, {
@@ -166,6 +151,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
       advancedPolicy={extractAdvancedPolicy(props.governance)}
       onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
     >
+      {mutationRunner.approvalDialog}
       <GovernanceControlSections
         sections={[
           {

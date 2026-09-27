@@ -49,54 +49,40 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
 
   const publicExposureMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Public exposure updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketPublicExposure(
-        props.profileId,
-        props.bucket,
-        buildAWSPublicExposureRequest(publicAccessBlock),
-      ),
+    section: "publicExposure",
+    buildRequest: () => buildAWSPublicExposureRequest(publicAccessBlock),
+    mutationFn: (request) => props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, request),
   });
 
   const accessMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Object ownership updated",
-    mutationFn: () => {
+    section: "access",
+    buildRequest: () => {
       if (!objectOwnership) throw new Error("Select an ownership mode before saving.");
-      return props.api.buckets.putBucketAccess(
-        props.profileId,
-        props.bucket,
-        buildAWSAccessRequest(objectOwnership),
-      );
+      return buildAWSAccessRequest(objectOwnership);
     },
+    mutationFn: (request) => props.api.buckets.putBucketAccess(props.profileId, props.bucket, request),
   });
 
   const versioningMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Versioning updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketVersioning(
-        props.profileId,
-        props.bucket,
-        buildVersioningRequest(versioningStatus),
-      ),
+    section: "versioning",
+    buildRequest: () => buildVersioningRequest(versioningStatus),
+    mutationFn: (request) => props.api.buckets.putBucketVersioning(props.profileId, props.bucket, request),
   });
 
   const encryptionMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Default encryption updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketEncryption(
-        props.profileId,
-        props.bucket,
-        buildAWSEncryptionRequest(encryptionMode, kmsKeyId),
-      ),
+    section: "encryption",
+    buildRequest: () => buildAWSEncryptionRequest(encryptionMode, kmsKeyId),
+    mutationFn: (request) => props.api.buckets.putBucketEncryption(props.profileId, props.bucket, request),
   });
 
   const lifecycleMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Lifecycle rules updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketLifecycle(
-        props.profileId,
-        props.bucket,
-        buildAWSLifecycleRequest(lifecycleText),
-      ),
+    section: "lifecycle",
+    buildRequest: () => buildAWSLifecycleRequest(lifecycleText),
+    mutationFn: (request) => props.api.buckets.putBucketLifecycle(props.profileId, props.bucket, request),
   });
 
   const anyMutationPending =
@@ -128,6 +114,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
       advancedPolicy={advancedPolicy}
       onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
     >
+      {mutationRunner.approvalDialog}
       <GovernanceControlSections
         sections={[
           {

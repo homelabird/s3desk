@@ -1,6 +1,7 @@
 import { Button, Input, Tag } from "antd";
 import type { Dispatch, SetStateAction } from "react";
 
+import { NativeSelect } from "../../../components/NativeSelect";
 import { FormField } from "../../../components/FormField";
 import styles from "../BucketGovernanceModal.module.css";
 import { GovernanceNestedSectionCard } from "./shell";
@@ -60,8 +61,15 @@ export function OCIRetentionRuleEditorCard({
           autoComplete="off"
         />
       </FormField>
-      <FormField
-        label="Retention days"
+      <FormField label="Duration unit" htmlFor={`bucket-governance-oci-retention-unit-${index}`}>
+        <NativeSelect id={`bucket-governance-oci-retention-unit-${index}`} value={rule.unit ?? "DAYS"}
+          disabled={rule.locked}
+          ariaLabel={`Retention duration unit for rule ${index + 1}`}
+          options={[{ value: "DAYS", label: "Days" }, { value: "YEARS", label: "Years" }, { value: "INDEFINITE", label: "Indefinite" }]}
+          onChange={(value) => updateRule({ unit: value === "YEARS" || value === "INDEFINITE" ? value : "DAYS" })} />
+      </FormField>
+      {rule.unit !== "INDEFINITE" ? <FormField
+        label={rule.unit === "YEARS" ? "Retention years" : "Retention days"}
         htmlFor={`bucket-governance-oci-retention-days-${index}`}
         extra={
           rule.locked
@@ -76,7 +84,7 @@ export function OCIRetentionRuleEditorCard({
           inputMode="numeric"
           autoComplete="off"
         />
-      </FormField>
+      </FormField> : <p>No expiration. Objects remain protected until this rule is removed.</p>}
       <div className={styles.tagRow}>
         {rule.id ? <Tag>ID {rule.id}</Tag> : <Tag>New rule</Tag>}
         {rule.timeModified ? <Tag>Modified {rule.timeModified}</Tag> : null}

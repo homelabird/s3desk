@@ -55,52 +55,37 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
 
   const publicExposureMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Public exposure updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketPublicExposure(
-        props.profileId,
-        props.bucket,
-        buildGCSPublicExposureRequest(publicMode, publicAccessPrevention),
-      ),
+    section: "publicExposure",
+    buildRequest: () => buildGCSPublicExposureRequest(publicMode, publicAccessPrevention),
+    mutationFn: (request) => props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, request),
   });
 
   const accessMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "IAM bindings updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketAccess(
-        props.profileId,
-        props.bucket,
-        buildGCSAccessRequest(bindings, etag),
-      ),
+    section: "access",
+    buildRequest: () => buildGCSAccessRequest(bindings, etag),
+    mutationFn: (request) => props.api.buckets.putBucketAccess(props.profileId, props.bucket, request),
   });
 
   const protectionMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Uniform access updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketProtection(
-        props.profileId,
-        props.bucket,
-        buildGCSUniformAccessRequest(uniformAccess),
-      ),
+    section: "protection",
+    buildRequest: () => buildGCSUniformAccessRequest(uniformAccess),
+    mutationFn: (request) => props.api.buckets.putBucketProtection(props.profileId, props.bucket, request),
   });
 
   const retentionMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Retention updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketProtection(
-        props.profileId,
-        props.bucket,
-        buildGCSRetentionRequest(retentionEnabled, retentionDays),
-      ),
+    section: "protection",
+    buildRequest: () => buildGCSRetentionRequest(retentionEnabled, retentionDays),
+    mutationFn: (request) => props.api.buckets.putBucketProtection(props.profileId, props.bucket, request),
   });
 
   const versioningMutation = useGovernanceControlMutation(mutationRunner, {
     successMessage: "Versioning updated",
-    mutationFn: () =>
-      props.api.buckets.putBucketVersioning(
-        props.profileId,
-        props.bucket,
-        buildVersioningRequest(versioningStatus),
-      ),
+    section: "versioning",
+    buildRequest: () => buildVersioningRequest(versioningStatus),
+    mutationFn: (request) => props.api.buckets.putBucketVersioning(props.profileId, props.bucket, request),
   });
 
   const headerTags = useMemo(
@@ -135,6 +120,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
       advancedPolicy={extractAdvancedPolicy(props.governance)}
       onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
     >
+      {mutationRunner.approvalDialog}
       <GovernanceControlSections
         sections={[
           {

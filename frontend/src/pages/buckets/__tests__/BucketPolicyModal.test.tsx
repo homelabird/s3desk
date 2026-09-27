@@ -677,6 +677,7 @@ describe("BucketPolicyModal", () => {
       await screen.findByRole("checkbox", { name: "Public read access" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
 
     await waitFor(() => expect(api.buckets.putBucketPolicy).toHaveBeenCalled());
     await waitFor(() =>
@@ -687,6 +688,80 @@ describe("BucketPolicyModal", () => {
     );
   });
 
+  it("requires reviewing the target and diff and preserves the draft on cancellation", async () => {
+    const api = createApi();
+    renderModal(api);
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    const draft = JSON.stringify({ Id: "review-draft", Statement: [] });
+    fireEvent.change(editor, { target: { value: draft } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const review = screen.getByRole("dialog", { name: "Review policy changes" });
+    expect(review).toHaveTextContent("demo-bucket");
+    expect(review).toHaveTextContent("profile-1");
+    expect(review).toHaveTextContent("review-draft");
+    expect(api.buckets.putBucketPolicy).not.toHaveBeenCalled();
+    fireEvent.click(review.querySelector("[data-policy-review-cancel]")!);
+    expect(screen.queryByRole("dialog", { name: "Review policy changes" })).not.toBeInTheDocument();
+    expect(editor).toHaveValue(draft);
+    expect(api.buckets.putBucketPolicy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a draft changed while its approval is open", async () => {
+    const api = createApi();
+    renderModal(api);
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    fireEvent.change(editor, { target: { value: JSON.stringify({ Id: "reviewed", Statement: [] }) } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.change(editor, { target: { value: JSON.stringify({ Id: "changed", Statement: [] }) } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    expect(api.buckets.putBucketPolicy).not.toHaveBeenCalled();
+    expect(await screen.findByText("Policy changed. Review it and confirm saving again.")).toBeInTheDocument();
+  });
+
+  it("blocks saving over an externally changed policy and retains the draft", async () => {
+    const api = createApi({ getBucketPolicy: vi.fn()
+      .mockResolvedValueOnce({ bucket: "demo-bucket", exists: true, policy: {} })
+      .mockResolvedValue({ bucket: "demo-bucket", exists: true, policy: { Id: "external", Statement: [] } }),
+    });
+    renderModal(api);
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    const draft = JSON.stringify({ Id: "draft", Statement: [] });
+    fireEvent.change(editor, { target: { value: draft } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    expect(await screen.findByText(/Stored policy changed since editing began/)).toBeInTheDocument();
+    expect(api.buckets.putBucketPolicy).not.toHaveBeenCalled();
+    expect(api.buckets.getBucketPolicy).toHaveBeenCalledTimes(2);
+    expect(editor).toHaveValue(draft);
+  });
+
+  it("blocks deleting a policy changed after it was loaded", async () => {
+    const api = createApi({ getBucketPolicy: vi.fn()
+      .mockResolvedValueOnce({ bucket: "demo-bucket", exists: true, policy: {} })
+      .mockResolvedValue({ bucket: "demo-bucket", exists: true, policy: { Id: "external" } }),
+    });
+    renderModal(api);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete policy" }));
+    const confirmation = confirmDangerActionMock.mock.calls.at(-1)![0];
+    await act(async () => { await expect(confirmation.onConfirm()).rejects.toThrow("Stored policy changed"); });
+    expect(api.buckets.deleteBucketPolicy).not.toHaveBeenCalled();
+  });
+
+  it("does not save after the editor closes during the preflight read", async () => {
+    const baseline = { bucket: "demo-bucket", exists: true, policy: {} };
+    const pending = deferred<typeof baseline>();
+    const api = createApi({ getBucketPolicy: vi.fn().mockResolvedValueOnce(baseline).mockImplementationOnce(() => pending.promise) });
+    const view = renderModal(api);
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    fireEvent.change(editor, { target: { value: JSON.stringify({ Id: "draft", Statement: [] }) } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(api.buckets.getBucketPolicy).toHaveBeenCalledTimes(2));
+    view.unmount();
+    await act(async () => { pending.resolve(baseline); await pending.promise; });
+    expect(api.buckets.putBucketPolicy).not.toHaveBeenCalled();
+  });
+
   it("refreshes policy after a failed save without retrying or losing the draft", async () => {
     const api = createApi({ putBucketPolicy: vi.fn().mockRejectedValue(new Error("response lost")) });
     const onClose = vi.fn();
@@ -695,7 +770,8 @@ describe("BucketPolicyModal", () => {
     const draft = JSON.stringify({ Version: "2012-10-17", Statement: [], Id: "keep-draft" });
     fireEvent.change(editor, { target: { value: draft } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(api.buckets.getBucketPolicy).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(api.buckets.getBucketPolicy).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
     expect(api.buckets.putBucketPolicy).toHaveBeenCalledTimes(1);
     expect(editor).toHaveValue(draft);
@@ -707,6 +783,7 @@ describe("BucketPolicyModal", () => {
     const api = createApi({
       getBucketPolicy: vi.fn()
         .mockResolvedValueOnce({ bucket: "demo-bucket", exists: true, policy: {} })
+        .mockResolvedValueOnce({ bucket: "demo-bucket", exists: true, policy: {} })
         .mockRejectedValue(new Error("read unavailable")),
       putBucketPolicy: vi.fn().mockResolvedValue(undefined),
     });
@@ -716,6 +793,7 @@ describe("BucketPolicyModal", () => {
     const draft = JSON.stringify({ Statement: [], Id: "retain-after-read-failure" });
     fireEvent.change(editor, { target: { value: draft } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     expect(await screen.findByText(/Change request accepted, but current policy could not be read/)).toBeInTheDocument();
     expect(api.buckets.putBucketPolicy).toHaveBeenCalledTimes(1);
     expect(editor).toHaveValue(draft);
@@ -860,6 +938,7 @@ describe("BucketPolicyModal", () => {
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
 
     await waitFor(() => expect(api.buckets.putBucketPolicy).toHaveBeenCalled());
 

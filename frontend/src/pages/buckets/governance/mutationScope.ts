@@ -15,7 +15,7 @@ export function useGovernanceMutationScope(args: {
   provider: Profile["provider"];
   bucket: string;
 }) {
-  const currentScopeKey = `${args.apiToken}:${args.profileId}:${args.provider}:${args.bucket}`;
+  const currentScopeKey = JSON.stringify([args.apiToken, args.profileId, args.provider, args.bucket]);
   const scopeVersionRef = useRef(0);
   const isActiveRef = useRef(true);
 

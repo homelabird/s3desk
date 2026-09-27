@@ -5,6 +5,7 @@ import { APIError, type APIClientShape } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 import type {
   BucketPolicyPutRequest,
+  BucketPolicyResponse,
   BucketPolicyValidateResponse,
   Profile,
 } from "../../api/types";
@@ -17,6 +18,7 @@ export function useBucketPolicyMutations(props: {
   bucket: string;
   provider?: Profile["provider"];
   validationKey: string;
+  baseline: BucketPolicyResponse;
   onClose: () => void;
   setActiveTab: (tab: "validate" | "preview" | "diff") => void;
   setLastProviderError: (error: APIError | null) => void;
@@ -57,9 +59,31 @@ export function useBucketPolicyMutations(props: {
     }
   };
 
+  const verifyCurrentPolicy = async () => {
+    const revision = validateRequestTokenRef.current;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const current = await props.api.buckets.getBucketPolicy(props.profileId, props.bucket, controller.signal);
+      if (!isActiveRef.current || revision !== validateRequestTokenRef.current) {
+        throw new Error("Policy editor changed. Review the current draft before saving.");
+      }
+      if (current.bucket !== props.bucket || current.exists !== props.baseline.exists || JSON.stringify(current.policy) !== JSON.stringify(props.baseline.policy)) {
+        throw new Error("Stored policy changed since editing began. Nothing was saved. Reopen the editor and review the latest policy.");
+      }
+    } catch (error) {
+      throw new PolicyPreflightError(error instanceof Error ? error.message : "Could not verify the current policy. Nothing was saved.");
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const putMutation = useMutation({
-    mutationFn: (req: BucketPolicyPutRequest) =>
-      props.api.buckets.putBucketPolicy(props.profileId, props.bucket, req),
+    retry: false,
+    mutationFn: async (req: BucketPolicyPutRequest) => {
+      await verifyCurrentPolicy();
+      return props.api.buckets.putBucketPolicy(props.profileId, props.bucket, req);
+    },
     onMutate: () => {
       putRequestTokenRef.current += 1;
       return { requestToken: putRequestTokenRef.current };
@@ -82,7 +106,7 @@ export function useBucketPolicyMutations(props: {
     },
     onError: async (err, _vars, context) => {
       // A lost response does not prove that the provider rejected the write.
-      await invalidatePolicyQueries();
+      if (!(err instanceof PolicyPreflightError)) await invalidatePolicyQueries();
       if (
         !isActiveRef.current ||
         context?.requestToken !== putRequestTokenRef.current
@@ -96,8 +120,11 @@ export function useBucketPolicyMutations(props: {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () =>
-      props.api.buckets.deleteBucketPolicy(props.profileId, props.bucket),
+    retry: false,
+    mutationFn: async () => {
+      await verifyCurrentPolicy();
+      return props.api.buckets.deleteBucketPolicy(props.profileId, props.bucket);
+    },
     onMutate: () => {
       deleteRequestTokenRef.current += 1;
       return { requestToken: deleteRequestTokenRef.current };
@@ -120,7 +147,7 @@ export function useBucketPolicyMutations(props: {
     },
     onError: async (err, _vars, context) => {
       // A lost response does not prove that the provider rejected the write.
-      await invalidatePolicyQueries();
+      if (!(err instanceof PolicyPreflightError)) await invalidatePolicyQueries();
       if (
         !isActiveRef.current ||
         context?.requestToken !== deleteRequestTokenRef.current
@@ -170,3 +197,5 @@ export function useBucketPolicyMutations(props: {
 
   return { putMutation, deleteMutation, validateMutation };
 }
+
+class PolicyPreflightError extends Error {}
