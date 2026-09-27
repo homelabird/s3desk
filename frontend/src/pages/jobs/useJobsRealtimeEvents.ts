@@ -301,9 +301,11 @@ export function useJobsRealtimeEvents({
 				} catch {
 					// ignore
 				}
+				onDisconnect()
 			}, 1500)
 
 			ws.onopen = () => {
+				if (stopped || disconnectHandled) return
 				opened = true
 				window.clearTimeout(fallbackTimer)
 				handleTransportOpen('ws')

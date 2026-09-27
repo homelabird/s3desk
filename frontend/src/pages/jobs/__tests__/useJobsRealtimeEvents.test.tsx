@@ -141,6 +141,24 @@ describe('useJobsRealtimeEvents', () => {
 		unmount()
 	})
 
+	it('falls back without waiting for close and ignores a late websocket open', async () => {
+		vi.spyOn(MockWebSocket.prototype, 'close').mockImplementation(() => {})
+		const queryClient = new QueryClient()
+		const { result, unmount } = renderHook(() =>
+			useJobsRealtimeEvents({ apiToken: 'token', profileId: 'profile-1', queryClient }),
+		)
+		await flushRealtimeSetup()
+		await act(async () => { await vi.advanceTimersByTimeAsync(1500) })
+		await flushRealtimeSetup()
+		expect(MockEventSource.instances).toHaveLength(1)
+		act(() => MockEventSource.instances[0].emitOpen())
+		act(() => MockWebSocket.instances[0].emitOpen())
+		expect(result.current.eventsConnected).toBe(true)
+		expect(result.current.eventsTransport).toBe('sse')
+		unmount()
+		queryClient.clear()
+	})
+
 	it('invalidates jobs when it detects an event sequence gap', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const setQueriesData = vi.fn()

@@ -371,9 +371,11 @@ export function useTransfersUploadJobEvents({
 				} catch {
 					// ignore
 				}
+				onDisconnect()
 			}, 1500)
 
 			ws.onopen = () => {
+				if (stopped || disconnectHandled) return
 				wsOpened = true
 				window.clearTimeout(wsFallbackTimer)
 				handleTransportOpen('ws')

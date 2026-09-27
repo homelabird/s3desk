@@ -172,6 +172,20 @@ describe('useTransfersUploadJobEvents', () => {
 		expect(MockEventSource.instances).toHaveLength(0)
 	})
 
+	it('falls back when a stalled websocket does not emit close', async () => {
+		vi.spyOn(MockWebSocket.prototype, 'close').mockImplementation(() => {})
+		const api = { jobs: { listJobs: vi.fn().mockResolvedValue(jobsListResponse()) } } as unknown as APIClientShape
+		const props = { api, apiToken: 'token', hasPendingUploadJobs: true,
+			uploadTasksRef: { current: [buildUploadTask()] },
+			handleUploadJobUpdate: vi.fn(async () => {}), updateUploadTask: vi.fn() }
+		const { unmount } = renderHook(() => useTransfersUploadJobEvents(props))
+		await flushRealtimeSetup()
+		await act(async () => { await vi.advanceTimersByTimeAsync(1500) })
+		await flushRealtimeSetup()
+		expect(MockEventSource.instances).toHaveLength(1)
+		unmount()
+	})
+
 	it('requests websocket realtime tickets and does not leak apiToken in realtime urls', async () => {
 		const handleUploadJobUpdate = vi.fn(async () => {})
 		const api = {
