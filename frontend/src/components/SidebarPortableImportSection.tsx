@@ -1,10 +1,11 @@
-import { Alert, Button, Input, Typography } from 'antd'
+import { Alert, Button, Checkbox, Input, Typography } from 'antd'
 import { useRef } from 'react'
 
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import styles from './SidebarBackupAction.module.css'
 
 type PortableSummaryView = {
+	status?: 'ready' | 'blocked' | 'complete' | 'partial'
 	mode: string
 	targetDbBackend: string
 	preflight: {
@@ -13,12 +14,16 @@ type PortableSummaryView = {
 		spaceReady: boolean
 		blockers?: string[] | null
 	}
+	recoveryDir?: string
+	recoveryBundlePath?: string
 	warnings?: string[] | null
 }
 
 type SidebarPortableImportSectionProps = {
 	portablePassword: string
 	onPortablePasswordChange: (value: string) => void
+	portableAllowUnsigned: boolean
+	onPortableAllowUnsignedChange: (value: boolean) => void
 	portableLoading: 'preview' | 'import' | null
 	portablePreviewReady: boolean
 	portableError: string | null
@@ -40,11 +45,15 @@ export function SidebarPortableImportSection(props: SidebarPortableImportSection
 			</Typography.Text>
 			<Input.Password
 				placeholder="Portable bundle password (optional)"
+				disabled={props.portableLoading === 'import'}
 				value={props.portablePassword}
 				onChange={(event) => props.onPortablePasswordChange(event.target.value)}
 			/>
+			<Checkbox disabled={props.portableLoading === 'import'} checked={props.portableAllowUnsigned} onChange={(event) => props.onPortableAllowUnsignedChange(event.target.checked)}>
+				I trust this unsigned backup (authenticity cannot be verified)
+			</Checkbox>
 			<div className={styles.actions}>
-				<Button loading={props.portableLoading === 'preview'} onClick={() => inputRef.current?.click()}>
+				<Button disabled={props.portableLoading === 'import'} loading={props.portableLoading === 'preview'} onClick={() => inputRef.current?.click()}>
 					Preview portable import
 				</Button>
 				<Button
@@ -66,9 +75,12 @@ export function SidebarPortableImportSection(props: SidebarPortableImportSection
 				</Button>
 			</div>
 			<Typography.Text type="secondary">
-				Portable export always includes logical entities. Thumbnail assets are included under <Typography.Text code>assets/thumbnails</Typography.Text> in clear bundles and inside <Typography.Text code>payload.enc</Typography.Text> when protected.
+				Portable export includes logical entities but excludes local upload files. Finish or cancel staging uploads on both servers before importing. Thumbnail assets are included under <Typography.Text code>assets/thumbnails</Typography.Text> in clear bundles and inside <Typography.Text code>payload.enc</Typography.Text> when protected.
 			</Typography.Text>
 			{props.portableError ? <Alert type="error" showIcon title="Portable migration failed" description={props.portableError} /> : null}
+			{props.portableImportResultPresent && props.portableSummary?.status === 'partial' ? (
+				<Alert type="warning" showIcon title="Import partially completed" description="The database was replaced, but asset replacement, verification, or recovery recording failed. Review the warnings before continuing." />
+			) : null}
 			{props.portableSummary ? (
 				<div className={styles.resultCard}>
 					<Typography.Text strong>
@@ -80,6 +92,14 @@ export function SidebarPortableImportSection(props: SidebarPortableImportSection
 					<Typography.Text type="secondary">
 						preflight: schema {props.portableSummary.preflight.schemaReady ? 'ready' : 'blocked'}, encryption {props.portableSummary.preflight.encryptionReady ? 'ready' : 'blocked'}, space {props.portableSummary.preflight.spaceReady ? 'ready' : 'blocked'}
 					</Typography.Text>
+					{props.portableImportResultPresent && props.portableSummary.recoveryBundlePath ? (
+						<Alert
+							type="info"
+							showIcon
+							title="Pre-import recovery saved"
+							description={<>The server retained the previous data at <Typography.Text code copyable>{props.portableSummary.recoveryBundlePath}</Typography.Text>. Inspect <Typography.Text code>{props.portableSummary.recoveryDir}/operation.json</Typography.Text> before retrying an uncertain import.</>}
+						/>
+					) : null}
 					{props.portableSummary.preflight.blockers?.length ? (
 						<Alert
 							type="warning"
@@ -114,6 +134,7 @@ export function SidebarPortableImportSection(props: SidebarPortableImportSection
 				ref={inputRef}
 				data-testid="sidebar-portable-preview-input"
 				type="file"
+				disabled={props.portableLoading === 'import'}
 				accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
 				onChange={(event) => {
 					const file = event.target.files?.[0] ?? null

@@ -81,6 +81,8 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 		restoreError,
 		restorePassword,
 		setRestorePassword,
+		restoreAllowUnsigned,
+		setRestoreAllowUnsigned,
 		restoreResult,
 		setRestoreResult,
 		restoreValidation,
@@ -90,6 +92,8 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 		portablePassword,
 		portableImportResult,
 		handlePortablePasswordChange,
+		portableAllowUnsigned,
+		handlePortableAllowUnsignedChange,
 		portableSummary,
 		portablePreviewReady,
 		handlePortablePreviewFileSelect,
@@ -189,6 +193,8 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 					<SidebarRestoreBundleSection
 						restorePassword={restorePassword}
 						setRestorePassword={setRestorePassword}
+						restoreAllowUnsigned={restoreAllowUnsigned}
+						setRestoreAllowUnsigned={setRestoreAllowUnsigned}
 						restoreLoading={restoreLoading}
 						restoreStagingCapabilityEnabled={restoreStagingCapability.enabled}
 						restoreStagingCapabilityReason={restoreStagingCapability.reason || ''}
@@ -219,6 +225,8 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 					<SidebarPortableImportSection
 						portablePassword={portablePassword}
 						onPortablePasswordChange={handlePortablePasswordChange}
+						portableAllowUnsigned={portableAllowUnsigned}
+						onPortableAllowUnsignedChange={handlePortableAllowUnsignedChange}
 						portableLoading={portableLoading}
 						portablePreviewReady={portablePreviewReady}
 						portableError={portableError}

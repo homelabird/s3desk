@@ -3,12 +3,13 @@ import type { BootstrapResponse, MetaResponse, ServerBackupTransferRequest, Serv
 
 type RequestFn = <T>(path: string, init: RequestInit, options?: RequestOptions) => Promise<T>
 
-function buildBundleForm(file: File, password?: string): FormData {
+function buildBundleForm(file: File, password?: string, allowUnsigned = false): FormData {
 	const form = new FormData()
 	form.append('bundle', file, file.name)
 	if (typeof password === 'string' && password.length > 0) {
 		form.append('password', password)
 	}
+	if (allowUnsigned) form.append('allowUnsigned', 'true')
 	return form
 }
 
@@ -20,8 +21,8 @@ export function getBootstrap(request: RequestFn): Promise<BootstrapResponse> {
 	return request('/bootstrap', { method: 'GET' })
 }
 
-export function restoreServerBackup(request: RequestFn, file: File, password?: string): Promise<ServerRestoreResponse> {
-	return request('/server/restore', { method: 'POST', body: buildBundleForm(file, password) })
+export function restoreServerBackup(request: RequestFn, file: File, password?: string, allowUnsigned = false): Promise<ServerRestoreResponse> {
+	return request('/server/restore', { method: 'POST', body: buildBundleForm(file, password, allowUnsigned) })
 }
 
 export function transferServerBackup(request: RequestFn, body: ServerBackupTransferRequest): Promise<ServerBackupTransferResponse> {
@@ -40,12 +41,12 @@ export function transferServerRestore(request: RequestFn, body: ServerRestoreTra
 	})
 }
 
-export function previewPortableImport(request: RequestFn, file: File, password?: string): Promise<ServerPortableImportResponse> {
-	return request('/server/import-portable/preview', { method: 'POST', body: buildBundleForm(file, password) })
+export function previewPortableImport(request: RequestFn, file: File, password?: string, allowUnsigned = false): Promise<ServerPortableImportResponse> {
+	return request('/server/import-portable/preview', { method: 'POST', body: buildBundleForm(file, password, allowUnsigned) })
 }
 
-export function importPortableBackup(request: RequestFn, file: File, password?: string): Promise<ServerPortableImportResponse> {
-	return request('/server/import-portable', { method: 'POST', body: buildBundleForm(file, password) })
+export function importPortableBackup(request: RequestFn, file: File, password?: string, allowUnsigned = false): Promise<ServerPortableImportResponse> {
+	return request('/server/import-portable', { method: 'POST', body: buildBundleForm(file, password, allowUnsigned) })
 }
 
 export function listServerRestores(request: RequestFn): Promise<ServerStagedRestoreListResponse> {

@@ -14,6 +14,8 @@ type ServerRestoreValidationView = {
 	payloadSignatureVerified?: boolean
 	payloadEncryptionPresent?: boolean
 	payloadEncryptionDecrypted?: boolean
+	sqliteIntegrityVerified?: boolean
+	sqliteSchemaVerified?: boolean
 }
 
 type ExportSummary = {
@@ -40,10 +42,12 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 	const [restoreLoading, setRestoreLoading] = useState(false)
 	const [restoreError, setRestoreError] = useState<string | null>(null)
 	const [restorePassword, setRestorePassword] = useState('')
+	const [restoreAllowUnsigned, setRestoreAllowUnsigned] = useState(false)
 	const [restoreResult, setRestoreResult] = useState<ServerRestoreResponse | null>(null)
 	const [portableLoading, setPortableLoading] = useState<'preview' | 'import' | null>(null)
 	const [portableError, setPortableError] = useState<string | null>(null)
 	const [portablePassword, setPortablePassword] = useState('')
+	const [portableAllowUnsigned, setPortableAllowUnsigned] = useState(false)
 	const [portableDraftFile, setPortableDraftFile] = useState<File | null>(null)
 	const [portablePreview, setPortablePreview] = useState<ServerPortableImportResponse | null>(null)
 	const [portableImportResult, setPortableImportResult] = useState<ServerPortableImportResponse | null>(null)
@@ -82,19 +86,19 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 				return {
 					title: 'Cache + metadata backup',
 					includes: ['SQLite database snapshot', 'Thumbnail cache under data/thumbnails'],
-					notes: ['Logs, artifacts, and staged restore directories are excluded.', 'This snapshot-style bundle is available only on sqlite-backed source servers.'],
+					notes: ['Logs, artifacts, staging upload files, and staged restore directories are excluded.', 'This snapshot-style bundle is available only on sqlite-backed source servers.'],
 				}
 			case 'portable':
 				return {
 					title: 'Portable backup',
 					includes: ['Logical JSONL export for profiles, jobs, uploads, object index, and favorites', 'Thumbnail assets under assets/thumbnails'],
-					notes: ['Portable bundles are intended for cross-backend migration such as sqlite -> postgres and postgres -> sqlite.', 'Logs, artifacts, and staged restore directories are excluded.'],
+					notes: ['Portable bundles are intended for cross-backend migration such as sqlite -> postgres and postgres -> sqlite.', 'Logs, artifacts, staging upload files, and staged restore directories are excluded.'],
 				}
 			default:
 				return {
 					title: 'Full backup',
 					includes: ['SQLite database snapshot', 'Thumbnail cache', 'Logs', 'Artifacts', 'Staging directories'],
-					notes: ['Use this for same-backend host recovery or full sqlite DATA_DIR migration.', 'This snapshot-style bundle is available only on sqlite-backed source servers.'],
+					notes: ['Use this for same-backend host recovery or full sqlite DATA_DIR migration.', 'Pause uploads and other writes, then drain jobs before exporting to coordinate the database and runtime files.', 'This snapshot-style bundle is available only on sqlite-backed source servers.'],
 				}
 		}
 	}, [backupScope])
@@ -146,7 +150,7 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 		setRestoreError(null)
 		setRestoreResult(null)
 		try {
-			const result = await api.server.restoreServerBackup(file, restorePassword || undefined)
+			const result = await api.server.restoreServerBackup(file, restorePassword || undefined, restoreAllowUnsigned)
 			if (restoreRequestTokenRef.current !== requestToken) return
 			setRestoreResult(result)
 			await refreshStagedRestores()
@@ -158,17 +162,26 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 				setRestoreLoading(false)
 			}
 		}
-	}, [api, refreshStagedRestores, restorePassword])
+	}, [api, refreshStagedRestores, restoreAllowUnsigned, restorePassword])
 
-	const handlePortablePasswordChange = useCallback((value: string) => {
+	const invalidatePortablePreview = useCallback(() => {
 		portableRequestTokenRef.current += 1
 		setPortableLoading(null)
-		setPortablePassword(value)
 		setPortableError(null)
 		setPortableDraftFile(null)
 		setPortablePreview(null)
 		setPortableImportResult(null)
 	}, [])
+
+	const handlePortablePasswordChange = useCallback((value: string) => {
+		invalidatePortablePreview()
+		setPortablePassword(value)
+	}, [invalidatePortablePreview])
+
+	const handlePortableAllowUnsignedChange = useCallback((value: boolean) => {
+		invalidatePortablePreview()
+		setPortableAllowUnsigned(value)
+	}, [invalidatePortablePreview])
 
 	const handlePortablePreviewFileSelect = useCallback(async (file: File | null) => {
 		if (!file) return
@@ -180,7 +193,7 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 		setPortablePreview(null)
 		setPortableImportResult(null)
 		try {
-			const result = await api.server.previewPortableImport(file, portablePassword || undefined)
+			const result = await api.server.previewPortableImport(file, portablePassword || undefined, portableAllowUnsigned)
 			if (portableRequestTokenRef.current !== requestToken) return
 			setPortableDraftFile(file)
 			setPortablePreview(result)
@@ -193,7 +206,7 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 				setPortableLoading(null)
 			}
 		}
-	}, [api, portablePassword])
+	}, [api, portableAllowUnsigned, portablePassword])
 
 	const handlePortableImport = useCallback(async () => {
 		if (!portableDraftFile) return
@@ -204,25 +217,31 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 		setPortableLoading('import')
 		setPortableError(null)
 		setPortableImportResult(null)
+		setPortableDraftFile(null)
+		setPortablePreview(null)
 		try {
-			const result = await api.server.importPortableBackup(currentFile, currentPassword)
+			const result = await api.server.importPortableBackup(currentFile, currentPassword, portableAllowUnsigned)
 			if (portableRequestTokenRef.current !== requestToken) return
 			setPortableImportResult(result)
 		} catch (err) {
 			if (portableRequestTokenRef.current !== requestToken) return
-			setPortableError(formatErr(err))
+			setPortableError(`The import result could not be confirmed. Inspect the server import-recovery records and destination data before retrying. ${formatErr(err)}`)
 		} finally {
 			if (portableRequestTokenRef.current === requestToken) {
 				setPortableLoading(null)
 			}
 		}
-	}, [api, portableDraftFile, portablePassword])
+	}, [api, portableAllowUnsigned, portableDraftFile, portablePassword])
 
 	const resetBackupDrawerAsyncState = useCallback(() => {
 		portableRequestTokenRef.current += 1
 		restoreRequestTokenRef.current += 1
 		setPortableLoading(null)
 		setRestoreLoading(false)
+		setRestoreAllowUnsigned(false)
+		setPortableAllowUnsigned(false)
+		setPortableDraftFile(null)
+		setPortablePreview(null)
 	}, [])
 
 	const restoreValidation = (restoreResult as (ServerRestoreResponse & { validation?: ServerRestoreValidationView }) | null)?.validation
@@ -261,6 +280,8 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 		restoreError,
 		restorePassword,
 		setRestorePassword,
+		restoreAllowUnsigned,
+		setRestoreAllowUnsigned,
 		restoreResult,
 		setRestoreResult,
 		restoreValidation,
@@ -269,6 +290,8 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 		portableError,
 		portablePassword,
 		handlePortablePasswordChange,
+		portableAllowUnsigned,
+		handlePortableAllowUnsignedChange,
 		portableDraftFile,
 		portablePreview,
 		portableImportResult,

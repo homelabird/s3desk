@@ -106,8 +106,8 @@ export function createServerSubFacade(deps: SubFacadeDeps) {
 		): { promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>; abort: () => void } {
 			return downloadsDomain.downloadServerBackup(deps.getXhrConfig(), scope, confidentiality, options)
 		},
-		restoreServerBackup(file: File, password?: string): Promise<ServerRestoreResponse> {
-			return serverDomain.restoreServerBackup(deps.requestFn, file, password)
+		restoreServerBackup(file: File, password?: string, allowUnsigned = false): Promise<ServerRestoreResponse> {
+			return serverDomain.restoreServerBackup(deps.requestFn, file, password, allowUnsigned)
 		},
 		transferServerBackup(body: ServerBackupTransferRequest): Promise<ServerBackupTransferResponse> {
 			return serverDomain.transferServerBackup(deps.requestFn, body)
@@ -115,11 +115,11 @@ export function createServerSubFacade(deps: SubFacadeDeps) {
 		transferServerRestore(body: ServerRestoreTransferRequest): Promise<ServerRestoreResponse> {
 			return serverDomain.transferServerRestore(deps.requestFn, body)
 		},
-		previewPortableImport(file: File, password?: string): Promise<ServerPortableImportResponse> {
-			return serverDomain.previewPortableImport(deps.requestFn, file, password)
+		previewPortableImport(file: File, password?: string, allowUnsigned = false): Promise<ServerPortableImportResponse> {
+			return serverDomain.previewPortableImport(deps.requestFn, file, password, allowUnsigned)
 		},
-		importPortableBackup(file: File, password?: string): Promise<ServerPortableImportResponse> {
-			return serverDomain.importPortableBackup(deps.requestFn, file, password)
+		importPortableBackup(file: File, password?: string, allowUnsigned = false): Promise<ServerPortableImportResponse> {
+			return serverDomain.importPortableBackup(deps.requestFn, file, password, allowUnsigned)
 		},
 		listServerRestores(): Promise<ServerStagedRestoreListResponse> {
 			return serverDomain.listServerRestores(deps.requestFn)

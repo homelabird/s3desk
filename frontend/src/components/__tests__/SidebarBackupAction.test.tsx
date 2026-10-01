@@ -134,7 +134,9 @@ function createApi(serverOverrides: Record<string, unknown> = {}) {
 
 async function openBackupDrawer() {
 	fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
-	return screen.findByRole('dialog', { name: 'Backup and restore' })
+	const drawer = await screen.findByRole('dialog', { name: 'Backup and restore' })
+	await screen.findByText('Backup export', {}, { timeout: 5_000 })
+	return drawer
 }
 
 function renderRemoteBackupAction(api: ReturnType<typeof createMockApiClient>, queryClient: QueryClient) {
@@ -498,17 +500,66 @@ describe('SidebarBackupAction', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Stage restore' }))
 		fireEvent.change(screen.getByPlaceholderText('Bundle password (optional)'), { target: { value: 'restore-secret' } })
 		fireEvent.change(screen.getByTestId('sidebar-restore-input'), { target: { files: [restoreFile] } })
-		await waitFor(() => expect(restoreServerBackup).toHaveBeenCalledWith(restoreFile, 'restore-secret'))
+		await waitFor(() => expect(restoreServerBackup).toHaveBeenCalledWith(restoreFile, 'restore-secret', false))
 
 		const portableFile = new File(['portable'], 'portable-backup.tar.gz', { type: 'application/gzip' })
 		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
 		fireEvent.change(screen.getByPlaceholderText('Portable bundle password (optional)'), { target: { value: 'portable-secret' } })
 		fireEvent.change(screen.getByTestId('sidebar-portable-preview-input'), { target: { files: [portableFile] } })
-		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(portableFile, 'portable-secret'))
+		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(portableFile, 'portable-secret', false))
 		await waitFor(() => expect(screen.getByRole('button', { name: 'Run portable import' })).toBeEnabled())
 
 		fireEvent.click(screen.getByRole('button', { name: 'Run portable import' }))
-		await waitFor(() => expect(importPortableBackup).toHaveBeenCalledWith(portableFile, 'portable-secret'))
+		await waitFor(() => expect(importPortableBackup).toHaveBeenCalledWith(portableFile, 'portable-secret', false))
+	})
+
+	it('requires a new preview when unsigned trust changes and displays partial imports', { timeout: 15_000 }, async () => {
+		const previewPortableImport = vi.fn(() => Promise.resolve(buildPortablePreview()))
+		const importPortableBackup = vi.fn(() => Promise.resolve(buildPortablePreview({
+			mode: 'replace', status: 'partial', recoveryDir: '/data/import-recovery/import-example', recoveryBundlePath: '/data/import-recovery/import-example/before.tar.gz', warnings: ['Thumbnail replacement failed; previous assets were kept.'],
+		})))
+		const api = createApi({ previewPortableImport, importPortableBackup })
+		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
+		const trust = screen.getByRole('checkbox', { name: /I trust this unsigned backup/ })
+		expect(trust).not.toBeChecked()
+		const file = new File(['portable'], 'unsigned.tar.gz', { type: 'application/gzip' })
+		fireEvent.change(screen.getByTestId('sidebar-portable-preview-input'), { target: { files: [file] } })
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Run portable import' })).toBeEnabled())
+		fireEvent.click(trust)
+		expect(screen.getByRole('button', { name: 'Run portable import' })).toBeDisabled()
+		fireEvent.change(screen.getByTestId('sidebar-portable-preview-input'), { target: { files: [file] } })
+		await waitFor(() => expect(previewPortableImport).toHaveBeenLastCalledWith(file, undefined, true))
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Run portable import' })).toBeEnabled())
+		fireEvent.click(screen.getByRole('button', { name: 'Run portable import' }))
+		await waitFor(() => expect(importPortableBackup).toHaveBeenCalledWith(file, undefined, true))
+		expect(await screen.findByText('Import partially completed')).toBeInTheDocument()
+		expect(screen.getByText('Pre-import recovery saved')).toBeInTheDocument()
+		expect(screen.getByText('/data/import-recovery/import-example/before.tar.gz')).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
+		expect(screen.getByRole('checkbox', { name: /I trust this unsigned backup/ })).not.toBeChecked()
+		expect(screen.getByRole('button', { name: 'Run portable import' })).toBeDisabled()
+	})
+
+	it('invalidates the preview when an import response is lost', { timeout: 15_000 }, async () => {
+		const importPortableBackup = vi.fn(async () => { throw new Error('synthetic lost response') })
+		const api = createApi({
+			previewPortableImport: vi.fn(() => Promise.resolve(buildPortablePreview())),
+			importPortableBackup,
+		})
+		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
+		const file = new File(['portable'], 'portable.tar.gz', { type: 'application/gzip' })
+		fireEvent.change(screen.getByTestId('sidebar-portable-preview-input'), { target: { files: [file] } })
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Run portable import' })).toBeEnabled())
+		fireEvent.click(screen.getByRole('button', { name: 'Run portable import' }))
+		expect(await screen.findByText(/The import result could not be confirmed/)).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Run portable import' })).toBeDisabled()
+		expect(importPortableBackup).toHaveBeenCalledTimes(1)
 	})
 
 	it('ignores stale portable preview responses after selecting a newer file', async () => {
@@ -531,10 +582,10 @@ describe('SidebarBackupAction', () => {
 		const secondFile = new File(['second'], 'second-portable.tar.gz', { type: 'application/gzip' })
 
 		fireEvent.change(previewInput, { target: { files: [firstFile] } })
-		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(firstFile, undefined))
+		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(firstFile, undefined, false))
 
 		fireEvent.change(previewInput, { target: { files: [secondFile] } })
-		await waitFor(() => expect(previewPortableImport).toHaveBeenLastCalledWith(secondFile, undefined))
+		await waitFor(() => expect(previewPortableImport).toHaveBeenLastCalledWith(secondFile, undefined, false))
 
 		await act(async () => {
 			secondPreview.resolve(buildPortablePreview({ targetDbBackend: 'sqlite' }))
@@ -552,7 +603,7 @@ describe('SidebarBackupAction', () => {
 		expect(screen.queryByText('dry_run / target postgres')).not.toBeInTheDocument()
 	})
 
-	it('ignores stale portable import responses after the portable password changes', async () => {
+	it('locks portable inputs while replacing the database and keeps the partial result visible', async () => {
 		const previewPortableImport = vi.fn(() => Promise.resolve(buildPortablePreview()))
 		const importRequest = deferred<ServerPortableImportResponse>()
 		const importPortableBackup = vi.fn(() => importRequest.promise)
@@ -572,26 +623,27 @@ describe('SidebarBackupAction', () => {
 		const portableFile = new File(['portable'], 'portable-backup.tar.gz', { type: 'application/gzip' })
 		fireEvent.change(previewInput, { target: { files: [portableFile] } })
 
-		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(portableFile, 'portable-secret'))
+		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(portableFile, 'portable-secret', false))
 		await waitFor(() => expect(screen.getByRole('button', { name: 'Run portable import' })).toBeEnabled())
 
 		fireEvent.click(screen.getByRole('button', { name: 'Run portable import' }))
-		await waitFor(() => expect(importPortableBackup).toHaveBeenCalledWith(portableFile, 'portable-secret'))
+		await waitFor(() => expect(importPortableBackup).toHaveBeenCalledWith(portableFile, 'portable-secret', false))
 
-		fireEvent.change(screen.getByPlaceholderText('Portable bundle password (optional)'), {
-			target: { value: 'new-secret' },
-		})
-		expect(screen.queryByText('Portable import result')).not.toBeInTheDocument()
-		expect(screen.queryByText('Portable preview result')).not.toBeInTheDocument()
+		expect(screen.getByPlaceholderText('Portable bundle password (optional)')).toBeDisabled()
+		expect(screen.getByRole('checkbox', { name: /I trust this unsigned backup/ })).toBeDisabled()
+		expect(screen.getByRole('button', { name: 'Preview portable import' })).toBeDisabled()
+		expect(previewInput).toBeDisabled()
 
 		await act(async () => {
-			importRequest.resolve(buildPortablePreview({ mode: 'replace' }))
+			importRequest.resolve(buildPortablePreview({ mode: 'replace', status: 'partial' }))
 			await Promise.resolve()
 		})
 
-		expect(screen.queryByText('Portable import result')).not.toBeInTheDocument()
-		expect(screen.queryByText('replace / target postgres')).not.toBeInTheDocument()
+		expect(screen.getByText('Portable import result')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Run portable import' })).toBeDisabled()
+		expect(screen.getByText('Import partially completed')).toBeInTheDocument()
+		expect(screen.getByPlaceholderText('Portable bundle password (optional)')).toBeEnabled()
+		expect(previewInput).toBeEnabled()
 	})
 
 	it('ignores stale staged restore inventory responses after closing and reopening the drawer', async () => {
@@ -656,7 +708,7 @@ describe('SidebarBackupAction', () => {
 
 		const restoreFile = new File(['backup'], 'server-backup.tar.gz', { type: 'application/gzip' })
 		fireEvent.change(screen.getByTestId('sidebar-restore-input'), { target: { files: [restoreFile] } })
-		await waitFor(() => expect(restoreServerBackup).toHaveBeenCalledWith(restoreFile, undefined))
+		await waitFor(() => expect(restoreServerBackup).toHaveBeenCalledWith(restoreFile, undefined, false))
 
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 		await waitFor(() => {

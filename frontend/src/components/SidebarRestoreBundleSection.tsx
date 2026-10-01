@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Typography } from 'antd'
+import { Alert, Button, Checkbox, Input, Typography } from 'antd'
 import { useRef } from 'react'
 
 import styles from './SidebarBackupAction.module.css'
@@ -10,6 +10,8 @@ type RestoreValidationView = {
 	payloadSignatureVerified?: boolean
 	payloadEncryptionPresent?: boolean
 	payloadEncryptionDecrypted?: boolean
+	sqliteIntegrityVerified?: boolean
+	sqliteSchemaVerified?: boolean
 }
 
 type RestoreResultView = {
@@ -26,6 +28,8 @@ type RestoreResultView = {
 type SidebarRestoreBundleSectionProps = {
 	restorePassword: string
 	setRestorePassword: (value: string) => void
+	restoreAllowUnsigned: boolean
+	setRestoreAllowUnsigned: (value: boolean) => void
 	restoreLoading: boolean
 	restoreStagingCapabilityEnabled: boolean
 	restoreStagingCapabilityReason: string
@@ -52,6 +56,9 @@ export function SidebarRestoreBundleSection(props: SidebarRestoreBundleSectionPr
 				value={props.restorePassword}
 				onChange={(event) => props.setRestorePassword(event.target.value)}
 			/>
+			<Checkbox checked={props.restoreAllowUnsigned} onChange={(event) => props.setRestoreAllowUnsigned(event.target.checked)}>
+				I trust this unsigned backup (authenticity cannot be verified)
+			</Checkbox>
 			<div className={styles.actions}>
 				<Button
 					loading={props.restoreLoading}
@@ -77,7 +84,8 @@ export function SidebarRestoreBundleSection(props: SidebarRestoreBundleSectionPr
 						<Typography.Text type="secondary">
 							{restoreValidation.payloadChecksumPresent ? (restoreValidation.payloadChecksumVerified ? 'checksum verified' : 'checksum not verified') : 'checksum absent'} /{' '}
 							{restoreValidation.payloadSignaturePresent ? (restoreValidation.payloadSignatureVerified ? 'signature verified' : 'signature not verified') : 'signature absent'} /{' '}
-							{restoreValidation.payloadEncryptionPresent ? (restoreValidation.payloadEncryptionDecrypted ? 'payload decrypted' : 'payload not decrypted') : 'payload clear'}
+							{restoreValidation.payloadEncryptionPresent ? (restoreValidation.payloadEncryptionDecrypted ? 'payload decrypted' : 'payload not decrypted') : 'payload clear'} /{' '}
+							{restoreValidation.sqliteIntegrityVerified && restoreValidation.sqliteSchemaVerified ? 'SQLite integrity and schema verified' : 'SQLite validation not confirmed'}
 						</Typography.Text>
 					) : null}
 					<div className={styles.inlineActions}>

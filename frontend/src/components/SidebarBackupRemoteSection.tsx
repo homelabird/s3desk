@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Input, InputNumber, Radio, Select, Typography } from 'antd'
+import { Alert, Button, Checkbox, Input, InputNumber, Radio, Select, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 
 import type { APIClientShape, ServerBackupConfidentialityMode, ServerBackupScope, ServerBackupTransferLocation } from '../api/client'
@@ -33,6 +33,7 @@ export function SidebarBackupRemoteSection(props: Props) {
 	const [username, setUsername] = useState('')
 	const [ftpPassword, setFTPPassword] = useState('')
 	const [restorePassword, setRestorePassword] = useState('')
+	const [allowUnsigned, setAllowUnsigned] = useState(false)
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [result, setResult] = useState<string | null>(null)
@@ -89,6 +90,7 @@ export function SidebarBackupRemoteSection(props: Props) {
 			} else {
 				const response = await props.api.server.transferServerRestore({
 					backupPassword: restorePassword || undefined,
+					allowUnsigned,
 					location,
 				})
 				await props.onRestoreStaged(response)
@@ -105,9 +107,9 @@ export function SidebarBackupRemoteSection(props: Props) {
 		<div className={styles.section}>
 			<Typography.Text strong>Remote backup storage</Typography.Text>
 			<Typography.Text type="secondary">
-				Store or fetch one existing backup format. NFS means a path already mounted on this server and allowed by <Typography.Text code>ALLOWED_LOCAL_DIRS</Typography.Text>.
+				Store any supported backup format. Fetch and stage restore accepts Full or Cache + metadata bundles; use Portable import for portable bundles. NFS means a path already mounted on this server and allowed by <Typography.Text code>ALLOWED_LOCAL_DIRS</Typography.Text>.
 			</Typography.Text>
-			<Radio.Group value={operation} onChange={(event) => setOperation(event.target.value)}>
+			<Radio.Group value={operation} onChange={(event) => { setOperation(event.target.value); setAllowUnsigned(false) }}>
 				<Radio.Button value="export">Store backup</Radio.Button>
 				<Radio.Button value="restore">Fetch and stage restore</Radio.Button>
 			</Radio.Group>
@@ -158,9 +160,14 @@ export function SidebarBackupRemoteSection(props: Props) {
 				/>
 			</FormField>
 			{operation === 'restore' ? (
+				<>
 				<FormField label="Backup password (optional)" htmlFor="remote-backup-restore-password">
 					<Input.Password id="remote-backup-restore-password" value={restorePassword} onChange={(event) => setRestorePassword(event.target.value)} />
 				</FormField>
+				<Checkbox checked={allowUnsigned} onChange={(event) => setAllowUnsigned(event.target.checked)}>
+					I trust this unsigned backup (authenticity cannot be verified)
+				</Checkbox>
+				</>
 			) : null}
 			<Typography.Text type="secondary">
 				{operation === 'export' ? 'A trailing slash appends the generated backup filename.' : 'Enter the exact backup file path or object key.'}
