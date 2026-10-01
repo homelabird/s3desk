@@ -54,6 +54,22 @@
   color: var(--s3d-color-text);
 }
 
+.objectThumbnailPlaceholder[data-compact='true'] {
+  padding: 0;
+}
+
+.objectThumbnailPlaceholder[data-compact='true'] > span {
+  display: none;
+}
+
+.objectThumbnailPlaceholder[data-compact='true']::before {
+  content: '…';
+}
+
+.objectThumbnailPlaceholderFailed[data-compact='true']::before {
+  content: '!';
+}
+
 .objectThumbnailImage {
   background: var(--s3d-media-checkerboard);
 }

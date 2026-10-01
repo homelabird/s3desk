@@ -8,14 +8,15 @@ This guide keeps S3Desk UI changes consistent after the UI/UX design audit.
 - Use `--s3d-color-bg-card` for stable content containers.
 - Use `--s3d-color-bg-elevated` for floating controls, popovers, menus, modal panels, and focused cards.
 - Use `--s3d-gradient-section` for section headers, table headers, and sticky structural bars.
-- Use `--s3d-gradient-surface` for major cards, page sections, modal panels, and list containers.
+- Keep stationary cards, page sections, and lists on `--s3d-color-bg-card`; use elevation and shadows for overlays and active states.
+- Page titles can sit directly on the page background with a bottom divider; avoid a separate raised card around the title and toolbar.
 - Avoid using plain `--s3d-color-bg` for data-dense cards unless the card already has a strong border, accent edge, or shadow.
 
 ## Border Tokens
 
 - Use `--s3d-color-border-soft` only for internal row dividers and secondary separators.
 - Use `--s3d-color-border` for normal cards, inputs, tables, and section boundaries.
-- Use `--s3d-color-border-strong` for app chrome, modal panels, table/list containers, and floating surfaces.
+- Use `--s3d-color-border-strong` for modal panels and floating surfaces. App chrome and stationary tables/lists use `--s3d-color-border`.
 - Use `--s3d-color-border-dashed` for empty states, upload zones, and placeholder containers.
 
 ## Text Tokens
@@ -35,7 +36,7 @@ This guide keeps S3Desk UI changes consistent after the UI/UX design audit.
 
 ## Layout Guidance
 
-- Dense tables and virtual lists need both row separators and a stronger container boundary.
+- Dense tables and virtual lists need row separators and a visible container boundary, without a floating-card shadow on every section.
 - Mobile cards should not rely only on top borders; give them a card background or selected/error accent edge.
 - Popovers, dropdowns, modals, drawers, and sheets must have elevated backgrounds, strong borders, and shadows.
 - First-run, login, and profile setup surfaces should use the same hierarchy as the main app so users do not experience a visual reset.

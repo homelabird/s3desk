@@ -1,11 +1,21 @@
 # Design Audit Implementation Status
 
 Originally audited: 2026-05-24
-Last updated: 2026-09-06
+Last updated: 2026-10-01
 
 ## Objective
 
 Track the implementation state for the project-wide UI/UX design audit focused on color, contrast, visual hierarchy, and discoverability issues.
+
+## 2026-10-01 Design Optimization
+
+- Desktop chrome is 64px instead of 80px, with the sidebar brand aligned to it. Selected navigation uses an accent edge; keyboard focus has a separate outline.
+- Objects uses the same page-title divider as the other routes. Stationary object, bucket, and profile lists retain row boundaries while dropping raised-card shadows and gradients.
+- Desktop object search, filters, view buttons, and sort controls align at a common control height.
+- Mobile clearable inputs retain a 48px outer target and a 44px inner input without double padding; Uploads Bucket and Prefix now have matching heights.
+- Object list selection, favorite, file/folder, and action targets meet the 48px mobile floor. Provider badges use the stronger primary text token to pass the rendered contrast scan.
+- Small thumbnail loading/failure placeholders use compact marks while retaining their accessible state labels and titles. Larger previews keep recovery text.
+- Current commands, rendered review, refreshed baselines, and evidence limits are recorded in [the validation log](DESIGN_AUDIT_VALIDATION_LOG.md#2026-10-01-design-optimization).
 
 ## 2026-09-06 Mobile and Desktop Review Follow-up
 

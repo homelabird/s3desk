@@ -47,11 +47,21 @@ async function setupObjectsAuditPage(
 test.describe('Design audit visual smoke @visual', () => {
 	test('Objects shell hierarchy remains visible in light mode', async ({ page }) => {
 		await setupObjectsAuditPage(page, 'light')
+		const headerBox = await page.getByTestId('app-header').boundingBox() // e2e-geometry-allow guards the compact desktop chrome height
+		expect(headerBox?.height).toBeLessThanOrEqual(64)
 		const listControls = await page.getByTestId('objects-list-controls-root').boundingBox() // e2e-geometry-allow keeps primary content above the desktop fold
 		expect(listControls?.y).toBeLessThanOrEqual(320)
 		const searchBox = await page.getByLabel('Search current folder').locator('..').boundingBox() // e2e-geometry-allow checks the visible input wrapper alignment
 		const filtersBox = await page.getByRole('button', { name: 'Filters' }).boundingBox() // e2e-geometry-allow checks desktop control alignment
 		expect(Math.abs((searchBox?.y ?? 0) - (filtersBox?.y ?? 0))).toBeLessThanOrEqual(2)
+		await page.getByRole('link', { name: 'Open objects workspace' }).focus()
+		await page.keyboard.press('Tab')
+		const profilesLink = page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Profiles', exact: true })
+		await expect(profilesLink).toBeFocused()
+		await expect(profilesLink).toHaveCSS('outline-width', '2px')
+		await expect(page.getByRole('link', { name: 'Objects', exact: true })).toHaveAttribute('aria-current', 'page')
+		await expect(page.getByRole('complementary')).toHaveScreenshot('design-audit-navigation-focus.png', visualScreenshotOptions)
+		await page.getByRole('main').focus()
 
 		await expect(page).toHaveScreenshot('design-audit-objects-shell-light.png', visualScreenshotOptions)
 	})
@@ -91,6 +101,30 @@ test.describe('Design audit visual smoke @visual', () => {
 		await expect(page).toHaveScreenshot('design-audit-objects-shell-narrow-mobile.png', visualScreenshotOptions)
 	})
 
+	test('Compact thumbnail loading and failure states fit the mobile list', async ({ page }) => {
+		let releaseThumbnail: () => void = () => {}
+		const thumbnailResponse = new Promise<void>((resolve) => { releaseThumbnail = resolve })
+		await installObjectsMobileResponsiveFixtures(page)
+		await page.route('**/objects/thumbnail?**', async (route) => {
+			await thumbnailResponse
+			await route.fulfill({ status: 413, json: { error: { code: 'too_large', message: 'Thumbnail unavailable' } } })
+		})
+		await seedObjectsMobileResponsiveStorage(page)
+		await page.setViewportSize({ width: 320, height: 568 })
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByTestId('objects-list-controls-root'))
+		const loading = page.getByRole('img', { name: 'Thumbnail loading for preview.png' })
+		await expect(loading).toBeVisible()
+		await expect(loading).toHaveCSS('padding', '0px')
+		await expect(loading.locator('span').first()).toBeHidden()
+		await expect(loading.locator('span').last()).toBeHidden()
+		releaseThumbnail()
+		const unavailable = page.getByRole('img', { name: 'Thumbnail unavailable for preview.png' })
+		await expect(unavailable).toBeVisible()
+		await expect(unavailable.locator('span').first()).toBeHidden()
+		await expect(unavailable.locator('span').last()).toBeHidden()
+		await expect(page).toHaveScreenshot('design-audit-objects-thumbnail-unavailable-mobile.png', visualScreenshotOptions)
+	})
+
 	test('Objects bucket picker floating surface remains distinct', async ({ page }) => {
 		await setupObjectsAuditPage(page, 'light')
 
@@ -121,7 +155,10 @@ test.describe('Design audit visual smoke @visual', () => {
 		await gotoUploadsPage(page)
 		const prefixInput = page.getByLabel('Upload prefix (optional)')
 		await expect(prefixInput).toBeVisible()
+		const bucketInputBox = await page.getByRole('combobox', { name: 'Bucket', exact: true }).locator('..').boundingBox() // e2e-geometry-allow measures the outer clearable control, not its nested input
 		const prefixBox = await prefixInput.boundingBox() // e2e-geometry-allow proves the upload target remains in the first mobile viewport
+		expect(bucketInputBox?.height).toBeGreaterThanOrEqual(48)
+		expect(Math.abs((bucketInputBox?.height ?? 0) - (prefixBox?.height ?? 0))).toBeLessThanOrEqual(2) // e2e-geometry-allow prevents the nested input touch floor from inflating only the Bucket field
 		expect((prefixBox?.y ?? 844) + (prefixBox?.height ?? 0)).toBeLessThanOrEqual(844)
 
 		await expect(page).toHaveScreenshot('design-audit-uploads-mobile.png', visualScreenshotOptions)

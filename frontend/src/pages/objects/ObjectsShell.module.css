@@ -460,11 +460,8 @@
 
   .pageHeader {
     gap: 10px;
-    padding: 16px;
-    border: 1px solid var(--s3d-color-border);
-    border-radius: var(--s3d-radius-lg);
-    background: var(--s3d-gradient-surface);
-    box-shadow: var(--s3d-shadow-sm);
+    padding: 4px 0 14px;
+    border-bottom: 1px solid var(--s3d-color-border-secondary);
   }
 }
 

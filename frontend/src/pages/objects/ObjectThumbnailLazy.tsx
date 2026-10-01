@@ -28,6 +28,7 @@ function ObjectThumbnailFallback(props: Pick<ObjectThumbnailProps, 'altText' | '
 		<span
 			className={`${styles.objectThumbnailPlaceholder} ${styles.objectThumbnailPlaceholderLoading}`}
 			style={buildFallbackStyle(props)}
+			data-compact={props.size < 48}
 			role="img"
 			aria-label={props.altText ?? `${descriptor.title} for ${fileName}`}
 			title={`${descriptor.title}: ${fileName}`}

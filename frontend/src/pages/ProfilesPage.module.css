@@ -134,10 +134,9 @@
 }
 
 .tableWrap {
-	border: 1px solid var(--s3d-color-border-strong);
+	border: 1px solid var(--s3d-color-border);
 	border-radius: var(--s3d-radius-lg);
-	background: var(--s3d-gradient-surface);
-	box-shadow: var(--s3d-shadow-sm);
+	background: var(--s3d-color-bg-card);
 	overflow: hidden;
 }
 
@@ -236,7 +235,7 @@
 	padding: 6px 10px;
 	border: 1px solid var(--s3d-color-info-border);
 	background: var(--s3d-color-primary-bg);
-	color: var(--s3d-color-primary);
+	color: var(--s3d-color-primary-hover);
 }
 
 .connectionStack {

@@ -119,6 +119,7 @@ export function ObjectThumbnail(props: ObjectThumbnailProps) {
 			<span
 				className={`${styles.objectThumbnailPlaceholder} ${failed ? styles.objectThumbnailPlaceholderFailed : styles.objectThumbnailPlaceholderLoading}`}
 				style={style}
+				data-compact={props.size < 48}
 				role="img"
 				aria-label={`${descriptor.title} for ${fileName}`}
 				title={`${descriptor.title}: ${fileName}`}

@@ -470,7 +470,7 @@ body::after {
     min-height: 48px !important;
   }
 
-  input:not([type='hidden']):not([type='checkbox']):not([type='radio']),
+  input:where(:not([type='hidden']):not([type='checkbox']):not([type='radio'])),
   select,
   textarea,
   .ant-input-affix-wrapper,
@@ -480,7 +480,14 @@ body::after {
     min-height: 48px !important;
   }
 
-  .ant-input-affix-wrapper > .ant-input,
+  .ant-input-affix-wrapper {
+    padding-block: 0 !important;
+  }
+
+  .ant-input-affix-wrapper > .ant-input {
+    min-height: var(--s3d-control-size-touch) !important;
+  }
+
   .ant-input-number-input {
     min-height: 0 !important;
   }

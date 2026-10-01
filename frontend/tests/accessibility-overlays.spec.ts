@@ -669,8 +669,7 @@ test.describe('overlay accessibility scans', () => {
 
 		await page.getByRole('button', { name: /Grid/i }).click()
 		await expect(page.getByTestId('objects-grid-content')).toBeVisible()
-		await objectsListRow(page, 'preview.png').getByRole('button', { name: 'Object actions for preview.png' }).click()
-		await page.getByRole('menuitem', { name: 'Open large preview' }).click()
+		await page.getByRole('button', { name: 'Open large preview for preview.png' }).click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		await expect(modal).toBeVisible()

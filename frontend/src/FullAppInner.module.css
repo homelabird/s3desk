@@ -18,7 +18,8 @@
 	align-items: center;
 	gap: 10px;
 	padding: 10px 12px;
-	border-radius: 12px;
+	min-height: var(--s3d-control-size-touch);
+	border-radius: var(--s3d-radius-sm);
 	color: inherit;
 	text-decoration: none;
 	border: 1px solid transparent;
@@ -28,17 +29,18 @@
 		box-shadow var(--s3d-transition-fast);
 }
 
-.navLink:hover,
-.navLink:focus-visible {
+.navLink:hover {
 	background: var(--s3d-sidebar-hover);
-	border-color: color-mix(in srgb, var(--s3d-color-focus) 42%, var(--s3d-color-border));
-	box-shadow: var(--s3d-shadow-sm);
-	outline: none;
+}
+
+.navLink:focus-visible {
+	outline: 2px solid var(--s3d-color-focus);
+	outline-offset: 2px;
 }
 
 .navLinkActive {
 	background: var(--s3d-sidebar-active);
-	border-color: color-mix(in srgb, var(--s3d-color-primary) 46%, var(--s3d-color-border));
+	box-shadow: inset 3px 0 0 var(--s3d-color-primary);
 	color: var(--s3d-sidebar-active-text);
 	font-weight: 700;
 }
@@ -115,20 +117,20 @@
 .sidebarToggleRow {
 	display: flex;
 	align-items: center;
-	min-height: 52px;
+	min-height: 64px;
 	padding: 4px 8px;
 }
 
 .header {
-	background: var(--s3d-color-bg-glass);
-	border-bottom: 1px solid var(--s3d-color-border-strong);
-	min-height: 52px;
+	background: var(--s3d-color-bg-card);
+	border-bottom: 1px solid var(--s3d-color-border);
+	height: auto;
+	min-height: 64px;
+	line-height: normal;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	gap: 10px;
-	backdrop-filter: blur(12px);
-	box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
 }
 
 .headerCompact {
@@ -307,6 +309,7 @@
 
 @media (max-width: 768px) {
 	.header {
+		min-height: 52px;
 		gap: 8px;
 	}
 

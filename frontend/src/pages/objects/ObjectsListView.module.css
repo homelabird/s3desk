@@ -18,7 +18,7 @@
 }
 
 .dropZoneCard {
-  border: 1px solid var(--s3d-color-border-strong);
+  border: 1px solid var(--s3d-color-border);
   border-radius: var(--s3d-radius-lg);
   overflow: hidden;
   position: relative;
@@ -27,8 +27,7 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  background: var(--s3d-gradient-surface);
-  box-shadow: var(--s3d-shadow-sm);
+  background: var(--s3d-color-bg-card);
   transition: box-shadow var(--s3d-transition-normal);
 }
 
@@ -556,8 +555,7 @@
   padding: 10px 12px;
   border: 1px solid var(--s3d-color-border);
   border-radius: var(--s3d-radius-lg);
-  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 90%, var(--s3d-color-bg-secondary));
-  box-shadow: var(--s3d-shadow-sm);
+  background: var(--s3d-color-bg-card);
 }
 
 .listControlsStack {
@@ -724,10 +722,6 @@
   max-width: 100%;
 }
 
-.listControlsSearchInputFull.listControlsSearchInputFull > :global(input.ant-input) {
-  min-height: 0 !important;
-}
-
 .listControlsSearchInput {
   width: min(100%, 320px);
   flex: 1 1 220px;
@@ -755,7 +749,7 @@
   width: 100%;
   display: flex;
   flex-wrap: wrap;
-  align-items: start;
+  align-items: center;
   gap: 10px 12px;
 }
 
@@ -766,6 +760,11 @@
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.listControlsDesktopLeft :global(.ant-btn),
+.listControlsDesktopLeft :global(select) {
+  min-height: var(--s3d-control-size-default);
 }
 
 .listControlsSummaryText {
@@ -1062,22 +1061,22 @@
    landscape phones too, not only the <=480px portrait breakpoint. */
 @media (max-width: 991px), (pointer: coarse) {
   .listGridCompact {
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-columns: var(--s3d-control-size-touch-lg) minmax(0, 1fr) var(--s3d-control-size-touch-lg);
     gap: 4px;
   }
 
   .listRowShell {
-    padding-block: 3px;
+    padding-block: 2px;
   }
 
   .listRowShell .listRowIconButton,
   .listRowShell .listRowMenuButton,
   .listRowShell .listRowFavoriteButton,
   .listRowCheckboxCell :global(.ant-checkbox-wrapper) {
-    min-width: var(--s3d-control-size-touch) !important;
-    min-height: var(--s3d-control-size-touch) !important;
-    width: var(--s3d-control-size-touch);
-    height: var(--s3d-control-size-touch);
+    min-width: var(--s3d-control-size-touch-lg) !important;
+    min-height: var(--s3d-control-size-touch-lg) !important;
+    width: var(--s3d-control-size-touch-lg);
+    height: var(--s3d-control-size-touch-lg);
   }
 
   .listRowCheckboxCell :global(.ant-checkbox-wrapper) {
@@ -1088,7 +1087,7 @@
 
   .listRowShell .listRowBodyButton {
     min-width: 0 !important;
-    min-height: var(--s3d-control-size-touch) !important;
+    min-height: var(--s3d-control-size-touch-lg) !important;
     flex: 1 1 auto;
   }
 

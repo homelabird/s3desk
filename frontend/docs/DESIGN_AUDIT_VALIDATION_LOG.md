@@ -1,8 +1,37 @@
 # Design Audit Validation Log
 
-Latest review: 2026-09-06. Earlier entries below retain their original dates.
+Latest review: 2026-10-01. Earlier entries below retain their original dates.
 
 Use this file to record the evidence required before the UI/UX design audit can be considered complete.
+
+## 2026-10-01 Design Optimization
+
+The current render showed a tall desktop header, repeated raised panels around Objects, a 6px search/filter alignment error, inconsistent mobile input heights, and clipped thumbnail state text. The changes reduce desktop chrome from 80px to 64px, use stationary card surfaces with row separators, align desktop controls, and keep selection accents separate from keyboard outlines. Clearable mobile inputs now have a 48px outer target and 44px inner input without double padding. Compact thumbnail states use a visible mark and retain their accessible labels.
+
+Rendered accessibility checks also exposed 44px Objects row targets and provider badges with 4.35:1 contrast. Row targets now meet the 48px floor, and provider badges use the stronger primary text token. The mobile image-viewer accessibility test now opens the existing grid preview button; its old menu trigger is no longer rendered in the compact grid.
+
+Commands ran from `frontend/` through RTK. Final browser acceptance used the completed production build served by `npm run preview -- --host 127.0.0.1 --port 18103 --strictPort`, with `PLAYWRIGHT_BASE_URL=http://127.0.0.1:18103` and separate output directories. Final comparisons did not update snapshots.
+
+| Command | Final result | Evidence |
+| --- | --- | --- |
+| `npm run test:unit -- src/__tests__/FullAppInner.smoke.test.tsx src/components/__tests__/PageHeader.test.tsx src/pages/objects/__tests__/ObjectsPageHeader.test.tsx src/components/__tests__/DatalistInput.test.tsx` | 4 files, 12 passed | Terminal output |
+| `npm run test:unit -- src/pages/objects/__tests__/ObjectThumbnail.test.tsx` | 7 passed | Terminal output |
+| `npm run build` | TypeScript and Vite passed | Terminal output |
+| `npm run lint` | ESLint, CSS tokens, import cycles passed | Terminal output |
+| `npm run check:design` | Tokens and tracked contrast passed; 61 advisory patterns | Terminal output |
+| `npm run check:e2e:geometry` | Passed | Terminal output |
+| `npm run test:e2e:visual -- --workers=2` | 36 passed | `/tmp/s3desk-design-visual-final/` |
+| `npm run test:e2e:mobile-responsive -- --workers=2` | 132 passed | `/tmp/s3desk-design-mobile-final/` |
+| `npx playwright test tests/accessibility-overlays.spec.ts tests/dark-theme-accessibility.spec.ts tests/wcag-reflow.spec.ts --project=chromium --workers=2` | 51 passed | `/tmp/s3desk-design-accessibility-final/` |
+| `git diff --check` | Passed after documentation edits | Terminal output |
+
+The final browser lanes contain 219 passing cases. Coverage includes light/dark screens, desktop/tablet/mobile widths, the complete first object file row at 320×568, the four-column mobile grid, loading/failure placeholders, keyboard navigation, matching Uploads input heights, overlay workflows, axe scans, and the existing 320 CSS px reflow checks. The tracked visual baselines and new navigation-focus/thumbnail-failure captures make these checks repeatable.
+
+Fresh screenshots were inspected across Objects light/dark/tablet/narrow mobile, navigation focus, bucket picker, grid, thumbnail failure, Profiles, Buckets, Login, Activity, Uploads, Settings, and Transfers. The review confirms that stationary lists remain distinct from floating overlays and that selected navigation differs from keyboard focus. Twenty-two existing PNG baselines were refreshed for the intentional shell, surface, input, and touch-target changes; two new captures cover navigation focus and compact thumbnail failure.
+
+The initial unchanged-worktree visual run had 25 passes and 10 failures, including the alignment assertion and stale desktop/grid baselines. During implementation, the first full mobile run had 126 passes and six failures: four intended baseline changes and two inner-input touch-target regressions. The first accessibility/reflow run had 48 passes and three failures: badge contrast, row target size, and the stale grid-menu locator. These were corrected before the complete final runs above; baseline generation and focused rechecks are not counted as final acceptance.
+
+This is local production-build rendering with mock API responses, Chromium keyboard/axe checks, and touch emulation. Some background realtime and late thumbnail requests logged proxy `ECONNREFUSED` errors because no backend was attached; the final fixture assertions still passed. This does not prove physical-device, assistive-technology, provider, or deployed behavior. Firefox/WebKit, actual browser UI/text zoom, backend tests, the full desktop core suite, bundle-budget, and `./scripts/check.sh fast/full` were not run for this frontend design change. The preview process was stopped after acceptance; `/tmp` artifacts are disposable.
 
 ## 2026-09-06 Search, Buckets, and Logs Follow-up
 

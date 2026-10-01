@@ -29,10 +29,9 @@
 }
 
 .tableWrap {
-	border: 1px solid var(--s3d-color-border-strong);
+	border: 1px solid var(--s3d-color-border);
 	border-radius: var(--s3d-radius-lg);
-	background: var(--s3d-gradient-surface);
-	box-shadow: var(--s3d-shadow-sm);
+	background: var(--s3d-color-bg-card);
 	overflow: hidden;
 }
 
