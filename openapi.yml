@@ -232,7 +232,12 @@ paths:
         restore/import, a non-empty multipart password is used before destination
         server `ENCRYPTION_KEY` fallback. Snapshot-style export currently supports
         sqlite-backed servers only, while portable export supports sqlite and postgres
-        source deployments.
+        source deployments. New encrypted bundles use v3 KDF-derived authentication
+        keys. Server backups exclude remote object contents and environment secrets.
+        Runtime files in online full backups are copied after the database snapshot;
+        pause writes and drain jobs before exporting when coordinated recovery is required.
+        Export rejects archives or payloads exceeding the source SERVER_RESTORE_MAX_BYTES;
+        configure the destination limit to cover both before restoring.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
         - name: X-S3Desk-Backup-Password
@@ -284,6 +289,9 @@ paths:
         "500":
           $ref: "#/components/responses/ErrorResponse"
 
+        "413":
+          $ref: "#/components/responses/ErrorResponse"
+
   /server/restore:
     post:
       tags: [System]
@@ -293,6 +301,9 @@ paths:
         under `DATA_DIR/restores/<id>` without overwriting the live instance. The staged
         directory can then be used as the destination server's `DATA_DIR`. The response
         includes a stage-only summary plus an apply plan and helper command for cutover.
+        Only full and cache_metadata sqlite bundles are accepted. SQLite integrity and
+        application schema are validated before staging. Unsigned bundles require
+        explicit allowUnsigned=true; portable bundles use the portable import endpoints.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
       requestBody:
@@ -309,6 +320,10 @@ paths:
                 password:
                   type: string
                   description: Optional multipart password field used when the backup payload was exported with operator-supplied password protection; omit it only when restoring an encrypted bundle with the destination server encryption key.
+                allowUnsigned:
+                  type: boolean
+                  default: false
+                  description: Explicitly trust an unsigned bundle. Authenticity cannot be verified. Does not bypass an invalid signature.
       responses:
         "201":
           description: Created
@@ -358,6 +373,9 @@ paths:
         "502":
           $ref: "#/components/responses/ErrorResponse"
 
+        "413":
+          $ref: "#/components/responses/ErrorResponse"
+
   /server/restore/transfer:
     post:
       tags: [System]
@@ -397,7 +415,9 @@ paths:
       summary: Preview a portable backup import
       description: |
         Uploads a portable `.tar.gz` bundle and performs a dry-run compatibility check
-        without writing database state.
+        without writing database state. Unsigned bundles require explicit allowUnsigned=true.
+        Bundles containing local staging upload sessions are blocked because their
+        local files are excluded; finish or cancel those uploads and export again.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
       requestBody:
@@ -414,6 +434,10 @@ paths:
                 password:
                   type: string
                   description: Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key.
+                allowUnsigned:
+                  type: boolean
+                  default: false
+                  description: Explicitly trust an unsigned bundle. Authenticity cannot be verified. Does not bypass an invalid signature.
       responses:
         "200":
           description: OK
@@ -438,7 +462,10 @@ paths:
       summary: Import a portable backup bundle
       description: |
         Uploads a portable `.tar.gz` bundle and imports its logical application data into
-        the current database backend using replace semantics.
+        the current database backend using replace semantics. Unsigned bundles require
+        explicit allowUnsigned=true. Thumbnail files are prepared before database
+        replacement. A response status of partial means the database was applied but
+        asset replacement or post-import verification did not complete; review warnings.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
       requestBody:
@@ -455,6 +482,10 @@ paths:
                 password:
                   type: string
                   description: Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key.
+                allowUnsigned:
+                  type: boolean
+                  default: false
+                  description: Explicitly trust an unsigned bundle. Authenticity cannot be verified. Does not bypass an invalid signature.
       responses:
         "200":
           description: OK (blocked by preflight; no data written)
@@ -4396,6 +4427,10 @@ components:
         backupPassword:
           type: string
           description: Optional password used to decrypt the fetched bundle.
+        allowUnsigned:
+          type: boolean
+          default: false
+          description: Explicitly trust an unsigned bundle. Does not bypass an invalid signature.
         location:
           $ref: "#/components/schemas/ServerBackupTransferLocation"
 
@@ -4424,6 +4459,10 @@ components:
         payloadSignatureVerified: { type: boolean }
         payloadEncryptionPresent: { type: boolean }
         payloadEncryptionDecrypted: { type: boolean }
+        sqliteIntegrityVerified: { type: boolean }
+        sqliteSchemaVerified:
+          type: boolean
+          description: All current application model tables and columns exist in the staged SQLite snapshot.
 
     ServerStagedRestore:
       type: object
@@ -4479,6 +4518,10 @@ components:
       type: object
       required: [manifest, mode, targetDbBackend, preflight, entities, verification]
       properties:
+        status:
+          type: string
+          enum: [ready, blocked, complete, partial]
+          description: Preflight readiness or actual import outcome. Partial means database replacement committed but subsequent work failed.
         manifest:
           $ref: "#/components/schemas/ServerMigrationManifest"
         mode: { type: string }
@@ -4492,6 +4535,15 @@ components:
         verification:
           $ref: "#/components/schemas/ServerPortableImportVerification"
         assetStagingDir: { type: string }
+        recoveryDir:
+          type: string
+          description: Private server directory containing the pre-import recovery bundle and durable operation.json record. Retained after import.
+        recoveryBundlePath:
+          type: string
+          description: Pre-import portable bundle. Encrypted with the destination ENCRYPTION_KEY when configured; otherwise unsigned and restricted to the private recovery directory.
+        assetRecoveryDir:
+          type: string
+          description: Preserved previous thumbnail assets when replacement rollback could not complete.
         warnings:
           type: array
           items: { type: string }

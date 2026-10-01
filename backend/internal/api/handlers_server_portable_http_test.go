@@ -27,7 +27,7 @@ func TestPortableImportHTTPService_HandlePreviewPortableImportWritesOK(t *testin
 			}
 			return io.NopCloser(bytes.NewReader(nil)), "operator-secret", func() {}, true
 		},
-		processArchive: func(_ context.Context, _ io.Reader, mode string, backupPassword string, encryptionKey string) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
+		processArchive: func(_ context.Context, _ io.Reader, mode string, backupPassword string, encryptionKey string, _ bool) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
 			if mode != portableImportModeDryRun {
 				t.Fatalf("mode=%q, want %q", mode, portableImportModeDryRun)
 			}
@@ -74,7 +74,7 @@ func TestPortableImportHTTPService_HandleImportPortableBackupWritesCreated(t *te
 			}
 			return io.NopCloser(bytes.NewReader(nil)), "operator-secret", func() {}, true
 		},
-		processArchive: func(_ context.Context, _ io.Reader, mode string, backupPassword string, encryptionKey string) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
+		processArchive: func(_ context.Context, _ io.Reader, mode string, backupPassword string, encryptionKey string, _ bool) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
 			if mode != portableImportModeReplace {
 				t.Fatalf("mode=%q, want %q", mode, portableImportModeReplace)
 			}
@@ -206,7 +206,7 @@ func TestPortableImportHTTPService_HandleReplaceWritesCreatedOrOKByBlockerState(
 				openRequest: func(_ http.ResponseWriter, _ *http.Request, _ serverRestoreBundleOpenOptions) (io.ReadCloser, string, func(), bool) {
 					return io.NopCloser(bytes.NewReader(nil)), "", func() {}, true
 				},
-				processArchive: func(_ context.Context, _ io.Reader, mode string, _, _ string) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
+				processArchive: func(_ context.Context, _ io.Reader, mode string, _, _ string, _ bool) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
 					if mode != portableImportModeReplace {
 						t.Fatalf("mode=%q, want %q", mode, portableImportModeReplace)
 					}
@@ -238,7 +238,7 @@ func TestPortableImportHTTPService_HandleProcessErrorUsesPortableErrorWriter(t *
 		openRequest: func(_ http.ResponseWriter, _ *http.Request, _ serverRestoreBundleOpenOptions) (io.ReadCloser, string, func(), bool) {
 			return io.NopCloser(bytes.NewReader(nil)), "", func() {}, true
 		},
-		processArchive: func(context.Context, io.Reader, string, string, string) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
+		processArchive: func(context.Context, io.Reader, string, string, string, bool) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
 			return models.ServerPortableImportResponse{}, "", wantErr
 		},
 		writeError: func(_ http.ResponseWriter, err error) {

@@ -162,12 +162,6 @@ def prepare_target_asset_failure():
     os.chmod(TARGET_DATA_DIR, 0o500)
 
 
-def verify_imported_profile(profile_id: str):
-    profiles = request_json("GET", f"{TARGET_API_BASE}/profiles") or []
-    imported_profile = next((item for item in profiles if item.get("id") == profile_id), None)
-    assert_true(imported_profile is not None, f"imported profile {profile_id} not found")
-
-
 def run_wrong_password():
     archive, _, names = download_portable_bundle()
     assert_true("payload.enc" in names, "encrypted bundle is missing payload.enc")
@@ -197,23 +191,22 @@ def run_wrong_password():
     }
 
 
-def run_asset_copy_warning(profile_id: str):
+def run_asset_preparation_failure():
+    before_profiles = request_json("GET", f"{TARGET_API_BASE}/profiles") or []
     prepare_target_asset_failure()
     archive, _, _ = download_portable_bundle()
     import_status, imported = post_bundle("/server/import-portable", archive)
-    assert_true(import_status == 201, f"asset_copy_warning import status={import_status}")
-    warnings = imported.get("warnings") or []
+    assert_true(import_status == 400, f"asset_preparation_failure import status={import_status}")
     assert_true(
-        any("failed to reset thumbnail assets" in item.lower() or "failed to copy thumbnail assets" in item.lower() for item in warnings),
-        f"asset_copy_warning warnings={warnings}",
+        "prepare thumbnail assets before database import" in error_details_error(imported).lower(),
+        "asset preparation failure was not reported before database replacement",
     )
-    assert_true(not imported.get("assetStagingDir"), f"asset_copy_warning assetStagingDir={imported.get('assetStagingDir')}")
-    verify_imported_profile(profile_id)
-
+    after_profiles = request_json("GET", f"{TARGET_API_BASE}/profiles") or []
+    assert_true(before_profiles == after_profiles, "asset preparation failure changed destination profiles")
     return {
-        "scenario": "asset_copy_warning",
+        "scenario": "asset_preparation_failure",
         "importStatus": import_status,
-        "warnings": warnings,
+        "destinationPreserved": True,
     }
 
 
@@ -243,12 +236,12 @@ def run_preflight_blocker():
     preview_status, preview = post_bundle("/server/import-portable/preview", archive)
     assert_true(preview_status == 200, f"preflight_blocker preview status={preview_status}")
     blockers = ((preview or {}).get("preflight") or {}).get("blockers") or []
-    assert_true(any("missing BACKUP_ENCRYPTION_KEY or ENCRYPTION_KEY required by the portable bundle" in item for item in blockers), f"preflight_blocker preview blockers={blockers}")
+    assert_true(any("missing ENCRYPTION_KEY required by the portable bundle" in item for item in blockers), f"preflight_blocker preview blockers={blockers}")
 
     import_status, imported = post_bundle("/server/import-portable", archive)
     assert_true(import_status == 200, f"preflight_blocker import status={import_status}")
     import_blockers = ((imported or {}).get("preflight") or {}).get("blockers") or []
-    assert_true(any("missing BACKUP_ENCRYPTION_KEY or ENCRYPTION_KEY required by the portable bundle" in item for item in import_blockers), f"preflight_blocker import blockers={import_blockers}")
+    assert_true(any("missing ENCRYPTION_KEY required by the portable bundle" in item for item in import_blockers), f"preflight_blocker import blockers={import_blockers}")
 
     return {
         "scenario": "preflight_blocker",
@@ -260,18 +253,17 @@ def run_preflight_blocker():
 
 
 def main():
-    if PORTABLE_FAILURE_SCENARIO not in {"wrong_password", "asset_copy_warning", "key_mismatch", "preflight_blocker"}:
+    if PORTABLE_FAILURE_SCENARIO not in {"wrong_password", "asset_preparation_failure", "key_mismatch", "preflight_blocker"}:
         raise RuntimeError(f"unsupported PORTABLE_FAILURE_SCENARIO={PORTABLE_FAILURE_SCENARIO!r}")
 
     wait_for_api(SOURCE_API_BASE)
     wait_for_api(TARGET_API_BASE)
-    fixture = load_fixture()
-    profile_id = fixture["profileId"]
+    load_fixture()
 
     if PORTABLE_FAILURE_SCENARIO == "wrong_password":
         result = run_wrong_password()
-    elif PORTABLE_FAILURE_SCENARIO == "asset_copy_warning":
-        result = run_asset_copy_warning(profile_id)
+    elif PORTABLE_FAILURE_SCENARIO == "asset_preparation_failure":
+        result = run_asset_preparation_failure()
     elif PORTABLE_FAILURE_SCENARIO == "key_mismatch":
         result = run_key_mismatch()
     else:

@@ -48,6 +48,7 @@ type serverBackupTransferRequest struct {
 
 type serverRestoreTransferRequest struct {
 	BackupPassword string                       `json:"backupPassword,omitempty"`
+	AllowUnsigned  bool                         `json:"allowUnsigned,omitempty"`
 	Location       serverBackupTransferLocation `json:"location"`
 }
 
@@ -128,7 +129,7 @@ func (s *server) handleTransferServerRestore(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	defer func() { _ = file.Close() }()
-	resp, err := s.restoreServerBackupArchive(r.Context(), file, req.BackupPassword, s.cfg.EncryptionKey)
+	resp, err := s.restoreServerBackupArchiveWithOptions(r.Context(), file, req.BackupPassword, s.cfg.EncryptionKey, req.AllowUnsigned)
 	if err != nil {
 		if limitErr, ok := asServerRestoreExtractLimitError(err); ok {
 			writeServerRestoreExtractLimitError(w, "bundle_too_large", "backup bundle exceeds restore extracted payload limit", limitErr)

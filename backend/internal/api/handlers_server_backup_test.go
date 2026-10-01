@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -194,7 +195,11 @@ func TestHandleRestoreServerBackup_StagesBundleWithoutOverwritingLiveData(t *tes
 	st, _, srv, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
 	_ = createTestProfile(t, st)
 
-	dbBytes, err := os.ReadFile(filepath.Join(dataDir, "s3desk.db"))
+	snapshotPath := filepath.Join(t.TempDir(), "snapshot.db")
+	if err := st.CreateSQLiteBackup(t.Context(), snapshotPath); err != nil {
+		t.Fatal(err)
+	}
+	dbBytes, err := os.ReadFile(snapshotPath)
 	if err != nil {
 		t.Fatalf("read sqlite db: %v", err)
 	}
@@ -225,6 +230,9 @@ func TestHandleRestoreServerBackup_StagesBundleWithoutOverwritingLiveData(t *tes
 	}
 	if _, err := part.Write(archiveBytes); err != nil {
 		t.Fatalf("write archive: %v", err)
+	}
+	if err := writer.WriteField("allowUnsigned", "true"); err != nil {
+		t.Fatal(err)
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatalf("close writer: %v", err)
@@ -478,7 +486,7 @@ func TestHandleRestoreServerBackup_StagesPasswordProtectedBundleWithMatchingPass
 	if _, ok := entries["payload.enc"]; !ok {
 		t.Fatalf("password-protected backup must include payload.enc")
 	}
-	assertEncryptedPayloadV2Manifest(t, decodeServerBackupArchiveManifest(t, entries))
+	assertEncryptedPayloadV3Manifest(t, decodeServerBackupArchiveManifest(t, entries))
 
 	_, _, targetSrv, _ := newTestJobsServer(t, "", false)
 	res := postRestoreArchiveWithPassword(t, targetSrv.URL, "/api/v1/server/restore", archiveBytes, "password-protected-backup.tar.gz", "operator-secret")
@@ -557,10 +565,10 @@ func decodeServerBackupArchiveManifest(t *testing.T, entries map[string][]byte) 
 	return manifest
 }
 
-func assertEncryptedPayloadV2Manifest(t *testing.T, manifest serverBackupArchiveManifest) {
+func assertEncryptedPayloadV3Manifest(t *testing.T, manifest serverBackupArchiveManifest) {
 	t.Helper()
-	if manifest.PayloadEncryptionVersion != serverBackupPayloadEncryptionV2 {
-		t.Fatalf("payload encryption version=%q, want %q", manifest.PayloadEncryptionVersion, serverBackupPayloadEncryptionV2)
+	if manifest.PayloadEncryptionVersion != serverBackupPayloadEncryptionV3 {
+		t.Fatalf("payload encryption version=%q, want %q", manifest.PayloadEncryptionVersion, serverBackupPayloadEncryptionV3)
 	}
 	if manifest.PayloadEncryptionCipher != serverBackupPayloadCipherV2 {
 		t.Fatalf("payload encryption cipher=%q, want %q", manifest.PayloadEncryptionCipher, serverBackupPayloadCipherV2)
@@ -575,7 +583,7 @@ func assertEncryptedPayloadV2Manifest(t *testing.T, manifest serverBackupArchive
 		t.Fatalf("payload encryption chunk size=%d, want %d", manifest.PayloadEncryptionChunkSize, serverBackupPayloadChunkBytesV2)
 	}
 	if manifest.PayloadEncryptionIV != "" {
-		t.Fatalf("payload encryption IV=%q, want empty for v2 payloads", manifest.PayloadEncryptionIV)
+		t.Fatalf("payload encryption IV=%q, want empty for v3 payloads", manifest.PayloadEncryptionIV)
 	}
 	salt, err := hex.DecodeString(manifest.PayloadEncryptionSalt)
 	if err != nil || len(salt) != serverBackupPayloadSaltBytesV2 {
@@ -625,7 +633,10 @@ func buildTarGzForRestore(t *testing.T, files map[string][]byte) []byte {
 	if err := writeTarDirHeader(tarWriter, "data/", time.Now().UTC()); err != nil {
 		t.Fatalf("write data dir header: %v", err)
 	}
-	for name, data := range files {
+	names := mapKeys(files)
+	sort.Strings(names)
+	for _, name := range names {
+		data := files[name]
 		header := &tar.Header{
 			Name:     name,
 			Mode:     0o600,

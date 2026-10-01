@@ -156,6 +156,7 @@ def main():
     assert_true("data/profiles.jsonl" in manifest_entries, "portable manifest is missing data/profiles.jsonl")
     if PORTABLE_BUNDLE_CONFIDENTIALITY == "encrypted":
         assert_true(manifest.get("confidentialityMode") == "encrypted", f"manifest.confidentialityMode={manifest.get('confidentialityMode')}")
+        assert_true(manifest.get("payloadEncryptionVersion") == "v3", "encrypted export must use v3 authentication")
         assert_true("payload.enc" in names, "encrypted portable archive is missing payload.enc")
         assert_true("data/profiles.jsonl" not in names, "encrypted portable archive must not expose clear data entries")
     else:
@@ -166,6 +167,7 @@ def main():
     assert_true(preview.get("manifest", {}).get("bundleKind") == "portable", "preview manifest.bundleKind must be portable")
     assert_true(preview.get("targetDbBackend") == EXPECTED_TARGET_DB_BACKEND, f"preview targetDbBackend={preview.get('targetDbBackend')}")
     assert_true(not preview.get("preflight", {}).get("blockers"), f"preview blockers={preview.get('preflight', {}).get('blockers')}")
+    assert_true(preview.get("status") == "ready", f"preview status={preview.get('status')}")
     assert_true(preview.get("preflight", {}).get("schemaReady") is True, "preview schemaReady must be true")
     assert_true(preview.get("preflight", {}).get("encryptionReady") is True, "preview encryptionReady must be true")
     assert_true(preview.get("preflight", {}).get("encryptionKeyHintVerified") is True, "preview encryptionKeyHintVerified must be true")
@@ -173,6 +175,9 @@ def main():
 
     import_status, imported = post_bundle("/server/import-portable", archive)
     assert_true(import_status == 201, f"portable import status={import_status}")
+    assert_true(imported.get("status") == "complete", f"portable import incomplete: {imported.get('status')}")
+    assert_true(bool(imported.get("recoveryDir")), "pre-import recovery directory missing")
+    assert_true(bool(imported.get("recoveryBundlePath")), "pre-import recovery bundle missing")
     assert_true(imported.get("targetDbBackend") == EXPECTED_TARGET_DB_BACKEND, f"import targetDbBackend={imported.get('targetDbBackend')}")
     assert_true(imported.get("verification", {}).get("entityChecksumsVerified") is True, "entityChecksumsVerified must be true")
     assert_true(imported.get("verification", {}).get("postImportHealthCheckPassed") is True, "postImportHealthCheckPassed must be true")

@@ -936,6 +936,8 @@ type ServerRestoreValidation struct {
 	PayloadSignatureVerified   bool  `json:"payloadSignatureVerified"`
 	PayloadEncryptionPresent   bool  `json:"payloadEncryptionPresent,omitempty"`
 	PayloadEncryptionDecrypted bool  `json:"payloadEncryptionDecrypted,omitempty"`
+	SQLiteIntegrityVerified    bool  `json:"sqliteIntegrityVerified"`
+	SQLiteSchemaVerified       bool  `json:"sqliteSchemaVerified"`
 }
 
 type ServerRestoreResponse struct {
@@ -982,14 +984,18 @@ type ServerPortableImportVerification struct {
 }
 
 type ServerPortableImportResponse struct {
-	Manifest        ServerMigrationManifest            `json:"manifest"`
-	Mode            string                             `json:"mode"`
-	TargetDBBackend string                             `json:"targetDbBackend"`
-	Preflight       ServerPortableImportPreflight      `json:"preflight"`
-	Entities        []ServerPortableImportEntityResult `json:"entities"`
-	Verification    ServerPortableImportVerification   `json:"verification"`
-	AssetStagingDir string                             `json:"assetStagingDir,omitempty"`
-	Warnings        []string                           `json:"warnings,omitempty"`
+	Status             string                             `json:"status"`
+	Manifest           ServerMigrationManifest            `json:"manifest"`
+	Mode               string                             `json:"mode"`
+	TargetDBBackend    string                             `json:"targetDbBackend"`
+	Preflight          ServerPortableImportPreflight      `json:"preflight"`
+	Entities           []ServerPortableImportEntityResult `json:"entities"`
+	Verification       ServerPortableImportVerification   `json:"verification"`
+	AssetStagingDir    string                             `json:"assetStagingDir,omitempty"`
+	RecoveryDir        string                             `json:"recoveryDir,omitempty"`
+	RecoveryBundlePath string                             `json:"recoveryBundlePath,omitempty"`
+	AssetRecoveryDir   string                             `json:"assetRecoveryDir,omitempty"`
+	Warnings           []string                           `json:"warnings,omitempty"`
 }
 
 type TransferEngineInfo struct {

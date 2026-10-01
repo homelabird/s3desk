@@ -20,7 +20,7 @@ const (
 
 type portableImportArchiveService struct {
 	dbBackend     string
-	extract       func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string) (string, models.ServerMigrationManifest, map[string][]byte, string, error)
+	extract       func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error)
 	buildResponse func(
 		mode string,
 		dbBackend db.Backend,
@@ -39,8 +39,8 @@ type portableImportArchiveService struct {
 func newPortableImportArchiveService(s *server) portableImportArchiveService {
 	return portableImportArchiveService{
 		dbBackend: s.cfg.DBBackend,
-		extract: func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
-			return extractPortableImportArchiveBundleWithLimit(ctx, src, backupPassword, encryptionKey, s.cfg.ServerRestoreMaxBytes)
+		extract: func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
+			return extractPortableImportArchiveBundleWithLimit(ctx, src, backupPassword, encryptionKey, s.cfg.ServerRestoreMaxBytes, allowUnsigned)
 		},
 		buildResponse: func(mode string, dbBackend db.Backend, manifest models.ServerMigrationManifest, entityFiles map[string][]byte) models.ServerPortableImportResponse {
 			return s.buildPortableImportResponse(mode, dbBackend, manifest, entityFiles)
@@ -52,8 +52,12 @@ func newPortableImportArchiveService(s *server) portableImportArchiveService {
 	}
 }
 
-func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader, mode string, backupPassword string, encryptionKey string) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
-	return newPortableImportArchiveService(s).process(ctx, src, mode, backupPassword, encryptionKey)
+func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader, mode string, backupPassword string, encryptionKey string, allowUnsigned bool) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
+	if mode == portableImportModeReplace {
+		s.restoreMu.Lock()
+		defer s.restoreMu.Unlock()
+	}
+	return newPortableImportArchiveService(s).process(ctx, src, mode, backupPassword, encryptionKey, allowUnsigned)
 }
 
 func (svc portableImportArchiveService) process(
@@ -62,6 +66,7 @@ func (svc portableImportArchiveService) process(
 	mode string,
 	backupPassword string,
 	encryptionKey string,
+	allowUnsigned bool,
 ) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
 	if mode != portableImportModeReplace && mode != portableImportModeDryRun {
 		return models.ServerPortableImportResponse{}, "", fmt.Errorf("unsupported portable import mode %q", mode)
@@ -72,7 +77,7 @@ func (svc portableImportArchiveService) process(
 		return models.ServerPortableImportResponse{}, "", err
 	}
 
-	tempRoot, manifest, entityFiles, assetRoot, err := svc.extract(ctx, src, backupPassword, encryptionKey)
+	tempRoot, manifest, entityFiles, assetRoot, err := svc.extract(ctx, src, backupPassword, encryptionKey, allowUnsigned)
 	if err != nil {
 		return models.ServerPortableImportResponse{}, "", err
 	}
@@ -101,8 +106,9 @@ func extractPortableImportArchiveBundleWithLimit(
 	backupPassword string,
 	encryptionKey string,
 	maxExtractedBytes int64,
+	allowUnsigned bool,
 ) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
-	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchiveWithLimit(ctx, src, backupPassword, encryptionKey, maxExtractedBytes)
+	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchiveWithLimit(ctx, src, backupPassword, encryptionKey, maxExtractedBytes, allowUnsigned)
 	if err != nil {
 		return "", models.ServerMigrationManifest{}, nil, "", err
 	}

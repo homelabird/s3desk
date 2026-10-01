@@ -22,6 +22,7 @@ type portableImportHTTPService struct {
 		mode string,
 		backupPassword string,
 		encryptionKey string,
+		allowUnsigned bool,
 	) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error)
 	writeError      func(http.ResponseWriter, error)
 	writeResponse   func(http.ResponseWriter, int, any)
@@ -33,8 +34,8 @@ func newPortableImportHTTPService(s *server) portableImportHTTPService {
 		maxBytes:      s.cfg.ServerRestoreMaxBytes,
 		encryptionKey: s.cfg.EncryptionKey,
 		openRequest:   openServerRestoreBundleRequest,
-		processArchive: func(ctx context.Context, src io.Reader, mode string, backupPassword string, encryptionKey string) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
-			return s.processPortableImportArchive(ctx, src, mode, backupPassword, encryptionKey)
+		processArchive: func(ctx context.Context, src io.Reader, mode string, backupPassword string, encryptionKey string, allowUnsigned bool) (models.ServerPortableImportResponse, portableImportArchiveOutcome, error) {
+			return s.processPortableImportArchive(ctx, src, mode, backupPassword, encryptionKey, allowUnsigned)
 		},
 		writeError:      writePortableImportError,
 		writeResponse:   writeJSON,
@@ -56,8 +57,13 @@ func (svc portableImportHTTPService) handlePreviewPortableImport(w http.Response
 		return
 	}
 	defer cleanup()
+	allowUnsigned, err := parseServerRestoreAllowUnsigned(r)
+	if err != nil {
+		svc.writeError(w, err)
+		return
+	}
 
-	response, outcome, err := svc.processArchive(r.Context(), file, portableImportModeDryRun, backupPassword, svc.encryptionKey)
+	response, outcome, err := svc.processArchive(r.Context(), file, portableImportModeDryRun, backupPassword, svc.encryptionKey, allowUnsigned)
 	if err != nil {
 		svc.writeError(w, err)
 		return
@@ -71,8 +77,13 @@ func (svc portableImportHTTPService) handleImportPortableBackup(w http.ResponseW
 		return
 	}
 	defer cleanup()
+	allowUnsigned, err := parseServerRestoreAllowUnsigned(r)
+	if err != nil {
+		svc.writeError(w, err)
+		return
+	}
 
-	response, outcome, err := svc.processArchive(r.Context(), file, portableImportModeReplace, backupPassword, svc.encryptionKey)
+	response, outcome, err := svc.processArchive(r.Context(), file, portableImportModeReplace, backupPassword, svc.encryptionKey, allowUnsigned)
 	if err != nil {
 		svc.writeError(w, err)
 		return

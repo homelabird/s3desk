@@ -303,7 +303,12 @@ export interface paths {
          *     restore/import, a non-empty multipart password is used before destination
          *     server `ENCRYPTION_KEY` fallback. Snapshot-style export currently supports
          *     sqlite-backed servers only, while portable export supports sqlite and postgres
-         *     source deployments.
+         *     source deployments. New encrypted bundles use v3 KDF-derived authentication
+         *     keys. Server backups exclude remote object contents and environment secrets.
+         *     Runtime files in online full backups are copied after the database snapshot;
+         *     pause writes and drain jobs before exporting when coordinated recovery is required.
+         *     Export rejects archives or payloads exceeding the source SERVER_RESTORE_MAX_BYTES;
+         *     configure the destination limit to cover both before restoring.
          */
         get: {
             parameters: {
@@ -341,6 +346,7 @@ export interface paths {
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
                 409: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
                 500: components["responses"]["ErrorResponse"];
             };
         };
@@ -367,6 +373,9 @@ export interface paths {
          *     under `DATA_DIR/restores/<id>` without overwriting the live instance. The staged
          *     directory can then be used as the destination server's `DATA_DIR`. The response
          *     includes a stage-only summary plus an apply plan and helper command for cutover.
+         *     Only full and cache_metadata sqlite bundles are accepted. SQLite integrity and
+         *     application schema are validated before staging. Unsigned bundles require
+         *     explicit allowUnsigned=true; portable bundles use the portable import endpoints.
          */
         post: {
             parameters: {
@@ -385,6 +394,11 @@ export interface paths {
                         bundle: string;
                         /** @description Optional multipart password field used when the backup payload was exported with operator-supplied password protection; omit it only when restoring an encrypted bundle with the destination server encryption key. */
                         password?: string;
+                        /**
+                         * @description Explicitly trust an unsigned bundle. Authenticity cannot be verified. Does not bypass an invalid signature.
+                         * @default false
+                         */
+                        allowUnsigned?: boolean;
                     };
                 };
             };
@@ -453,6 +467,7 @@ export interface paths {
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
                 409: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
                 502: components["responses"]["ErrorResponse"];
             };
         };
@@ -526,7 +541,9 @@ export interface paths {
         /**
          * Preview a portable backup import
          * @description Uploads a portable `.tar.gz` bundle and performs a dry-run compatibility check
-         *     without writing database state.
+         *     without writing database state. Unsigned bundles require explicit allowUnsigned=true.
+         *     Bundles containing local staging upload sessions are blocked because their
+         *     local files are excluded; finish or cancel those uploads and export again.
          */
         post: {
             parameters: {
@@ -545,6 +562,11 @@ export interface paths {
                         bundle: string;
                         /** @description Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key. */
                         password?: string;
+                        /**
+                         * @description Explicitly trust an unsigned bundle. Authenticity cannot be verified. Does not bypass an invalid signature.
+                         * @default false
+                         */
+                        allowUnsigned?: boolean;
                     };
                 };
             };
@@ -583,7 +605,10 @@ export interface paths {
         /**
          * Import a portable backup bundle
          * @description Uploads a portable `.tar.gz` bundle and imports its logical application data into
-         *     the current database backend using replace semantics.
+         *     the current database backend using replace semantics. Unsigned bundles require
+         *     explicit allowUnsigned=true. Thumbnail files are prepared before database
+         *     replacement. A response status of partial means the database was applied but
+         *     asset replacement or post-import verification did not complete; review warnings.
          */
         post: {
             parameters: {
@@ -602,6 +627,11 @@ export interface paths {
                         bundle: string;
                         /** @description Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key. */
                         password?: string;
+                        /**
+                         * @description Explicitly trust an unsigned bundle. Authenticity cannot be verified. Does not bypass an invalid signature.
+                         * @default false
+                         */
+                        allowUnsigned?: boolean;
                     };
                 };
             };
@@ -4925,6 +4955,11 @@ export interface components {
         ServerRestoreTransferRequest: {
             /** @description Optional password used to decrypt the fetched bundle. */
             backupPassword?: string;
+            /**
+             * @description Explicitly trust an unsigned bundle. Does not bypass an invalid signature.
+             * @default false
+             */
+            allowUnsigned: boolean;
             location: components["schemas"]["ServerBackupTransferLocation"];
         };
         ServerBackupTransferResponse: {
@@ -4948,6 +4983,9 @@ export interface components {
             payloadSignatureVerified: boolean;
             payloadEncryptionPresent?: boolean;
             payloadEncryptionDecrypted?: boolean;
+            sqliteIntegrityVerified?: boolean;
+            /** @description All current application model tables and columns exist in the staged SQLite snapshot. */
+            sqliteSchemaVerified?: boolean;
         };
         ServerStagedRestore: {
             id: string;
@@ -4978,6 +5016,11 @@ export interface components {
             postImportHealthCheckPassed: boolean;
         };
         ServerPortableImportResponse: {
+            /**
+             * @description Preflight readiness or actual import outcome. Partial means database replacement committed but subsequent work failed.
+             * @enum {string}
+             */
+            status?: "ready" | "blocked" | "complete" | "partial";
             manifest: components["schemas"]["ServerMigrationManifest"];
             mode: string;
             targetDbBackend: string;
@@ -4985,6 +5028,12 @@ export interface components {
             entities: components["schemas"]["ServerPortableImportEntityResult"][];
             verification: components["schemas"]["ServerPortableImportVerification"];
             assetStagingDir?: string;
+            /** @description Private server directory containing the pre-import recovery bundle and durable operation.json record. Retained after import. */
+            recoveryDir?: string;
+            /** @description Pre-import portable bundle. Encrypted with the destination ENCRYPTION_KEY when configured; otherwise unsigned and restricted to the private recovery directory. */
+            recoveryBundlePath?: string;
+            /** @description Preserved previous thumbnail assets when replacement rollback could not complete. */
+            assetRecoveryDir?: string;
             warnings?: string[];
         };
         MetaCapabilities: {

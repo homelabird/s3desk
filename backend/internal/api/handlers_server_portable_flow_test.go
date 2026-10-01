@@ -19,16 +19,26 @@ import (
 )
 
 type stubPortableImportApplyStore struct {
-	importCounts store.PortableImportCounts
-	importErr    error
-	pingErr      error
+	importCounts  store.PortableImportCounts
+	importErr     error
+	pingErr       error
+	captureBundle *store.PortableExportBundle
+	pingHook      func() error
 }
 
-func (s stubPortableImportApplyStore) ImportPortableEntityFilesReplaceWithOptions(_ context.Context, _ map[string][]byte, _ string, _ store.PortableValidationOptions) (store.PortableImportCounts, error) {
+func (s stubPortableImportApplyStore) ImportPortableEntityFilesReplaceWithRecovery(_ context.Context, _ map[string][]byte, _ string, _ store.PortableValidationOptions, capture func(store.PortableExportBundle) error) (store.PortableImportCounts, error) {
+	if s.captureBundle != nil {
+		if err := capture(*s.captureBundle); err != nil {
+			return store.PortableImportCounts{}, err
+		}
+	}
 	return s.importCounts, s.importErr
 }
 
 func (s stubPortableImportApplyStore) Ping(_ context.Context) error {
+	if s.pingHook != nil {
+		return s.pingHook()
+	}
 	return s.pingErr
 }
 
@@ -186,6 +196,15 @@ func TestApplyPortableImportPayload_CopiesThumbnailsAndMarksHealthCheck(t *testi
 	if resp.AssetStagingDir == "" {
 		t.Fatal("expected AssetStagingDir to be set")
 	}
+	if resp.Status != "complete" {
+		t.Fatalf("status=%q, want complete", resp.Status)
+	}
+	if data, err := os.ReadFile(thumbPath); err != nil || string(data) != "thumb" {
+		t.Fatal("import must copy from the extraction tree, not move it")
+	}
+	if paths, err := filepath.Glob(filepath.Join(dataDir, ".portable-thumbnails-*")); err != nil || len(paths) != 0 {
+		t.Fatalf("prepared thumbnail workspace not cleaned up: %v, %v", paths, err)
+	}
 }
 
 func TestFinalizePortableImportResponse_AddsMismatchWarning(t *testing.T) {
@@ -205,6 +224,33 @@ func TestFinalizePortableImportResponse_AddsMismatchWarning(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(resp.Warnings, "\n"), "Imported row counts did not match") {
 		t.Fatalf("expected mismatch warning, got %v", resp.Warnings)
+	}
+	if resp.Status != "partial" {
+		t.Fatalf("status=%q, want partial", resp.Status)
+	}
+}
+
+func TestPortableThumbnailSwapRestoresPreviousTreeOnFailure(t *testing.T) {
+	dataDir := t.TempDir()
+	previousFile := filepath.Join(dataDir, "thumbnails", "old.jpg")
+	if err := os.MkdirAll(filepath.Dir(previousFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(previousFile, []byte("previous"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	preparedRoot, err := os.MkdirTemp(dataDir, ".portable-thumbnails-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the prepared tree becoming unavailable after the database commit.
+	resp := &models.ServerPortableImportResponse{Status: "complete"}
+	newPortableImportApplyService(nil, dataDir).applyAssets(resp, preparedRoot)
+	if resp.Status != "partial" || len(resp.Warnings) == 0 {
+		t.Fatal("asset failure was reported as complete")
+	}
+	if data, err := os.ReadFile(previousFile); err != nil || string(data) != "previous" {
+		t.Fatal("previous tree was not restored")
 	}
 }
 

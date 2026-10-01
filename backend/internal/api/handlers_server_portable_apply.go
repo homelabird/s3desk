@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 )
 
 type portableImportApplyStore interface {
-	ImportPortableEntityFilesReplaceWithOptions(ctx context.Context, entityFiles map[string][]byte, dataDir string, opts store.PortableValidationOptions) (store.PortableImportCounts, error)
+	ImportPortableEntityFilesReplaceWithRecovery(ctx context.Context, entityFiles map[string][]byte, dataDir string, opts store.PortableValidationOptions, beforeReplace func(store.PortableExportBundle) error) (store.PortableImportCounts, error)
 	Ping(ctx context.Context) error
 }
 
@@ -25,9 +26,10 @@ type portableImportPreflightService struct {
 }
 
 type portableImportApplyService struct {
-	store       portableImportApplyStore
-	dataDir     string
-	allowRemote bool
+	store               portableImportApplyStore
+	dataDir             string
+	allowRemote         bool
+	writeRecoveryBundle func(context.Context, string, store.PortableExportBundle) error
 }
 
 func newPortableImportPreflightService(dataDir, encryptionKey string) portableImportPreflightService {
@@ -109,6 +111,18 @@ func (s *server) applyPortableImportPayload(
 ) error {
 	svc := newPortableImportApplyService(s.store, s.cfg.DataDir)
 	svc.allowRemote = s.cfg.AllowRemote
+	svc.writeRecoveryBundle = func(ctx context.Context, path string, bundle store.PortableExportBundle) error {
+		confidentiality := serverBackupConfidentialityClear
+		if s.cfg.EncryptionKey != "" {
+			confidentiality = serverBackupConfidentialityEncrypted
+		}
+		secrets, err := resolveServerBackupExportSecrets(confidentiality, "", s.cfg.EncryptionKey)
+		if err != nil {
+			return err
+		}
+		_, err = s.writePortableServerBackupArchiveFromBundle(ctx, path, confidentiality, true, secrets, bundle)
+		return err
+	}
 	return svc.apply(ctx, resp, entityFiles, assetRoot)
 }
 
@@ -118,49 +132,152 @@ func (svc portableImportApplyService) apply(
 	entityFiles map[string][]byte,
 	assetRoot string,
 ) error {
-	counts, err := svc.replaceEntities(ctx, entityFiles)
+	preparedRoot, err := svc.prepareAssets(assetRoot)
 	if err != nil {
 		return err
 	}
+	if preparedRoot != "" {
+		defer func() {
+			if resp.AssetRecoveryDir == "" {
+				_ = os.RemoveAll(preparedRoot)
+			}
+		}()
+	}
+	recovery, err := newPortableImportRecovery(svc.dataDir, preparedRoot)
+	if err != nil {
+		return err
+	}
+	recovery.record.IncomingPayloadSHA256 = resp.Manifest.PayloadSHA256
+	saved := false
+	defer func() {
+		if !saved {
+			_ = os.RemoveAll(recovery.dir)
+		}
+	}()
+	if svc.writeRecoveryBundle == nil {
+		return errors.New("portable import recovery writer is missing")
+	}
+	counts, err := svc.store.ImportPortableEntityFilesReplaceWithRecovery(ctx, entityFiles, svc.dataDir, store.PortableValidationOptions{AllowRemote: svc.allowRemote}, func(bundle store.PortableExportBundle) error {
+		if err := svc.writeRecoveryBundle(ctx, recovery.record.RecoveryBundlePath, bundle); err != nil {
+			return fmt.Errorf("save pre-import recovery bundle: %w", err)
+		}
+		if err := syncPortableRecoveryPath(recovery.record.RecoveryBundlePath); err != nil {
+			return err
+		}
+		recovery.record.Phase = "commit_unknown"
+		if err := recovery.save(); err != nil {
+			return err
+		}
+		saved = true
+		return nil
+	})
+	if err != nil {
+		if saved {
+			return fmt.Errorf("portable import outcome requires inspection of %s: %w", recovery.dir, err)
+		}
+		return err
+	}
+	resp.RecoveryDir = recovery.dir
+	resp.RecoveryBundlePath = recovery.record.RecoveryBundlePath
+	recovery.record.Phase = "database_committed"
+	journalErr := recovery.save()
 	resp.Entities = applyPortableImportCounts(resp.Entities, counts)
-	svc.applyAssets(resp, assetRoot)
+	resp.Status = "complete"
+	svc.applyAssets(resp, preparedRoot)
 	svc.finalizeResponse(ctx, resp)
+	if journalErr != nil {
+		resp.Status = "partial"
+		resp.Warnings = append(resp.Warnings, "Database replacement committed, but its intermediate recovery record could not be saved.")
+	}
+	recovery.record.Phase = resp.Status
+	recovery.record.Result = resp
+	if err := recovery.save(); err != nil {
+		resp.Status = "partial"
+		resp.Warnings = append(resp.Warnings, "Database replacement committed, but its final recovery record could not be saved. Inspect the database and recovery directory before retrying.")
+		recovery.record.Phase = "partial"
+		_ = recovery.save() // Best effort to record the warning if rename succeeded but directory sync failed.
+	}
 	return nil
 }
 
-func (svc portableImportApplyService) replaceEntities(ctx context.Context, entityFiles map[string][]byte) (store.PortableImportCounts, error) {
-	return svc.store.ImportPortableEntityFilesReplaceWithOptions(ctx, entityFiles, svc.dataDir, store.PortableValidationOptions{AllowRemote: svc.allowRemote})
-}
-
-func (svc portableImportApplyService) applyAssets(resp *models.ServerPortableImportResponse, assetRoot string) {
+func (svc portableImportApplyService) prepareAssets(assetRoot string) (string, error) {
 	if assetRoot == "" {
-		return
+		return "", nil
 	}
 	thumbnailsPath := filepath.Join(assetRoot, portableAssetKeyThumbnails)
-	info, statErr := os.Stat(thumbnailsPath)
-	if statErr != nil || !info.IsDir() {
-		return
+	info, err := os.Stat(thumbnailsPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
 	}
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", errors.New("thumbnail assets are not a directory")
+	}
+	preparedRoot, err := os.MkdirTemp(svc.dataDir, ".portable-thumbnails-*")
+	if err != nil {
+		return "", fmt.Errorf("prepare thumbnail assets before database import: %w", err)
+	}
+	if err := copyPortableAssetTree(thumbnailsPath, filepath.Join(preparedRoot, portableAssetKeyThumbnails)); err != nil {
+		_ = os.RemoveAll(preparedRoot)
+		return "", fmt.Errorf("prepare thumbnail assets before database import: %w", err)
+	}
+	if err := syncPortableRecoveryPath(preparedRoot); err != nil {
+		_ = os.RemoveAll(preparedRoot)
+		return "", fmt.Errorf("prepare thumbnail assets before database import: %w", err)
+	}
+	return preparedRoot, nil
+}
 
-	assetTargetDir := filepath.Join(svc.dataDir, portableAssetKeyThumbnails)
-	if err := os.RemoveAll(assetTargetDir); err != nil {
-		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but failed to reset thumbnail assets: %v", err))
+func (svc portableImportApplyService) applyAssets(resp *models.ServerPortableImportResponse, preparedRoot string) {
+	if preparedRoot == "" {
 		return
 	}
-	if err := copyPortableAssetTree(thumbnailsPath, assetTargetDir); err != nil {
-		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but failed to copy thumbnail assets: %v", err))
+	assetTargetDir := filepath.Join(svc.dataDir, portableAssetKeyThumbnails)
+	previousPath := filepath.Join(preparedRoot, "previous")
+	hadPrevious := false
+	if _, err := os.Stat(assetTargetDir); err == nil {
+		if err := os.Rename(assetTargetDir, previousPath); err != nil {
+			resp.Status = "partial"
+			resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but kept previous thumbnail assets because replacement failed: %v", err))
+			return
+		}
+		hadPrevious = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		resp.Status = "partial"
+		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but could not inspect thumbnail assets: %v", err))
+		return
+	}
+	if err := os.Rename(filepath.Join(preparedRoot, portableAssetKeyThumbnails), assetTargetDir); err != nil {
+		resp.Status = "partial"
+		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but failed to replace thumbnail assets: %v", err))
+		if hadPrevious {
+			if rollbackErr := os.Rename(previousPath, assetTargetDir); rollbackErr != nil {
+				resp.AssetRecoveryDir = previousPath
+				resp.Warnings = append(resp.Warnings, fmt.Sprintf("Previous thumbnail assets remain at %s because rollback failed: %v", previousPath, rollbackErr))
+			}
+		}
 		return
 	}
 	resp.AssetStagingDir = assetTargetDir
+	for _, path := range []string{preparedRoot, svc.dataDir} {
+		if err := syncPortableRecoveryPath(path); err != nil {
+			resp.Status = "partial"
+			resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state and replaced thumbnails, but could not sync the asset directory: %v", err))
+		}
+	}
 }
 
 func (svc portableImportApplyService) finalizeResponse(ctx context.Context, resp *models.ServerPortableImportResponse) {
 	if err := svc.store.Ping(ctx); err == nil {
 		resp.Verification.PostImportHealthCheckPassed = true
 	} else {
+		resp.Status = "partial"
 		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but post-import health check failed: %v", err))
 	}
 	if !verifyPortableImportCounts(resp.Entities) {
+		resp.Status = "partial"
 		resp.Warnings = append(resp.Warnings, "Imported row counts did not match the manifest counts for one or more entities.")
 	}
 }

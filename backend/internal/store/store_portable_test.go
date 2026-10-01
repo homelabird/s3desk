@@ -87,6 +87,82 @@ func TestImportPortableEntityFilesReplaceRollsBackOnInsertFailure(t *testing.T) 
 	}
 }
 
+func TestPortableRecoveryCapturesPreimageBeforeDeleteAndAbortsOnFailure(t *testing.T) {
+	for _, failure := range []string{"backup", "cancel", "insert", "none"} {
+		t.Run(failure, func(t *testing.T) {
+			source := newTestStore(t)
+			incoming := createTestProfile(t, source)
+			bundle, err := source.ExportPortableEntityFiles(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			files := map[string][]byte{}
+			for name, file := range bundle.EntityFiles {
+				files[name] = file.Data
+			}
+			target := newTestStore(t)
+			original := createTestProfile(t, target)
+			if failure == "insert" {
+				if err := target.db.Exec(`CREATE TRIGGER fail_recovery_insert BEFORE INSERT ON profiles BEGIN SELECT RAISE(ABORT, 'forced insert failure'); END;`).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			called := false
+			_, err = target.ImportPortableEntityFilesReplaceWithRecovery(ctx, files, t.TempDir(), PortableValidationOptions{}, func(before PortableExportBundle) error {
+				called = true
+				rows, err := parsePortableRows[profileRow](before.EntityFiles["profiles"].Data)
+				if err != nil || len(rows) != 1 || rows[0].ID != original.ID {
+					t.Fatalf("preimage was not destination state: %v", err)
+				}
+				if failure == "backup" {
+					return errors.New("forced backup write failure")
+				}
+				if failure == "cancel" {
+					cancel()
+				}
+				return nil
+			})
+			if !called || (err == nil) != (failure == "none") {
+				t.Fatalf("called=%v error=%v", called, err)
+			}
+			_, oldExists, err := target.GetProfile(t.Context(), original.ID)
+			if err != nil || oldExists != (failure != "none") {
+				t.Fatalf("old profile exists=%v error=%v", oldExists, err)
+			}
+			_, newExists, err := target.GetProfile(t.Context(), incoming.ID)
+			if err != nil || newExists != (failure == "none") {
+				t.Fatalf("new profile exists=%v error=%v", newExists, err)
+			}
+		})
+	}
+}
+
+func TestPortableRecoveryRejectsDestinationLocalUploadBeforeCapture(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	bundle, err := st.ExportPortableEntityFiles(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{}
+	for name, file := range bundle.EntityFiles {
+		files[name] = file.Data
+	}
+	if err := st.db.Create(&uploadSessionRow{ID: ulid.Make().String(), ProfileID: profile.ID, Mode: "staging", Bucket: "bucket-a", CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), ExpiresAt: time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	_, err = st.ImportPortableEntityFilesReplaceWithRecovery(t.Context(), files, t.TempDir(), PortableValidationOptions{}, func(PortableExportBundle) error { called = true; return nil })
+	if !errors.Is(err, ErrPortableImportLocalUploads) || called {
+		t.Fatalf("error=%v captured=%v", err, called)
+	}
+	if _, ok, err := st.GetProfile(t.Context(), profile.ID); err != nil || !ok {
+		t.Fatal("blocked import changed destination")
+	}
+}
+
 func TestPortableRoundTripIncludesObjectIndexReplacements(t *testing.T) {
 	ctx := context.Background()
 	source := newTestStore(t)

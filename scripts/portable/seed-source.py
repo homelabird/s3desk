@@ -269,6 +269,8 @@ def main():
     put_profile_tls(profile_id)
     staging_upload = create_upload_session(profile_id, "staging", "seed-staging")
     upload_staging_file(profile_id, staging_upload["uploadId"], "notes/seed.txt", b"portable-seed-upload")
+    # Portable bundles exclude local staging files; cancel this session before export.
+    request_json("DELETE", f"{SOURCE_API_BASE}/uploads/{staging_upload['uploadId']}", profile_id=profile_id)
     presigned_upload = create_upload_session(profile_id, "presigned", "seed-presigned")
     multipart_presign = create_presigned_multipart_metadata(profile_id, presigned_upload["uploadId"])
     thumbnail_rel_path = write_thumbnail(profile_id)
@@ -279,7 +281,7 @@ def main():
         "bucket": DEMO_BUCKET,
         "favoriteKey": FAVORITE_KEY,
         "indexJobId": completed_job["id"],
-        "uploadSessionIds": [staging_upload["uploadId"], presigned_upload["uploadId"]],
+        "uploadSessionIds": [presigned_upload["uploadId"]],
         "multipartUpload": {
             "uploadId": presigned_upload["uploadId"],
             "path": "multipart/portable-large.bin",
@@ -290,7 +292,7 @@ def main():
             "profiles": 1,
             "profile_connection_options": 1,
             "jobs": 1,
-            "upload_sessions": 2,
+            "upload_sessions": 1,
             "upload_multipart_uploads": 1,
             "upload_objects": 1,
             "object_index": 1,

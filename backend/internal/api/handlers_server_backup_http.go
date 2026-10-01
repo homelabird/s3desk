@@ -38,6 +38,7 @@ type serverBackupHTTPService struct {
 		src io.Reader,
 		backupPassword string,
 		encryptionKey string,
+		allowUnsigned bool,
 	) (models.ServerRestoreResponse, error)
 	openRequest func(
 		w http.ResponseWriter,
@@ -53,7 +54,7 @@ func newServerBackupHTTPService(s *server) serverBackupHTTPService {
 		encryptionKey:   s.cfg.EncryptionKey,
 		maxRestoreBytes: s.cfg.ServerRestoreMaxBytes,
 		exportArchive:   s.writeServerBackupArchive,
-		restoreArchive:  s.restoreServerBackupArchive,
+		restoreArchive:  s.restoreServerBackupArchiveWithOptions,
 		openRequest:     openServerRestoreBundleRequest,
 		now:             time.Now,
 	}
@@ -195,6 +196,11 @@ func (svc serverBackupHTTPService) executePreparedExport(
 		_ = os.Remove(tmpPath)
 		return "", "", nil, nil, err
 	}
+	if err := validateServerBackupPayloadSize(info.Size(), svc.maxRestoreBytes); err != nil {
+		_ = file.Close()
+		_ = os.Remove(tmpPath)
+		return "", "", nil, nil, err
+	}
 
 	return fmt.Sprintf(
 		"%s-%s.tar.gz",
@@ -228,8 +234,13 @@ func (svc serverBackupHTTPService) executeRestore(
 		return nil, nil, false
 	}
 	defer cleanup()
+	allowUnsigned, err := parseServerRestoreAllowUnsigned(r)
+	if err != nil {
+		writeServerRestoreBundleOpenError(w, err)
+		return nil, nil, false
+	}
 
-	resp, err := svc.restoreArchive(r.Context(), file, backupPassword, svc.encryptionKey)
+	resp, err := svc.restoreArchive(r.Context(), file, backupPassword, svc.encryptionKey, allowUnsigned)
 	if err != nil {
 		return nil, err, true
 	}

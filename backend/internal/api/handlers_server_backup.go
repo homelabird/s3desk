@@ -29,6 +29,7 @@ import (
 
 	"s3desk/internal/db"
 	"s3desk/internal/models"
+	"s3desk/internal/store"
 	"s3desk/internal/version"
 )
 
@@ -43,6 +44,7 @@ const (
 	serverBackupManifestMaxBytes          = 1 << 20
 	serverRestoreMultipartFormMaxMemory   = 32 << 20
 	serverBackupPayloadEncryptionV2       = "v2"
+	serverBackupPayloadEncryptionV3       = "v3"
 	serverBackupPayloadCipherV2           = "aes-256-gcm-chunked"
 	serverBackupPayloadKDFV2              = "pbkdf2-sha256"
 	serverBackupPayloadKDFIterationsV2    = 210_000
@@ -162,6 +164,9 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 			return models.ServerMigrationManifest{}, err
 		}
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
+		if err := validateServerBackupPayloadSize(manifest.PayloadBytes, s.cfg.ServerRestoreMaxBytes); err != nil {
+			return models.ServerMigrationManifest{}, err
+		}
 		archiveManifest, err := buildEncryptedServerBackupArchiveManifest(manifest, secrets.HMACSecret)
 		if err != nil {
 			return models.ServerMigrationManifest{}, err
@@ -187,6 +192,9 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 			}
 		}
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
+		if err := validateServerBackupPayloadSize(manifest.PayloadBytes, s.cfg.ServerRestoreMaxBytes); err != nil {
+			return models.ServerMigrationManifest{}, err
+		}
 		archiveManifest := buildServerBackupArchiveManifest(manifest, secrets.HMACSecret)
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
@@ -251,7 +259,7 @@ func writeEncryptedServerBackupPayload(
 
 func writeEncryptedPayloadFile(tarWriter *tar.Writer, payloadPath string, archiveManifest serverBackupArchiveManifest, encryptionKey string) error {
 	switch strings.TrimSpace(archiveManifest.PayloadEncryptionVersion) {
-	case serverBackupPayloadEncryptionV2:
+	case serverBackupPayloadEncryptionV2, serverBackupPayloadEncryptionV3:
 		return writeEncryptedPayloadFileV2(tarWriter, payloadPath, archiveManifest, encryptionKey)
 	case "":
 		return writeLegacyEncryptedPayloadFile(tarWriter, payloadPath, archiveManifest.PayloadEncryptionIV, encryptionKey)
@@ -379,6 +387,10 @@ func encryptServerBackupPayloadFileV2(payloadPath string, encryptedPath string, 
 }
 
 func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string) (models.ServerRestoreResponse, error) {
+	return s.restoreServerBackupArchiveWithOptions(ctx, src, backupPassword, encryptionKey, false)
+}
+
+func (s *server) restoreServerBackupArchiveWithOptions(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (models.ServerRestoreResponse, error) {
 	s.restoreMu.Lock()
 	defer s.restoreMu.Unlock()
 
@@ -499,13 +511,22 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 		}
 	}
 
+	if err := finishServerBackupArchive(ctx, gzipReader); err != nil {
+		return models.ServerRestoreResponse{}, err
+	}
 	if !manifestSeen {
 		return models.ServerRestoreResponse{}, errors.New("backup manifest is missing")
 	}
 	if strings.TrimSpace(manifest.ConfidentialityMode) == serverBackupConfidentialityEncrypted && !validation.PayloadEncryptionDecrypted {
 		return models.ServerRestoreResponse{}, errors.New("encrypted backup payload is missing")
 	}
-	payloadVerification, err := verifyServerRestorePayload("backup", manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey)
+	if manifest.BundleKind != serverBackupScopeFull && manifest.BundleKind != serverBackupScopeCacheMetadata {
+		return models.ServerRestoreResponse{}, errors.New("snapshot restore requires a full or cache_metadata bundle; use portable import for portable bundles")
+	}
+	if manifest.DBBackend != string(db.BackendSQLite) {
+		return models.ServerRestoreResponse{}, errors.New("snapshot restore requires a sqlite database")
+	}
+	payloadVerification, err := verifyServerRestorePayloadWithOptions("backup", manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey, true, allowUnsigned)
 	if err != nil {
 		return models.ServerRestoreResponse{}, err
 	}
@@ -516,6 +537,11 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 	if manifest.DBBackend == string(db.BackendSQLite) && !sqliteSeen {
 		return models.ServerRestoreResponse{}, errors.New("sqlite database is missing from backup bundle")
 	}
+	if err := store.ValidateSQLiteSnapshot(ctx, filepath.Join(tempRoot, "s3desk.db")); err != nil {
+		return models.ServerRestoreResponse{}, err
+	}
+	validation.SQLiteIntegrityVerified = true
+	validation.SQLiteSchemaVerified = true
 	if err := staging.Commit(); err != nil {
 		return models.ServerRestoreResponse{}, err
 	}
@@ -763,18 +789,17 @@ func extractEncryptedServerRestorePayload(
 	if strings.TrimSpace(encryptionKey) == "" {
 		return errors.New("encrypted backup bundle requires the backup password or ENCRYPTION_KEY on the destination server")
 	}
-	payloadTar, cleanup, err := openEncryptedServerBackupPayloadTarReader(ctx, encryptedPayload, archiveManifest, encryptionKey)
+	payloadTar, finish, err := openEncryptedServerBackupPayloadTarReader(ctx, encryptedPayload, archiveManifest, encryptionKey)
 	if err != nil {
 		return err
 	}
-	defer cleanup()
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		header, err := payloadTar.Next()
 		if errors.Is(err, io.EOF) {
-			return nil
+			return finish()
 		}
 		if err != nil {
 			return err
@@ -801,20 +826,20 @@ func openEncryptedServerBackupPayloadTarReader(
 	encryptedPayload io.Reader,
 	archiveManifest serverBackupArchiveManifest,
 	encryptionKey string,
-) (*tar.Reader, func(), error) {
+) (*tar.Reader, func() error, error) {
 	switch strings.TrimSpace(archiveManifest.PayloadEncryptionVersion) {
-	case serverBackupPayloadEncryptionV2:
+	case serverBackupPayloadEncryptionV2, serverBackupPayloadEncryptionV3:
 		payloadReader, err := newServerBackupPayloadV2Reader(ctx, encryptedPayload, archiveManifest, encryptionKey)
 		if err != nil {
 			return nil, nil, err
 		}
-		return tar.NewReader(payloadReader), func() {}, nil
+		return tar.NewReader(payloadReader), func() error { return finishServerBackupArchive(ctx, payloadReader) }, nil
 	case "":
 		streamReader, err := legacyEncryptedServerBackupPayloadReader(encryptedPayload, archiveManifest.PayloadEncryptionIV, encryptionKey)
 		if err != nil {
 			return nil, nil, err
 		}
-		return tar.NewReader(streamReader), func() {}, nil
+		return tar.NewReader(streamReader), func() error { return finishServerBackupArchive(ctx, streamReader) }, nil
 	default:
 		return nil, nil, fmt.Errorf("unsupported payload encryption version %q", archiveManifest.PayloadEncryptionVersion)
 	}
@@ -989,6 +1014,7 @@ func backupFilenamePrefix(scope string, confidentiality string) string {
 func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, confidentiality string, passwordProtected bool) []string {
 	warnings := []string{
 		"Environment config outside DATA_DIR is not included (API_TOKEN, DB_BACKEND, DATABASE_URL, ALLOWED_HOSTS, ENCRYPTION_KEY).",
+		"Remote object storage contents are not included in server backup bundles.",
 	}
 	if scope == serverBackupScopeCacheMetadata {
 		warnings = append(warnings, "Cache + metadata backups include only the sqlite snapshot and selected cache directories such as thumbnails. Logs, artifacts, and staging data are excluded.")
@@ -996,8 +1022,9 @@ func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, con
 	if scope == serverBackupScopePortable {
 		warnings = append(warnings, "Portable backups export logical application data instead of a raw sqlite database file.")
 		warnings = append(warnings, "Use portable import to move data between sqlite and Postgres deployments.")
-		warnings = append(warnings, "Portable backups do not include logs, artifacts, or staged restore directories.")
+		warnings = append(warnings, "Portable backups do not include logs, artifacts, local staging upload files, or staged restore directories. Finish or cancel staging uploads before migration.")
 	} else {
+		warnings = append(warnings, "Online snapshot backups copy runtime files after the database snapshot. Pause uploads and other writes and drain jobs before export for coordinated recovery.")
 		warnings = append(warnings, "Transient rclone config files (*.rclone.conf) are excluded because they can contain provider credentials.")
 	}
 	if encryptionEnabled {
@@ -1016,6 +1043,13 @@ func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, con
 		}
 	}
 	return warnings
+}
+
+func validateServerBackupPayloadSize(payloadBytes, maxBytes int64) error {
+	if maxBytes > 0 && payloadBytes > maxBytes {
+		return newServerBackupPreparationError(http.StatusRequestEntityTooLarge, "backup_exceeds_restore_limit", "backup payload exceeds this server's restore limit; increase SERVER_RESTORE_MAX_BYTES on source and destination before exporting", map[string]any{"payloadBytes": payloadBytes, "maxBytes": maxBytes})
+	}
+	return nil
 }
 
 func parseServerBackupPasswordHeader(r *http.Request) (string, error) {
@@ -1085,7 +1119,7 @@ func buildEncryptedServerBackupArchiveManifest(manifest models.ServerMigrationMa
 	}
 	archiveManifest := serverBackupArchiveManifest{
 		ServerMigrationManifest:    manifest,
-		PayloadEncryptionVersion:   serverBackupPayloadEncryptionV2,
+		PayloadEncryptionVersion:   serverBackupPayloadEncryptionV3,
 		PayloadEncryptionCipher:    serverBackupPayloadCipherV2,
 		PayloadEncryptionKDF:       serverBackupPayloadKDFV2,
 		PayloadEncryptionKDFIters:  serverBackupPayloadKDFIterationsV2,
@@ -1094,6 +1128,9 @@ func buildEncryptedServerBackupArchiveManifest(manifest models.ServerMigrationMa
 		PayloadEncryptionChunkSize: serverBackupPayloadChunkBytesV2,
 	}
 	archiveManifest.PayloadHMACSHA256 = buildServerBackupPayloadHMAC(archiveManifest, hmacSecret)
+	if archiveManifest.PayloadHMACSHA256 == "" {
+		return serverBackupArchiveManifest{}, errors.New("failed to derive encrypted backup signature")
+	}
 	return archiveManifest, nil
 }
 
@@ -1124,6 +1161,23 @@ func buildServerBackupPayloadHMAC(archiveManifest serverBackupArchiveManifest, h
 	manifest := archiveManifest.ServerMigrationManifest
 	if key == "" || manifest.PayloadSHA256 == "" {
 		return ""
+	}
+	if archiveManifest.PayloadEncryptionVersion == serverBackupPayloadEncryptionV3 {
+		derivedKey, err := deriveServerBackupPayloadKey(archiveManifest, key)
+		if err != nil {
+			return ""
+		}
+		// Derive a separate authentication key after the expensive password KDF.
+		keyMAC := hmac.New(sha256.New, derivedKey)
+		_, _ = io.WriteString(keyMAC, "s3desk-backup-auth:v3")
+		mac := hmac.New(sha256.New, keyMAC.Sum(nil))
+		archiveManifest.PayloadHMACSHA256 = ""
+		data, err := json.Marshal(archiveManifest)
+		if err != nil {
+			return ""
+		}
+		_, _ = mac.Write(data)
+		return hex.EncodeToString(mac.Sum(nil))
 	}
 	mac := hmac.New(sha256.New, []byte(key))
 	_, _ = io.WriteString(mac, manifest.Format)
@@ -1170,32 +1224,37 @@ func deriveServerBackupCipherKey(encryptionKey string) []byte {
 	return sum[:]
 }
 
+func deriveServerBackupPayloadKey(archiveManifest serverBackupArchiveManifest, encryptionKey string) ([]byte, error) {
+	if archiveManifest.PayloadEncryptionKDF != serverBackupPayloadKDFV2 {
+		return nil, fmt.Errorf("unsupported payload encryption KDF %q", archiveManifest.PayloadEncryptionKDF)
+	}
+	if archiveManifest.PayloadEncryptionKDFIters <= 0 || archiveManifest.PayloadEncryptionKDFIters > serverBackupPayloadMaxKDFIterationsV2 {
+		return nil, fmt.Errorf("invalid payload encryption KDF iteration count %d", archiveManifest.PayloadEncryptionKDFIters)
+	}
+	salt, err := decodeServerBackupPayloadHex("salt", archiveManifest.PayloadEncryptionSalt, serverBackupPayloadSaltBytesV2)
+	if err != nil {
+		return nil, err
+	}
+	return pbkdf2.Key(sha256.New, strings.TrimSpace(encryptionKey), salt, archiveManifest.PayloadEncryptionKDFIters, 32)
+}
+
 func serverBackupPayloadAEADV2(archiveManifest serverBackupArchiveManifest, encryptionKey string) (cipher.AEAD, []byte, int, error) {
-	if strings.TrimSpace(archiveManifest.PayloadEncryptionVersion) != serverBackupPayloadEncryptionV2 {
+	version := strings.TrimSpace(archiveManifest.PayloadEncryptionVersion)
+	if version != serverBackupPayloadEncryptionV2 && version != serverBackupPayloadEncryptionV3 {
 		return nil, nil, 0, fmt.Errorf("unsupported payload encryption version %q", archiveManifest.PayloadEncryptionVersion)
 	}
 	if strings.TrimSpace(archiveManifest.PayloadEncryptionCipher) != serverBackupPayloadCipherV2 {
 		return nil, nil, 0, fmt.Errorf("unsupported payload encryption cipher %q", archiveManifest.PayloadEncryptionCipher)
 	}
-	if strings.TrimSpace(archiveManifest.PayloadEncryptionKDF) != serverBackupPayloadKDFV2 {
-		return nil, nil, 0, fmt.Errorf("unsupported payload encryption KDF %q", archiveManifest.PayloadEncryptionKDF)
-	}
-	if archiveManifest.PayloadEncryptionKDFIters <= 0 || archiveManifest.PayloadEncryptionKDFIters > serverBackupPayloadMaxKDFIterationsV2 {
-		return nil, nil, 0, fmt.Errorf("invalid payload encryption KDF iteration count %d", archiveManifest.PayloadEncryptionKDFIters)
-	}
 	chunkSize := archiveManifest.PayloadEncryptionChunkSize
 	if chunkSize <= 0 || chunkSize > serverBackupPayloadMaxChunkBytesV2 {
 		return nil, nil, 0, fmt.Errorf("invalid payload encryption chunk size %d", chunkSize)
 	}
-	salt, err := decodeServerBackupPayloadHex("salt", archiveManifest.PayloadEncryptionSalt, serverBackupPayloadSaltBytesV2)
+	key, err := deriveServerBackupPayloadKey(archiveManifest, encryptionKey)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 	nonce, err := decodeServerBackupPayloadHex("nonce", archiveManifest.PayloadEncryptionNonce, serverBackupPayloadNonceBytesV2)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	key, err := pbkdf2.Key(sha256.New, strings.TrimSpace(encryptionKey), salt, archiveManifest.PayloadEncryptionKDFIters, 32)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -1303,6 +1362,9 @@ func buildServerRestoreWarnings(manifest models.ServerMigrationManifest, validat
 	if !validation.PayloadChecksumPresent {
 		warnings = append(warnings, "Backup payload checksum is missing. Only continue with staged restore data from a trusted legacy bundle.")
 	}
+	if !validation.PayloadSignaturePresent {
+		warnings = append(warnings, "Unsigned bundle was explicitly trusted by the operator. Its authenticity has not been verified.")
+	}
 	if manifest.EncryptionEnabled && !destinationHasEncryptionKey {
 		warnings = append(warnings, "This server is currently running without ENCRYPTION_KEY, but the restored data still requires the source ENCRYPTION_KEY when you start from the staged DATA_DIR.")
 	}
@@ -1313,4 +1375,34 @@ func buildServerRestoreWarnings(manifest models.ServerMigrationManifest, validat
 		warnings = append(warnings, "Backup payload signature is present but could not be verified on this server. Use the source ENCRYPTION_KEY to verify bundle authenticity.")
 	}
 	return warnings
+}
+
+// TAR EOF can precede the gzip checksum or encrypted frames. Read the bounded
+// zero padding to the underlying EOF before trusting the archive.
+func finishServerBackupArchive(ctx context.Context, reader io.Reader) error {
+	const maxPadding = 1 << 20
+	limited := io.LimitReader(reader, maxPadding+1)
+	var total int
+	var buf [4096]byte
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n, err := limited.Read(buf[:])
+		total += n
+		if total > maxPadding {
+			return errors.New("backup archive trailing padding exceeds limit")
+		}
+		for _, value := range buf[:n] {
+			if value != 0 {
+				return errors.New("backup archive has unexpected trailing data")
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("finish backup archive: %w", err)
+		}
+	}
 }

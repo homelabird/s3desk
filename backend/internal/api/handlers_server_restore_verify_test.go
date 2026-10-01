@@ -1,11 +1,91 @@
 package api
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"s3desk/internal/models"
 )
+
+func TestEncryptedBackupV3DoesNotExposeRawPasswordVerifier(t *testing.T) {
+	manifest, err := buildEncryptedServerBackupArchiveManifest(models.ServerMigrationManifest{
+		Format: serverBackupBundleFormat, BundleKind: serverBackupScopeFull, DBBackend: "sqlite",
+		ConfidentialityMode: serverBackupConfidentialityEncrypted,
+		PayloadFileCount:    1, PayloadBytes: 4, PayloadSHA256: strings.Repeat("a", 64),
+	}, "synthetic-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := fmt.Sprintf("%s\n%s\n%s\n%d\n%d\n%s\n%t\n%s\n%s\n%s\n%s\n%d\n%s\n%s\n%d",
+		manifest.Format, manifest.BundleKind, manifest.DBBackend, manifest.PayloadFileCount, manifest.PayloadBytes,
+		manifest.PayloadSHA256, manifest.EncryptionEnabled, manifest.ConfidentialityMode,
+		manifest.PayloadEncryptionVersion, manifest.PayloadEncryptionCipher, manifest.PayloadEncryptionKDF,
+		manifest.PayloadEncryptionKDFIters, manifest.PayloadEncryptionSalt, manifest.PayloadEncryptionNonce,
+		manifest.PayloadEncryptionChunkSize)
+	mac := hmac.New(sha256.New, []byte("synthetic-password"))
+	_, _ = io.WriteString(mac, message)
+	if manifest.PayloadHMACSHA256 == hex.EncodeToString(mac.Sum(nil)) {
+		t.Fatal("raw password still verifies public manifest")
+	}
+	canonical := manifest
+	canonical.PayloadHMACSHA256 = ""
+	data, err := json.Marshal(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mac.Reset()
+	_, _ = mac.Write(data)
+	if manifest.PayloadHMACSHA256 == hex.EncodeToString(mac.Sum(nil)) {
+		t.Fatal("canonical manifest exposes a raw password verifier")
+	}
+	if manifest.PayloadHMACSHA256 != buildServerBackupPayloadHMAC(manifest, "synthetic-password") {
+		t.Fatal("derived signature is not stable")
+	}
+	manifest.AppVersion = "tampered"
+	if manifest.PayloadHMACSHA256 == buildServerBackupPayloadHMAC(manifest, "synthetic-password") {
+		t.Fatal("manifest metadata is not authenticated")
+	}
+}
+
+func TestEncryptedBackupV2RemainsReadable(t *testing.T) {
+	manifest, err := buildEncryptedServerBackupArchiveManifest(models.ServerMigrationManifest{
+		PayloadSHA256: strings.Repeat("a", 64),
+	}, "synthetic-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.PayloadEncryptionVersion = serverBackupPayloadEncryptionV2
+	manifest.PayloadHMACSHA256 = buildServerBackupPayloadHMAC(manifest, "synthetic-password")
+	root := t.TempDir()
+	plainPath, encryptedPath := filepath.Join(root, "plain"), filepath.Join(root, "encrypted")
+	if err := os.WriteFile(plainPath, []byte("synthetic legacy payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := encryptServerBackupPayloadFileV2(plainPath, encryptedPath, manifest, "synthetic-password"); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(encryptedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	reader, err := newServerBackupPayloadV2Reader(t.Context(), file, manifest, "synthetic-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := io.ReadAll(reader)
+	if err != nil || string(plain) != "synthetic legacy payload" {
+		t.Fatalf("legacy read failed: %v", err)
+	}
+}
 
 func TestVerifyServerRestorePayloadSuccess(t *testing.T) {
 	t.Parallel()

@@ -229,36 +229,44 @@ func TestHandleGetServerBackup_PortableArchiveIncludesUploadState(t *testing.T) 
 	}
 }
 
-func TestHandleImportPortableBackup_RewritesUploadSessionStagingDir(t *testing.T) {
-	t.Parallel()
-
-	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+func TestHandleImportPortableBackup_BlocksStagingUploadSessions(t *testing.T) {
+	st, _, sourceSrv, sourceDir := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
-	session, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", "staging", "/tmp/source-escape", time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano))
+	session, err := st.CreateUploadSession(t.Context(), profile.ID, "test-bucket", "incoming", "staging", "", time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano))
 	if err != nil {
-		t.Fatalf("create upload session: %v", err)
+		t.Fatal(err)
 	}
-
+	stagingDir := filepath.Join(sourceDir, "staging", session.ID)
+	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pendingPath := filepath.Join(stagingDir, "pending.bin")
+	if err := os.WriteFile(pendingPath, []byte("synthetic pending upload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUploadSessionStagingDir(t.Context(), profile.ID, session.ID, stagingDir); err != nil {
+		t.Fatal(err)
+	}
 	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
-
-	targetStore, _, targetSrv, targetDataDir := newTestJobsServer(t, testEncryptionKey(), false)
-	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(res.Body)
-		t.Fatalf("expected status 201, got %d: %s", res.StatusCode, string(body))
+	targetStore, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	original := createTestProfile(t, targetStore)
+	for _, endpoint := range []string{"/api/v1/server/import-portable/preview", "/api/v1/server/import-portable"} {
+		res := postPortableArchive(t, targetSrv.URL, endpoint, archiveBytes, "portable-backup.tar.gz")
+		var resp models.ServerPortableImportResponse
+		decodeJSONResponse(t, res, &resp)
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK || !strings.Contains(strings.Join(resp.Preflight.Blockers, " "), "local staging files") {
+			t.Fatalf("expected staging blocker: status=%d blockers=%v", res.StatusCode, resp.Preflight.Blockers)
+		}
 	}
-
-	imported, ok, err := targetStore.GetUploadSession(context.Background(), profile.ID, session.ID)
-	if err != nil {
-		t.Fatalf("get upload session: %v", err)
+	if _, ok, err := targetStore.GetUploadSession(t.Context(), profile.ID, session.ID); err != nil || ok {
+		t.Fatal("blocked import changed upload state")
 	}
-	if !ok {
-		t.Fatalf("expected imported upload session")
+	if _, ok, err := targetStore.GetProfile(t.Context(), original.ID); err != nil || !ok {
+		t.Fatal("blocked import replaced destination")
 	}
-	want := filepath.Join(targetDataDir, "staging", session.ID)
-	if imported.StagingDir != want {
-		t.Fatalf("stagingDir=%q, want %q", imported.StagingDir, want)
+	if _, err := os.Stat(pendingPath); err != nil {
+		t.Fatal("source staging file was removed")
 	}
 }
 
@@ -393,7 +401,7 @@ func TestHandlePreviewPortableImport_RejectsOversizedBundle(t *testing.T) {
 	t.Parallel()
 
 	srv := &server{cfg: config.Config{ServerRestoreMaxBytes: 128}}
-	body, contentType := buildPortableArchiveMultipartBody(t, bytes.Repeat([]byte("x"), 1024), "oversized.tar.gz", "")
+	body, contentType := buildPortableArchiveMultipartBody(t, bytes.Repeat([]byte("x"), 1024), "oversized.tar.gz", "", false)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/server/import-portable/preview", body)
 	req.Header.Set("Content-Type", contentType)
 	rr := httptest.NewRecorder()
@@ -461,7 +469,7 @@ func TestHandleImportPortableBackup_RejectsOversizedBundle(t *testing.T) {
 	t.Parallel()
 
 	srv := &server{cfg: config.Config{ServerRestoreMaxBytes: 128}}
-	body, contentType := buildPortableArchiveMultipartBody(t, bytes.Repeat([]byte("x"), 1024), "oversized.tar.gz", "")
+	body, contentType := buildPortableArchiveMultipartBody(t, bytes.Repeat([]byte("x"), 1024), "oversized.tar.gz", "", false)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/server/import-portable", body)
 	req.Header.Set("Content-Type", contentType)
 	rr := httptest.NewRecorder()
@@ -634,7 +642,7 @@ func TestHandleImportPortableBackup_EncryptedBundleImportsWithMatchingKey(t *tes
 	if _, ok := entries["payload.enc"]; !ok {
 		t.Fatalf("encrypted portable backup must include payload.enc")
 	}
-	assertEncryptedPayloadV2Manifest(t, decodeServerBackupArchiveManifest(t, entries))
+	assertEncryptedPayloadV3Manifest(t, decodeServerBackupArchiveManifest(t, entries))
 
 	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup-encrypted.tar.gz")
@@ -792,45 +800,43 @@ func TestCopyPortableAssetTreeCopiesManyFiles(t *testing.T) {
 	}
 }
 
-func TestHandleImportPortableBackup_WarnsWhenThumbnailCopyFails(t *testing.T) {
-	t.Parallel()
-
-	_, _, sourceSrv, sourceDataDir := newTestJobsServer(t, testEncryptionKey(), false)
-	thumbPath := filepath.Join(sourceDataDir, "thumbnails", "profile-a", "bucket-a", "thumb.jpg")
+func TestHandleImportPortableBackup_PreservesDestinationWhenThumbnailPreparationFails(t *testing.T) {
+	sourceStore, _, sourceSrv, sourceDataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	sourceProfile := createTestProfile(t, sourceStore)
+	thumbPath := filepath.Join(sourceDataDir, "thumbnails", sourceProfile.ID, "bucket-a", "thumb.jpg")
 	if err := os.MkdirAll(filepath.Dir(thumbPath), 0o700); err != nil {
-		t.Fatalf("mkdir thumbnails: %v", err)
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(thumbPath, []byte("jpeg"), 0o600); err != nil {
-		t.Fatalf("write thumbnail: %v", err)
+	if err := os.WriteFile(thumbPath, []byte("fresh"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-
-	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable&includeThumbnails=true")
-
-	_, _, targetSrv, targetDataDir := newTestJobsServer(t, testEncryptionKey(), false)
-	targetThumbDir := filepath.Join(targetDataDir, "thumbnails")
-	if err := os.MkdirAll(targetThumbDir, 0o700); err != nil {
-		t.Fatalf("mkdir target thumbnails: %v", err)
+	archive := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable&includeThumbnails=true")
+	targetStore, _, targetSrv, targetDir := newTestJobsServer(t, testEncryptionKey(), false)
+	original := createTestProfile(t, targetStore)
+	oldThumbnail := filepath.Join(targetDir, "thumbnails", "old.jpg")
+	if err := os.MkdirAll(filepath.Dir(oldThumbnail), 0o700); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.Chmod(targetDataDir, 0o500); err != nil {
-		t.Fatalf("chmod target data dir: %v", err)
+	if err := os.WriteFile(oldThumbnail, []byte("previous"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	defer func() { _ = os.Chmod(targetDataDir, 0o700) }()
-
-	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
+	if err := os.Chmod(targetDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(targetDir, 0o700) }()
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archive, "portable.tar.gz")
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(res.Body)
-		t.Fatalf("expected status 201, got %d: %s", res.StatusCode, string(body))
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected preparation failure, status=%d", res.StatusCode)
 	}
-
-	var resp models.ServerPortableImportResponse
-	decodeJSONResponse(t, res, &resp)
-	warnings := strings.Join(resp.Warnings, "\n")
-	if !strings.Contains(warnings, "failed to copy thumbnail assets") && !strings.Contains(warnings, "failed to reset thumbnail assets") {
-		t.Fatalf("expected thumbnail copy warning, got %v", resp.Warnings)
+	if _, ok, err := targetStore.GetProfile(t.Context(), original.ID); err != nil || !ok {
+		t.Fatal("preparation failure replaced the database")
 	}
-	if resp.AssetStagingDir != "" {
-		t.Fatalf("assetStagingDir=%q, want empty on copy warning", resp.AssetStagingDir)
+	if _, ok, err := targetStore.GetProfile(t.Context(), sourceProfile.ID); err != nil || ok {
+		t.Fatal("source profile was applied despite preparation failure")
+	}
+	if data, err := os.ReadFile(oldThumbnail); err != nil || string(data) != "previous" {
+		t.Fatal("previous thumbnails were lost")
 	}
 }
 
@@ -973,7 +979,7 @@ func TestExtractPortableArchiveRejectsOversizedManifestHeader(t *testing.T) {
 	t.Parallel()
 
 	archive := buildTarGzWithDeclaredEntrySize(t, "manifest.json", portablePreviewMaxManifestBytes+1)
-	_, _, _, _, _, err := extractPortableArchiveWithLimit(t.Context(), bytes.NewReader(archive), "", "", 0)
+	_, _, _, _, _, err := extractPortableArchiveWithLimit(t.Context(), bytes.NewReader(archive), "", "", 0, false)
 	var limitErr serverRestoreExtractLimitError
 	if !errors.As(err, &limitErr) {
 		t.Fatalf("expected serverRestoreExtractLimitError, got %v", err)
@@ -992,7 +998,7 @@ func TestExtractPortableArchiveRejectsDuplicateManifest(t *testing.T) {
 	}})
 	archive := buildTarGzWithDuplicateEntry(t, "manifest.json", manifest)
 
-	_, _, _, _, _, err := extractPortableArchiveWithLimit(t.Context(), bytes.NewReader(archive), "", "", 0)
+	_, _, _, _, _, err := extractPortableArchiveWithLimit(t.Context(), bytes.NewReader(archive), "", "", 0, false)
 	if err == nil || !strings.Contains(err.Error(), "portable manifest appears more than once") {
 		t.Fatalf("error=%v, want duplicate portable manifest rejection", err)
 	}
@@ -1050,7 +1056,7 @@ func downloadPortableArchiveBytesWithPassword(t *testing.T, serverURL string, pa
 func postPortableArchive(t *testing.T, serverURL string, path string, archive []byte, filename string) *http.Response {
 	t.Helper()
 
-	body, contentType := buildPortableArchiveMultipartBody(t, archive, filename, "")
+	body, contentType := buildPortableArchiveMultipartBody(t, archive, filename, "", false)
 	req, err := http.NewRequest(http.MethodPost, serverURL+path, body)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
@@ -1066,7 +1072,7 @@ func postPortableArchive(t *testing.T, serverURL string, path string, archive []
 func postPortableArchiveWithPassword(t *testing.T, serverURL string, path string, archive []byte, filename string, password string) *http.Response {
 	t.Helper()
 
-	body, contentType := buildPortableArchiveMultipartBody(t, archive, filename, password)
+	body, contentType := buildPortableArchiveMultipartBody(t, archive, filename, password, false)
 	req, err := http.NewRequest(http.MethodPost, serverURL+path, body)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
@@ -1079,7 +1085,7 @@ func postPortableArchiveWithPassword(t *testing.T, serverURL string, path string
 	return res
 }
 
-func buildPortableArchiveMultipartBody(t *testing.T, archive []byte, filename string, password string) (*bytes.Buffer, string) {
+func buildPortableArchiveMultipartBody(t *testing.T, archive []byte, filename string, password string, allowUnsigned bool) (*bytes.Buffer, string) {
 	t.Helper()
 
 	body := &bytes.Buffer{}
@@ -1094,6 +1100,11 @@ func buildPortableArchiveMultipartBody(t *testing.T, archive []byte, filename st
 	if password != "" {
 		if err := writer.WriteField("password", password); err != nil {
 			t.Fatalf("write password: %v", err)
+		}
+	}
+	if allowUnsigned {
+		if err := writer.WriteField("allowUnsigned", "true"); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if err := writer.Close(); err != nil {

@@ -48,6 +48,8 @@ type PortableValidationOptions struct {
 	AllowRemote bool
 }
 
+var ErrPortableImportLocalUploads = errors.New("portable import cannot replace destination local staging uploads; finish or cancel them first")
+
 var ErrPortableImportActiveJobs = errors.New("portable import cannot replace data while destination jobs are queued or running")
 
 func (s *Store) ExportPortableEntityFiles(ctx context.Context) (PortableExportBundle, error) {
@@ -129,6 +131,11 @@ func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFile
 }
 
 func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context, entityFiles map[string][]byte, dataDir string, opts PortableValidationOptions) (PortableImportCounts, error) {
+	return s.ImportPortableEntityFilesReplaceWithRecovery(ctx, entityFiles, dataDir, opts, nil)
+}
+
+// beforeReplace must durably preserve the preimage or return an error before any DELETE.
+func (s *Store) ImportPortableEntityFilesReplaceWithRecovery(ctx context.Context, entityFiles map[string][]byte, dataDir string, opts PortableValidationOptions, beforeReplace func(PortableExportBundle) error) (PortableImportCounts, error) {
 	var counts PortableImportCounts
 
 	rows, err := parseAndValidatePortableEntityFiles(dataDir, entityFiles, opts)
@@ -145,9 +152,29 @@ func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context,
 	objectIndexReplacements := rows.objectIndexReplacements
 	objectFavorites := rows.objectFavorites
 
+	var txOptions *sql.TxOptions
+	if s.db.Dialector.Name() == "postgres" {
+		txOptions = &sql.TxOptions{Isolation: sql.LevelSerializable}
+	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ensureNoActivePortableImportJobs(tx); err != nil {
 			return err
+		}
+		var localUploads int64
+		if err := tx.Model(&uploadSessionRow{}).Where("mode NOT IN ? OR mode IS NULL", []string{"direct", "presigned"}).Count(&localUploads).Error; err != nil {
+			return err
+		}
+		if localUploads > 0 {
+			return ErrPortableImportLocalUploads
+		}
+		if beforeReplace != nil {
+			bundle, err := exportPortableEntityFiles(tx)
+			if err != nil {
+				return err
+			}
+			if err := beforeReplace(bundle); err != nil {
+				return err
+			}
 		}
 		deleteTables := []any{
 			&objectFavoriteRow{},
@@ -221,7 +248,7 @@ func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context,
 			counts.ObjectFavorites = len(objectFavorites)
 		}
 		return nil
-	})
+	}, txOptions)
 	if err != nil {
 		return PortableImportCounts{}, err
 	}
@@ -678,7 +705,7 @@ func quarantinePortableExecutableJobs(rows []jobRow) []jobRow {
 	return normalized
 }
 
-func normalizePortableUploadSessions(dataDir string, rows []uploadSessionRow) ([]uploadSessionRow, error) {
+func normalizePortableUploadSessions(_ string, rows []uploadSessionRow) ([]uploadSessionRow, error) {
 	normalized := append([]uploadSessionRow(nil), rows...)
 	for i := range normalized {
 		mode := strings.TrimSpace(strings.ToLower(normalized[i].Mode))
@@ -686,11 +713,7 @@ func normalizePortableUploadSessions(dataDir string, rows []uploadSessionRow) ([
 		case "direct", "presigned":
 			normalized[i].StagingDir = ""
 		default:
-			stagingDir, err := ResolveUploadStagingDir(dataDir, normalized[i].ID)
-			if err != nil {
-				return nil, fmt.Errorf("session %q: %w", normalized[i].ID, err)
-			}
-			normalized[i].StagingDir = stagingDir
+			return nil, fmt.Errorf("portable upload session %q uses local staging files that are not included in portable backups; finish or cancel staging uploads on the source and export again", normalized[i].ID)
 		}
 	}
 	return normalized, nil

@@ -12,7 +12,12 @@ func buildPortableImportResponseBody(
 	preflight models.ServerPortableImportPreflight,
 	entityVerification portableImportEntityVerification,
 ) models.ServerPortableImportResponse {
+	status := "ready"
+	if len(preflight.Blockers) > 0 {
+		status = "blocked"
+	}
 	return models.ServerPortableImportResponse{
+		Status:          status,
 		Manifest:        manifest,
 		Mode:            mode,
 		TargetDBBackend: string(dbBackend),
@@ -22,5 +27,6 @@ func buildPortableImportResponseBody(
 			EntityChecksumsVerified:     entityVerification.entityChecksumsVerified,
 			PostImportHealthCheckPassed: false,
 		},
+		Warnings: append([]string(nil), manifest.Warnings...),
 	}
 }

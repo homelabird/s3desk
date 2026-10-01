@@ -598,6 +598,19 @@ npm run check:openapi
 
 These are the concrete portable backup/import validation paths.
 
+Local failure and rollback coverage for archive tails, destination preimages,
+recovery write failures, SQL/context rollback, uncertain commit records, and
+partial outcomes:
+
+```bash
+cd backend
+go test ./internal/api ./internal/store -run 'PortableRecovery|BackupRejectsCorruptionAfterTarEOF|BackupArchiveTail' -count=1
+```
+
+These tests use local SQLite and injected failures. They do not establish
+PostgreSQL runtime, provider, SIGKILL, reboot, or power-loss recovery evidence.
+See [failure and recovery analysis](BACKUP_RESTORE_FAILURE_ANALYSIS.ko.md).
+
 ```bash
 bash scripts/run_portable_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_smoke.sh && bash scripts/run_portable_sqlite_to_postgres_smoke.sh
 ```
@@ -650,7 +663,7 @@ These scripts verify:
 
 - wrong password on encrypted/password-protected portable bundles
 - destination `ENCRYPTION_KEY` mismatch against the bundle fingerprint
-- partial thumbnail asset copy warnings after successful database import
+- thumbnail preparation failure before database replacement, preserving the destination
 
 ## Upgrade Compatibility
 

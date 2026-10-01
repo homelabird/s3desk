@@ -131,7 +131,7 @@ func TestServerBackupHTTPService_HandleRestoreServerBackup_MapsPreflightError(t 
 		openRequest: func(_ http.ResponseWriter, _ *http.Request, _ serverRestoreBundleOpenOptions) (io.ReadCloser, string, func(), bool) {
 			return io.NopCloser(strings.NewReader("bundle")), "bundle-password", func() {}, true
 		},
-		restoreArchive: func(_ context.Context, _ io.Reader, _ string, _ string) (models.ServerRestoreResponse, error) {
+		restoreArchive: func(_ context.Context, _ io.Reader, _ string, _ string, _ bool) (models.ServerRestoreResponse, error) {
 			return models.ServerRestoreResponse{}, serverRestorePreflightError{Path: "/tmp", RequiredBytes: 10, AvailableBytes: 5}
 		},
 	}
@@ -152,6 +152,25 @@ func TestServerBackupHTTPService_HandleRestoreServerBackup_MapsPreflightError(t 
 	}
 	if got, _ := resp.Error.Details["path"].(string); got != "/tmp" {
 		t.Fatalf("resp.Error.Details[path]=%q, want /tmp", got)
+	}
+}
+
+func TestServerBackupHTTPService_RejectsOversizedArchiveAndCleansTemporaryFile(t *testing.T) {
+	var archivePath string
+	svc := serverBackupHTTPService{
+		dbBackend: string(db.BackendSQLite), maxRestoreBytes: 4,
+		exportArchive: func(_ context.Context, path, _, _ string, _ bool, _ serverBackupSecrets) (models.ServerMigrationManifest, error) {
+			archivePath = path
+			return models.ServerMigrationManifest{}, os.WriteFile(path, []byte("oversized archive"), 0o600)
+		},
+	}
+	rec := httptest.NewRecorder()
+	svc.handleGetServerBackup(rec, httptest.NewRequest(http.MethodGet, "/api/v1/server/backup", nil))
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status=%d, want 413", rec.Code)
+	}
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Fatalf("oversized archive left temporary file: %v", err)
 	}
 }
 
@@ -191,7 +210,7 @@ func TestServerBackupHTTPService_HandleRestoreServerBackup_ReturnsCreatedRespons
 		openRequest: func(_ http.ResponseWriter, _ *http.Request, _ serverRestoreBundleOpenOptions) (io.ReadCloser, string, func(), bool) {
 			return io.NopCloser(strings.NewReader("bundle")), "bundle-password", func() { cleanupCalled = true }, true
 		},
-		restoreArchive: func(_ context.Context, _ io.Reader, backupPassword string, encryptionKey string) (models.ServerRestoreResponse, error) {
+		restoreArchive: func(_ context.Context, _ io.Reader, backupPassword string, encryptionKey string, _ bool) (models.ServerRestoreResponse, error) {
 			if backupPassword != "bundle-password" {
 				t.Fatalf("backupPassword=%q, want bundle-password", backupPassword)
 			}

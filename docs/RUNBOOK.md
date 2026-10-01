@@ -289,6 +289,32 @@ Use these operational thresholds:
 - Uploading a restore bundle stages a sqlite-backed `DATA_DIR`; it does not restore a running Postgres deployment
 - Keep `API_TOKEN` and any encryption-related secrets outside of the repository
 
+### Coordinated SQLite Recovery
+
+- Export uses a consistent SQLite snapshot, then copies selected runtime files.
+  An online Full export does not freeze uploads, job cleanup, or other file writers.
+- For coordinated recovery, stop new uploads and other mutations, let running and
+  queued jobs finish, then export. Keep writes paused until export completes.
+- Keep the old data directory and an independently stored copy of the source
+  `ENCRYPTION_KEY`. A backup password decrypts the bundle; it does not replace
+  the key needed to read encrypted provider credentials.
+- Snapshot restore accepts only Full/Cache sqlite bundles and opens the staged
+  database read-only to check integrity, foreign keys, and application columns.
+  Portable bundles must go through portable preview/import.
+  An older SQLite schema missing current columns must be upgraded on the source
+  and exported again; validation does not run migrations against the snapshot.
+- Unsigned bundles require explicit `allowUnsigned=true` after the operator
+  establishes trust. Invalid signatures are always rejected.
+- The default `SERVER_RESTORE_MAX_BYTES` is 4 GiB and caps both the incoming
+  archive and cumulative extracted payload. Export rejects bundles that exceed
+  either limit on the source. Ensure both source and destination limits cover
+  the backup before exporting. Export/import also need temporary disk
+  space; encrypted export holds a snapshot, a plain payload, encrypted payload,
+  and the final archive during preparation. Portable logical entities are held
+  in memory, so size the process for large object indexes.
+- Keep remote object data protected by the storage provider's backup/versioning
+  policy. S3Desk bundles do not contain those objects, environment config, or keys.
+
 ### Profile YAML Exports
 
 - Default profile YAML export omits provider secrets and TLS private material.
@@ -315,9 +341,22 @@ Use these operational thresholds:
 - Use it when you need to move S3Desk state between sqlite and Postgres deployments.
 - Portable bundles contain logical application data rather than a raw `s3desk.db` snapshot.
 - Portable import currently assumes replace semantics for portable-scope entities.
+- Pause source and destination writes and finish or cancel staging uploads and
+  active jobs before migration. The import lock does not freeze all API writers.
+- Before replacement, import preserves the destination in
+  `DATA_DIR/import-recovery/import-*/before.tar.gz` and records its outcome in
+  `operation.json`. Keep these files and the destination `ENCRYPTION_KEY`.
+  If a request fails or its response is lost, inspect the record and database
+  before retrying. `commit_unknown` and `database_committed` are unfinished
+  outcomes, and `partial` requires recovery work before cutover.
+- To undo replacement, first preserve the latest target state, then preview and
+  import the matching `before.tar.gz` with writes paused. This does not reverse
+  provider object changes or schema/environment changes. Keep an off-host native
+  backup. See [Portable Backup](PORTABLE_BACKUP.md) and
+  [failure and recovery analysis](BACKUP_RESTORE_FAILURE_ANALYSIS.ko.md).
 - Keep `ENCRYPTION_KEY` aligned between source and destination when encrypted profile data is present.
 - When using `confidentiality=encrypted`, a non-empty backup password overrides the destination `ENCRYPTION_KEY`; keep the export/import password aligned, or leave the password blank for server-key encrypted bundles.
-- New encrypted backup bundles use versioned PBKDF2-SHA256 plus AES-256-GCM payload encryption; older `payloadEncryptionIv` bundles remain import-compatible.
+- New encrypted backup bundles use v3 PBKDF2-SHA256, AES-256-GCM payload encryption, and a separate KDF-derived manifest authentication key. Signed v2 and older `payloadEncryptionIv` bundles remain readable; re-export old password-protected bundles to remove their fast password verifier.
 - A safe migration flow is:
   1. Export a portable backup from the source server.
   2. Run portable import preview on the destination server.

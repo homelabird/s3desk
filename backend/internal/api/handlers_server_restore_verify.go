@@ -23,7 +23,7 @@ func verifyServerRestorePayload(
 	backupPassword string,
 	encryptionKey string,
 ) (serverRestorePayloadVerification, error) {
-	return verifyServerRestorePayloadWithOptions(subject, manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey, true)
+	return verifyServerRestorePayloadWithOptions(subject, manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey, true, false)
 }
 
 func verifyServerRestorePayloadWithOptions(
@@ -34,6 +34,7 @@ func verifyServerRestorePayloadWithOptions(
 	backupPassword string,
 	encryptionKey string,
 	verifySignature bool,
+	allowUnsigned bool,
 ) (serverRestorePayloadVerification, error) {
 	var verification serverRestorePayloadVerification
 
@@ -66,14 +67,21 @@ func verifyServerRestorePayloadWithOptions(
 		verification.ChecksumVerified = true
 	}
 
-	if archiveManifest.PayloadHMACSHA256 != "" {
+	if archiveManifest.PayloadHMACSHA256 == "" {
+		if !allowUnsigned {
+			return verification, fmt.Errorf("%s payload signature is required; allowUnsigned=true is only for a trusted unsigned bundle", subject)
+		}
+	} else {
 		verification.SignaturePresent = true
 		if !verifySignature {
 			return verification, nil
 		}
 		secrets := resolveServerBackupArchiveSecrets(manifest, backupPassword, encryptionKey)
 		expectedHMAC := buildServerBackupPayloadHMAC(archiveManifest, secrets.HMACSecret)
-		if expectedHMAC != "" && !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {
+		if expectedHMAC == "" {
+			return verification, fmt.Errorf("%s payload signature cannot be verified with the supplied password or encryption key", subject)
+		}
+		if !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {
 			return verification, fmt.Errorf("%s payload signature mismatch", subject)
 		}
 		if expectedHMAC != "" {

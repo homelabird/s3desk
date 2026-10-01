@@ -18,7 +18,7 @@ func TestPortableImportArchiveService_ProcessDryRunSkipsApplyAndCleansUp(t *test
 	applyCalled := false
 	svc := portableImportArchiveService{
 		dbBackend: string(db.BackendSQLite),
-		extract: func(_ context.Context, _ io.Reader, backupPassword string, encryptionKey string) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
+		extract: func(_ context.Context, _ io.Reader, backupPassword string, encryptionKey string, _ bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			if backupPassword != "operator-secret" {
 				t.Fatalf("backupPassword=%q, want operator-secret", backupPassword)
 			}
@@ -54,7 +54,7 @@ func TestPortableImportArchiveService_ProcessDryRunSkipsApplyAndCleansUp(t *test
 		},
 	}
 
-	response, outcome, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeDryRun, "operator-secret", "enc-key")
+	response, outcome, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeDryRun, "operator-secret", "enc-key", false)
 	if err != nil {
 		t.Fatalf("process() error = %v", err)
 	}
@@ -79,7 +79,7 @@ func TestPortableImportArchiveService_ProcessBlockedReplaceSkipsApplyAndCleansUp
 	applyCalled := false
 	svc := portableImportArchiveService{
 		dbBackend: string(db.BackendSQLite),
-		extract: func(_ context.Context, _ io.Reader, _, _ string) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
+		extract: func(_ context.Context, _ io.Reader, _, _ string, _ bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			return "/tmp/portable-import-blocked", models.ServerMigrationManifest{BundleKind: serverBackupScopePortable}, nil, "", nil
 		},
 		buildResponse: func(mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
@@ -103,7 +103,7 @@ func TestPortableImportArchiveService_ProcessBlockedReplaceSkipsApplyAndCleansUp
 		},
 	}
 
-	response, outcome, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeReplace, "", "")
+	response, outcome, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeReplace, "", "", false)
 	if err != nil {
 		t.Fatalf("process() error = %v", err)
 	}
@@ -129,7 +129,7 @@ func TestPortableImportArchiveService_ProcessReplaceAppliesAndCleansUpOnError(t 
 	wantErr := errors.New("replace failed")
 	svc := portableImportArchiveService{
 		dbBackend: string(db.BackendSQLite),
-		extract: func(_ context.Context, _ io.Reader, _, _ string) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
+		extract: func(_ context.Context, _ io.Reader, _, _ string, _ bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			return "/tmp/portable-import-replace", models.ServerMigrationManifest{BundleKind: serverBackupScopePortable}, map[string][]byte{
 				"profiles": []byte("[]\n"),
 			}, "/tmp/assets", nil
@@ -156,7 +156,7 @@ func TestPortableImportArchiveService_ProcessReplaceAppliesAndCleansUpOnError(t 
 		},
 	}
 
-	_, _, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeReplace, "", "")
+	_, _, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeReplace, "", "", false)
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("process() error = %v, want %v", err, wantErr)
 	}
@@ -173,7 +173,7 @@ func TestPortableImportArchiveService_ProcessReplaceAppliedReturnsAppliedOutcome
 
 	svc := portableImportArchiveService{
 		dbBackend: string(db.BackendSQLite),
-		extract: func(_ context.Context, _ io.Reader, _, _ string) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
+		extract: func(_ context.Context, _ io.Reader, _, _ string, _ bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			return "", models.ServerMigrationManifest{BundleKind: serverBackupScopePortable}, nil, "", nil
 		},
 		buildResponse: func(mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
@@ -185,7 +185,7 @@ func TestPortableImportArchiveService_ProcessReplaceAppliedReturnsAppliedOutcome
 		cleanup: func(string) error { return nil },
 	}
 
-	response, outcome, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeReplace, "", "")
+	response, outcome, err := svc.process(context.Background(), bytes.NewReader(nil), portableImportModeReplace, "", "", false)
 	if err != nil {
 		t.Fatalf("process() error = %v", err)
 	}

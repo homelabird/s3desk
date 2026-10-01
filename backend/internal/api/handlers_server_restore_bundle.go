@@ -4,12 +4,24 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type serverRestoreBundleOpenOptions struct {
 	MaxBytes        int64
 	TooLargeMessage string
 	OnOpenError     func(http.ResponseWriter, error)
+}
+
+func parseServerRestoreAllowUnsigned(r *http.Request) (bool, error) {
+	switch strings.TrimSpace(r.FormValue("allowUnsigned")) {
+	case "", "false":
+		return false, nil
+	case "true":
+		return true, nil
+	default:
+		return false, errors.New("allowUnsigned must be true or false")
+	}
 }
 
 func openServerRestoreBundleRequest(
