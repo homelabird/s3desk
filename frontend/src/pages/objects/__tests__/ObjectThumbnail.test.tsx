@@ -12,6 +12,7 @@ const originalRevokeObjectURL = URL.revokeObjectURL
 const PERSISTENT_THUMBNAIL_INDEX_KEY = 's3desk-thumbnail-blobs-v1:index'
 
 beforeEach(() => {
+	window.localStorage.clear()
 	URL.createObjectURL = vi.fn(() => 'blob:thumbnail')
 	URL.revokeObjectURL = vi.fn()
 })
@@ -25,6 +26,46 @@ afterEach(() => {
 })
 
 describe('ObjectThumbnail', () => {
+	it.each([
+		[null, 24, 256],
+		[96, 24, 96],
+		[256, 24, 256],
+		[512, 24, 512],
+		['invalid', 24, 256],
+		[96, 512, 512],
+	] as const)('requests quality %s at %s display pixels as %s pixels', async (quality, displaySize, requestSize) => {
+		if (quality !== null) window.localStorage.setItem('objectsThumbnailQuality', JSON.stringify(quality))
+		const downloadObjectThumbnail = vi.fn(() => ({
+			promise: Promise.resolve({ blob: new Blob(['thumb'], { type: 'image/jpeg' }), contentType: 'image/jpeg' }),
+			abort: vi.fn(),
+		}))
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
+		render(<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="image.png" size={displaySize} cache={createThumbnailCache()} />)
+
+		await waitFor(() => expect(downloadObjectThumbnail).toHaveBeenCalledWith(expect.objectContaining({ size: requestSize })))
+		const image = await screen.findByRole('img', { name: 'Thumbnail of image.png' })
+		expect(image).toHaveAttribute('width', String(displaySize))
+		expect(image).toHaveAttribute('height', String(displaySize))
+	})
+
+	it('fetches a higher resolution when the saved quality changes while mounted', async () => {
+		window.localStorage.setItem('objectsThumbnailQuality', '96')
+		const downloadObjectThumbnail = vi.fn(() => ({
+			promise: Promise.resolve({ blob: new Blob(['thumb'], { type: 'image/jpeg' }), contentType: 'image/jpeg' }),
+			abort: vi.fn(),
+		}))
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
+		render(<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="image.png" size={24} cache={createThumbnailCache()} />)
+		await screen.findByRole('img', { name: 'Thumbnail of image.png' })
+
+		act(() => {
+			window.localStorage.setItem('objectsThumbnailQuality', '512')
+			window.dispatchEvent(new CustomEvent('local-storage', { detail: { key: 'objectsThumbnailQuality', value: '512' } }))
+		})
+		await waitFor(() => expect(downloadObjectThumbnail).toHaveBeenLastCalledWith(expect.objectContaining({ size: 512 })))
+		expect(downloadObjectThumbnail).toHaveBeenCalledTimes(2)
+	})
+
 	it('uses persistent local cache for video thumbnails before hitting the network', async () => {
 		const cache = createThumbnailCache()
 		const downloadObjectThumbnail = vi.fn()
@@ -34,7 +75,7 @@ describe('ObjectThumbnail', () => {
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				objectKey: 'clip.mp4',
-				size: 24,
+				size: 256,
 			}),
 		)
 		const match = vi.fn().mockResolvedValue(
@@ -66,7 +107,7 @@ describe('ObjectThumbnail', () => {
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				objectKey: 'clip.mp4',
-				size: 24,
+				size: 256,
 			}),
 		)
 		let resolveMatch: ((value: Response | undefined) => void) | undefined
@@ -159,7 +200,7 @@ describe('ObjectThumbnail', () => {
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				objectKey: 'clip.mp4',
-				size: 24,
+				size: 256,
 			}),
 		)
 		const match = vi.fn().mockResolvedValue(
@@ -209,7 +250,7 @@ describe('ObjectThumbnail', () => {
 							profileId: 'profile-1',
 							bucket: 'bucket-a',
 							objectKey: 'clip.mp4',
-							size: 24,
+							size: 256,
 						}),
 					),
 				),

@@ -1,6 +1,7 @@
 import { Collapse, Select, Space, Typography } from 'antd'
 
 import { FormField } from '../../components/FormField'
+import { NativeSelect } from '../../components/NativeSelect'
 import { NumberField } from '../../components/NumberField'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
 import {
@@ -19,6 +20,9 @@ import {
 	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
 	THUMBNAIL_CACHE_MAX_ENTRIES,
 	THUMBNAIL_CACHE_MIN_ENTRIES,
+	THUMBNAIL_QUALITY_DEFAULT,
+	THUMBNAIL_QUALITY_STORAGE_KEY,
+	normalizeThumbnailQuality,
 } from '../../lib/thumbnailCache'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { profileScopedStorageKey } from '../../lib/profileScopedStorage'
@@ -26,6 +30,9 @@ import styles from '../SettingsPage.module.css'
 
 export function ObjectsSettingsSection(props: { apiToken: string; profileId: string | null; profileName: string | null }) {
 	const [objectsShowThumbnails, setObjectsShowThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
+	const [thumbnailQuality, setThumbnailQuality] = useLocalStorageState<number>(THUMBNAIL_QUALITY_STORAGE_KEY, THUMBNAIL_QUALITY_DEFAULT, {
+		sanitize: normalizeThumbnailQuality,
+	})
 	const [objectsThumbnailCacheSize, setObjectsThumbnailCacheSize] = useLocalStorageState<number>(
 		'objectsThumbnailCacheSize',
 		THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
@@ -55,6 +62,25 @@ export function ObjectsSettingsSection(props: { apiToken: string; profileId: str
 					checked={objectsShowThumbnails}
 					onChange={setObjectsShowThumbnails}
 					ariaLabel="Show image thumbnails"
+				/>
+			</FormField>
+			<FormField
+				label="Thumbnail quality"
+				htmlFor="settings-thumbnail-quality"
+				extra="Image and video thumbnail resolution in lists, grids, and details. Higher quality uses more bandwidth and cache space."
+			>
+				<NativeSelect
+					id="settings-thumbnail-quality"
+					ariaLabel="Thumbnail quality"
+					value={String(thumbnailQuality)}
+					disabled={!objectsShowThumbnails}
+					onChange={(value) => setThumbnailQuality(Number(value))}
+					className={styles.fullWidth}
+					options={[
+						{ value: '96', label: 'Low (96 px)' },
+						{ value: '256', label: 'Standard (256 px)' },
+						{ value: '512', label: 'High (512 px)' },
+					]}
 				/>
 			</FormField>
 			<FormField

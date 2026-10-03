@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { buildProfileFixture, installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
-import { gotoObjectsPage, objectsListRow } from './support/ui'
+import { dialogByName, gotoObjectsPage, objectsListRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -191,6 +191,38 @@ function rowFor(page: Page, key: string) {
 }
 
 test.describe('Objects image preview', () => {
+	test('thumbnail quality persists and fetches sharper images after changing settings', async ({ page }) => {
+		const sizes: number[] = []
+		page.on('request', (request) => {
+			const url = new URL(request.url())
+			if (url.pathname.endsWith('/objects/thumbnail')) sizes.push(Number(url.searchParams.get('size')))
+		})
+		await stubObjectsImagePreviewApi(page, [fixtures[0]])
+		await seedStorage(page, { detailsOpen: false })
+		await gotoObjectsPage(page)
+		await expect(rowFor(page, 'hero.png').getByRole('img', { name: 'Thumbnail of hero.png' })).toBeVisible()
+		expect(sizes).toContain(256)
+
+		await page.getByRole('button', { name: 'App menu' }).click()
+		await page.getByRole('menuitem', { name: /Settings/ }).click()
+		const drawer = dialogByName(page, 'Settings')
+		await drawer.getByRole('tab', { name: 'Objects', exact: true }).click()
+		const quality = drawer.getByRole('combobox', { name: 'Thumbnail quality' })
+		await expect(quality).toHaveValue('256')
+		await quality.selectOption('512')
+		await expect.poll(() => page.evaluate(() => window.localStorage.getItem('objectsThumbnailQuality'))).toBe('512')
+		await drawer.getByRole('button', { name: 'Close' }).click()
+		await expect.poll(() => sizes).toContain(512)
+
+		await page.reload()
+		await expect(rowFor(page, 'hero.png').getByRole('img', { name: 'Thumbnail of hero.png' })).toBeVisible()
+		await page.getByRole('button', { name: 'App menu' }).click()
+		await page.getByRole('menuitem', { name: /Settings/ }).click()
+		const reopenedDrawer = dialogByName(page, 'Settings')
+		await reopenedDrawer.getByRole('tab', { name: 'Objects', exact: true }).click()
+		await expect(reopenedDrawer.getByRole('combobox', { name: 'Thumbnail quality' })).toHaveValue('512')
+	})
+
 	test('continues loading thumbnails after synchronous XHR startup failures', async ({ page }) => {
 		const pageErrors: string[] = []
 		page.on('pageerror', (error) => pageErrors.push(error.message))

@@ -59,6 +59,7 @@ export const RESETTABLE_UI_STATE_KEYS = [
 	'objectsMaxModifiedMs',
 	'objectsSort',
 	'objectsShowThumbnails',
+	'objectsThumbnailQuality',
 	'objectsThumbnailCacheSize',
 	'objectsCostMode',
 	'objectsAutoIndexEnabled',

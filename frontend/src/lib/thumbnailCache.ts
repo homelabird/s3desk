@@ -27,6 +27,13 @@ export type ThumbnailCacheMatch = {
 export const THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES = 400
 export const THUMBNAIL_CACHE_MIN_ENTRIES = 50
 export const THUMBNAIL_CACHE_MAX_ENTRIES = 2000
+export const THUMBNAIL_QUALITY_STORAGE_KEY = 'objectsThumbnailQuality'
+export const THUMBNAIL_QUALITY_DEFAULT = 256
+
+export function normalizeThumbnailQuality(value: unknown): number {
+	return value === 96 || value === 512 ? value : THUMBNAIL_QUALITY_DEFAULT
+}
+
 const PERSISTENT_THUMBNAIL_CACHE_NAME = 's3desk-thumbnail-blobs-v1'
 const PERSISTENT_THUMBNAIL_CACHE_INDEX_KEY = 's3desk-thumbnail-blobs-v1:index'
 const PERSISTENT_THUMBNAIL_CACHE_PREFIX = 'https://thumbnail-cache.s3desk.local/'
@@ -326,7 +333,6 @@ function parseThumbnailCacheKey(cacheKey: string): ParsedThumbnailCacheKey | nul
 function findReusableCacheKeys(keys: Iterable<string>, requested: ParsedThumbnailCacheKey): string[] {
 	const exact: ParsedThumbnailCacheKey[] = []
 	const larger: ParsedThumbnailCacheKey[] = []
-	const smaller: ParsedThumbnailCacheKey[] = []
 
 	for (const key of keys) {
 		const parsed = parseThumbnailCacheKey(key)
@@ -339,12 +345,10 @@ function findReusableCacheKeys(keys: Iterable<string>, requested: ParsedThumbnai
 			larger.push(parsed)
 			continue
 		}
-		smaller.push(parsed)
 	}
 
 	larger.sort((a, b) => a.size - b.size)
-	smaller.sort((a, b) => b.size - a.size)
-	return [...exact, ...larger, ...smaller].map((entry) => entry.cacheKey)
+	return [...exact, ...larger].map((entry) => entry.cacheKey)
 }
 
 function loadPersistentThumbnailIndex(): PersistentThumbnailIndex {

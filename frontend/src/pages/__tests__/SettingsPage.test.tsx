@@ -127,11 +127,22 @@ describe('SettingsPage', () => {
 		})
 	})
 
+	it('saves thumbnail quality and disables it when thumbnails are hidden', async () => {
+		renderSettingsPage(undefined, '/?settings=objects')
+		const quality = await screen.findByRole('combobox', { name: 'Thumbnail quality' })
+		expect(quality).toHaveValue('256')
+		fireEvent.change(quality, { target: { value: '512' } })
+		await waitFor(() => expect(window.localStorage.getItem('objectsThumbnailQuality')).toBe('512'))
+		fireEvent.click(screen.getByRole('switch', { name: 'Show image thumbnails' }))
+		expect(quality).toBeDisabled()
+	})
+
 	it('resets saved UI state after confirmation', async () => {
 		const successSpy = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
 		vi.spyOn(console, 'error').mockImplementation(() => undefined)
 		window.localStorage.setItem('bucket', 'archive-bucket')
 		window.localStorage.setItem('objectsSearch', 'photos')
+		window.localStorage.setItem('objectsThumbnailQuality', '512')
 		window.localStorage.setItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY, '6')
 		window.localStorage.setItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY, '4')
 		window.localStorage.setItem('uploadBatchConcurrency', '32')
@@ -158,6 +169,7 @@ describe('SettingsPage', () => {
 		await waitFor(() => {
 			expect(window.localStorage.getItem('bucket')).toBeNull()
 			expect(window.localStorage.getItem('objectsSearch')).toBeNull()
+			expect(window.localStorage.getItem('objectsThumbnailQuality')).toBeNull()
 			expect(window.localStorage.getItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBeNull()
 			expect(window.localStorage.getItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBeNull()
 			expect(window.localStorage.getItem('uploadBatchConcurrency')).toBeNull()

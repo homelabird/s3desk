@@ -4,8 +4,12 @@ import type { APIClientShape } from '../../api/client'
 import { RequestAbortedError } from '../../api/client'
 import {
 	buildThumbnailCacheKey,
+	normalizeThumbnailQuality,
+	THUMBNAIL_QUALITY_DEFAULT,
+	THUMBNAIL_QUALITY_STORAGE_KEY,
 	type ThumbnailCache,
 } from '../../lib/thumbnailCache'
+import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import styles from './ObjectsThumbnailPrimitives.module.css'
 import { buildObjectThumbnailRequest, getThumbnailFailureTtlMs, shouldCacheThumbnailFailure } from './objectPreviewPolicy'
 import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
@@ -29,18 +33,22 @@ export type ObjectThumbnailProps = {
 }
 
 export function ObjectThumbnail(props: ObjectThumbnailProps) {
+	const [thumbnailQuality] = useLocalStorageState<number>(THUMBNAIL_QUALITY_STORAGE_KEY, THUMBNAIL_QUALITY_DEFAULT, {
+		sanitize: normalizeThumbnailQuality,
+	})
+	const requestSize = Math.min(512, Math.max(props.size, thumbnailQuality))
 	const thumbnailRequest = useMemo(
 		() => buildObjectThumbnailRequest({
 			apiToken: props.apiToken,
 			profileId: props.profileId,
 			bucket: props.bucket,
 			objectKey: props.objectKey,
-			size: props.size,
+			size: requestSize,
 			cacheKeySuffix: props.cacheKeySuffix,
 			etag: props.etag,
 			lastModified: props.lastModified,
 		}),
-		[props.apiToken, props.bucket, props.cacheKeySuffix, props.etag, props.lastModified, props.objectKey, props.profileId, props.size],
+		[props.apiToken, props.bucket, props.cacheKeySuffix, props.etag, props.lastModified, props.objectKey, props.profileId, requestSize],
 	)
 	const cacheKey = useMemo(() => buildThumbnailCacheKey(thumbnailRequest), [thumbnailRequest])
 	const [, bumpCacheVersion] = useState(0)

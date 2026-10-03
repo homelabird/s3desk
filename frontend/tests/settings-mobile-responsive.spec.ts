@@ -55,6 +55,26 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await seedSettingsMobileResponsiveStorage(page)
 	})
 
+	test('thumbnail quality remains usable and saved on narrow mobile', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 568 })
+		await page.goto('/settings')
+		const drawer = dialogByName(page, 'Settings')
+		await drawer.getByRole('tab', { name: 'Objects', exact: true }).click()
+		const quality = drawer.getByRole('combobox', { name: 'Thumbnail quality' })
+		await expect(quality).toBeVisible()
+		await expectMinTouchTarget(quality)
+		await quality.selectOption('512')
+		await expect.poll(() => page.evaluate(() => window.localStorage.getItem('objectsThumbnailQuality'))).toBe('512')
+		await drawer.getByRole('button', { name: 'Close' }).click()
+
+		const reopenedDrawer = dialogByName(page, 'Settings')
+		await reopenSettingsFromCompactHeader(reopenedDrawer)
+		await reopenedDrawer.getByRole('tab', { name: 'Objects', exact: true }).click()
+		await expect(reopenedDrawer.getByRole('combobox', { name: 'Thumbnail quality' })).toHaveValue('512')
+		await setSwitch(reopenedDrawer, 'Show image thumbnails', false)
+		await expect(reopenedDrawer.getByRole('combobox', { name: 'Thumbnail quality' })).toBeDisabled()
+	})
+
 	test('settings drawer persists transfer preferences across mobile reopen', async ({ page }) => {
 		const advancedOptionsName = 'Advanced transfer options'
 		const proxySwitchName = 'Use server for downloads and previews'
