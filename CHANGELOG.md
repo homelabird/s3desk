@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## `0.21v-rc5` - 2026-10-04
+
+### New Features
+
+- Add thumbnail quality preferences with 96, 256 (default), and 512 pixel
+  resolutions for image and video thumbnails; save the choice in this browser.
+- Add configurable thumbnail cache lifetime and a review step before saving
+  bucket governance and policy changes.
+
 ### Improvements
 
 - Replace the default MinIO demo with a pinned, authenticated SeaweedFS S3 stack,
@@ -17,6 +26,47 @@
 - Follow empty filtered pages with valid cursors in the object list and tree.
 - Add focused migration, pooling, contention, cursor and frontend regressions;
   document synthetic measurements separately from unverified live acceptance.
+- Simplify application surfaces and improve touch targets, narrow-screen object
+  actions, upload guidance, and job details.
+
+### Security
+
+- Verify backup bundle integrity before restore and retain recovery data when
+  portable imports fail; require explicit trust for unsigned bundles.
+- Harden upload and thumbnail request validation and verify governance changes
+  before reporting them as saved.
+
+### Bug Fixes
+
+- Stop reusing smaller cached thumbnails for higher-resolution requests so
+  increasing thumbnail quality fetches a suitable image.
+- Reject invalid S3 list page sizes and recover from websocket fallback races.
+- Preserve mutation results, upload drafts, retries, favorites, and job links
+  across navigation and delayed requests.
+- Default browser downloads to the server proxy and discard stale picker results.
+
+### Release Candidate Notes
+
+- `0.21v-rc5` continues the previously prepared `0.21v-rc4` scope; neither is a
+  final `0.21v` release. The comparison base remains the published `0.21v-rc3` tag.
+- Thumbnail checks passed: 42 focused unit tests, three browser tests using mock
+  APIs and mobile emulation, and the frontend production build.
+- `./scripts/check.sh fast` failed on two backup UI test timeouts. The Transfers
+  bundle exceeds its gzip budget on both the unchanged baseline and this candidate.
+- The full local gate has not run. Current-candidate provider, reverse-proxy, and
+  portable-backup evidence is still required before release approval.
+
+### Known Limitations
+
+- Thumbnail quality changes resolution, up to the server's 512 pixel limit;
+  higher resolutions use more bandwidth and cache space.
+- Azure immutability and legal-hold editing require ARM credentials in addition to storage credentials.
+- OCI PAR edits are delete-and-recreate rather than in-place mutation, and the full access URI is only guaranteed at creation time.
+- AWS typed bucket governance still does not cover Object Lock.
+- In-product backup and staged restore target sqlite `DATA_DIR` workflows and do not replace Postgres disaster recovery.
+
+### Full Changelog
+**Full Changelog**: https://github.com/homelabird/s3desk/compare/0.21v-rc3...0.21v-rc5
 
 ## `0.21v-rc4` - 2026-08-21
 
