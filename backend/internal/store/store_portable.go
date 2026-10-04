@@ -45,7 +45,9 @@ type PortableImportCounts struct {
 }
 
 type PortableValidationOptions struct {
-	AllowRemote bool
+	AllowRemote   bool
+	EncryptionKey string
+	crypto        *profileCrypto
 }
 
 var ErrPortableImportLocalUploads = errors.New("portable import cannot replace destination local staging uploads; finish or cancel them first")
@@ -134,15 +136,28 @@ func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context,
 	return s.ImportPortableEntityFilesReplaceWithRecovery(ctx, entityFiles, dataDir, opts, nil)
 }
 
+// Preview is advisory; replacement checks again inside its transaction.
+func (s *Store) CheckPortableImportDestination(ctx context.Context) error {
+	return ensurePortableImportDestinationIdle(s.db.WithContext(ctx))
+}
+
 // beforeReplace must durably preserve the preimage or return an error before any DELETE.
 func (s *Store) ImportPortableEntityFilesReplaceWithRecovery(ctx context.Context, entityFiles map[string][]byte, dataDir string, opts PortableValidationOptions, beforeReplace func(PortableExportBundle) error) (PortableImportCounts, error) {
 	var counts PortableImportCounts
 
+	opts.crypto = s.crypto
 	rows, err := parseAndValidatePortableEntityFiles(dataDir, entityFiles, opts)
 	if err != nil {
 		return PortableImportCounts{}, err
 	}
 	profiles := rows.profiles
+	for i, profile := range profiles {
+		encrypted, _, err := s.encryptProfileSecrets(profile)
+		if err != nil {
+			return PortableImportCounts{}, fmt.Errorf("encrypt portable profile row %d: %w", i+1, err)
+		}
+		profiles[i] = encrypted
+	}
 	profileConnectionOptions := rows.profileConnectionOptions
 	jobsRows := rows.jobsRows
 	uploadSessions := rows.uploadSessions
@@ -157,15 +172,8 @@ func (s *Store) ImportPortableEntityFilesReplaceWithRecovery(ctx context.Context
 		txOptions = &sql.TxOptions{Isolation: sql.LevelSerializable}
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := ensureNoActivePortableImportJobs(tx); err != nil {
+		if err := ensurePortableImportDestinationIdle(tx); err != nil {
 			return err
-		}
-		var localUploads int64
-		if err := tx.Model(&uploadSessionRow{}).Where("mode NOT IN ? OR mode IS NULL", []string{"direct", "presigned"}).Count(&localUploads).Error; err != nil {
-			return err
-		}
-		if localUploads > 0 {
-			return ErrPortableImportLocalUploads
 		}
 		if beforeReplace != nil {
 			bundle, err := exportPortableEntityFiles(tx)
@@ -256,7 +264,7 @@ func (s *Store) ImportPortableEntityFilesReplaceWithRecovery(ctx context.Context
 	return counts, nil
 }
 
-func ensureNoActivePortableImportJobs(tx *gorm.DB) error {
+func ensurePortableImportDestinationIdle(tx *gorm.DB) error {
 	var count int64
 	if err := tx.Model(&jobRow{}).
 		Where("status IN ?", []string{string(models.JobStatusQueued), string(models.JobStatusRunning)}).
@@ -265,6 +273,13 @@ func ensureNoActivePortableImportJobs(tx *gorm.DB) error {
 	}
 	if count > 0 {
 		return fmt.Errorf("%w: %d active job(s)", ErrPortableImportActiveJobs, count)
+	}
+	var localUploads int64
+	if err := tx.Model(&uploadSessionRow{}).Where("mode NOT IN ? OR mode IS NULL", []string{"direct", "presigned"}).Count(&localUploads).Error; err != nil {
+		return err
+	}
+	if localUploads > 0 {
+		return ErrPortableImportLocalUploads
 	}
 	return nil
 }
@@ -516,11 +531,29 @@ func validatePortableProfileRow(row profileRow, opts PortableValidationOptions) 
 				return err
 			}
 		}
-		if !cfg.Anonymous && strings.TrimSpace(sec.ServiceAccountJSON) == "" {
+		serviceAccountJSON := strings.TrimSpace(sec.ServiceAccountJSON)
+		if strings.HasPrefix(serviceAccountJSON, encryptedPrefix) {
+			crypto := opts.crypto
+			var err error
+			if crypto == nil {
+				crypto, err = newProfileCrypto(opts.EncryptionKey)
+				if err != nil {
+					return err
+				}
+			}
+			if crypto == nil {
+				return ErrEncryptedCredentials
+			}
+			serviceAccountJSON, err = crypto.decryptString(serviceAccountJSON)
+			if err != nil {
+				return fmt.Errorf("serviceAccountJson: %w", err)
+			}
+		}
+		if !cfg.Anonymous && serviceAccountJSON == "" {
 			return errors.New("serviceAccountJson is required unless anonymous=true")
 		}
-		if strings.TrimSpace(sec.ServiceAccountJSON) != "" {
-			if err := gcsauth.ValidateServiceAccountJSON(sec.ServiceAccountJSON); err != nil {
+		if serviceAccountJSON != "" {
+			if err := gcsauth.ValidateServiceAccountJSON(serviceAccountJSON); err != nil {
 				return err
 			}
 		}

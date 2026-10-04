@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,142 @@ import (
 
 	"s3desk/internal/models"
 )
+
+func TestPortableImportEncryptsPlaintextCredentials(t *testing.T) {
+	testPortableImportEncryptsPlaintextCredentials(t, newProfileTestStore(t, Options{EncryptionKey: testStoreEncryptionKey()}))
+}
+
+func testPortableImportEncryptsPlaintextCredentials(t *testing.T, target *Store) {
+	t.Helper()
+	source := newTestStore(t)
+	s3 := createTestProfile(t, source)
+	if err := source.db.Model(&profileRow{}).Where("id = ?", s3.ID).Update("session_token", "portable fixture").Error; err != nil {
+		t.Fatal(err)
+	}
+	azure := createAzureProfile(t, source)
+	serviceAccount := `{"type":"service_account","project_id":"portable","client_email":"fixture@example.invalid","private_key":"synthetic fixture","token_uri":"https://oauth2.googleapis.com/token"}`
+	projectNumber := "1234"
+	gcs, err := source.CreateProfile(t.Context(), models.ProfileCreateRequest{Provider: models.ProfileProviderGcpGcs, Name: "portable-gcs", ProjectNumber: &projectNumber, ServiceAccountJSON: &serviceAccount})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := source.ExportPortableEntityFiles(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{}
+	for name, file := range bundle.EntityFiles {
+		files[name] = file.Data
+	}
+	createTestProfile(t, target)
+	const callback = "test:require_encryption_before_sql"
+	checked := 0
+	if err := target.db.Callback().Create().Before("gorm:create").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement.Table != "profiles" {
+			return
+		}
+		for i := 0; i < tx.Statement.ReflectValue.Len(); i++ {
+			row := tx.Statement.ReflectValue.Index(i).Interface().(profileRow)
+			if isS3LikeProvider(models.ProfileProvider(row.Provider)) {
+				if !strings.HasPrefix(row.AccessKeyID, encryptedPrefix) || !strings.HasPrefix(row.SecretAccessKey, encryptedPrefix) || row.SessionToken == nil || !strings.HasPrefix(*row.SessionToken, encryptedPrefix) {
+					t.Fatal("plaintext S3 credentials reached SQL")
+				}
+			} else {
+				var secrets map[string]string
+				if err := json.Unmarshal([]byte(row.SecretsJSON), &secrets); err != nil {
+					t.Fatal(err)
+				}
+				for _, value := range secrets {
+					if value != "" && !strings.HasPrefix(value, encryptedPrefix) {
+						t.Fatal("plaintext provider credentials reached SQL")
+					}
+				}
+			}
+			checked++
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = target.db.Callback().Create().Remove(callback) })
+	if _, err := target.ImportPortableEntityFilesReplace(t.Context(), files, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if checked != 3 {
+		t.Fatalf("encrypted rows checked before SQL=%d, want 3", checked)
+	}
+	for _, profile := range []models.Profile{s3, azure, gcs} {
+		var row profileRow
+		if err := target.db.Where("id = ?", profile.ID).Take(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		if profile.ID == s3.ID {
+			if !strings.HasPrefix(row.AccessKeyID, encryptedPrefix) || !strings.HasPrefix(row.SecretAccessKey, encryptedPrefix) {
+				t.Fatal("imported S3 credentials remain plaintext at rest")
+			}
+		} else if profile.ID == azure.ID {
+			var secrets azureProfileSecrets
+			if err := json.Unmarshal([]byte(row.SecretsJSON), &secrets); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(secrets.AccountKey, encryptedPrefix) {
+				t.Fatal("imported Azure credentials remain plaintext at rest")
+			}
+		} else {
+			var secrets gcpProfileSecrets
+			if err := json.Unmarshal([]byte(row.SecretsJSON), &secrets); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(secrets.ServiceAccountJSON, encryptedPrefix) {
+				t.Fatal("imported GCS credentials remain plaintext at rest")
+			}
+		}
+		want, _, err := source.GetProfileSecrets(t.Context(), profile.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, ok, err := target.GetProfileSecrets(t.Context(), profile.ID)
+		if err != nil || !ok || got.AccessKeyID != want.AccessKeyID || got.SecretAccessKey != want.SecretAccessKey || got.AzureAccountKey != want.AzureAccountKey || got.GcpServiceAccountJSON != want.GcpServiceAccountJSON {
+			t.Fatal("imported credentials could not be read back correctly")
+		}
+		if want.SessionToken != nil && (got.SessionToken == nil || *got.SessionToken != *want.SessionToken) {
+			t.Fatal("imported session credential value changed")
+		}
+	}
+}
+
+func TestPortableEncryptedGCSValidation(t *testing.T) {
+	key := testStoreEncryptionKey()
+	crypto, err := newProfileCrypto(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, key, plaintext string
+		valid                bool
+	}{
+		{"valid", key, `{"token_uri":"https://oauth2.googleapis.com/token"}`, true},
+		{"missing key", "", `{"token_uri":"https://oauth2.googleapis.com/token"}`, false},
+		{"wrong key", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("C", 32))), `{"token_uri":"https://oauth2.googleapis.com/token"}`, false},
+		{"unsafe token URI", key, `{"token_uri":"http://169.254.169.254/token"}`, false},
+		{"empty required credentials", key, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			encrypted, err := crypto.encryptString(tc.plaintext)
+			if err != nil {
+				t.Fatal(err)
+			}
+			secrets, err := json.Marshal(gcpProfileSecrets{ServiceAccountJSON: encrypted})
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := marshalPortableEntityFile("profiles", []profileRow{{ID: ulid.Make().String(), Provider: string(models.ProfileProviderGcpGcs), ConfigJSON: `{"projectNumber":"1234"}`, SecretsJSON: string(secrets)}})
+			err = ValidatePortableEntityFilesWithOptions(t.TempDir(), map[string][]byte{"profiles": file.Data}, PortableValidationOptions{EncryptionKey: tc.key})
+			if (err == nil) != tc.valid {
+				t.Fatalf("validation accepted=%v, want %v", err == nil, tc.valid)
+			}
+		})
+	}
+}
 
 func TestExportPortableEntityFilesUsesConsistentSnapshot(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "s3desk.db")

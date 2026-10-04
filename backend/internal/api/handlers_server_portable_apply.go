@@ -97,7 +97,7 @@ func (svc portableImportPreflightService) buildResponse(
 		manifest.Entities,
 		entityFiles,
 		svc.dataDir,
-		store.PortableValidationOptions{AllowRemote: svc.allowRemote},
+		store.PortableValidationOptions{AllowRemote: svc.allowRemote, EncryptionKey: svc.encryptionKey},
 	)
 	preflight.Blockers = append(preflight.Blockers, entityVerification.blockers...)
 	return buildPortableImportResponseBody(mode, dbBackend, manifest, preflight, entityVerification)

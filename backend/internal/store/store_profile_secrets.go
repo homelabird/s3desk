@@ -155,106 +155,95 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 	if s.crypto == nil {
 		return 0, nil
 	}
-
 	var profiles []profileRow
 	if err := s.db.WithContext(ctx).
 		Select("id", "provider", "access_key_id", "secret_access_key", "session_token", "secrets_json").
 		Find(&profiles).Error; err != nil {
 		return 0, err
 	}
-
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	for _, p := range profiles {
-		provider := normalizeProfileProvider(models.ProfileProvider(p.Provider))
-
-		updates := map[string]any{"updated_at": now}
-		needsUpdate := false
-
-		if isS3LikeProvider(provider) {
-			ak := p.AccessKeyID
-			sk := p.SecretAccessKey
-			session := p.SessionToken
-
-			if ak != "" && !strings.HasPrefix(ak, encryptedPrefix) {
-				enc, err := s.crypto.encryptString(ak)
-				if err != nil {
-					return updated, err
-				}
-				ak = enc
-				needsUpdate = true
-			}
-			if sk != "" && !strings.HasPrefix(sk, encryptedPrefix) {
-				enc, err := s.crypto.encryptString(sk)
-				if err != nil {
-					return updated, err
-				}
-				sk = enc
-				needsUpdate = true
-			}
-			if session != nil && *session != "" && !strings.HasPrefix(*session, encryptedPrefix) {
-				enc, err := s.crypto.encryptString(*session)
-				if err != nil {
-					return updated, err
-				}
-				*session = enc
-				needsUpdate = true
-			}
-
-			if needsUpdate {
-				updates["access_key_id"] = ak
-				updates["secret_access_key"] = sk
-				updates["session_token"] = session
-			}
-		} else {
-			raw := strings.TrimSpace(p.SecretsJSON)
-			if raw == "" {
-				raw = "{}"
-			}
-			var sec map[string]any
-			if err := unmarshalProfileJSON(p.ID, provider, "secrets_json", raw, &sec); err != nil {
-				return updated, err
-			}
-
-			var keys []string
-			switch provider {
-			case models.ProfileProviderAzureBlob:
-				keys = []string{"accountKey", "clientSecret"}
-			case models.ProfileProviderGcpGcs:
-				keys = []string{"serviceAccountJson"}
-			default:
-				keys = nil
-			}
-			for _, key := range keys {
-				if v, ok := sec[key].(string); ok && v != "" && !strings.HasPrefix(v, encryptedPrefix) {
-					enc, err := s.crypto.encryptString(v)
-					if err != nil {
-						return updated, err
-					}
-					sec[key] = enc
-					needsUpdate = true
-				}
-			}
-
-			if needsUpdate {
-				buf, err := json.Marshal(sec)
-				if err != nil {
-					return updated, err
-				}
-				updates["secrets_json"] = string(buf)
-			}
+	for _, profile := range profiles {
+		encrypted, changed, err := s.encryptProfileSecrets(profile)
+		if err != nil {
+			return updated, err
 		}
-
-		if !needsUpdate {
+		if !changed {
 			continue
 		}
-		if err := s.db.WithContext(ctx).
-			Model(&profileRow{}).
-			Where("id = ?", p.ID).
-			Updates(updates).Error; err != nil {
+		if err := s.db.WithContext(ctx).Model(&profileRow{}).Where("id = ?", profile.ID).Updates(map[string]any{
+			"updated_at": now, "access_key_id": encrypted.AccessKeyID,
+			"secret_access_key": encrypted.SecretAccessKey, "session_token": encrypted.SessionToken,
+			"secrets_json": encrypted.SecretsJSON,
+		}).Error; err != nil {
 			return updated, err
 		}
 		updated++
 	}
-
 	return updated, nil
+}
+
+// Prepare encrypted row values before they reach SQL, including during portable imports.
+func (s *Store) encryptProfileSecrets(profile profileRow) (profileRow, bool, error) {
+	if s.crypto == nil {
+		return profile, false, nil
+	}
+	changed := false
+	encrypt := func(value string) (string, error) {
+		if value == "" || strings.HasPrefix(value, encryptedPrefix) {
+			return value, nil
+		}
+		encrypted, err := s.crypto.encryptString(value)
+		if err == nil {
+			changed = true
+		}
+		return encrypted, err
+	}
+	provider := normalizeProfileProvider(models.ProfileProvider(profile.Provider))
+	if isS3LikeProvider(provider) {
+		var err error
+		profile.AccessKeyID, err = encrypt(profile.AccessKeyID)
+		if err != nil {
+			return profileRow{}, false, err
+		}
+		profile.SecretAccessKey, err = encrypt(profile.SecretAccessKey)
+		if err != nil {
+			return profileRow{}, false, err
+		}
+		if profile.SessionToken != nil {
+			session, err := encrypt(*profile.SessionToken)
+			if err != nil {
+				return profileRow{}, false, err
+			}
+			profile.SessionToken = &session
+		}
+	} else {
+		var secrets map[string]any
+		if err := unmarshalProfileJSON(profile.ID, provider, "secrets_json", profile.SecretsJSON, &secrets); err != nil {
+			return profileRow{}, false, err
+		}
+		var keys []string
+		switch provider {
+		case models.ProfileProviderAzureBlob:
+			keys = []string{"accountKey", "clientSecret"}
+		case models.ProfileProviderGcpGcs:
+			keys = []string{"serviceAccountJson"}
+		}
+		for _, key := range keys {
+			if value, ok := secrets[key].(string); ok {
+				encrypted, err := encrypt(value)
+				if err != nil {
+					return profileRow{}, false, err
+				}
+				secrets[key] = encrypted
+			}
+		}
+		if changed {
+			raw, err := json.Marshal(secrets)
+			if err != nil {
+				return profileRow{}, false, err
+			}
+			profile.SecretsJSON = string(raw)
+		}
+	}
+	return profile, changed, nil
 }

@@ -19,9 +19,10 @@ const (
 )
 
 type portableImportArchiveService struct {
-	dbBackend     string
-	extract       func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error)
-	buildResponse func(
+	dbBackend        string
+	checkDestination func(context.Context) error
+	extract          func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error)
+	buildResponse    func(
 		mode string,
 		dbBackend db.Backend,
 		manifest models.ServerMigrationManifest,
@@ -38,7 +39,8 @@ type portableImportArchiveService struct {
 
 func newPortableImportArchiveService(s *server) portableImportArchiveService {
 	return portableImportArchiveService{
-		dbBackend: s.cfg.DBBackend,
+		dbBackend:        s.cfg.DBBackend,
+		checkDestination: s.store.CheckPortableImportDestination,
 		extract: func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			return extractPortableImportArchiveBundleWithLimit(ctx, src, backupPassword, encryptionKey, s.cfg.ServerRestoreMaxBytes, allowUnsigned)
 		},
@@ -88,6 +90,12 @@ func (svc portableImportArchiveService) process(
 	}
 
 	resp := svc.buildResponse(mode, dbBackend, manifest, entityFiles)
+	if svc.checkDestination != nil {
+		if err := svc.checkDestination(ctx); err != nil {
+			resp.Status = "blocked"
+			resp.Preflight.Blockers = append(resp.Preflight.Blockers, fmt.Sprintf("Destination cannot be replaced: %v", err))
+		}
+	}
 	if mode == portableImportModeDryRun {
 		return resp, portableImportArchiveOutcomeDryRun, nil
 	}

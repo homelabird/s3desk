@@ -270,6 +270,51 @@ func TestHandleImportPortableBackup_BlocksStagingUploadSessions(t *testing.T) {
 	}
 }
 
+func TestPortableImportPreflightBlocksBusyDestination(t *testing.T) {
+	for _, activity := range []string{"job", "staging upload"} {
+		t.Run(activity, func(t *testing.T) {
+			source, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+			createTestProfile(t, source)
+			archive := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+			target, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+			original := createTestProfile(t, target)
+			var activityErr error
+			blocker := "jobs are queued or running"
+			if activity == "job" {
+				_, activityErr = target.CreateJob(t.Context(), original.ID, store.CreateJobInput{Type: "s3_index_objects", Payload: map[string]any{"bucket": "test-bucket"}})
+			} else {
+				_, activityErr = target.CreateUploadSession(t.Context(), original.ID, "test-bucket", "incoming/", "staging", "", time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano))
+				blocker = "local staging uploads"
+			}
+			if activityErr != nil {
+				t.Fatal(activityErr)
+			}
+			before, err := target.ExportPortableEntityFiles(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, endpoint := range []string{"/api/v1/server/import-portable/preview", "/api/v1/server/import-portable"} {
+				res := postPortableArchive(t, targetSrv.URL, endpoint, archive, "portable-backup.tar.gz")
+				var resp models.ServerPortableImportResponse
+				decodeJSONResponse(t, res, &resp)
+				res.Body.Close()
+				if res.StatusCode != http.StatusOK || resp.Status != "blocked" || !strings.Contains(strings.Join(resp.Preflight.Blockers, " "), blocker) {
+					t.Fatalf("expected destination blocker: HTTP=%d status=%q blockers=%v", res.StatusCode, resp.Status, resp.Preflight.Blockers)
+				}
+			}
+			after, err := target.ExportPortableEntityFiles(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, file := range before.EntityFiles {
+				if after.EntityFiles[name].SHA256 != file.SHA256 {
+					t.Fatalf("blocked import changed destination %s", name)
+				}
+			}
+		})
+	}
+}
+
 func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyMissing(t *testing.T) {
 	t.Parallel()
 
@@ -510,6 +555,31 @@ func TestHandleImportPortableBackup_ReplaceImportsProfiles(t *testing.T) {
 	}
 	if profiles[0].ID != profile.ID {
 		t.Fatalf("imported profile id=%q, want %q", profiles[0].ID, profile.ID)
+	}
+}
+
+func TestPortableImportPreservesEncryptedGCSProfile(t *testing.T) {
+	source, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	serviceAccount := `{"type":"service_account","project_id":"portable","client_email":"fixture@example.invalid","private_key":"synthetic fixture","token_uri":"https://oauth2.googleapis.com/token"}`
+	projectNumber := "1234"
+	profile, err := source.CreateProfile(t.Context(), models.ProfileCreateRequest{Provider: models.ProfileProviderGcpGcs, Name: "portable-gcs", ProjectNumber: &projectNumber, ServiceAccountJSON: &serviceAccount})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+	target, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	for _, endpoint := range []string{"/api/v1/server/import-portable/preview", "/api/v1/server/import-portable"} {
+		res := postPortableArchive(t, targetSrv.URL, endpoint, archive, "portable-backup.tar.gz")
+		var resp models.ServerPortableImportResponse
+		decodeJSONResponse(t, res, &resp)
+		res.Body.Close()
+		if len(resp.Preflight.Blockers) > 0 || (resp.Status != "ready" && resp.Status != "complete") {
+			t.Fatalf("GCS portable import was blocked: status=%q blockers=%v", resp.Status, resp.Preflight.Blockers)
+		}
+	}
+	secrets, ok, err := target.GetProfileSecrets(t.Context(), profile.ID)
+	if err != nil || !ok || secrets.GcpServiceAccountJSON != serviceAccount {
+		t.Fatal("imported GCS credentials changed or cannot be decrypted")
 	}
 }
 
