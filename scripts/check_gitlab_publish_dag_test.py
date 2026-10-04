@@ -118,7 +118,7 @@ class CheckGitlabPublishDagTests(unittest.TestCase):
         )
         self.assertIn("    - changes:\n        - .gitlab-ci.yml\n        - backend/**/*", job)
         self.assertIn(
-            "go test -race ./internal/store -run '^(TestPostgresTransactionReliability|TestPostgresObjectIndexSearchIsCaseInsensitive)$' -count=1",
+            "go test -race ./internal/store -run '^(TestPostgresTransactionReliability|TestPostgresObjectIndexSearchIsCaseInsensitive|TestPostgresPortableMigration)$' -count=1",
             job,
         )
         self.assertIn("    - go_postgres", jobs["publish_dockerhub"])

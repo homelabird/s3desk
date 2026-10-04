@@ -723,7 +723,7 @@ go_postgres:
       set -o pipefail
       mkdir -p artifacts/ci/backend
       cd backend
-      go test -race ./internal/store -run '^(TestPostgresTransactionReliability|TestPostgresObjectIndexSearchIsCaseInsensitive)$' -count=1 2>&1 | tee ../artifacts/ci/backend/go-postgres.log
+      go test -race ./internal/store -run '^(TestPostgresTransactionReliability|TestPostgresObjectIndexSearchIsCaseInsensitive|TestPostgresPortableMigration)$' -count=1 2>&1 | tee ../artifacts/ci/backend/go-postgres.log
   artifacts:
     when: always
     paths:
