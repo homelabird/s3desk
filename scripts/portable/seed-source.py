@@ -267,6 +267,17 @@ def main():
     job_id = create_index_job(profile_id)
     completed_job = wait_for_job(profile_id, job_id)
     put_profile_tls(profile_id)
+    gcs_profile = request_json(
+        "POST", f"{SOURCE_API_BASE}/profiles",
+        {
+            "provider": "gcp_gcs", "name": "Portable GCS fixture", "projectNumber": "1234",
+            "serviceAccountJson": json.dumps({
+                "type": "service_account", "project_id": "portable-fixture",
+                "client_email": "fixture@example.invalid", "private_key": TLS_KEY_PEM,
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }),
+        },
+    )
     staging_upload = create_upload_session(profile_id, "staging", "seed-staging")
     upload_staging_file(profile_id, staging_upload["uploadId"], "notes/seed.txt", b"portable-seed-upload")
     # Portable bundles exclude local staging files; cancel this session before export.
@@ -278,6 +289,7 @@ def main():
     fixture = {
         "profileId": profile_id,
         "profileName": PROFILE_NAME,
+        "gcsProfileId": gcs_profile["id"],
         "bucket": DEMO_BUCKET,
         "favoriteKey": FAVORITE_KEY,
         "indexJobId": completed_job["id"],
@@ -289,7 +301,7 @@ def main():
         },
         "thumbnailRelPath": thumbnail_rel_path,
         "portableMinimumCounts": {
-            "profiles": 1,
+            "profiles": 2,
             "profile_connection_options": 1,
             "jobs": 1,
             "upload_sessions": 1,

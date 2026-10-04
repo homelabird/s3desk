@@ -73,7 +73,7 @@ def load_fixture():
     raise RuntimeError(f"fixture file did not appear: {FIXTURE_PATH}")
 
 
-def download_portable_bundle() -> tuple[bytes, dict, list[str]]:
+def download_portable_bundle(base_url: str = SOURCE_API_BASE) -> tuple[bytes, dict, list[str]]:
     if PORTABLE_BUNDLE_CONFIDENTIALITY not in {"clear", "encrypted"}:
         raise RuntimeError(f"unsupported PORTABLE_BUNDLE_CONFIDENTIALITY={PORTABLE_BUNDLE_CONFIDENTIALITY}")
     query = "?scope=portable&includeThumbnails=true"
@@ -82,7 +82,7 @@ def download_portable_bundle() -> tuple[bytes, dict, list[str]]:
     headers = {}
     if PORTABLE_BUNDLE_EXPORT_PASSWORD:
         headers["X-S3Desk-Backup-Password"] = PORTABLE_BUNDLE_EXPORT_PASSWORD
-    with request("GET", f"{SOURCE_API_BASE}/server/backup{query}", extra_headers=headers) as resp:
+    with request("GET", f"{base_url}/server/backup{query}", extra_headers=headers) as resp:
         archive = resp.read()
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tf:
         names = tf.getnames()
@@ -204,6 +204,28 @@ def main():
     profiles = request_json("GET", f"{TARGET_API_BASE}/profiles") or []
     imported_profile = next((item for item in profiles if item.get("id") == profile_id), None)
     assert_true(imported_profile is not None, f"imported profile {profile_id} not found")
+    gcs_profile = next((item for item in profiles if item.get("id") == fixture["gcsProfileId"]), None)
+    assert_true(gcs_profile is not None and gcs_profile.get("provider") == "gcp_gcs", "encrypted GCS profile was not imported")
+
+    # A preview and replacement must both preserve a busy destination.
+    session = request_json(
+        "POST", f"{TARGET_API_BASE}/uploads",
+        {"bucket": fixture["bucket"], "prefix": "preflight-check/", "mode": "staging"},
+        profile_id=profile_id,
+    )
+    try:
+        _, before, _ = download_portable_bundle(TARGET_API_BASE)
+        for path in ["/server/import-portable/preview", "/server/import-portable"]:
+            status, blocked = post_bundle(path, archive)
+            assert_true(status == 200 and blocked.get("status") == "blocked", "busy destination was not blocked")
+            assert_true(
+                any("local staging uploads" in message for message in blocked.get("preflight", {}).get("blockers", [])),
+                "busy destination staging blocker is missing",
+            )
+        _, after, _ = download_portable_bundle(TARGET_API_BASE)
+        assert_true(before["entities"] == after["entities"], "blocked import changed destination entities")
+    finally:
+        request_json("DELETE", f"{TARGET_API_BASE}/uploads/{session['uploadId']}", profile_id=profile_id)
 
     tls_status = request_json("GET", f"{TARGET_API_BASE}/profiles/{profile_id}/tls")
     assert_true(tls_status.get("mode") == "mtls", f"tls mode={tls_status.get('mode')}")
@@ -251,6 +273,8 @@ def main():
         "indexedObjectCount": index_summary.get("objectCount"),
         "jobsCount": len(items),
         "thumbnailPath": thumbnail_path,
+        "busyDestinationPreserved": True,
+        "encryptedGCSProfilePreserved": True,
     }
     print(json.dumps(result, indent=2))
 

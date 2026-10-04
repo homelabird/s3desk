@@ -95,6 +95,18 @@ preimage is read inside the replacement transaction. PostgreSQL replacement uses
 Serializable isolation and may fail on concurrent changes; pause ordinary writes
 before import rather than automatically retrying a destructive replacement.
 Destination local staging sessions and queued/running jobs block replacement.
+Preview reports these destination activity blockers too. A successful preview
+does not reserve the destination; replacement repeats the same checks inside
+its transaction, so keep writes paused through cutover.
+
+When the destination has an `ENCRYPTION_KEY`, importing plaintext profile
+credentials encrypts them before any SQL insert. An encryption failure leaves
+the destination unchanged; plaintext values do not reach SQL statements.
+Existing encrypted credentials remain unchanged and still require the matching
+source key on the destination.
+Encrypted GCS service account JSON is decrypted for schema and token-endpoint
+validation using that key. Missing or mismatched keys and unsafe token endpoints
+block import; validation does not discard these checks for encrypted credentials.
 
 The response exposes `recoveryDir` and `recoveryBundlePath`. Recovery files are
 private; the bundle is encrypted with the destination `ENCRYPTION_KEY` when set.
@@ -127,6 +139,9 @@ For failure scenarios and cutover/failback procedures, see
 
 ## Validation Commands
 
+See the [2026-10-04 local SQLite/PostgreSQL validation record](release/evidence/sqlite-postgres-migration-2026-10-04.md)
+for the tested working-tree snapshot, outcomes, and environment limits.
+
 The smoke fixture cancels its local staging upload before export and retains
 presigned upload and multipart metadata. The following commands create isolated
 Compose deployments and must be rerun to establish migration evidence for this
@@ -138,6 +153,25 @@ Bidirectional smoke:
 bash scripts/run_portable_sqlite_to_postgres_smoke.sh
 bash scripts/run_portable_postgres_to_sqlite_smoke.sh
 ```
+
+The successful smoke flows also create a destination staging upload, verify that
+both preview and replacement report `blocked`, and compare all entity counts and
+checksums before and after the blocked requests. They also retain a synthetic GCS
+profile with encrypted service account data; this does not test real GCS access.
+
+For a field-by-field SQLite -> PostgreSQL -> SQLite round trip, set
+`S3DESK_TEST_POSTGRES_URL` to an isolated, disposable PostgreSQL database, then run:
+
+```bash
+cd backend && go test -race ./internal/store -run '^TestPostgresPortableMigration$' -count=1
+```
+
+This test creates and removes its own temporary PostgreSQL schema and replaces
+only fixture data. It checks all nine entities, a batch of 251 index and replacement
+rows, Unicode, SQL NULL versus empty text, integers larger
+than JavaScript's exact-number range, recovery/insert rollback, and destination
+credential encryption. It skips when the database URL is unset; a skip is not
+PostgreSQL validation.
 
 Encrypted and password-protected smoke:
 
