@@ -11,7 +11,7 @@ require (
 	github.com/aws/smithy-go v1.24.2
 	github.com/getkin/kin-openapi v0.144.0
 	github.com/glebarez/sqlite v1.11.0
-	github.com/go-chi/chi/v5 v5.2.4
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/prometheus/client_golang v1.23.2
