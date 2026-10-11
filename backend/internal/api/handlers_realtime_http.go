@@ -8,7 +8,6 @@ import (
 )
 
 type realtimeSSEPreparedRequest struct {
-	flusher     http.Flusher
 	afterSeq    int64
 	includeLogs bool
 	releaseSlot func()
@@ -50,7 +49,7 @@ func newRealtimeWSHTTPService(s *server) realtimeWSHTTPService {
 }
 
 func (svc realtimeSSEHTTPService) prepareEventsSSE(w http.ResponseWriter, r *http.Request) (realtimeSSEPreparedRequest, bool) {
-	flusher, ok := requireRealtimeSSEFlusher(w)
+	_, ok := requireRealtimeSSEFlusher(w)
 	if !ok {
 		return realtimeSSEPreparedRequest{}, false
 	}
@@ -60,7 +59,7 @@ func (svc realtimeSSEHTTPService) prepareEventsSSE(w http.ResponseWriter, r *htt
 		return realtimeSSEPreparedRequest{}, false
 	}
 
-	return realtimeSSEPreparedRequest{flusher: flusher, afterSeq: afterSeq, includeLogs: includeLogs, releaseSlot: releaseSlot}, true
+	return realtimeSSEPreparedRequest{afterSeq: afterSeq, includeLogs: includeLogs, releaseSlot: releaseSlot}, true
 }
 
 func (svc realtimeSSEHTTPService) executePrepared(ctx context.Context, w http.ResponseWriter, prepared realtimeSSEPreparedRequest) {
@@ -68,12 +67,14 @@ func (svc realtimeSSEHTTPService) executePrepared(ctx context.Context, w http.Re
 	streamCtx, releaseContext := svc.server.withRealtimeShutdown(ctx)
 	defer releaseContext()
 
-	writeRealtimeSSEHandshake(w, prepared.flusher)
+	if err := writeRealtimeSSEHandshake(w); err != nil {
+		return
+	}
 
 	client, backlog, release := svc.server.subscribeRealtime(prepared.afterSeq, prepared.includeLogs)
 	defer release()
 
-	session := newRealtimeSSESession(w, prepared.flusher)
+	session := newRealtimeSSESession(w)
 	defer session.release()
 
 	serveRealtimeSSE(streamCtx, client, backlog, session)

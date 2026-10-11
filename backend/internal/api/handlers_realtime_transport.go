@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -17,14 +16,13 @@ func requireRealtimeSSEFlusher(w http.ResponseWriter) (http.Flusher, bool) {
 	return flusher, true
 }
 
-func writeRealtimeSSEHandshake(w http.ResponseWriter, flusher http.Flusher) {
+func writeRealtimeSSEHandshake(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	_, _ = fmt.Fprintf(w, ": ok\n\n")
-	flusher.Flush()
+	return newRealtimeSSEEmitter(w).writeFrame(": ok\n\n")
 }
 
 func (s *server) prepareRealtimeWSConn(w http.ResponseWriter, r *http.Request) (*websocket.Conn, bool) {

@@ -7,19 +7,25 @@ import (
 )
 
 func serveRealtimeSSE(ctx context.Context, client *ws.Client, backlog []ws.Message, session realtimeSSESession) {
-	session.emitter.replay(backlog)
+	if err := session.emitter.replay(backlog); err != nil {
+		return
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-session.heartbeat.C:
-			session.emitter.writePing()
+			if err := session.emitter.writePing(); err != nil {
+				return
+			}
 		case msg, ok := <-client.Messages():
 			if !ok {
 				return
 			}
-			session.emitter.writeMessage(msg)
+			if err := session.emitter.writeMessage(msg); err != nil {
+				return
+			}
 		}
 	}
 }

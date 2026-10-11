@@ -14,13 +14,15 @@ func TestNewRealtimeSSESession_ProvidesHeartbeatEmitterAndRelease(t *testing.T) 
 	t.Parallel()
 
 	rr := httptest.NewRecorder()
-	session := newRealtimeSSESession(rr, rr)
+	session := newRealtimeSSESession(rr)
 	defer session.release()
 
 	if session.heartbeat == nil {
 		t.Fatal("expected heartbeat ticker")
 	}
-	session.emitter.writePing()
+	if err := session.emitter.writePing(); err != nil {
+		t.Fatal(err)
+	}
 	if body := rr.Body.String(); body != ": ping\n\n" {
 		t.Fatalf("body=%q, want %q", body, ": ping\n\n")
 	}

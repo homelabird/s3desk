@@ -1,6 +1,8 @@
 package api
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,12 +14,40 @@ import (
 	"s3desk/internal/ws"
 )
 
+type deadlineFailureSSEWriter struct {
+	*httptest.ResponseRecorder
+	failReset bool
+}
+
+func (w *deadlineFailureSSEWriter) SetWriteDeadline(deadline time.Time) error {
+	if deadline.IsZero() == w.failReset {
+		return io.ErrClosedPipe
+	}
+	return nil
+}
+
+func TestRealtimeSSEEmitterStopsWhenWriteDeadlineFails(t *testing.T) {
+	for _, failReset := range []bool{false, true} {
+		t.Run(map[bool]string{false: "set", true: "reset"}[failReset], func(t *testing.T) {
+			writer := &deadlineFailureSSEWriter{ResponseRecorder: httptest.NewRecorder(), failReset: failReset}
+			if err := newRealtimeSSEEmitter(writer).writePing(); !errors.Is(err, io.ErrClosedPipe) {
+				t.Fatalf("error=%v, want client deadline failure", err)
+			}
+			if !failReset && writer.Body.Len() != 0 {
+				t.Fatal("wrote an unbounded frame after failing to set its deadline")
+			}
+		})
+	}
+}
+
 func TestRealtimeSSEEmitter_WriteMessage_WritesEventFrame(t *testing.T) {
 	t.Parallel()
 
 	rr := httptest.NewRecorder()
-	emitter := newRealtimeSSEEmitter(rr, rr)
-	emitter.writeMessage(ws.Message{Seq: 7, Data: []byte(`{"type":"job.created"}`)})
+	emitter := newRealtimeSSEEmitter(rr)
+	if err := emitter.writeMessage(ws.Message{Seq: 7, Data: []byte(`{"type":"job.created"}`)}); err != nil {
+		t.Fatal(err)
+	}
 
 	if body := rr.Body.String(); body != "id: 7\ndata: {\"type\":\"job.created\"}\n\n" {
 		t.Fatalf("body=%q", body)
@@ -28,8 +58,10 @@ func TestRealtimeSSEEmitter_WritePing_WritesHeartbeatFrame(t *testing.T) {
 	t.Parallel()
 
 	rr := httptest.NewRecorder()
-	emitter := newRealtimeSSEEmitter(rr, rr)
-	emitter.writePing()
+	emitter := newRealtimeSSEEmitter(rr)
+	if err := emitter.writePing(); err != nil {
+		t.Fatal(err)
+	}
 
 	if body := rr.Body.String(); body != ": ping\n\n" {
 		t.Fatalf("body=%q, want %q", body, ": ping\n\n")

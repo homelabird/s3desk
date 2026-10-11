@@ -54,12 +54,14 @@ func TestWriteRealtimeSSEHandshake_SetsHeadersAndPreamble(t *testing.T) {
 	t.Parallel()
 
 	rr := httptest.NewRecorder()
-	flusher, ok := requireRealtimeSSEFlusher(rr)
+	_, ok := requireRealtimeSSEFlusher(rr)
 	if !ok {
 		t.Fatal("expected recorder to implement flusher")
 	}
 
-	writeRealtimeSSEHandshake(rr, flusher)
+	if err := writeRealtimeSSEHandshake(rr); err != nil {
+		t.Fatal(err)
+	}
 
 	if got := rr.Header().Get("Content-Type"); got != "text/event-stream; charset=utf-8" {
 		t.Fatalf("Content-Type=%q", got)

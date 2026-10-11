@@ -12,9 +12,9 @@ type realtimeSSESession struct {
 	heartbeat *time.Ticker
 }
 
-func newRealtimeSSESession(w http.ResponseWriter, flusher http.Flusher) realtimeSSESession {
+func newRealtimeSSESession(w http.ResponseWriter) realtimeSSESession {
 	return realtimeSSESession{
-		emitter:   newRealtimeSSEEmitter(w, flusher),
+		emitter:   newRealtimeSSEEmitter(w),
 		heartbeat: time.NewTicker(15 * time.Second),
 	}
 }
