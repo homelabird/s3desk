@@ -202,7 +202,7 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 	await expect(row.getByText('Done', { exact: true })).toBeVisible()
 })
 
-test('reconciles an ambiguous presigned response without proxy fallback', async ({ page }) => {
+test('rejects an ambiguous presigned response without committing or proxy fallback', async ({ page }) => {
 	test.setTimeout(presignedUploadTestTimeoutMs)
 	const uploadId = 'upload-cors'
 	const jobId = 'job-cors'
@@ -272,11 +272,12 @@ test('reconciles an ambiguous presigned response without proxy fallback', async 
 	})
 
 	await expect.poll(() => presignRequested, { timeout: 5000 }).toBe(true)
-	await expect.poll(() => presignedUploadAttempts, { timeout: 5000 }).toBe(2)
-	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
-	expect(proxyUploadAttempted).toBe(false)
 	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt')
-	await expect(row.getByText('Done', { exact: true })).toBeVisible()
+	// Four retries use 0.5 + 1 + 2 + 4 seconds of bounded backoff.
+	await expect(row.getByText('Failed', { exact: true })).toBeVisible({ timeout: 15_000 })
+	expect(presignedUploadAttempts).toBe(5)
+	expect(commitCalled).toBe(false)
+	expect(proxyUploadAttempted).toBe(false)
 })
 
 test('uses capability matrix to skip presigned mode for unsupported providers', async ({ page }) => {

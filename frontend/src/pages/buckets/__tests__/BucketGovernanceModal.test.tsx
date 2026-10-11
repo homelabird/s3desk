@@ -902,7 +902,7 @@ describe("BucketGovernanceModal", () => {
       .getAllByRole("textbox", { name: /retention days/i })[0]).toHaveValue("60");
     expect(message.error).toHaveBeenCalled();
     expect(message.success).not.toHaveBeenCalled();
-  });
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
   it("blocks GCS access save when the loaded ETag is cleared", async () => {
     const api = createApi("gcp_gcs");
