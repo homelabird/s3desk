@@ -47,6 +47,10 @@ func (m *Manager) enqueueBlocking(ctx context.Context, ids []string) {
 			}
 			m.queueCond.Wait()
 		}
+		if ctx.Err() != nil {
+			m.queueMu.Unlock()
+			return
+		}
 		m.compactQueueLocked()
 		m.queue = append(m.queue, id)
 		depth := m.queueDepthLocked()
@@ -78,6 +82,10 @@ func (m *Manager) dequeue(ctx context.Context) (string, bool) {
 			return "", false
 		}
 		m.queueCond.Wait()
+	}
+	if ctx.Err() != nil {
+		m.queueMu.Unlock()
+		return "", false
 	}
 
 	jobID := m.queue[m.queueHead]

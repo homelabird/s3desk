@@ -95,6 +95,33 @@ func TestQueueDequeueChurnKeepsBoundedBackingStorage(t *testing.T) {
 	}
 }
 
+func TestDequeuePreservesQueuedJobAfterCancellation(t *testing.T) {
+	manager := NewManager(Config{Concurrency: 1})
+	if err := manager.Enqueue("job-1"); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if jobID, ok := manager.dequeue(ctx); ok {
+		t.Fatalf("dequeue after cancellation returned %q", jobID)
+	}
+	if stats := manager.QueueStats(); stats.Depth != 1 {
+		t.Fatalf("queue depth=%d, want 1 after cancellation", stats.Depth)
+	}
+}
+
+func TestEnqueueBlockingStopsAfterCancellationWithFreeCapacity(t *testing.T) {
+	manager := NewManager(Config{Concurrency: 1})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	manager.enqueueBlocking(ctx, []string{"job-1", "job-2"})
+	if stats := manager.QueueStats(); stats.Depth != 0 {
+		t.Fatalf("queue depth=%d, want 0 after cancellation", stats.Depth)
+	}
+}
+
 func TestManagerKeepsJobQueuedUntilWorkerSlotIsAvailable(t *testing.T) {
 	manager := NewManager(Config{Concurrency: 1})
 	manager.sem <- struct{}{}
