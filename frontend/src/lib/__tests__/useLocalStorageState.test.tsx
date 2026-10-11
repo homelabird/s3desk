@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useLocalStorageState } from '../useLocalStorageState'
@@ -6,7 +7,48 @@ import { useLocalStorageState } from '../useLocalStorageState'
 describe('useLocalStorageState', () => {
 	afterEach(() => {
 		window.localStorage.clear()
+		window.sessionStorage.clear()
 		vi.restoreAllMocks()
+	})
+
+	it('reads the current persisted value when returning to a previously selected key', () => {
+		window.localStorage.setItem('scope-a', JSON.stringify('original'))
+		window.localStorage.setItem('scope-b', JSON.stringify('other'))
+		const { result, rerender } = renderHook(({ storageKey }) => useLocalStorageState(storageKey, ''), {
+			initialProps: { storageKey: 'scope-a' },
+			wrapper: StrictMode,
+		})
+
+		rerender({ storageKey: 'scope-b' })
+		window.localStorage.setItem('scope-a', JSON.stringify('updated elsewhere'))
+		rerender({ storageKey: 'scope-a' })
+
+		expect(result.current[0]).toBe('updated elsewhere')
+		expect(window.localStorage.getItem('scope-a')).toBe(JSON.stringify('updated elsewhere'))
+		act(() => result.current[1]((previous) => `${previous}!`))
+		expect(result.current[0]).toBe('updated elsewhere!')
+	})
+
+	it('ignores events from sessionStorage with a matching key', () => {
+		const { result } = renderHook(() => useLocalStorageState('shared-key', 'local value'))
+		act(() => {
+			window.sessionStorage.setItem('shared-key', JSON.stringify('session value'))
+			window.dispatchEvent(new StorageEvent('storage', {
+				key: 'shared-key', newValue: JSON.stringify('session value'), storageArea: window.sessionStorage,
+			}))
+		})
+		expect(result.current[0]).toBe('local value')
+		expect(window.localStorage.getItem('shared-key')).toBe(JSON.stringify('local value'))
+	})
+
+	it('resets state when another tab clears localStorage', () => {
+		window.localStorage.setItem('shared-key', JSON.stringify('saved'))
+		const { result } = renderHook(() => useLocalStorageState('shared-key', 'default'))
+		act(() => {
+			window.localStorage.clear()
+			window.dispatchEvent(new StorageEvent('storage', { key: null, storageArea: window.localStorage }))
+		})
+		expect(result.current[0]).toBe('default')
 	})
 
 	it('does not rewrite or rebroadcast an unchanged scoped value', async () => {

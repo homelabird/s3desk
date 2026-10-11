@@ -60,6 +60,7 @@ export function useSessionStorageState<T>(
 		value: readValue(key),
 	}))
 	const state = stateSlot.key === key ? stateSlot.value : readValue(key)
+	if (stateSlot.key !== key) setStateSlot({ key, value: state })
 	const stateRef = useRef(state)
 	useEffect(() => {
 		stateRef.current = state
@@ -83,7 +84,7 @@ export function useSessionStorageState<T>(
 		if (typeof window === 'undefined') return
 
 		const handleStorage = (event: StorageEvent) => {
-			if (event.storageArea !== window.sessionStorage || event.key !== key) return
+			if (event.storageArea !== window.sessionStorage || (event.key !== null && event.key !== key)) return
 			const nextRaw = event.newValue
 			const currentRaw = JSON.stringify(stateRef.current)
 			if (nextRaw === currentRaw) return

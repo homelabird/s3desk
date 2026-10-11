@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { useSessionStorageState } from '../useSessionStorageState'
@@ -7,6 +8,34 @@ describe('useSessionStorageState', () => {
 	afterEach(() => {
 		window.sessionStorage.clear()
 		window.localStorage.clear()
+	})
+
+	it('reads the current persisted value when returning to a previously selected key', () => {
+		window.sessionStorage.setItem('scope-a', JSON.stringify('original'))
+		window.sessionStorage.setItem('scope-b', JSON.stringify('other'))
+		const { result, rerender } = renderHook(({ storageKey }) => useSessionStorageState(storageKey, ''), {
+			initialProps: { storageKey: 'scope-a' },
+			wrapper: StrictMode,
+		})
+
+		rerender({ storageKey: 'scope-b' })
+		window.sessionStorage.setItem('scope-a', JSON.stringify('updated elsewhere'))
+		rerender({ storageKey: 'scope-a' })
+
+		expect(result.current[0]).toBe('updated elsewhere')
+		expect(window.sessionStorage.getItem('scope-a')).toBe(JSON.stringify('updated elsewhere'))
+		act(() => result.current[1]((previous) => `${previous}!`))
+		expect(result.current[0]).toBe('updated elsewhere!')
+	})
+
+	it('resets state when another same-tab document clears sessionStorage', () => {
+		window.sessionStorage.setItem('shared-key', JSON.stringify('saved'))
+		const { result } = renderHook(() => useSessionStorageState('shared-key', 'default'))
+		act(() => {
+			window.sessionStorage.clear()
+			window.dispatchEvent(new StorageEvent('storage', { key: null, storageArea: window.sessionStorage }))
+		})
+		expect(result.current[0]).toBe('default')
 	})
 
 	it('falls back to the legacy localStorage key and migrates the value into sessionStorage', async () => {
