@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useJobsPageSurfaceState } from '../useJobsPageSurfaceState'
@@ -108,5 +109,18 @@ describe('useJobsPageSurfaceState', () => {
     expect(result.current.detailsJobId).toBeNull()
     expect(result.current.logDrawerRequest.jobId).toBeNull()
     expect(result.current.isCurrentDeleteRequest(staleDeleteToken)).toBe(false)
+  })
+
+  it('invalidates pending delete requests on unmount after StrictMode setup', () => {
+    const { result, unmount } = renderHook(() => useJobsPageSurfaceState({
+      apiToken: 'token-a', profileId: 'profile-1', initialDeletePrefill: null,
+    }), { wrapper: StrictMode })
+    const requestToken = result.current.beginDeleteRequest()
+    const isCurrentDeleteRequest = result.current.isCurrentDeleteRequest
+    expect(isCurrentDeleteRequest(requestToken)).toBe(true)
+
+    unmount()
+
+    expect(isCurrentDeleteRequest(requestToken)).toBe(false)
   })
 })

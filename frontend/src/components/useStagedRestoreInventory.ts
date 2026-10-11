@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import type { APIClientShape } from '../api/client'
 import type { ServerStagedRestore } from '../api/types'
@@ -21,6 +21,12 @@ export function useStagedRestoreInventory(args: {
 	const stagedRestoresRequestTokenRef = useRef(0)
 	const deleteRestoreRequestTokenRef = useRef(0)
 	const cleanupRestoresRequestTokenRef = useRef(0)
+
+	useLayoutEffect(() => () => {
+		stagedRestoresRequestTokenRef.current += 1
+		deleteRestoreRequestTokenRef.current += 1
+		cleanupRestoresRequestTokenRef.current += 1
+	}, [api])
 
 	const refreshStagedRestores = useCallback(async () => {
 		const requestToken = stagedRestoresRequestTokenRef.current + 1

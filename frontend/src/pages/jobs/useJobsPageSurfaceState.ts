@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
@@ -49,7 +49,16 @@ export function useJobsPageSurfaceState({
 
   const previousScopeKeyRef = useRef<string | null | undefined>(undefined)
   const createDeleteRequestTokenRef = useRef(0)
+  const isActiveRef = useRef(false)
   const currentScopeKey = `${apiToken || '__no_server__'}:${profileId ?? '__no_profile__'}`
+
+  useLayoutEffect(() => {
+    isActiveRef.current = true
+    return () => {
+      isActiveRef.current = false
+      createDeleteRequestTokenRef.current += 1
+    }
+  }, [currentScopeKey])
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -89,7 +98,7 @@ export function useJobsPageSurfaceState({
   }, [])
 
   const isCurrentDeleteRequest = useCallback(
-    (token: number) => createDeleteRequestTokenRef.current === token,
+    (token: number) => isActiveRef.current && createDeleteRequestTokenRef.current === token,
     [],
   )
 

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
 import { useJobsPageCreateFlows } from '../useJobsPageCreateFlows'
+import { useJobsPageSurfaceState } from '../useJobsPageSurfaceState'
 
 const { messageSuccess, messageError } = vi.hoisted(() => ({ messageSuccess: vi.fn(), messageError: vi.fn() }))
 
@@ -88,5 +89,30 @@ describe('useJobsPageCreateFlows', () => {
 		})
 		await waitFor(() => expect(args.createJobWithRetry).toHaveBeenCalledTimes(1))
 		await act(async () => { pendingJob.resolve({ id: 'job-delete-1' }); await Promise.resolve() })
+	})
+
+	it.each(['request starts', 'request is queued'] as const)('refreshes the original job cache without showing feedback after unmount when the %s', async (timing) => {
+		const pendingJob = deferred<{ id: string }>()
+		const args = buildArgs({ createJobWithRetry: vi.fn(() => pendingJob.promise) })
+		const invalidateSpy = vi.spyOn(args.queryClient, 'invalidateQueries')
+		const { result, unmount } = renderHook(() => {
+			const surface = useJobsPageSurfaceState({
+				apiToken: args.apiToken, profileId: args.profileId, initialDeletePrefill: null,
+			})
+			return useJobsPageCreateFlows({
+				...args, beginDeleteRequest: surface.beginDeleteRequest, isCurrentDeleteRequest: surface.isCurrentDeleteRequest,
+			})
+		}, { wrapper: createWrapper(args.queryClient) })
+		let request!: Promise<{ id: string }>
+		act(() => { request = result.current.createDeleteMutation.mutateAsync(payload) })
+		if (timing === 'request starts') await waitFor(() => expect(args.createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		unmount()
+		await act(async () => { pendingJob.resolve({ id: 'job-delete-1' }); await request })
+
+		expect(messageSuccess).not.toHaveBeenCalled()
+		expect(args.setCreateDeleteOpen).not.toHaveBeenCalled()
+		expect(args.setDeleteJobPrefill).not.toHaveBeenCalled()
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-a'), exact: false })
 	})
 })

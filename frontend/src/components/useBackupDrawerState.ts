@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import type { APIClientShape, ServerBackupConfidentialityMode, ServerBackupScope } from '../api/client'
 import type { MetaResponse, ServerPortableImportResponse, ServerRestoreResponse } from '../api/types'
@@ -53,6 +53,16 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 	const [portableImportResult, setPortableImportResult] = useState<ServerPortableImportResponse | null>(null)
 	const portableRequestTokenRef = useRef(0)
 	const restoreRequestTokenRef = useRef(0)
+	const exportRequestTokenRef = useRef(0)
+	const exportAbortRef = useRef<(() => void) | null>(null)
+
+	useLayoutEffect(() => () => {
+		portableRequestTokenRef.current += 1
+		restoreRequestTokenRef.current += 1
+		exportRequestTokenRef.current += 1
+		exportAbortRef.current?.()
+		exportAbortRef.current = null
+	}, [api])
 
 	const {
 		backupExportCapability,
@@ -125,20 +135,28 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 				return
 			}
 		}
+		const requestToken = ++exportRequestTokenRef.current
+		exportAbortRef.current?.()
 		setLoadingScope(backupScope)
 		setErrorMessage(null)
 		try {
-			const { promise } = api.server.downloadServerBackup(backupScope, backupConfidentiality, {
+			const { promise, abort } = api.server.downloadServerBackup(backupScope, backupConfidentiality, {
 				password: backupProtection === 'password' ? backupPassword : undefined,
 			})
+			exportAbortRef.current = abort
 			const result = await promise
+			if (exportRequestTokenRef.current !== requestToken) return
 			const filename = filenameFromContentDisposition(result.contentDisposition) ?? buildBackupFilenameFallback(backupScope, backupConfidentiality)
 			saveBlob(result.blob, filename)
 			onActionComplete?.()
 		} catch (err) {
+			if (exportRequestTokenRef.current !== requestToken) return
 			setErrorMessage(formatErr(err))
 		} finally {
-			setLoadingScope(null)
+			if (exportRequestTokenRef.current === requestToken) {
+				exportAbortRef.current = null
+				setLoadingScope(null)
+			}
 		}
 	}, [api, backupConfidentiality, backupPassword, backupPasswordConfirm, backupProtection, backupScope, backupScopeAvailability, backupSupported, onActionComplete])
 
@@ -236,6 +254,10 @@ export function useBackupDrawerState(args: UseBackupDrawerStateArgs) {
 	const resetBackupDrawerAsyncState = useCallback(() => {
 		portableRequestTokenRef.current += 1
 		restoreRequestTokenRef.current += 1
+		exportRequestTokenRef.current += 1
+		exportAbortRef.current?.()
+		exportAbortRef.current = null
+		setLoadingScope(null)
 		setPortableLoading(null)
 		setRestoreLoading(false)
 		setRestoreAllowUnsigned(false)

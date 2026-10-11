@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../api/queryKeys'
@@ -8,6 +9,8 @@ import { AuthContext } from '../../auth/useAuth'
 import { ensureDomShims } from '../../test/domShims'
 import { createMockApiClient } from '../../test/mockApiClient'
 import { SidebarBackupAction } from '../SidebarBackupAction'
+// Resolve the drawer before timed interactions so cold Vite transforms cannot spill into the next test.
+import '../SidebarBackupDrawer'
 
 vi.mock('../../lib/confirmDangerAction', () => ({
 	confirmDangerAction: vi.fn(async ({ onConfirm }: { onConfirm: () => Promise<void> | void }) => {
@@ -165,7 +168,7 @@ function deferred<T>() {
 	return { promise, resolve, reject }
 }
 
-describe('SidebarBackupAction', () => {
+describe('SidebarBackupAction', { timeout: 15_000 }, () => {
 	let clickSpy: ReturnType<typeof vi.spyOn>
 
 	beforeEach(() => {
@@ -412,6 +415,72 @@ describe('SidebarBackupAction', () => {
 		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledWith('full', 'clear', { password: undefined }))
 		await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1))
 		expect(clickSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it.each(['close', 'scope change'] as const)('does not save a late export after %s', async (endSession) => {
+		const download = deferred<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>()
+		const abort = vi.fn()
+		const downloadServerBackup = vi.fn(() => ({ promise: download.promise, abort }))
+		const onActionComplete = vi.fn()
+		const api = createApi({ downloadServerBackup })
+		const { rerender } = render(<SidebarBackupAction api={api} meta={buildMeta()} scopeKey="token-a" onActionComplete={onActionComplete} />, { wrapper: StrictMode })
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Download backup' }))
+		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledTimes(1))
+		if (endSession === 'close') fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+		else rerender(<SidebarBackupAction api={api} meta={buildMeta()} scopeKey="token-b" onActionComplete={onActionComplete} />)
+		await act(async () => {
+			download.resolve({ blob: new Blob(['old backup']), contentDisposition: null, contentType: 'application/gzip' })
+		})
+		expect(URL.createObjectURL).not.toHaveBeenCalled()
+		expect(clickSpy).not.toHaveBeenCalled()
+		expect(onActionComplete).not.toHaveBeenCalled()
+		expect(abort).toHaveBeenCalledTimes(1)
+	})
+
+	it('exports a fresh backup after canceling and reopening under StrictMode', async () => {
+		const oldDownload = deferred<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>()
+		const oldAbort = vi.fn()
+		const onActionComplete = vi.fn()
+		const downloadServerBackup = vi.fn()
+			.mockReturnValueOnce({ promise: oldDownload.promise, abort: oldAbort })
+			.mockReturnValueOnce({
+				promise: Promise.resolve({ blob: new Blob(['current']), contentDisposition: null, contentType: 'application/gzip' }),
+				abort: vi.fn(),
+			})
+		const api = createApi({ downloadServerBackup })
+		render(<SidebarBackupAction api={api} meta={buildMeta()} onActionComplete={onActionComplete} />, { wrapper: StrictMode })
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Download backup' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+		expect(oldAbort).toHaveBeenCalledTimes(1)
+
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Download backup' }))
+		await waitFor(() => expect(onActionComplete).toHaveBeenCalledTimes(1))
+		await act(async () => { oldDownload.resolve({ blob: new Blob(['old']), contentDisposition: null, contentType: 'application/gzip' }) })
+
+		expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+		expect(clickSpy).toHaveBeenCalledTimes(1)
+		expect(onActionComplete).toHaveBeenCalledTimes(1)
+	})
+
+	it('does not refresh the former restore scope after a late staging response', async () => {
+		const restore = deferred<ReturnType<typeof buildRestoreResponse>>()
+		const restoreServerBackup = vi.fn(() => restore.promise)
+		const listServerRestores = vi.fn().mockResolvedValue({ items: [] })
+		const api = createApi({ restoreServerBackup, listServerRestores })
+		const { rerender } = render(<SidebarBackupAction api={api} meta={buildMeta()} scopeKey="token-a" />)
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Stage restore' }))
+		fireEvent.change(screen.getByTestId('sidebar-restore-input'), {
+			target: { files: [new File(['backup'], 'backup.tar.gz', { type: 'application/gzip' })] },
+		})
+		await waitFor(() => expect(restoreServerBackup).toHaveBeenCalledTimes(1))
+		listServerRestores.mockClear()
+		rerender(<SidebarBackupAction api={api} meta={buildMeta()} scopeKey="token-b" />)
+		await act(async () => { restore.resolve(buildRestoreResponse()) })
+		expect(listServerRestores).not.toHaveBeenCalled()
 	})
 
 	it('passes password-protected export options to the API', async () => {
