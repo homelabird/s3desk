@@ -54,6 +54,8 @@
 
 ## Quality and testing
 
+- React and Go pattern audit and repairs:
+  - [REACT_GO_PATTERN_AUDIT_2026-10-11.md](REACT_GO_PATTERN_AUDIT_2026-10-11.md)
 - Quality review:
   - [CODEBASE_QUALITY_REVIEW_2026-03-19.md](CODEBASE_QUALITY_REVIEW_2026-03-19.md)
 - Quality gate plan:
