@@ -60,8 +60,9 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	if err := m.store.DiscardObjectIndexReplacement(ctx, replacementID); err != nil {
 		return err
 	}
-	cleanupCtx := context.WithoutCancel(ctx)
 	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cleanupCancel()
 		_ = m.store.DiscardObjectIndexReplacement(cleanupCtx, replacementID)
 	}()
 
