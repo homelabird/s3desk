@@ -72,22 +72,15 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 	cmd := exec.Command(rclonePath, fullArgs...)
 	ConfigureProcessGroup(cmd)
 	cmd.Env = egressProxy.Environment(os.Environ())
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = egressProxy.Close()
-		_ = os.Remove(configPath)
-		tlsCleanup()
-		return nil, err
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		_ = egressProxy.Close()
-		_ = os.Remove(configPath)
-		tlsCleanup()
-		return nil, err
-	}
+	stdout, stdoutWriter := io.Pipe()
+	cmd.Stdout = stdoutWriter
+	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
+	cmd.Stderr = stderrBuf
+	cmd.WaitDelay = rclonePipeDrainTimeout
 
 	if err := cmd.Start(); err != nil {
+		_ = stdout.Close()
+		_ = stdoutWriter.Close()
 		_ = egressProxy.Close()
 		_ = os.Remove(configPath)
 		tlsCleanup()
@@ -99,25 +92,18 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 	}
 	cancelWatcher := StartProcessCancelWatcher(ctx, jobID, pid)
 
-	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
-	stderrDone := make(chan struct{})
+	waitDone := make(chan error, 1)
 	go func() {
-		_, _ = io.Copy(stderrBuf, stderrPipe)
-		close(stderrDone)
+		err := cmd.Wait()
+		_ = stdoutWriter.Close()
+		waitDone <- err
 	}()
 
 	wait := func() error {
-		stdoutDone := make(chan struct{})
-		go func() {
-			// Some callers stop reading stdout early once they have enough
-			// metadata. Drain the remainder here so rclone cannot wedge on a
-			// full stdout pipe while cmd.Wait is waiting for process exit.
-			_, _ = io.Copy(io.Discard, stdout)
-			close(stdoutDone)
-		}()
-		<-stdoutDone
-		<-stderrDone
-		err := cmd.Wait()
+		// Callers can stop at enough metadata; drain the remainder for process exit.
+		_, _ = io.Copy(io.Discard, stdout)
+		_ = stdout.Close()
+		err := <-waitDone
 		if cancelErr := cancelWatcher(); cancelErr != nil {
 			if pid > 0 {
 				logging.WarnFields("job process termination helper failed", map[string]any{

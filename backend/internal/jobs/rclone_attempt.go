@@ -2,13 +2,17 @@ package jobs
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"s3desk/internal/logging"
 	"s3desk/internal/rcloneegress"
 )
+
+const rclonePipeDrainTimeout = 5 * time.Second
 
 // runRcloneAttempt executes a single rclone invocation and streams logs to the job log.
 // It returns a compact stderr capture (last N lines) and the rclone process wait error.
@@ -44,16 +48,16 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 	cmd.Env = egressProxy.Environment(os.Environ())
 	cmd.ExtraFiles = opts.ExtraFiles
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = egressProxy.Close()
-		return "", err
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		_ = egressProxy.Close()
-		return "", err
-	}
+	stdout, stdoutWriter := io.Pipe()
+	defer stdout.Close()
+	defer stdoutWriter.Close()
+	stderrPipe, stderrWriter := io.Pipe()
+	defer stderrPipe.Close()
+	defer stderrWriter.Close()
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
+	// Let Wait drain output, with a deadline if descendants keep the pipes open.
+	cmd.WaitDelay = rclonePipeDrainTimeout
 
 	if err := cmd.Start(); err != nil {
 		_ = egressProxy.Close()
@@ -93,6 +97,9 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 	}()
 
 	waitErr = cmd.Wait()
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	wg.Wait()
 
 	if cancelErr := cancelWatcher(); cancelErr != nil {
 		if pid > 0 {
@@ -108,8 +115,6 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 		}
 	}
 	_ = egressProxy.Close()
-
-	wg.Wait()
 
 	if progressCh != nil {
 		close(progressCh)

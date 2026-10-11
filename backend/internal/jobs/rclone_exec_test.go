@@ -3,12 +3,16 @@ package jobs
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -57,6 +61,39 @@ func TestStartRcloneCommandWaitDrainsUnreadStdout(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("wait remained hung after context cancellation")
 		}
+	}
+}
+
+func TestStartRcloneCommandBoundsInheritedOutputPipes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake rclone helper uses a POSIX shell")
+	}
+	installJobsEnsureRclonePath(t, writeInheritedPipeFakeRcloneScript(t))
+	ctx, cancel := context.WithTimeout(context.Background(), rclonePipeDrainTimeout+3*time.Second)
+	defer cancel()
+	manager := NewManager(Config{DataDir: t.TempDir()})
+	proc, err := manager.startRcloneCommand(ctx, testRcloneExecProfile(), "job-inherited", []string{"cat", "remote:object"})
+	if err != nil {
+		t.Fatalf("startRcloneCommand: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		if _, err := io.ReadAll(proc.stdout); err != nil {
+			done <- err
+			return
+		}
+		done <- proc.wait()
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, exec.ErrWaitDelay) {
+			t.Fatalf("wait: %v, want ErrWaitDelay for inherited pipes", err)
+		}
+		if !strings.Contains(proc.stderr.String(), "final error detail") {
+			t.Fatal("stderr capture lost the final error detail")
+		}
+	case <-ctx.Done():
+		t.Fatal("stdout EOF waited for the descendant's inherited pipes")
 	}
 }
 
@@ -339,6 +376,34 @@ esac
 		t.Fatalf("write fake rclone: %v", err)
 	}
 	return path
+}
+
+func writeInheritedPipeFakeRcloneScript(t *testing.T) string {
+	t.Helper()
+	tempDir := t.TempDir()
+	rclonePath := filepath.Join(tempDir, "rclone")
+	groupPath := filepath.Join(tempDir, "group")
+	t.Setenv("S3DESK_TEST_RCLONE_GROUP_PATH", groupPath)
+	script := `#!/bin/sh
+set -eu
+printf '%s' "$$" > "$S3DESK_TEST_RCLONE_GROUP_PATH"
+sleep 30 &
+printf 'final error detail\n' >&2
+`
+	if err := os.WriteFile(rclonePath, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		group, err := os.ReadFile(groupPath)
+		if err != nil {
+			return
+		}
+		pid, err := strconv.Atoi(string(group))
+		if err == nil {
+			_ = signalProcessGroup(pid, syscall.SIGKILL)
+		}
+	})
+	return rclonePath
 }
 
 func writeCancelableFakeRcloneScript(t *testing.T, mode string) string {

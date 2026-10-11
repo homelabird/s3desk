@@ -18,11 +18,7 @@ func TestTerminateJobProcessWithTimeoutsGraceful(t *testing.T) {
 		t.Skip("process group tests use POSIX signals")
 	}
 
-	cmd := startProcessGroupHelper(t, "graceful")
-	waitDone := make(chan error, 1)
-	go func() {
-		waitDone <- cmd.Wait()
-	}()
+	cmd, wait := startProcessGroupHelper(t, "graceful")
 
 	usedSigkill, err := terminateJobProcessWithTimeouts("job-term", cmd.Process.Pid, time.Second, time.Second, 20*time.Millisecond)
 	if err != nil {
@@ -31,7 +27,7 @@ func TestTerminateJobProcessWithTimeoutsGraceful(t *testing.T) {
 	if usedSigkill {
 		t.Fatal("usedSigkill=true want false for graceful shutdown")
 	}
-	if err := <-waitDone; err != nil {
+	if err := wait(); err != nil {
 		t.Fatalf("wait after graceful shutdown: %v", err)
 	}
 }
@@ -41,11 +37,7 @@ func TestTerminateJobProcessWithTimeoutsFallsBackToSigkill(t *testing.T) {
 		t.Skip("process group tests use POSIX signals")
 	}
 
-	cmd := startProcessGroupHelper(t, "ignore")
-	waitDone := make(chan error, 1)
-	go func() {
-		waitDone <- cmd.Wait()
-	}()
+	cmd, wait := startProcessGroupHelper(t, "ignore")
 
 	usedSigkill, err := terminateJobProcessWithTimeouts("job-kill", cmd.Process.Pid, 150*time.Millisecond, time.Second, 20*time.Millisecond)
 	if err != nil {
@@ -54,7 +46,7 @@ func TestTerminateJobProcessWithTimeoutsFallsBackToSigkill(t *testing.T) {
 	if !usedSigkill {
 		t.Fatal("usedSigkill=false want true when process ignores SIGTERM")
 	}
-	if err := <-waitDone; err == nil {
+	if err := wait(); err == nil {
 		t.Fatal("wait succeeded want killed process error")
 	}
 }
@@ -119,11 +111,12 @@ func TestProcessKillHelper(t *testing.T) {
 	}
 }
 
-func startProcessGroupHelper(t *testing.T, mode string) *exec.Cmd {
+func startProcessGroupHelper(t *testing.T, mode string) (*exec.Cmd, func() error) {
 	t.Helper()
 
 	cmd := exec.Command(os.Args[0], "-test.run=TestProcessKillHelper")
-	cmd.Env = append(os.Environ(), "S3DESK_PROCESS_KILL_HELPER="+mode)
+	// Race-instrumented helpers must not delay exit past the tested grace period.
+	cmd.Env = append(os.Environ(), "S3DESK_PROCESS_KILL_HELPER="+mode, "GORACE=atexit_sleep_ms=0")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -132,6 +125,20 @@ func startProcessGroupHelper(t *testing.T, mode string) *exec.Cmd {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start helper: %v", err)
 	}
+	waitDone := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = cmd.Wait()
+		close(waitDone)
+	}()
+	wait := func() error {
+		<-waitDone
+		return waitErr
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = wait()
+	})
 	ready := make(chan error, 1)
 	go func() {
 		reader := bufio.NewReader(stdout)
@@ -154,11 +161,5 @@ func startProcessGroupHelper(t *testing.T, mode string) *exec.Cmd {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for helper readiness")
 	}
-	t.Cleanup(func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-		_ = cmd.Wait()
-	})
-	return cmd
+	return cmd, wait
 }
