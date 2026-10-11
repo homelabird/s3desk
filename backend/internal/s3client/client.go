@@ -1,6 +1,7 @@
 package s3client
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -25,7 +26,11 @@ func FromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
 }
 
 func FromProfileWithOptions(secrets models.ProfileSecrets, opts ProfileOptions) (*s3.Client, error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(secrets, opts.AllowRemote); err != nil {
+	return FromProfileWithOptionsContext(context.Background(), secrets, opts)
+}
+
+func FromProfileWithOptionsContext(ctx context.Context, secrets models.ProfileSecrets, opts ProfileOptions) (*s3.Client, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, secrets, opts.AllowRemote); err != nil {
 		return nil, err
 	}
 	return fromProfileWithEndpoint(secrets, strings.TrimSpace(secrets.Endpoint), opts)
@@ -36,7 +41,11 @@ func PresignFromProfile(secrets models.ProfileSecrets) (*s3.PresignClient, error
 }
 
 func PresignFromProfileWithOptions(secrets models.ProfileSecrets, opts ProfileOptions) (*s3.PresignClient, error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(secrets, opts.AllowRemote); err != nil {
+	return PresignFromProfileWithOptionsContext(context.Background(), secrets, opts)
+}
+
+func PresignFromProfileWithOptionsContext(ctx context.Context, secrets models.ProfileSecrets, opts ProfileOptions) (*s3.PresignClient, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, secrets, opts.AllowRemote); err != nil {
 		return nil, err
 	}
 	endpoint := strings.TrimSpace(secrets.PublicEndpoint)

@@ -15,7 +15,7 @@ import (
 )
 
 func (svc objectListHTTPService) executeS3(metric *storageMetric, r *http.Request, p models.ProfileSecrets, bucket, prefix, delimiter, token string, maxKeys int, prefixesOnly bool) (*models.ListObjectsResponse, error) {
-	client, err := s3ClientFromProfile(p, svc.server.cfg.AllowRemote, svc.server.metrics)
+	client, err := s3ClientFromProfile(r.Context(), p, svc.server.cfg.AllowRemote, svc.server.metrics)
 	if err != nil {
 		metric.SetStatus("invalid_config")
 		return nil, newObjectListHTTPError(http.StatusBadRequest, "invalid_config", "failed to prepare S3 listing client", nil)

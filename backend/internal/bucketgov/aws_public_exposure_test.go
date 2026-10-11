@@ -123,8 +123,8 @@ func (f *fakePublicAccessBlockClient) DeleteBucketLifecycle(_ context.Context, i
 	return &s3.DeleteBucketLifecycleOutput{}, nil
 }
 
-func stubAWSClient(client awsPublicAccessBlockClient) func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
-	return func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+func stubAWSClient(client awsPublicAccessBlockClient) func(context.Context, models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+	return func(context.Context, models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
 		return client, nil
 	}
 }
@@ -141,7 +141,7 @@ func TestAWSAdapterGetGovernanceReusesClient(t *testing.T) {
 	}
 	newClientCalls := 0
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+		newClient: func(context.Context, models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
 			newClientCalls++
 			return client, nil
 		},

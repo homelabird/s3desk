@@ -37,7 +37,7 @@ func NewHTTPClient(opts HTTPClientOptions) *http.Client {
 		},
 		Timeout: timeout,
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			return ValidateRequestURL("redirect", req.URL, opts.AllowRemote)
+			return ValidateRequestURLContext(req.Context(), "redirect", req.URL, opts.AllowRemote)
 		},
 	}
 }
@@ -49,7 +49,7 @@ func GuardedDialContext(allowRemote bool) func(context.Context, string, string) 
 		if err != nil {
 			return nil, err
 		}
-		ips, err := resolveDialIPs("endpoint", host, network, allowRemote)
+		ips, err := resolveDialIPs(ctx, "endpoint", host, network, allowRemote)
 		if err != nil {
 			return nil, err
 		}
@@ -74,13 +74,16 @@ type guardedRoundTripper struct {
 }
 
 func (rt guardedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if err := ValidateRequestURL("request URL", req.URL, rt.allowRemote); err != nil {
+	if err := ValidateRequestURLContext(req.Context(), "request URL", req.URL, rt.allowRemote); err != nil {
 		return nil, err
 	}
 	return rt.base.RoundTrip(req)
 }
 
-func resolveDialIPs(field, rawHost, network string, allowRemote bool) ([]net.IP, error) {
+func resolveDialIPs(ctx context.Context, field, rawHost, network string, allowRemote bool) ([]net.IP, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	host := normalizeHost(strings.Trim(rawHost, "[]"))
 	if host == "" {
 		return nil, fmt.Errorf("%s must be an absolute http(s) URL", field)
@@ -100,7 +103,7 @@ func resolveDialIPs(field, rawHost, network string, allowRemote bool) ([]net.IP,
 		}
 		return []net.IP{ip}, nil
 	}
-	if canonical, err := lookupEndpointCNAME(host); err == nil {
+	if canonical, err := lookupEndpointCNAME(ctx, host); err == nil {
 		canonical = normalizeHost(canonical)
 		if _, blocked := blockedHosts[canonical]; blocked {
 			return nil, fmt.Errorf("%s points to a blocked metadata host", field)
@@ -109,8 +112,14 @@ func resolveDialIPs(field, rawHost, network string, allowRemote bool) ([]net.IP,
 			return nil, fmt.Errorf("%s must not target localhost when remote access is enabled", field)
 		}
 	}
-	addrs, err := lookupEndpointIPAddr(host)
-	if err != nil || len(addrs) == 0 {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	addrs, err := lookupEndpointIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("%s host could not be resolved: %w", field, err)
+	}
+	if len(addrs) == 0 {
 		return nil, fmt.Errorf("%s host could not be resolved", field)
 	}
 	selected := make([]net.IP, 0, len(addrs))

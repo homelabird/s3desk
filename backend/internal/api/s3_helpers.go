@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"s3desk/internal/metrics"
@@ -8,10 +10,10 @@ import (
 	"s3desk/internal/s3client"
 )
 
-func s3ClientFromProfile(secrets models.ProfileSecrets, allowRemote bool, m *metrics.Metrics) (*s3.Client, error) {
-	return s3client.FromProfileWithOptions(secrets, s3client.ProfileOptions{AllowRemote: allowRemote, Metrics: m})
+func s3ClientFromProfile(ctx context.Context, secrets models.ProfileSecrets, allowRemote bool, m *metrics.Metrics) (*s3.Client, error) {
+	return s3client.FromProfileWithOptionsContext(ctx, secrets, s3client.ProfileOptions{AllowRemote: allowRemote, Metrics: m})
 }
 
-func s3PresignClientFromProfile(secrets models.ProfileSecrets, allowRemote bool) (*s3.PresignClient, error) {
-	return s3client.PresignFromProfileWithOptions(secrets, s3client.ProfileOptions{AllowRemote: allowRemote})
+func s3PresignClientFromProfile(ctx context.Context, secrets models.ProfileSecrets, allowRemote bool) (*s3.PresignClient, error) {
+	return s3client.PresignFromProfileWithOptionsContext(ctx, secrets, s3client.ProfileOptions{AllowRemote: allowRemote})
 }

@@ -1,6 +1,7 @@
 package profileendpoint
 
 import (
+	"context"
 	"net"
 	"net/url"
 	"os"
@@ -12,10 +13,14 @@ import (
 // one exact loopback URL. Server request URLs and internal endpoints never use
 // this exception; their transport-level SSRF checks remain enabled.
 func ValidatePublicURL(field string, raw *string, allowRemote bool) error {
+	return ValidatePublicURLContext(context.Background(), field, raw, allowRemote)
+}
+
+func ValidatePublicURLContext(ctx context.Context, field string, raw *string, allowRemote bool) error {
 	if allowRemote && raw != nil && allowedLoopbackPublicEndpoint(*raw) {
-		return ValidateURL(field, raw, false)
+		return ValidateURLContext(ctx, field, raw, false)
 	}
-	return ValidateURL(field, raw, allowRemote)
+	return ValidateURLContext(ctx, field, raw, allowRemote)
 }
 
 func allowedLoopbackPublicEndpoint(raw string) bool {

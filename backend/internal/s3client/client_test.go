@@ -1,12 +1,14 @@
 package s3client
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"net/http"
@@ -19,6 +21,20 @@ import (
 
 	"s3desk/internal/models"
 )
+
+func TestProfileClientsHonorCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	profile := models.ProfileSecrets{Provider: models.ProfileProviderS3Compatible}
+	if _, err := FromProfileWithOptionsContext(ctx, profile, ProfileOptions{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("FromProfileWithOptionsContext error=%v, want context.Canceled", err)
+	}
+	if _, err := PresignFromProfileWithOptionsContext(ctx, profile, ProfileOptions{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("PresignFromProfileWithOptionsContext error=%v, want context.Canceled", err)
+	}
+}
 
 func TestFromProfileAcceptsStoredMTLSSettingsAndUsesGuardedHTTPClient(t *testing.T) {
 	t.Parallel()

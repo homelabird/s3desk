@@ -128,7 +128,7 @@ func (svc objectDownloadURLHTTPService) executeGet(metric *storageMetric, r *htt
 	}
 
 	if secrets.Provider == models.ProfileProviderAwsS3 || secrets.Provider == models.ProfileProviderS3Compatible {
-		presigner, err := s3PresignClientFromProfile(secrets, svc.server.cfg.AllowRemote)
+		presigner, err := s3PresignClientFromProfile(r.Context(), secrets, svc.server.cfg.AllowRemote)
 		if err != nil {
 			metric.SetStatus("invalid_config")
 			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectDownloadURLHTTPError(http.StatusBadRequest, "invalid_config", "failed to prepare download presigner", nil)

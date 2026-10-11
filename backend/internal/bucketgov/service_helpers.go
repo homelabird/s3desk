@@ -50,9 +50,9 @@ type sectionPut[A any, T any] func(A, context.Context, models.ProfileSecrets, st
 type sectionPutResult[A any, TReq any, TResp any] func(A, context.Context, models.ProfileSecrets, string, TReq) (TResp, error)
 type sectionValidator[T any] func(ValidationContext, T) error
 
-func resolveSectionAdapter[A any](s *Service, profile models.ProfileSecrets, bucket string) (A, string, error) {
+func resolveSectionAdapter[A any](s *Service, ctx context.Context, profile models.ProfileSecrets, bucket string) (A, string, error) {
 	var zero A
-	adapter, bucket, err := s.resolve(profile, bucket)
+	adapter, bucket, err := s.resolve(ctx, profile, bucket)
 	if err != nil {
 		return zero, "", err
 	}
@@ -65,7 +65,7 @@ func resolveSectionAdapter[A any](s *Service, profile models.ProfileSecrets, buc
 
 func serviceGet[A any, T any](s *Service, ctx context.Context, profile models.ProfileSecrets, bucket string, getter sectionGetter[A, T]) (T, error) {
 	var zero T
-	adapter, bucket, err := resolveSectionAdapter[A](s, profile, bucket)
+	adapter, bucket, err := resolveSectionAdapter[A](s, ctx, profile, bucket)
 	if err != nil {
 		return zero, err
 	}
@@ -73,7 +73,7 @@ func serviceGet[A any, T any](s *Service, ctx context.Context, profile models.Pr
 }
 
 func servicePut[A any, T any](s *Service, ctx context.Context, profile models.ProfileSecrets, bucket string, req T, validate sectionValidator[T], put sectionPut[A, T]) error {
-	adapter, bucket, err := resolveSectionAdapter[A](s, profile, bucket)
+	adapter, bucket, err := resolveSectionAdapter[A](s, ctx, profile, bucket)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func servicePut[A any, T any](s *Service, ctx context.Context, profile models.Pr
 
 func servicePutAndReturn[A any, TReq any, TResp any](s *Service, ctx context.Context, profile models.ProfileSecrets, bucket string, req TReq, validate sectionValidator[TReq], put sectionPutResult[A, TReq, TResp]) (TResp, error) {
 	var zero TResp
-	adapter, bucket, err := resolveSectionAdapter[A](s, profile, bucket)
+	adapter, bucket, err := resolveSectionAdapter[A](s, ctx, profile, bucket)
 	if err != nil {
 		return zero, err
 	}

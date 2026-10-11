@@ -146,7 +146,7 @@ func (s *Store) ImportPortableEntityFilesReplaceWithRecovery(ctx context.Context
 	var counts PortableImportCounts
 
 	opts.crypto = s.crypto
-	rows, err := parseAndValidatePortableEntityFiles(dataDir, entityFiles, opts)
+	rows, err := parseAndValidatePortableEntityFiles(ctx, dataDir, entityFiles, opts)
 	if err != nil {
 		return PortableImportCounts{}, err
 	}
@@ -301,18 +301,25 @@ func ValidatePortableEntityFiles(dataDir string, entityFiles map[string][]byte) 
 }
 
 func ValidatePortableEntityFilesWithOptions(dataDir string, entityFiles map[string][]byte, opts PortableValidationOptions) error {
-	_, err := parseAndValidatePortableEntityFiles(dataDir, entityFiles, opts)
+	return ValidatePortableEntityFilesWithOptionsContext(context.Background(), dataDir, entityFiles, opts)
+}
+
+func ValidatePortableEntityFilesWithOptionsContext(ctx context.Context, dataDir string, entityFiles map[string][]byte, opts PortableValidationOptions) error {
+	_, err := parseAndValidatePortableEntityFiles(ctx, dataDir, entityFiles, opts)
 	return err
 }
 
-func parseAndValidatePortableEntityFiles(dataDir string, entityFiles map[string][]byte, opts PortableValidationOptions) (portableImportEntityRows, error) {
+func parseAndValidatePortableEntityFiles(ctx context.Context, dataDir string, entityFiles map[string][]byte, opts PortableValidationOptions) (portableImportEntityRows, error) {
 	var rows portableImportEntityRows
+	if err := ctx.Err(); err != nil {
+		return rows, err
+	}
 
 	profiles, err := parsePortableRows[profileRow](entityFiles["profiles"])
 	if err != nil {
 		return rows, fmt.Errorf("parse profiles: %w", err)
 	}
-	if err := validatePortableProfileRows(profiles, opts); err != nil {
+	if err := validatePortableProfileRows(ctx, profiles, opts); err != nil {
 		return rows, err
 	}
 	profiles = normalizePortableProfileRows(profiles)
@@ -434,19 +441,22 @@ func parseAndValidatePortableEntityFiles(dataDir string, entityFiles map[string]
 	return rows, nil
 }
 
-func validatePortableProfileRows(rows []profileRow, opts PortableValidationOptions) error {
+func validatePortableProfileRows(ctx context.Context, rows []profileRow, opts PortableValidationOptions) error {
 	for i, row := range rows {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if _, err := ulid.ParseStrict(row.ID); err != nil {
 			return fmt.Errorf("invalid portable profile id at row %d: %q", i+1, row.ID)
 		}
-		if err := validatePortableProfileRow(row, opts); err != nil {
+		if err := validatePortableProfileRow(ctx, row, opts); err != nil {
 			return fmt.Errorf("invalid portable profile at row %d: %w", i+1, err)
 		}
 	}
 	return nil
 }
 
-func validatePortableProfileRow(row profileRow, opts PortableValidationOptions) error {
+func validatePortableProfileRow(ctx context.Context, row profileRow, opts PortableValidationOptions) error {
 	provider, err := validatePortableProfileProvider(row.Provider)
 	if err != nil {
 		return err
@@ -465,14 +475,14 @@ func validatePortableProfileRow(row profileRow, opts PortableValidationOptions) 
 		if provider == models.ProfileProviderS3Compatible && strings.TrimSpace(row.Endpoint) == "" {
 			return errors.New("endpoint is required for s3_compatible")
 		}
-		if err := validatePortableEndpointURL("endpoint", row.Endpoint, opts); err != nil {
+		if err := validatePortableEndpointURL(ctx, "endpoint", row.Endpoint, opts); err != nil {
 			return err
 		}
-		if err := validatePortableEndpointURL("publicEndpoint", row.PublicEndpoint, opts); err != nil {
+		if err := validatePortableEndpointURL(ctx, "publicEndpoint", row.PublicEndpoint, opts); err != nil {
 			return err
 		}
 		if row.TLSInsecureSkipVerify != 0 {
-			if err := validatePortableTLSSkipVerifyEndpoint("endpoint", row.Endpoint, opts); err != nil {
+			if err := validatePortableTLSSkipVerifyEndpoint(ctx, "endpoint", row.Endpoint, opts); err != nil {
 				return err
 			}
 		}
@@ -491,11 +501,11 @@ func validatePortableProfileRow(row profileRow, opts PortableValidationOptions) 
 		if strings.TrimSpace(cfg.AccountName) == "" || strings.TrimSpace(sec.AccountKey) == "" {
 			return errors.New("azure accountName and accountKey are required")
 		}
-		if err := validatePortableEndpointURL("endpoint", cfg.Endpoint, opts); err != nil {
+		if err := validatePortableEndpointURL(ctx, "endpoint", cfg.Endpoint, opts); err != nil {
 			return err
 		}
 		if row.TLSInsecureSkipVerify != 0 {
-			if err := validatePortableTLSSkipVerifyEndpoint("endpoint", cfg.Endpoint, opts); err != nil {
+			if err := validatePortableTLSSkipVerifyEndpoint(ctx, "endpoint", cfg.Endpoint, opts); err != nil {
 				return err
 			}
 		}
@@ -523,11 +533,11 @@ func validatePortableProfileRow(row profileRow, opts PortableValidationOptions) 
 		if strings.TrimSpace(cfg.ProjectNumber) == "" {
 			return errors.New("projectNumber is required")
 		}
-		if err := validatePortableEndpointURL("endpoint", cfg.Endpoint, opts); err != nil {
+		if err := validatePortableEndpointURL(ctx, "endpoint", cfg.Endpoint, opts); err != nil {
 			return err
 		}
 		if row.TLSInsecureSkipVerify != 0 {
-			if err := validatePortableTLSSkipVerifyEndpoint("endpoint", cfg.Endpoint, opts); err != nil {
+			if err := validatePortableTLSSkipVerifyEndpoint(ctx, "endpoint", cfg.Endpoint, opts); err != nil {
 				return err
 			}
 		}
@@ -570,11 +580,11 @@ func validatePortableProfileRow(row profileRow, opts PortableValidationOptions) 
 			strings.TrimSpace(cfg.Compartment) == "" {
 			return errors.New("region, namespace, and compartment are required")
 		}
-		if err := validatePortableEndpointURL("endpoint", cfg.Endpoint, opts); err != nil {
+		if err := validatePortableEndpointURL(ctx, "endpoint", cfg.Endpoint, opts); err != nil {
 			return err
 		}
 		if row.TLSInsecureSkipVerify != 0 {
-			if err := validatePortableTLSSkipVerifyEndpoint("endpoint", cfg.Endpoint, opts); err != nil {
+			if err := validatePortableTLSSkipVerifyEndpoint(ctx, "endpoint", cfg.Endpoint, opts); err != nil {
 				return err
 			}
 		}
@@ -582,17 +592,17 @@ func validatePortableProfileRow(row profileRow, opts PortableValidationOptions) 
 	return nil
 }
 
-func validatePortableEndpointURL(field, raw string, opts PortableValidationOptions) error {
+func validatePortableEndpointURL(ctx context.Context, field, raw string, opts PortableValidationOptions) error {
 	value := strings.TrimSpace(raw)
 	if value == "" {
 		return nil
 	}
-	return profileendpoint.ValidateURL(field, &value, opts.AllowRemote)
+	return profileendpoint.ValidateURLContext(ctx, field, &value, opts.AllowRemote)
 }
 
-func validatePortableTLSSkipVerifyEndpoint(field, raw string, opts PortableValidationOptions) error {
+func validatePortableTLSSkipVerifyEndpoint(ctx context.Context, field, raw string, opts PortableValidationOptions) error {
 	value := strings.TrimSpace(raw)
-	if err := profileendpoint.ValidateTLSSkipVerifyEndpoint(field, &value, opts.AllowRemote); err != nil {
+	if err := profileendpoint.ValidateTLSSkipVerifyEndpointContext(ctx, field, &value, opts.AllowRemote); err != nil {
 		return err
 	}
 	return nil

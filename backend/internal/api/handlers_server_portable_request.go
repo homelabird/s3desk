@@ -23,6 +23,7 @@ type portableImportArchiveService struct {
 	checkDestination func(context.Context) error
 	extract          func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error)
 	buildResponse    func(
+		ctx context.Context,
 		mode string,
 		dbBackend db.Backend,
 		manifest models.ServerMigrationManifest,
@@ -44,8 +45,8 @@ func newPortableImportArchiveService(s *server) portableImportArchiveService {
 		extract: func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string, allowUnsigned bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			return extractPortableImportArchiveBundleWithLimit(ctx, src, backupPassword, encryptionKey, s.cfg.ServerRestoreMaxBytes, allowUnsigned)
 		},
-		buildResponse: func(mode string, dbBackend db.Backend, manifest models.ServerMigrationManifest, entityFiles map[string][]byte) models.ServerPortableImportResponse {
-			return s.buildPortableImportResponse(mode, dbBackend, manifest, entityFiles)
+		buildResponse: func(ctx context.Context, mode string, dbBackend db.Backend, manifest models.ServerMigrationManifest, entityFiles map[string][]byte) models.ServerPortableImportResponse {
+			return s.buildPortableImportResponse(ctx, mode, dbBackend, manifest, entityFiles)
 		},
 		applyPayload: func(ctx context.Context, resp *models.ServerPortableImportResponse, entityFiles map[string][]byte, assetRoot string) error {
 			return s.applyPortableImportPayload(ctx, resp, entityFiles, assetRoot)
@@ -89,7 +90,13 @@ func (svc portableImportArchiveService) process(
 		}()
 	}
 
-	resp := svc.buildResponse(mode, dbBackend, manifest, entityFiles)
+	if err := ctx.Err(); err != nil {
+		return models.ServerPortableImportResponse{}, "", err
+	}
+	resp := svc.buildResponse(ctx, mode, dbBackend, manifest, entityFiles)
+	if err := ctx.Err(); err != nil {
+		return models.ServerPortableImportResponse{}, "", err
+	}
 	if svc.checkDestination != nil {
 		if err := svc.checkDestination(ctx); err != nil {
 			resp.Status = "blocked"

@@ -378,3 +378,49 @@ func TestGuardedClientCloseIdleConnectionsReachesTransport(t *testing.T) {
 		t.Fatal("guarded wrapper swallowed CloseIdleConnections")
 	}
 }
+
+func TestGuardedHTTPDNSHonorsCancellation(t *testing.T) {
+	for _, stage := range []string{"cname", "ip"} {
+		for _, operation := range []string{"dial", "request", "redirect"} {
+			t.Run(stage+"/"+operation, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				restore := SetLookupHooksForTest(
+					func(lookupCtx context.Context, _ string) (string, error) {
+						if stage == "cname" {
+							cancel()
+							return "", lookupCtx.Err()
+						}
+						return "", errors.New("no cname")
+					},
+					func(lookupCtx context.Context, _ string) ([]net.IPAddr, error) {
+						if stage == "ip" {
+							cancel()
+							return nil, lookupCtx.Err()
+						}
+						t.Error("IP lookup continued after CNAME cancellation")
+						return nil, errors.New("unexpected lookup")
+					},
+				)
+				t.Cleanup(restore)
+
+				var err error
+				if operation == "dial" {
+					_, err = GuardedDialContext(false)(ctx, "tcp", "storage.example:80")
+				} else {
+					req := httptest.NewRequest(http.MethodGet, "http://storage.example/object", nil).WithContext(ctx)
+					client := NewHTTPClient(HTTPClientOptions{})
+					defer client.CloseIdleConnections()
+					if operation == "request" {
+						_, err = client.Transport.RoundTrip(req)
+					} else {
+						err = client.CheckRedirect(req, nil)
+					}
+				}
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("error=%v, want context.Canceled", err)
+				}
+			})
+		}
+	}
+}

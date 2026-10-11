@@ -49,7 +49,7 @@ func TestPortableRecoveryBundleRestoresPreviousDestination(t *testing.T) {
 			}
 			srv := &server{store: target, cfg: config.Config{DataDir: dataDir, DBBackend: "sqlite", EncryptionKey: key}}
 			manifest := models.ServerMigrationManifest{Format: serverBackupBundleFormat, BundleKind: serverBackupScopePortable, FormatVersion: portableBackupFormatVersion, SchemaVersion: portableBackupSchemaVersion, Entities: entities}
-			resp := srv.buildPortableImportResponse(portableImportModeReplace, db.BackendSQLite, manifest, files)
+			resp := srv.buildPortableImportResponse(context.Background(), portableImportModeReplace, db.BackendSQLite, manifest, files)
 			if err := srv.applyPortableImportPayload(t.Context(), &resp, files, assets); err != nil {
 				t.Fatal(err)
 			}
@@ -87,7 +87,7 @@ func TestPortableRecoveryBundleRestoresPreviousDestination(t *testing.T) {
 			if key != "" && beforeManifest.ConfidentialityMode != serverBackupConfidentialityEncrypted {
 				t.Fatal("recovery credentials were not encrypted")
 			}
-			rollback := srv.buildPortableImportResponse(portableImportModeReplace, db.BackendSQLite, beforeManifest, beforeFiles)
+			rollback := srv.buildPortableImportResponse(context.Background(), portableImportModeReplace, db.BackendSQLite, beforeManifest, beforeFiles)
 			if err := srv.applyPortableImportPayload(t.Context(), &rollback, beforeFiles, beforeAssets); err != nil {
 				t.Fatal(err)
 			}

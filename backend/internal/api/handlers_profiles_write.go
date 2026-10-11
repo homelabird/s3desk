@@ -63,7 +63,7 @@ func (svc profileWriteHTTPService) prepareCreateProfile(r *http.Request) profile
 			decodeErr: err,
 		}
 	}
-	req, err := prepareCreateProfileRequest(req, svc.server.cfg.AllowRemote)
+	req, err := prepareCreateProfileRequest(r.Context(), req, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return profileWritePreparedRequest{
 			kind: profileWriteCreate,
@@ -125,7 +125,7 @@ func (svc profileWriteHTTPService) prepareUpdateProfile(r *http.Request) profile
 			err:       prepErr,
 		}
 	}
-	if err := validatePreparedUpdateProfileRequest(currentProfile, req, svc.server.cfg.AllowRemote); err != nil {
+	if err := validatePreparedUpdateProfileRequest(r.Context(), currentProfile, req, svc.server.cfg.AllowRemote); err != nil {
 		return profileWritePreparedRequest{
 			kind:      profileWriteUpdate,
 			profileID: profileID,

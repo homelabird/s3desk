@@ -14,7 +14,7 @@ import (
 )
 
 func (a *awsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketAccessView, error) {
-	client, err := a.clientFor(profile, bucket)
+	client, err := a.clientFor(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketAccessView{}, err
 	}
@@ -42,7 +42,7 @@ func (a *awsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecret
 }
 
 func (a *awsAdapter) PutAccess(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
-	client, err := a.clientFor(profile, bucket)
+	client, err := a.clientFor(ctx, profile, bucket)
 	if err != nil {
 		return err
 	}

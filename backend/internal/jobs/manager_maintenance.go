@@ -203,7 +203,7 @@ func (m *Manager) cleanupExpiredUploadSessionMultipartUploads(ctx context.Contex
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
 		return fmt.Errorf("multipart cleanup requires an S3-compatible profile")
 	}
-	client, err := s3ClientFromProfile(secrets, m.allowRemote, m.metrics)
+	client, err := s3ClientFromProfile(ctx, secrets, m.allowRemote, m.metrics)
 	if err != nil {
 		return err
 	}

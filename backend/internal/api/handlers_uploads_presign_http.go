@@ -131,7 +131,7 @@ func (svc uploadPresignHTTPService) executeSinglePart(r *http.Request, prepared 
 		return nil, uploadErr
 	}
 
-	presigner, err := s3PresignClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
+	presigner, err := s3PresignClientFromProfile(r.Context(), prepared.secrets, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return nil, newUploadInternalError("failed to prepare presigner", nil)
 	}
@@ -236,7 +236,7 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		return nil, newUploadInternalError("failed to load multipart upload", nil)
 	}
 	if found && (meta.FileSize != fileSize || meta.ChunkSize != partSize) {
-		client, clientErr := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote, svc.server.metrics)
+		client, clientErr := s3ClientFromProfile(r.Context(), prepared.secrets, svc.server.cfg.AllowRemote, svc.server.metrics)
 		if clientErr != nil {
 			return nil, newUploadInternalError("failed to prepare multipart reset", map[string]any{"error": clientErr.Error()})
 		}
@@ -248,7 +248,7 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 	createdMeta := false
 	var createdClient *s3.Client
 	if !found {
-		client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote, svc.server.metrics)
+		client, err := s3ClientFromProfile(r.Context(), prepared.secrets, svc.server.cfg.AllowRemote, svc.server.metrics)
 		if err != nil {
 			return nil, newUploadInternalError("failed to prepare multipart client", nil)
 		}
@@ -300,7 +300,7 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		return nil, uploadErr
 	}
 
-	presigner, err := s3PresignClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
+	presigner, err := s3PresignClientFromProfile(r.Context(), prepared.secrets, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return nil, newUploadInternalError("failed to prepare presigner", nil)
 	}

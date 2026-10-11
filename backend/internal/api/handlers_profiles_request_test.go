@@ -19,7 +19,7 @@ func TestPrepareCreateProfileRequest_NormalizesDefaultsAndNilEmptyOptionals(t *t
 	secretAccessKey := "  secret  "
 	publicEndpoint := "   "
 
-	req, err := prepareCreateProfileRequest(models.ProfileCreateRequest{
+	req, err := prepareCreateProfileRequest(context.Background(), models.ProfileCreateRequest{
 		Name:            name,
 		Endpoint:        &endpoint,
 		PublicEndpoint:  &publicEndpoint,
@@ -57,7 +57,7 @@ func TestPrepareCreateProfileRequest_RejectsTLSSkipVerifyWithoutCustomEndpoint(t
 	region := "us-east-1"
 	accessKeyID := "access"
 	secretAccessKey := "secret"
-	_, err := prepareCreateProfileRequest(models.ProfileCreateRequest{
+	_, err := prepareCreateProfileRequest(context.Background(), models.ProfileCreateRequest{
 		Provider:              models.ProfileProviderAwsS3,
 		Name:                  "aws-default",
 		Region:                &region,
@@ -75,7 +75,7 @@ func TestPrepareCreateProfileRequest_RejectsUnsafeGcpServiceAccountTokenURI(t *t
 
 	projectNumber := "123456789"
 	serviceAccountJSON := `{"client_email":"demo@example.test","private_key":"placeholder","token_uri":"http://169.254.169.254/token"}`
-	_, err := prepareCreateProfileRequest(models.ProfileCreateRequest{
+	_, err := prepareCreateProfileRequest(context.Background(), models.ProfileCreateRequest{
 		Provider:           models.ProfileProviderGcpGcs,
 		Name:               "gcs",
 		ProjectNumber:      &projectNumber,
@@ -90,7 +90,7 @@ func TestValidatePreparedUpdateProfileRequest_RejectsUnsafeGcpServiceAccountToke
 	t.Parallel()
 
 	serviceAccountJSON := `{"client_email":"demo@example.test","private_key":"placeholder","token_uri":"http://169.254.169.254/token"}`
-	err := validatePreparedUpdateProfileRequest(models.Profile{
+	err := validatePreparedUpdateProfileRequest(context.Background(), models.Profile{
 		Provider: models.ProfileProviderGcpGcs,
 	}, models.ProfileUpdateRequest{
 		ServiceAccountJSON: &serviceAccountJSON,
@@ -140,7 +140,7 @@ func TestValidatePreparedUpdateProfileRequest_RejectsPublicEndpointWhileTLSSkipV
 	)
 
 	endpoint := "https://public.example.com"
-	err := validatePreparedUpdateProfileRequest(models.Profile{
+	err := validatePreparedUpdateProfileRequest(context.Background(), models.Profile{
 		Endpoint:              "https://minio.internal:9000",
 		TLSInsecureSkipVerify: true,
 	}, models.ProfileUpdateRequest{

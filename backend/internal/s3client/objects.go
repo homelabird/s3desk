@@ -13,7 +13,7 @@ import (
 )
 
 func PutEmptyObjectWithOptions(ctx context.Context, secrets models.ProfileSecrets, bucket, key string, opts ProfileOptions) error {
-	client, err := FromProfileWithOptions(secrets, opts)
+	client, err := FromProfileWithOptionsContext(ctx, secrets, opts)
 	if err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func DeleteFolderMarkersWithOptions(ctx context.Context, secrets models.ProfileS
 		return nil
 	}
 
-	client, err := FromProfileWithOptions(secrets, opts)
+	client, err := FromProfileWithOptionsContext(ctx, secrets, opts)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func DeleteFolderMarkersWithOptions(ctx context.Context, secrets models.ProfileS
 }
 
 func DeletePrefixMarkerIfEmpty(ctx context.Context, secrets models.ProfileSecrets, bucket, prefix string, opts ProfileOptions) error {
-	client, err := FromProfileWithOptions(secrets, opts)
+	client, err := FromProfileWithOptionsContext(ctx, secrets, opts)
 	if err != nil {
 		return err
 	}

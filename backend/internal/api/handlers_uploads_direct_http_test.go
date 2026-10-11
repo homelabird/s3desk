@@ -658,7 +658,7 @@ func TestDirectMultipartStateSerializesCreateForConcurrentChunks(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("get profile secrets: ok=%v err=%v", ok, err)
 	}
-	client, err := s3ClientFromProfile(secrets, false, nil)
+	client, err := s3ClientFromProfile(context.Background(), secrets, false, nil)
 	if err != nil {
 		t.Fatalf("create s3 client: %v", err)
 	}

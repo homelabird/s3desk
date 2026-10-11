@@ -481,7 +481,7 @@ func (s *server) requireProfile(next http.Handler) http.Handler {
 			writeError(w, http.StatusBadRequest, "profile_not_found", "profile not found", map[string]any{"profileId": profileID})
 			return
 		}
-		if err := profileendpoint.ValidateProfileSecretsEndpoints(secrets, s.cfg.AllowRemote); err != nil {
+		if err := profileendpoint.ValidateProfileSecretsEndpointsContext(r.Context(), secrets, s.cfg.AllowRemote); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_config", "profile endpoint is not allowed by current remote access policy", map[string]any{"error": err.Error()})
 			return
 		}

@@ -63,7 +63,7 @@ func TestBuildPortableImportResponse_BlocksMissingEntityAndChecksumMismatch(t *t
 		"profiles": []byte("[]\n"),
 	}
 
-	resp := srv.buildPortableImportResponse(portableImportModeDryRun, db.BackendSQLite, manifest, entityFiles)
+	resp := srv.buildPortableImportResponse(context.Background(), portableImportModeDryRun, db.BackendSQLite, manifest, entityFiles)
 	if resp.Verification.EntityChecksumsVerified {
 		t.Fatal("expected EntityChecksumsVerified=false")
 	}
@@ -97,7 +97,7 @@ func TestBuildPortableImportResponseRejectsLocalhostPortableEndpointWhenRemoteEn
 	}
 	entityFiles := map[string][]byte{"profiles": profileData}
 
-	resp := srv.buildPortableImportResponse(portableImportModeDryRun, db.BackendSQLite, manifest, entityFiles)
+	resp := srv.buildPortableImportResponse(context.Background(), portableImportModeDryRun, db.BackendSQLite, manifest, entityFiles)
 	blockers := strings.Join(resp.Preflight.Blockers, "\n")
 	if !strings.Contains(blockers, "must not target localhost") {
 		t.Fatalf("blockers=%v, want localhost endpoint rejection", resp.Preflight.Blockers)
@@ -124,7 +124,7 @@ func TestPortableImportPreflightService_BlocksInsufficientThumbnailDiskSpace(t *
 		return 32, nil
 	}
 
-	resp := svc.buildResponse(portableImportModeDryRun, db.BackendSQLite, models.ServerMigrationManifest{
+	resp := svc.buildResponse(context.Background(), portableImportModeDryRun, db.BackendSQLite, models.ServerMigrationManifest{
 		BundleKind:    serverBackupScopePortable,
 		Format:        serverBackupBundleFormat,
 		FormatVersion: portableBackupFormatVersion,
@@ -179,7 +179,7 @@ func TestApplyPortableImportPayload_CopiesThumbnailsAndMarksHealthCheck(t *testi
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	resp := srv.buildPortableImportResponse(portableImportModeReplace, db.BackendSQLite, models.ServerMigrationManifest{
+	resp := srv.buildPortableImportResponse(context.Background(), portableImportModeReplace, db.BackendSQLite, models.ServerMigrationManifest{
 		BundleKind:    serverBackupScopePortable,
 		Format:        serverBackupBundleFormat,
 		FormatVersion: portableBackupFormatVersion,

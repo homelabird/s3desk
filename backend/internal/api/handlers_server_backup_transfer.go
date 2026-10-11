@@ -290,7 +290,7 @@ func (s *server) prepareServerBackupTransfer(ctx context.Context, location serve
 		target := rcloneRemoteObject(strings.TrimSpace(location.Bucket), remotePath, profile.PreserveLeadingSlash)
 		return target, &profile, "", func() {}, nil
 	case serverBackupProtocolFTP:
-		host, err := profileendpoint.ResolveHost("location.host", location.Host, s.cfg.AllowRemote)
+		host, err := profileendpoint.ResolveHostContext(ctx, "location.host", location.Host, s.cfg.AllowRemote)
 		if err != nil {
 			return "", nil, "", func() {}, err
 		}

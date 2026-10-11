@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -24,10 +25,11 @@ func buildPortableImportEntityVerification(
 	entityFiles map[string][]byte,
 	dataDir string,
 ) portableImportEntityVerification {
-	return buildPortableImportEntityVerificationWithOptions(manifestEntities, entityFiles, dataDir, store.PortableValidationOptions{})
+	return buildPortableImportEntityVerificationWithOptions(context.Background(), manifestEntities, entityFiles, dataDir, store.PortableValidationOptions{})
 }
 
 func buildPortableImportEntityVerificationWithOptions(
+	ctx context.Context,
 	manifestEntities map[string]models.ServerMigrationEntityManifest,
 	entityFiles map[string][]byte,
 	dataDir string,
@@ -76,7 +78,7 @@ func buildPortableImportEntityVerificationWithOptions(
 			ChecksumVerified: checksumVerified,
 		})
 	}
-	if err := store.ValidatePortableEntityFilesWithOptions(dataDir, entityFiles, opts); err != nil {
+	if err := store.ValidatePortableEntityFilesWithOptionsContext(ctx, dataDir, entityFiles, opts); err != nil {
 		blockers = append(blockers, fmt.Sprintf("Portable bundle entity schema validation failed: %v", err))
 	}
 

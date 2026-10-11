@@ -25,7 +25,7 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 		return ErrProfileNotFound
 	}
 
-	configPath, err := m.writeRcloneConfig(jobID, profileSecrets)
+	configPath, err := m.writeRcloneConfig(ctx, jobID, profileSecrets)
 	if err != nil {
 		return err
 	}

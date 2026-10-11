@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,7 +16,68 @@ import (
 	"gorm.io/gorm"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 )
+
+func TestPortableEndpointValidationHonorsCancellation(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		name := "preview"
+		if replace {
+			name = "replace"
+		}
+		t.Run(name, func(t *testing.T) {
+			target := newProfileTestStore(t, Options{})
+			existing := createTestProfile(t, target)
+			file := marshalPortableEntityFile("profiles", []profileRow{{
+				ID: ulid.Make().String(), Name: "cancel-import", Provider: string(models.ProfileProviderS3Compatible),
+				Endpoint: "http://cancel.example:9000", Region: "us-east-1", AccessKeyID: "access", SecretAccessKey: "secret",
+			}})
+			files := map[string][]byte{"profiles": file.Data}
+			started := make(chan struct{}, 1)
+			ipLookupCalled := false
+			t.Cleanup(profileendpoint.SetLookupHooksForTest(func(ctx context.Context, _ string) (string, error) {
+				started <- struct{}{}
+				<-ctx.Done()
+				return "", ctx.Err()
+			}, func(context.Context, string) ([]net.IPAddr, error) {
+				ipLookupCalled = true
+				return nil, context.Canceled
+			}))
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			done := make(chan error, 1)
+			dataDir := t.TempDir()
+			go func() {
+				if replace {
+					_, err := target.ImportPortableEntityFilesReplace(ctx, files, dataDir)
+					done <- err
+					return
+				}
+				done <- ValidatePortableEntityFilesWithOptionsContext(ctx, dataDir, files, PortableValidationOptions{})
+			}()
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("portable validation did not start DNS lookup")
+			}
+			cancel()
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("portable validation returned %v, want context.Canceled", err)
+				}
+				if ipLookupCalled {
+					t.Fatal("IP lookup started after cancellation")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("portable validation did not stop after cancellation")
+			}
+			if _, ok, err := target.GetProfile(t.Context(), existing.ID); err != nil || !ok {
+				t.Fatalf("destination profile after cancellation: ok=%v err=%v, want preserved", ok, err)
+			}
+		})
+	}
+}
 
 func TestPortableImportEncryptsPlaintextCredentials(t *testing.T) {
 	testPortableImportEncryptsPlaintextCredentials(t, newProfileTestStore(t, Options{EncryptionKey: testStoreEncryptionKey()}))

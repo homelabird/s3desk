@@ -1,49 +1,57 @@
 package profileendpoint
 
 import (
+	"context"
 	"strings"
 
 	"s3desk/internal/models"
 )
 
 func ValidateProfileSecretsEndpoints(secrets models.ProfileSecrets, allowRemote bool) error {
+	return ValidateProfileSecretsEndpointsContext(context.Background(), secrets, allowRemote)
+}
+
+func ValidateProfileSecretsEndpointsContext(ctx context.Context, secrets models.ProfileSecrets, allowRemote bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	switch secrets.Provider {
 	case "", models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		if err := validateProfileEndpointField("endpoint", secrets.Endpoint, allowRemote); err != nil {
+		if err := validateProfileEndpointField(ctx, "endpoint", secrets.Endpoint, allowRemote); err != nil {
 			return err
 		}
-		if err := ValidatePublicURL("publicEndpoint", &secrets.PublicEndpoint, allowRemote); err != nil {
+		if err := ValidatePublicURLContext(ctx, "publicEndpoint", &secrets.PublicEndpoint, allowRemote); err != nil {
 			return err
 		}
 		if secrets.TLSInsecureSkipVerify {
-			if err := validateProfileTLSSkipVerifyField("endpoint", secrets.Endpoint, allowRemote); err != nil {
+			if err := validateProfileTLSSkipVerifyField(ctx, "endpoint", secrets.Endpoint, allowRemote); err != nil {
 				return err
 			}
 		}
 	case models.ProfileProviderAzureBlob:
-		if err := validateProfileEndpointField("endpoint", secrets.AzureEndpoint, allowRemote); err != nil {
+		if err := validateProfileEndpointField(ctx, "endpoint", secrets.AzureEndpoint, allowRemote); err != nil {
 			return err
 		}
 		if secrets.TLSInsecureSkipVerify {
-			if err := validateProfileTLSSkipVerifyField("endpoint", secrets.AzureEndpoint, allowRemote); err != nil {
+			if err := validateProfileTLSSkipVerifyField(ctx, "endpoint", secrets.AzureEndpoint, allowRemote); err != nil {
 				return err
 			}
 		}
 	case models.ProfileProviderGcpGcs:
-		if err := validateProfileEndpointField("endpoint", secrets.GcpEndpoint, allowRemote); err != nil {
+		if err := validateProfileEndpointField(ctx, "endpoint", secrets.GcpEndpoint, allowRemote); err != nil {
 			return err
 		}
 		if secrets.TLSInsecureSkipVerify {
-			if err := validateProfileTLSSkipVerifyField("endpoint", secrets.GcpEndpoint, allowRemote); err != nil {
+			if err := validateProfileTLSSkipVerifyField(ctx, "endpoint", secrets.GcpEndpoint, allowRemote); err != nil {
 				return err
 			}
 		}
 	case models.ProfileProviderOciObjectStorage:
-		if err := validateProfileEndpointField("endpoint", secrets.OciEndpoint, allowRemote); err != nil {
+		if err := validateProfileEndpointField(ctx, "endpoint", secrets.OciEndpoint, allowRemote); err != nil {
 			return err
 		}
 		if secrets.TLSInsecureSkipVerify {
-			if err := validateProfileTLSSkipVerifyField("endpoint", secrets.OciEndpoint, allowRemote); err != nil {
+			if err := validateProfileTLSSkipVerifyField(ctx, "endpoint", secrets.OciEndpoint, allowRemote); err != nil {
 				return err
 			}
 		}
@@ -58,7 +66,7 @@ func ValidateProfileSecretsEndpoints(secrets models.ProfileSecrets, allowRemote 
 			{"gcpEndpoint", secrets.GcpEndpoint},
 			{"ociEndpoint", secrets.OciEndpoint},
 		} {
-			if err := validateProfileEndpointField(endpoint.field, endpoint.value, allowRemote); err != nil {
+			if err := validateProfileEndpointField(ctx, endpoint.field, endpoint.value, allowRemote); err != nil {
 				return err
 			}
 		}
@@ -66,15 +74,15 @@ func ValidateProfileSecretsEndpoints(secrets models.ProfileSecrets, allowRemote 
 	return nil
 }
 
-func validateProfileEndpointField(field, raw string, allowRemote bool) error {
+func validateProfileEndpointField(ctx context.Context, field, raw string, allowRemote bool) error {
 	value := strings.TrimSpace(raw)
 	if value == "" {
 		return nil
 	}
-	return ValidateURL(field, &value, allowRemote)
+	return ValidateURLContext(ctx, field, &value, allowRemote)
 }
 
-func validateProfileTLSSkipVerifyField(field, raw string, allowRemote bool) error {
+func validateProfileTLSSkipVerifyField(ctx context.Context, field, raw string, allowRemote bool) error {
 	value := strings.TrimSpace(raw)
-	return ValidateTLSSkipVerifyEndpoint(field, &value, allowRemote)
+	return ValidateTLSSkipVerifyEndpointContext(ctx, field, &value, allowRemote)
 }

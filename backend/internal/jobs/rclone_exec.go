@@ -29,7 +29,7 @@ var (
 )
 
 func (m *Manager) startRcloneCommand(ctx context.Context, profile models.ProfileSecrets, jobID string, args []string) (*rcloneProcess, error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, m.allowRemote); err != nil {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, m.allowRemote); err != nil {
 		return nil, err
 	}
 	hooks := currentProcessTestHooks()
@@ -41,7 +41,7 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 		return nil, TransferEngineJobError(err)
 	}
 
-	configPath, err := m.writeRcloneConfig(jobID, profile)
+	configPath, err := m.writeRcloneConfig(ctx, jobID, profile)
 	if err != nil {
 		return nil, err
 	}

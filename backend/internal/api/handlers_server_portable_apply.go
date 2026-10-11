@@ -48,6 +48,7 @@ func newPortableImportApplyService(st portableImportApplyStore, dataDir string) 
 }
 
 func (s *server) buildPortableImportResponse(
+	ctx context.Context,
 	mode string,
 	dbBackend db.Backend,
 	manifest models.ServerMigrationManifest,
@@ -55,10 +56,11 @@ func (s *server) buildPortableImportResponse(
 ) models.ServerPortableImportResponse {
 	svc := newPortableImportPreflightService(s.cfg.DataDir, s.cfg.EncryptionKey)
 	svc.allowRemote = s.cfg.AllowRemote
-	return svc.buildResponse(mode, dbBackend, manifest, entityFiles)
+	return svc.buildResponse(ctx, mode, dbBackend, manifest, entityFiles)
 }
 
 func (svc portableImportPreflightService) buildResponse(
+	ctx context.Context,
 	mode string,
 	dbBackend db.Backend,
 	manifest models.ServerMigrationManifest,
@@ -94,6 +96,7 @@ func (svc portableImportPreflightService) buildResponse(
 	}
 
 	entityVerification := buildPortableImportEntityVerificationWithOptions(
+		ctx,
 		manifest.Entities,
 		entityFiles,
 		svc.dataDir,

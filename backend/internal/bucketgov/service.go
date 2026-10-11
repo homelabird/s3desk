@@ -129,12 +129,12 @@ func (s *Service) PutSharing(ctx context.Context, profile models.ProfileSecrets,
 	})
 }
 
-func (s *Service) resolve(profile models.ProfileSecrets, bucket string) (Adapter, string, error) {
+func (s *Service) resolve(ctx context.Context, profile models.ProfileSecrets, bucket string) (Adapter, string, error) {
 	bucket = strings.TrimSpace(bucket)
 	if s == nil || s.registry == nil {
 		return nil, "", UnsupportedProviderError{Provider: profile.Provider}
 	}
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.allowRemote); err != nil {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, s.allowRemote); err != nil {
 		return nil, "", &OperationError{
 			Status:  http.StatusBadRequest,
 			Code:    string(models.NormalizedErrorInvalidConfig),

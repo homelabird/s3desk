@@ -3,12 +3,93 @@ package bucketgov
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 )
+
+func TestServiceHonorProfileDNSCancellation(t *testing.T) {
+	for _, operation := range []string{"get", "put", "put result"} {
+		t.Run(operation, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			restore := profileendpoint.SetLookupHooksForTest(
+				func(lookupCtx context.Context, _ string) (string, error) {
+					cancel()
+					if !errors.Is(lookupCtx.Err(), context.Canceled) {
+						t.Error("DNS lookup did not inherit governance operation cancellation")
+					}
+					return "", lookupCtx.Err()
+				},
+				func(context.Context, string) ([]net.IPAddr, error) {
+					t.Error("IP lookup continued after cancellation")
+					return nil, errors.New("unexpected lookup")
+				},
+			)
+			t.Cleanup(restore)
+			registry := NewRegistry()
+			adapter := &stubAdapter{}
+			registry.Register(models.ProfileProviderAwsS3, adapter)
+			service := NewService(registry)
+			profile := models.ProfileSecrets{Provider: models.ProfileProviderAwsS3, Endpoint: "https://storage.example.test"}
+			var err error
+			switch operation {
+			case "get":
+				_, err = service.GetAccess(ctx, profile, "bucket")
+			case "put":
+				err = service.PutAccess(ctx, profile, "bucket", models.BucketAccessPutRequest{})
+			case "put result":
+				_, err = service.PutSharing(ctx, profile, "bucket", models.BucketSharingPutRequest{})
+			}
+			var opErr *OperationError
+			if !errors.As(err, &opErr) || !strings.Contains(opErr.Details["error"].(string), context.Canceled.Error()) {
+				t.Fatalf("error=%v, want canceled DNS error", err)
+			}
+			if adapter.bucketSeen != "" {
+				t.Fatal("adapter was called after DNS cancellation")
+			}
+		})
+	}
+}
+
+func TestAWSAdapterHonorsProfileDNSCancellation(t *testing.T) {
+	for _, operation := range []string{"section", "governance"} {
+		t.Run(operation, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			restore := profileendpoint.SetLookupHooksForTest(
+				func(lookupCtx context.Context, _ string) (string, error) {
+					cancel()
+					if !errors.Is(lookupCtx.Err(), context.Canceled) {
+						t.Error("DNS lookup did not inherit AWS operation cancellation")
+					}
+					return "", lookupCtx.Err()
+				},
+				func(context.Context, string) ([]net.IPAddr, error) {
+					t.Error("IP lookup continued after cancellation")
+					return nil, errors.New("unexpected lookup")
+				},
+			)
+			t.Cleanup(restore)
+			profile := models.ProfileSecrets{Provider: models.ProfileProviderAwsS3, Endpoint: "https://storage.example.test"}
+			adapter := NewAWSAdapter()
+			var err error
+			if operation == "section" {
+				_, err = adapter.GetPublicExposure(ctx, profile, "bucket")
+			} else {
+				_, err = adapter.GetGovernance(ctx, profile, "bucket")
+			}
+			var opErr *OperationError
+			if !errors.As(err, &opErr) || !strings.Contains(opErr.Details["error"].(string), context.Canceled.Error()) {
+				t.Fatalf("error=%v, want canceled DNS error", err)
+			}
+		})
+	}
+}
 
 type stubAdapter struct {
 	governance models.BucketGovernanceView

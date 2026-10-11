@@ -247,7 +247,7 @@ func run(ctx context.Context, profile models.ProfileSecrets, opts ClientOptions,
 	if strings.TrimSpace(profile.OciNamespace) == "" {
 		return Response{}, errors.New("missing oci namespace")
 	}
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, opts.AllowRemote); err != nil {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, opts.AllowRemote); err != nil {
 		return Response{}, err
 	}
 	cmdArgs := append(buildGlobalArgs(profile), args...)

@@ -147,15 +147,15 @@ func (s *server) rcloneDownloadFlags() []string {
 	return flags
 }
 
-func (s *server) prepareRcloneConfig(profile models.ProfileSecrets, hint string) (path string, cleanup func(), err error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+func (s *server) prepareRcloneConfig(ctx context.Context, profile models.ProfileSecrets, hint string) (path string, cleanup func(), err error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, s.cfg.AllowRemote); err != nil {
 		return "", nil, err
 	}
 	return rcloneconfig.WriteTempConfig(s.cfg.DataDir, "api", hint, profile)
 }
 
 func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (*rcloneProcess, error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, s.cfg.AllowRemote); err != nil {
 		return nil, err
 	}
 	hooks := currentAPIProcessTestHooks()
@@ -167,7 +167,7 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 		return nil, err
 	}
 
-	configPath, configCleanup, err := s.prepareRcloneConfig(profile, hint)
+	configPath, configCleanup, err := s.prepareRcloneConfig(ctx, profile, hint)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 }
 
 func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (string, string, error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, s.cfg.AllowRemote); err != nil {
 		return "", "", err
 	}
 	hooks := currentAPIProcessTestHooks()
@@ -292,7 +292,7 @@ func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSec
 }
 
 func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecrets, args []string, hint string, stdin io.Reader) (string, error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, s.cfg.AllowRemote); err != nil {
 		return "", err
 	}
 	hooks := currentAPIProcessTestHooks()
@@ -304,7 +304,7 @@ func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecre
 		return "", err
 	}
 
-	configPath, configCleanup, err := s.prepareRcloneConfig(profile, hint)
+	configPath, configCleanup, err := s.prepareRcloneConfig(ctx, profile, hint)
 	if err != nil {
 		return "", err
 	}

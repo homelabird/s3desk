@@ -202,12 +202,12 @@ func (p *Proxy) authorized(r *http.Request) bool {
 }
 
 func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := profileendpoint.ValidateRequestURL("rclone proxy target", r.URL, p.allowRemote); err != nil {
+	ctx, finish := p.requestContext(r)
+	defer finish()
+	if err := profileendpoint.ValidateRequestURLContext(ctx, "rclone proxy target", r.URL, p.allowRemote); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	ctx, finish := p.requestContext(r)
-	defer finish()
 
 	req := r.Clone(ctx)
 	req.RequestURI = ""
@@ -233,17 +233,17 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
+	ctx, finish := p.requestContext(r)
+	defer finish()
 	target := strings.TrimSpace(r.Host)
 	if target == "" {
 		target = strings.TrimSpace(r.URL.Host)
 	}
-	if err := validateConnectTarget(target, p.allowRemote); err != nil {
+	if err := validateConnectTarget(ctx, target, p.allowRemote); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	ctx, finish := p.requestContext(r)
-	defer finish()
 	upstream, err := profileendpoint.GuardedDialContext(p.allowRemote)(ctx, "tcp", target)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -336,26 +336,25 @@ func (p *Proxy) untrack(conn net.Conn) {
 	p.connMu.Unlock()
 }
 
-func validateConnectTarget(target string, allowRemote bool) error {
+func validateConnectTarget(ctx context.Context, target string, allowRemote bool) error {
 	host, port, err := net.SplitHostPort(target)
 	if err != nil || host == "" || port == "" {
 		return fmt.Errorf("rclone proxy target must be host:port")
 	}
 	targetURL := &url.URL{Scheme: "https", Host: net.JoinHostPort(host, port)}
-	return profileendpoint.ValidateRequestURL("rclone proxy target", targetURL, allowRemote)
+	return profileendpoint.ValidateRequestURLContext(ctx, "rclone proxy target", targetURL, allowRemote)
 }
 
 func guardedRedirect(allowRemote bool) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, _ []*http.Request) error {
-		return profileendpoint.ValidateRequestURL("rclone proxy redirect", req.URL, allowRemote)
+		return profileendpoint.ValidateRequestURLContext(req.Context(), "rclone proxy redirect", req.URL, allowRemote)
 	}
 }
 
 func copyProxyHeaders(dst, src http.Header) {
+	src = src.Clone()
+	removeHopByHopHeaders(src)
 	for key, values := range src {
-		if isHopByHopHeader(key) {
-			continue
-		}
 		for _, value := range values {
 			dst.Add(key, value)
 		}

@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -9,8 +10,8 @@ import (
 	"s3desk/internal/rcloneconfig"
 )
 
-func (m *Manager) writeRcloneConfig(jobID string, profile models.ProfileSecrets) (string, error) {
-	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, m.allowRemote); err != nil {
+func (m *Manager) writeRcloneConfig(ctx context.Context, jobID string, profile models.ProfileSecrets) (string, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpointsContext(ctx, profile, m.allowRemote); err != nil {
 		return "", err
 	}
 	dir := filepath.Join(m.dataDir, "logs", "jobs")

@@ -79,7 +79,7 @@ type awsNoncurrentVersionTransitionPayload struct {
 }
 
 func (a *awsAdapter) GetLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketLifecycleView, error) {
-	client, err := a.clientFor(profile, bucket)
+	client, err := a.clientFor(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketLifecycleView{}, err
 	}
@@ -109,7 +109,7 @@ func (a *awsAdapter) PutLifecycle(ctx context.Context, profile models.ProfileSec
 		return err
 	}
 
-	client, err := a.clientFor(profile, bucket)
+	client, err := a.clientFor(ctx, profile, bucket)
 	if err != nil {
 		return err
 	}

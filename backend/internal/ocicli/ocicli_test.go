@@ -2,6 +2,8 @@ package ocicli
 
 import (
 	"context"
+	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +11,35 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/objectlisting"
+	"s3desk/internal/profileendpoint"
 )
+
+func TestGetBucketHonorsProfileDNSCancellationBeforeCLIResolution(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	restore := profileendpoint.SetLookupHooksForTest(
+		func(lookupCtx context.Context, _ string) (string, error) {
+			cancel()
+			if !errors.Is(lookupCtx.Err(), context.Canceled) {
+				t.Error("DNS lookup did not inherit OCI operation cancellation")
+			}
+			return "", lookupCtx.Err()
+		},
+		func(context.Context, string) ([]net.IPAddr, error) {
+			t.Error("IP lookup continued after cancellation")
+			return nil, errors.New("unexpected lookup")
+		},
+	)
+	t.Cleanup(restore)
+	_, err := GetBucket(ctx, models.ProfileSecrets{
+		Provider:     models.ProfileProviderOciObjectStorage,
+		OciNamespace: "namespace",
+		OciEndpoint:  "https://storage.example.test",
+	}, "bucket")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error=%v, want context.Canceled", err)
+	}
+}
 
 func TestResolveCLIPathUsesPATHWhenUnset(t *testing.T) {
 	dir := t.TempDir()

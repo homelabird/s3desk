@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"s3desk/internal/gcsauth"
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 )
 
 type fieldTextInput struct {
@@ -15,7 +17,7 @@ type fieldTextInput struct {
 	value *string
 }
 
-func prepareCreateProfileRequest(req models.ProfileCreateRequest, allowRemote bool) (models.ProfileCreateRequest, error) {
+func prepareCreateProfileRequest(ctx context.Context, req models.ProfileCreateRequest, allowRemote bool) (models.ProfileCreateRequest, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	provider := models.ProfileProvider(strings.TrimSpace(string(req.Provider)))
 	if provider == "" {
@@ -71,17 +73,17 @@ func prepareCreateProfileRequest(req models.ProfileCreateRequest, allowRemote bo
 	); err != nil {
 		return req, err
 	}
-	if err := validateProfileEndpointURL("endpoint", req.Endpoint, allowRemote); err != nil {
+	if err := profileendpoint.ValidateURLContext(ctx, "endpoint", req.Endpoint, allowRemote); err != nil {
 		return req, err
 	}
-	if err := validateProfilePublicEndpointURL("publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
+	if err := profileendpoint.ValidatePublicURLContext(ctx, "publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
 		return req, err
 	}
 	if err := validateCreateProfileProvider(&req); err != nil {
 		return req, err
 	}
 	if req.TLSInsecureSkipVerify {
-		if err := validateProfileTLSSkipVerifyEndpoint("endpoint", req.Endpoint, allowRemote); err != nil {
+		if err := profileendpoint.ValidateTLSSkipVerifyEndpointContext(ctx, "endpoint", req.Endpoint, allowRemote); err != nil {
 			return req, err
 		}
 	}
@@ -151,11 +153,11 @@ func prepareUpdateProfileRequest(req models.ProfileUpdateRequest) (models.Profil
 	return req, nil
 }
 
-func validatePreparedUpdateProfileRequest(currentProfile models.Profile, req models.ProfileUpdateRequest, allowRemote bool) error {
-	if err := validateProfileEndpointURL("endpoint", req.Endpoint, allowRemote); err != nil {
+func validatePreparedUpdateProfileRequest(ctx context.Context, currentProfile models.Profile, req models.ProfileUpdateRequest, allowRemote bool) error {
+	if err := profileendpoint.ValidateURLContext(ctx, "endpoint", req.Endpoint, allowRemote); err != nil {
 		return err
 	}
-	if err := validateProfilePublicEndpointURL("publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
+	if err := profileendpoint.ValidatePublicURLContext(ctx, "publicEndpoint", req.PublicEndpoint, allowRemote); err != nil {
 		return err
 	}
 
@@ -168,7 +170,7 @@ func validatePreparedUpdateProfileRequest(currentProfile models.Profile, req mod
 		effectiveTLSSkipVerify = *req.TLSInsecureSkipVerify
 	}
 	if effectiveTLSSkipVerify {
-		if err := validateProfileTLSSkipVerifyEndpoint("endpoint", &effectiveEndpoint, allowRemote); err != nil {
+		if err := profileendpoint.ValidateTLSSkipVerifyEndpointContext(ctx, "endpoint", &effectiveEndpoint, allowRemote); err != nil {
 			return err
 		}
 	}

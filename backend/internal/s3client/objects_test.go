@@ -2,14 +2,70 @@ package s3client
 
 import (
 	"context"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 )
+
+func TestObjectHelpersHonorProfileDNSCancellation(t *testing.T) {
+	profile := models.ProfileSecrets{Provider: models.ProfileProviderS3Compatible, Endpoint: "https://storage.example.test"}
+	operations := []struct {
+		name string
+		run  func(context.Context) error
+	}{
+		{"put", func(ctx context.Context) error {
+			return PutEmptyObjectWithOptions(ctx, profile, "bucket", "folder/", ProfileOptions{})
+		}},
+		{"delete markers", func(ctx context.Context) error {
+			return DeleteFolderMarkersWithOptions(ctx, profile, "bucket", []string{"folder/"}, ProfileOptions{})
+		}},
+		{"delete empty prefix", func(ctx context.Context) error {
+			return DeletePrefixMarkerIfEmpty(ctx, profile, "bucket", "folder/", ProfileOptions{})
+		}},
+	}
+	for _, operation := range operations {
+		for _, stage := range []string{"cname", "ip"} {
+			t.Run(operation.name+"/"+stage, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				restore := profileendpoint.SetLookupHooksForTest(
+					func(lookupCtx context.Context, _ string) (string, error) {
+						if stage == "ip" {
+							return "", errors.New("no cname")
+						}
+						cancel()
+						if !errors.Is(lookupCtx.Err(), context.Canceled) {
+							t.Error("CNAME lookup did not inherit object operation cancellation")
+						}
+						return "", lookupCtx.Err()
+					},
+					func(lookupCtx context.Context, _ string) ([]net.IPAddr, error) {
+						if stage == "cname" {
+							t.Error("IP lookup continued after CNAME cancellation")
+							return nil, errors.New("unexpected lookup")
+						}
+						cancel()
+						if !errors.Is(lookupCtx.Err(), context.Canceled) {
+							t.Error("IP lookup did not inherit object operation cancellation")
+						}
+						return nil, lookupCtx.Err()
+					},
+				)
+				t.Cleanup(restore)
+				if err := operation.run(ctx); !errors.Is(err, context.Canceled) {
+					t.Fatalf("error=%v, want context.Canceled", err)
+				}
+			})
+		}
+	}
+}
 
 func TestObjectHelpersUseGuardedProfileClient(t *testing.T) {
 	var requests []string

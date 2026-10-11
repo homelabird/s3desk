@@ -29,7 +29,7 @@ func TestPortableImportArchiveService_ProcessDryRunSkipsApplyAndCleansUp(t *test
 				"profiles": []byte("[]\n"),
 			}, "/tmp/assets", nil
 		},
-		buildResponse: func(mode string, dbBackend db.Backend, manifest models.ServerMigrationManifest, entityFiles map[string][]byte) models.ServerPortableImportResponse {
+		buildResponse: func(_ context.Context, mode string, dbBackend db.Backend, manifest models.ServerMigrationManifest, entityFiles map[string][]byte) models.ServerPortableImportResponse {
 			if mode != portableImportModeDryRun {
 				t.Fatalf("mode=%q, want %q", mode, portableImportModeDryRun)
 			}
@@ -82,7 +82,7 @@ func TestPortableImportArchiveService_ProcessBlockedReplaceSkipsApplyAndCleansUp
 		extract: func(_ context.Context, _ io.Reader, _, _ string, _ bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			return "/tmp/portable-import-blocked", models.ServerMigrationManifest{BundleKind: serverBackupScopePortable}, nil, "", nil
 		},
-		buildResponse: func(mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
+		buildResponse: func(_ context.Context, mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
 			return models.ServerPortableImportResponse{
 				Mode: mode,
 				Preflight: models.ServerPortableImportPreflight{
@@ -134,7 +134,7 @@ func TestPortableImportArchiveService_ProcessReplaceAppliesAndCleansUpOnError(t 
 				"profiles": []byte("[]\n"),
 			}, "/tmp/assets", nil
 		},
-		buildResponse: func(mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
+		buildResponse: func(_ context.Context, mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
 			return models.ServerPortableImportResponse{Mode: mode}
 		},
 		applyPayload: func(_ context.Context, resp *models.ServerPortableImportResponse, entityFiles map[string][]byte, assetRoot string) error {
@@ -176,7 +176,7 @@ func TestPortableImportArchiveService_ProcessReplaceAppliedReturnsAppliedOutcome
 		extract: func(_ context.Context, _ io.Reader, _, _ string, _ bool) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
 			return "", models.ServerMigrationManifest{BundleKind: serverBackupScopePortable}, nil, "", nil
 		},
-		buildResponse: func(mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
+		buildResponse: func(_ context.Context, mode string, _ db.Backend, _ models.ServerMigrationManifest, _ map[string][]byte) models.ServerPortableImportResponse {
 			return models.ServerPortableImportResponse{Mode: mode}
 		},
 		applyPayload: func(_ context.Context, _ *models.ServerPortableImportResponse, _ map[string][]byte, _ string) error {

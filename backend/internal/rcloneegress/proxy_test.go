@@ -11,9 +11,66 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"s3desk/internal/profileendpoint"
 )
+
+func TestProxyDNSStopsWhenInvocationIsCanceled(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodConnect} {
+		t.Run(method, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			restore := profileendpoint.SetLookupHooksForTest(
+				func(lookupCtx context.Context, _ string) (string, error) {
+					cancel()
+					select {
+					case <-lookupCtx.Done():
+						return "", lookupCtx.Err()
+					case <-time.After(100 * time.Millisecond):
+						t.Error("DNS did not receive invocation cancellation")
+						return "", errNoCNAME
+					}
+				},
+				func(context.Context, string) ([]net.IPAddr, error) {
+					t.Error("IP lookup continued after invocation cancellation")
+					return nil, errors.New("unexpected lookup")
+				},
+			)
+			defer restore()
+			proxy := &Proxy{ctx: ctx}
+			request := httptest.NewRequest(method, "http://storage.example:443/object", nil)
+			if method == http.MethodConnect {
+				proxy.handleConnect(httptest.NewRecorder(), request)
+			} else {
+				proxy.handleHTTP(httptest.NewRecorder(), request)
+			}
+		})
+	}
+}
+
+func TestCopyProxyHeadersRemovesConnectionNamedHeaders(t *testing.T) {
+	source := http.Header{
+		"Connection":   {"keep-alive, X-Internal", "X-Other"},
+		"Keep-Alive":   {"timeout=5"},
+		"X-Internal":   {"private"},
+		"X-Other":      {"private"},
+		"X-End-To-End": {"kept"},
+	}
+	target := make(http.Header)
+	copyProxyHeaders(target, source)
+	for _, header := range []string{"Connection", "Keep-Alive", "X-Internal", "X-Other"} {
+		if target.Get(header) != "" {
+			t.Errorf("forwarded connection-specific header %s", header)
+		}
+	}
+	if target.Get("X-End-To-End") != "kept" {
+		t.Fatal("dropped end-to-end header")
+	}
+	if source.Get("X-Internal") != "private" || source.Get("Connection") == "" {
+		t.Fatal("header copy mutated the source")
+	}
+}
 
 func TestProxyForwardsHTTPThroughGuardedDial(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

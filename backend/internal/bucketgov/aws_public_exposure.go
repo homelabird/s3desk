@@ -32,7 +32,7 @@ type awsPublicAccessBlockClient interface {
 }
 
 type awsAdapter struct {
-	newClient func(models.ProfileSecrets) (awsPublicAccessBlockClient, error)
+	newClient func(context.Context, models.ProfileSecrets) (awsPublicAccessBlockClient, error)
 }
 
 type DefaultRegistryOptions struct {
@@ -64,14 +64,14 @@ func NewAWSAdapter() Adapter {
 
 func NewAWSAdapterWithOptions(opts AWSAdapterOptions) Adapter {
 	return &awsAdapter{
-		newClient: func(secrets models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
-			return s3client.FromProfileWithOptions(secrets, s3client.ProfileOptions{AllowRemote: opts.AllowRemote, Metrics: opts.Metrics})
+		newClient: func(ctx context.Context, secrets models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+			return s3client.FromProfileWithOptionsContext(ctx, secrets, s3client.ProfileOptions{AllowRemote: opts.AllowRemote, Metrics: opts.Metrics})
 		},
 	}
 }
 
-func (a *awsAdapter) clientFor(profile models.ProfileSecrets, bucket string) (awsPublicAccessBlockClient, error) {
-	client, err := a.newClient(profile)
+func (a *awsAdapter) clientFor(ctx context.Context, profile models.ProfileSecrets, bucket string) (awsPublicAccessBlockClient, error) {
+	client, err := a.newClient(ctx, profile)
 	if err != nil {
 		return nil, UpstreamOperationError("bucket_governance_client_error", "failed to prepare bucket governance client", bucket, err)
 	}
@@ -84,9 +84,9 @@ func (a *awsAdapter) GetGovernance(ctx context.Context, profile models.ProfileSe
 
 	requestAdapter := *a
 	newClient := sync.OnceValues(func() (awsPublicAccessBlockClient, error) {
-		return a.newClient(profile)
+		return a.newClient(ctx, profile)
 	})
-	requestAdapter.newClient = func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+	requestAdapter.newClient = func(context.Context, models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
 		return newClient()
 	}
 
@@ -131,7 +131,7 @@ func (a *awsAdapter) GetGovernance(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *awsAdapter) GetPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketPublicExposureView, error) {
-	client, err := a.clientFor(profile, bucket)
+	client, err := a.clientFor(ctx, profile, bucket)
 	if err != nil {
 		return models.BucketPublicExposureView{}, err
 	}
@@ -169,7 +169,7 @@ func (a *awsAdapter) PutPublicExposure(ctx context.Context, profile models.Profi
 		return err
 	}
 
-	client, err := a.clientFor(profile, bucket)
+	client, err := a.clientFor(ctx, profile, bucket)
 	if err != nil {
 		return err
 	}

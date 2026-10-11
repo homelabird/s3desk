@@ -56,10 +56,17 @@ func SetLookupHooksForTest(
 }
 
 func ValidateTLSSkipVerifyEndpoint(field string, raw *string, allowRemote bool) error {
+	return ValidateTLSSkipVerifyEndpointContext(context.Background(), field, raw, allowRemote)
+}
+
+func ValidateTLSSkipVerifyEndpointContext(ctx context.Context, field string, raw *string, allowRemote bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if raw == nil || strings.TrimSpace(*raw) == "" {
 		return fmt.Errorf("tlsInsecureSkipVerify requires %s to be set to a custom https:// endpoint", field)
 	}
-	if err := ValidateURL(field, raw, allowRemote); err != nil {
+	if err := ValidateURLContext(ctx, field, raw, allowRemote); err != nil {
 		return err
 	}
 
@@ -83,8 +90,11 @@ func ValidateTLSSkipVerifyEndpoint(field string, raw *string, allowRemote bool) 
 		return nil
 	}
 
-	addrs, err := lookupEndpointIPAddr(host)
-	if err != nil || len(addrs) == 0 {
+	addrs, err := lookupEndpointIPAddr(ctx, host)
+	if err != nil {
+		return fmt.Errorf("%s host could not be resolved: %w", field, err)
+	}
+	if len(addrs) == 0 {
 		return fmt.Errorf("%s host could not be resolved", field)
 	}
 	for _, addr := range addrs {
@@ -96,6 +106,13 @@ func ValidateTLSSkipVerifyEndpoint(field string, raw *string, allowRemote bool) 
 }
 
 func ValidateURL(field string, raw *string, allowRemote bool) error {
+	return ValidateURLContext(context.Background(), field, raw, allowRemote)
+}
+
+func ValidateURLContext(ctx context.Context, field string, raw *string, allowRemote bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if raw == nil {
 		return nil
 	}
@@ -108,22 +125,33 @@ func ValidateURL(field string, raw *string, allowRemote bool) error {
 	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
 		return fmt.Errorf("%s must be an absolute http(s) URL", field)
 	}
-	return validateParsedURL(field, parsed, allowRemote, false)
+	return validateParsedURL(ctx, field, parsed, allowRemote, false)
 }
 
 func ValidateRequestURL(field string, parsed *url.URL, allowRemote bool) error {
+	return ValidateRequestURLContext(context.Background(), field, parsed, allowRemote)
+}
+
+func ValidateRequestURLContext(ctx context.Context, field string, parsed *url.URL, allowRemote bool) error {
 	if parsed == nil {
 		return fmt.Errorf("%s must be an absolute http(s) URL", field)
 	}
 	if !parsed.IsAbs() || parsed.Host == "" {
 		return fmt.Errorf("%s must be an absolute http(s) URL", field)
 	}
-	return validateParsedURL(field, parsed, allowRemote, true)
+	return validateParsedURL(ctx, field, parsed, allowRemote, true)
 }
 
 // ResolveHost validates a non-HTTP endpoint and pins it to one vetted IP so a
 // subprocess cannot resolve a different address after validation.
 func ResolveHost(field, rawHost string, allowRemote bool) (string, error) {
+	return ResolveHostContext(context.Background(), field, rawHost, allowRemote)
+}
+
+func ResolveHostContext(ctx context.Context, field, rawHost string, allowRemote bool) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	host := normalizeHost(strings.Trim(rawHost, "[]"))
 	if host == "" {
 		return "", fmt.Errorf("%s is required", field)
@@ -137,7 +165,7 @@ func ResolveHost(field, rawHost string, allowRemote bool) (string, error) {
 		}
 		return ip.String(), nil
 	}
-	if canonical, err := lookupEndpointCNAME(host); err == nil {
+	if canonical, err := lookupEndpointCNAME(ctx, host); err == nil {
 		canonical = normalizeHost(canonical)
 		if _, blocked := blockedHosts[canonical]; blocked {
 			return "", fmt.Errorf("%s points to a blocked metadata host", field)
@@ -146,8 +174,14 @@ func ResolveHost(field, rawHost string, allowRemote bool) (string, error) {
 			return "", fmt.Errorf("%s must not target localhost when remote access is enabled", field)
 		}
 	}
-	addrs, err := lookupEndpointIPAddr(host)
-	if err != nil || len(addrs) == 0 {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	addrs, err := lookupEndpointIPAddr(ctx, host)
+	if err != nil {
+		return "", fmt.Errorf("%s host could not be resolved: %w", field, err)
+	}
+	if len(addrs) == 0 {
 		return "", fmt.Errorf("%s host could not be resolved", field)
 	}
 	for _, addr := range addrs {
@@ -158,7 +192,10 @@ func ResolveHost(field, rawHost string, allowRemote bool) (string, error) {
 	return addrs[0].IP.String(), nil
 }
 
-func validateParsedURL(field string, parsed *url.URL, allowRemote bool, allowQuery bool) error {
+func validateParsedURL(ctx context.Context, field string, parsed *url.URL, allowRemote bool, allowQuery bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme != "http" && scheme != "https" {
 		return fmt.Errorf("%s must be an absolute http(s) URL", field)
@@ -187,14 +224,14 @@ func validateParsedURL(field string, parsed *url.URL, allowRemote bool, allowQue
 	if ip := net.ParseIP(host); ip != nil {
 		return validateEndpointIP(field, ip, allowRemote)
 	}
-	if err := validateResolvedEndpointHost(field, host, allowRemote); err != nil {
+	if err := validateResolvedEndpointHost(ctx, field, host, allowRemote); err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateResolvedEndpointHost(field, host string, allowRemote bool) error {
-	if canonical, err := lookupEndpointCNAME(host); err == nil {
+func validateResolvedEndpointHost(ctx context.Context, field, host string, allowRemote bool) error {
+	if canonical, err := lookupEndpointCNAME(ctx, host); err == nil {
 		canonical = normalizeHost(canonical)
 		if _, blocked := blockedHosts[canonical]; blocked {
 			return fmt.Errorf("%s points to a blocked metadata host", field)
@@ -203,10 +240,13 @@ func validateResolvedEndpointHost(field, host string, allowRemote bool) error {
 			return fmt.Errorf("%s must not target localhost when remote access is enabled", field)
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
-	addrs, err := lookupEndpointIPAddr(host)
+	addrs, err := lookupEndpointIPAddr(ctx, host)
 	if err != nil {
-		return fmt.Errorf("%s host could not be resolved", field)
+		return fmt.Errorf("%s host could not be resolved: %w", field, err)
 	}
 	if len(addrs) == 0 {
 		return fmt.Errorf("%s host could not be resolved", field)
@@ -245,8 +285,8 @@ func isTLSSkipVerifyPrivateIP(ip net.IP) bool {
 	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
 }
 
-func lookupEndpointCNAME(host string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
+func lookupEndpointCNAME(ctx context.Context, host string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, resolveTimeout)
 	defer cancel()
 	lookupHooksMu.RLock()
 	lookup := lookupCNAME
@@ -254,8 +294,8 @@ func lookupEndpointCNAME(host string) (string, error) {
 	return lookup(ctx, host)
 }
 
-func lookupEndpointIPAddr(host string) ([]net.IPAddr, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
+func lookupEndpointIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
+	ctx, cancel := context.WithTimeout(ctx, resolveTimeout)
 	defer cancel()
 	lookupHooksMu.RLock()
 	lookup := lookupIPAddr
