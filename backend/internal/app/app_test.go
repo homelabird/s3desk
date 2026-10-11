@@ -1,8 +1,13 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -324,5 +329,74 @@ func TestRunRejectsInvalidJobsEnvironment(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "RCLONE_STATS_INTERVAL") {
 		t.Fatalf("Run() error=%q, want RCLONE_STATS_INTERVAL detail", err.Error())
+	}
+}
+
+func TestRunClosesIncompleteRequestAfterShutdownDeadline(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	dataDir := t.TempDir()
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, config.Config{Addr: addr, DataDir: dataDir, DBBackend: "sqlite"})
+	}()
+	var conn net.Conn
+	deadline := time.After(5 * time.Second)
+	for {
+		conn, err = net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			break
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("Run exited before accepting requests: %v", err)
+		case <-deadline:
+			t.Fatal("server did not start")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fmt.Fprintf(conn, "POST /api/v1/profiles HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: 100\r\nExpect: 100-continue\r\n\r\n", addr); err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReader(conn)
+	response, err := http.ReadResponse(reader, nil)
+	if err != nil {
+		select {
+		case runErr := <-done:
+			t.Fatalf("wait for request body read: %v; Run exited: %v", err, runErr)
+		default:
+		}
+		t.Fatalf("wait for request body read: %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusContinue {
+		t.Fatalf("status=%d, want 100 Continue before shutdown", response.StatusCode)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run shutdown: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("Run did not finish shutdown")
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadAll(reader); err != nil {
+		t.Fatalf("request connection still open after Run returned: %v", err)
 	}
 }

@@ -202,6 +202,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		ReadTimeout:  0,
 		WriteTimeout: 0,
 	}
+	defer func() { _ = server.Close() }()
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -214,17 +215,15 @@ func Run(ctx context.Context, cfg config.Config) error {
 	var runErr error
 	select {
 	case <-ctx.Done():
-		realtimeShutdownCancel()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_ = server.Shutdown(shutdownCtx)
-		cancel()
 	case err := <-errCh:
 		runErr = err
-		realtimeShutdownCancel()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_ = server.Shutdown(shutdownCtx)
-		cancel()
 	}
+	realtimeShutdownCancel()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		_ = server.Close()
+	}
+	cancel()
 
 	managerCancel()
 	workerShutdownCtx, workerCancel := context.WithTimeout(context.Background(), 10*time.Second)
