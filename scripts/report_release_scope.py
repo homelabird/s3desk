@@ -21,8 +21,11 @@ DEPENDENCY_METADATA = {
     "frontend/package-lock.json",
     "THIRD_PARTY_NOTICES.md",
 }
-DEPENDENCY_NOTICE_UNIT = DEPENDENCY_METADATA
 LICENSE_PREFIX = "third_party/licenses/"
+DEPENDENCY_OWNER_METADATA = {
+    "go": {"backend/go.mod", "backend/go.sum"},
+    "npm": {"frontend/package.json", "frontend/package-lock.json"},
+}
 
 ROOT_ARTIFACT_SUFFIXES = {
     ".gif",
@@ -397,7 +400,13 @@ def summarize(
 
     missing_notice_unit_paths: list[str] = []
     if dependency_scope:
-        missing_notice_unit_paths = sorted(DEPENDENCY_NOTICE_UNIT - dependency_metadata_paths)
+        required_notice_unit_paths = {"THIRD_PARTY_NOTICES.md"}
+        for owner, metadata_paths in DEPENDENCY_OWNER_METADATA.items():
+            if dependency_metadata_paths & metadata_paths or any(
+                path.startswith(f"{LICENSE_PREFIX}{owner}/") for path in license_paths
+            ):
+                required_notice_unit_paths.update(metadata_paths)
+        missing_notice_unit_paths = sorted(required_notice_unit_paths - dependency_metadata_paths)
     dependency_notice_unit_complete = not dependency_scope or (
         not missing_notice_unit_paths and licenses_touched
     )

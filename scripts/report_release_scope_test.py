@@ -111,6 +111,55 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertFalse(license_only["dependency_notice_unit_complete"])
         self.assertIn("License snapshots changed without dependency metadata in the same status set.", license_only["dependency_scope_warnings"])
 
+    def test_dependency_notice_unit_accepts_single_owner_updates(self):
+        for metadata, license_path in [
+            (["backend/go.mod", "backend/go.sum"], "third_party/licenses/go/chi@v5.3.0-LICENSE"),
+            (["frontend/package.json", "frontend/package-lock.json"], "third_party/licenses/npm/yaml@2.8.3-LICENSE"),
+        ]:
+            with self.subTest(metadata=metadata), tempfile.TemporaryDirectory() as tmp:
+                summary = MODULE.summarize(
+                    [MODULE.StatusEntry(" M", path) for path in metadata + ["THIRD_PARTY_NOTICES.md", license_path]],
+                    pathlib.Path(tmp),
+                )
+
+                self.assertTrue(summary["dependency_notice_unit_complete"], summary["dependency_scope_warnings"])
+                self.assertEqual(summary["dependency_notice_unit_missing_metadata"], [])
+                self.assertEqual(summary["dependency_scope_warnings"], [])
+
+    def test_dependency_notice_unit_rejects_missing_owner_metadata_notice_or_license(self):
+        owners = [
+            (["backend/go.mod", "backend/go.sum"], "third_party/licenses/go/chi@v5.3.0-LICENSE"),
+            (["frontend/package.json", "frontend/package-lock.json"], "third_party/licenses/npm/yaml@2.8.3-LICENSE"),
+        ]
+        for metadata, license_path in owners:
+            paths = metadata + ["THIRD_PARTY_NOTICES.md", license_path]
+            for missing_path in paths:
+                with self.subTest(missing_path=missing_path), tempfile.TemporaryDirectory() as tmp:
+                    summary = MODULE.summarize(
+                        [MODULE.StatusEntry(" M", path) for path in paths if path != missing_path],
+                        pathlib.Path(tmp),
+                    )
+
+                    self.assertFalse(summary["dependency_notice_unit_complete"])
+                    self.assertTrue(summary["dependency_scope_warnings"])
+                    if missing_path != license_path:
+                        self.assertIn(missing_path, summary["dependency_notice_unit_missing_metadata"])
+
+    def test_dependency_notice_unit_requires_metadata_for_both_changed_owners(self):
+        paths = [
+            "backend/go.mod", "backend/go.sum", "frontend/package.json", "frontend/package-lock.json",
+            "THIRD_PARTY_NOTICES.md", "third_party/licenses/npm/yaml@2.8.3-LICENSE",
+        ]
+        for missing_path in paths[:4]:
+            with self.subTest(missing_path=missing_path), tempfile.TemporaryDirectory() as tmp:
+                summary = MODULE.summarize(
+                    [MODULE.StatusEntry(" M", path) for path in paths if path != missing_path],
+                    pathlib.Path(tmp),
+                )
+
+                self.assertFalse(summary["dependency_notice_unit_complete"])
+                self.assertIn(missing_path, summary["dependency_notice_unit_missing_metadata"])
+
     def test_empty_dependency_scope_does_not_report_missing_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             summary = MODULE.summarize(
