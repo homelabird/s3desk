@@ -134,6 +134,55 @@ func TestUpsertUploadObjectWithByteLimitTracksReplacementDelta(t *testing.T) {
 	}
 }
 
+func TestUploadObjectReservationWithoutSizeRestoresPreviousObject(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	profile, session := createUploadObjectTestSession(t, st)
+	ctx := context.Background()
+	size := int64(6)
+	obj := UploadObject{
+		UploadID: session.ID, ProfileID: profile.ID, Path: "file.bin",
+		Bucket: session.Bucket, ObjectKey: "incoming/file.bin", ExpectedSize: &size,
+	}
+	if err := st.UpsertUploadObjectWithByteLimit(ctx, obj, 0); err != nil {
+		t.Fatalf("reserve initial object: %v", err)
+	}
+	obj.ExpectedSize = nil
+	obj.ObjectKey = "incoming/replacement.bin"
+	reservation, err := st.UpsertUploadObjectWithByteLimitReservation(ctx, obj, 0)
+	if err != nil {
+		t.Fatalf("reserve replacement without size: %v", err)
+	}
+	assertUploadSessionBytes(t, st, profile.ID, session.ID, 0)
+	if err := st.RollbackUploadObjectReservation(ctx, reservation); err != nil {
+		t.Fatalf("rollback replacement: %v", err)
+	}
+	assertUploadSessionBytes(t, st, profile.ID, session.ID, size)
+	objects, err := st.ListUploadObjects(ctx, profile.ID, session.ID)
+	if err != nil {
+		t.Fatalf("list upload objects: %v", err)
+	}
+	if len(objects) != 1 || objects[0].ObjectKey != "incoming/file.bin" || objects[0].ExpectedSize == nil || *objects[0].ExpectedSize != size {
+		t.Fatalf("objects after rollback=%#v, want previous object and size", objects)
+	}
+}
+
+func TestUploadObjectReservationWithoutSizeChecksSessionOwnership(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	profile, session := createUploadObjectTestSession(t, st)
+	otherProfile, _ := createUploadObjectTestSession(t, st)
+	_, err := st.UpsertUploadObjectWithByteLimitReservation(context.Background(), UploadObject{
+		UploadID: session.ID, ProfileID: otherProfile.ID, Path: "file.bin",
+		Bucket: session.Bucket, ObjectKey: "incoming/file.bin",
+	}, 0)
+	if !errors.Is(err, ErrUploadSessionNotFound) {
+		t.Fatalf("reserve other profile's session: %v, want ErrUploadSessionNotFound", err)
+	}
+	objects, err := st.ListUploadObjects(context.Background(), profile.ID, session.ID)
+	if err != nil || len(objects) != 0 {
+		t.Fatalf("objects=%#v err=%v, want no upload object", objects, err)
+	}
+}
+
 func TestUpsertUploadObjectWithByteLimitConcurrentSessionLimit(t *testing.T) {
 	st := newProfileTestStore(t, Options{})
 	testUpsertUploadObjectWithByteLimitConcurrentSessionLimit(t, st)

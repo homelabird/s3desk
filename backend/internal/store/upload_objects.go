@@ -43,14 +43,6 @@ func (s *Store) UpsertUploadObjectWithByteLimit(ctx context.Context, obj UploadO
 }
 
 func (s *Store) UpsertUploadObjectWithByteLimitReservation(ctx context.Context, obj UploadObject, maxBytes int64) (UploadObjectReservation, error) {
-	if obj.ExpectedSize == nil {
-		return UploadObjectReservation{
-			UploadID:  obj.UploadID,
-			ProfileID: obj.ProfileID,
-			Path:      obj.Path,
-		}, s.UpsertUploadObject(ctx, obj)
-	}
-
 	var reservation UploadObjectReservation
 	// Keep byte reservation and object upsert atomic; prior state enables rollback after external failure.
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -67,7 +59,11 @@ func (s *Store) UpsertUploadObjectWithByteLimitReservation(ctx context.Context, 
 			previousSize = *previous.ExpectedSize
 		}
 
-		delta := *obj.ExpectedSize - previousSize
+		expectedSize := int64(0)
+		if obj.ExpectedSize != nil {
+			expectedSize = *obj.ExpectedSize
+		}
+		delta := expectedSize - previousSize
 		if delta != 0 {
 			res := tx.Model(&uploadSessionRow{}).
 				Where("profile_id = ? AND id = ?", obj.ProfileID, obj.UploadID).
