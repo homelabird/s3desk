@@ -197,6 +197,51 @@ func TestBuildJobLogReadResult_AdjustsAfterOffsetPastEnd(t *testing.T) {
 	}
 }
 
+func TestReadJobLogFileBoundsTailAndCursorWhenFileChanges(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		initial  string
+		append   string
+		truncate int64
+		wantBody string
+		wantNext int64
+	}{
+		{name: "append", initial: "abcdef", append: "new data", truncate: -1, wantBody: "def", wantNext: 6},
+		{name: "empty then append", append: "new data", truncate: -1},
+		{name: "truncate", initial: "abcdef", truncate: 5, wantBody: "de", wantNext: 5},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			file, err := os.CreateTemp(t.TempDir(), "job.log")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			if _, err := file.WriteString(test.initial); err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := file.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := file.WriteString(test.append); err != nil {
+				t.Fatal(err)
+			}
+			if test.truncate >= 0 {
+				if err := file.Truncate(test.truncate); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body, next, err := readJobLogFile(file, snapshot.Size(), jobLogReadOptions{tailBytes: 3})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(body) != test.wantBody || next != test.wantNext {
+				t.Fatalf("body=%q next=%d, want body=%q next=%d", body, next, test.wantBody, test.wantNext)
+			}
+		})
+	}
+}
+
 func TestJobReadHTTPService_ExecuteGet_ReturnsLoadedJob(t *testing.T) {
 	t.Parallel()
 

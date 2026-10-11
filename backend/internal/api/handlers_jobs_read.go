@@ -330,7 +330,10 @@ func buildJobLogReadResult(dataDir, jobID string, options jobLogReadOptions) ([]
 		)
 	}
 
-	size := info.Size()
+	return readJobLogFile(f, info.Size(), options)
+}
+
+func readJobLogFile(f *os.File, size int64, options jobLogReadOptions) ([]byte, int64, error) {
 	if options.afterOffset != nil {
 		afterOffset := *options.afterOffset
 		if afterOffset > size {
@@ -373,7 +376,7 @@ func buildJobLogReadResult(dataDir, jobID string, options jobLogReadOptions) ([]
 			nil,
 		)
 	}
-	body, err := io.ReadAll(f)
+	body, err := io.ReadAll(io.LimitReader(f, size-start))
 	if err != nil {
 		return nil, 0, newJobReadError(
 			http.StatusInternalServerError,
@@ -382,7 +385,7 @@ func buildJobLogReadResult(dataDir, jobID string, options jobLogReadOptions) ([]
 			nil,
 		)
 	}
-	return body, size, nil
+	return body, start + int64(len(body)), nil
 }
 
 func jobResourcePath(dataDir, kind, subdir, jobID, suffix string) (string, error) {
