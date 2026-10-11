@@ -26,13 +26,15 @@ type CommitUploadAndTrackJobArgs = {
 		job: { status?: JobStatus; progress?: JobProgress | null; error?: string | null },
 	) => Promise<void>
 	onCommitted?: () => void
+	signal?: AbortSignal
 }
 
 export async function commitUploadAndTrackJob(args: CommitUploadAndTrackJobArgs) {
 	const commitReq = args.task.pendingCommit ? pendingCommitRequest(args.task.pendingCommit) : buildUploadCommitRequest(args.task, args.items)
 	args.updateUploadTask(args.taskId, task => ({ ...task, pendingCommit: { uploadId: args.uploadId, body: JSON.stringify(commitReq) ?? '' } }))
 	const response = await withJobQueueRetry(() =>
-		args.api.uploads.commitUpload(args.task.profileId, args.uploadId, commitReq),
+		args.api.uploads.commitUpload(args.task.profileId, args.uploadId, commitReq, args.signal),
+		{ signal: args.signal },
 	)
 	args.onCommitted?.()
 	delete args.uploadItemsByTaskIdRef.current[args.taskId]

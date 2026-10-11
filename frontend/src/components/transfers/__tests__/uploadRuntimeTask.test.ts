@@ -151,6 +151,49 @@ describe('runUploadTask', () => {
 		})
 	})
 
+	it.each(['attempt', 'resume'] as const)('cancels before executing a lazily loaded %s module', async (kind) => {
+		const modulePath = kind === 'attempt' ? '../uploadRuntimeAttempt' : '../uploadRuntimeResume'
+		const exportName = kind === 'attempt' ? 'executeUploadAttempt' : 'resolveExistingResumeChunks'
+		const moduleFunction = kind === 'attempt' ? executeUploadAttemptMock : resolveExistingResumeChunksMock
+		let startedImport!: () => void
+		let releaseImport!: () => void
+		const started = new Promise<void>((resolve) => { startedImport = resolve })
+		const gate = new Promise<void>((resolve) => { releaseImport = resolve })
+		vi.resetModules()
+		vi.doMock(modulePath, async () => {
+			startedImport()
+			await gate
+			return { [exportName]: (...args: unknown[]) => moduleFunction(...args) }
+		})
+		const task = createUploadTask(kind === 'resume' ? {
+			uploadId: 'existing-session',
+			resumeFiles: [{ path: 'clip.mp4', size: 128, chunkSizeBytes: 64 }],
+		} : {})
+		const args = createRunArgs({ task })
+		try {
+			const { runUploadTask: runWithDeferredImport } = await import('../uploadRuntimeTask')
+			const work = runWithDeferredImport(args)
+			await started
+			args.uploadAbortByTaskIdRef.current[task.id]()
+			releaseImport()
+			await work
+			expect(moduleFunction).not.toHaveBeenCalled()
+			expect(commitUploadAndTrackJobMock).not.toHaveBeenCalled()
+			expect(args.notifications.info).toHaveBeenCalledWith('Upload canceled')
+			expect(args.uploadAbortByTaskIdRef.current[task.id]).toBeUndefined()
+			if (kind === 'resume') {
+				expect(createUploadSessionWithFallbackMock).not.toHaveBeenCalled()
+				expect(args.api.uploads.deleteUpload).not.toHaveBeenCalled()
+			} else {
+				expect(args.api.uploads.deleteUpload).toHaveBeenCalledWith(task.profileId, 'session-1')
+			}
+		} finally {
+			releaseImport()
+			vi.doMock(modulePath, () => ({ [exportName]: (...args: unknown[]) => moduleFunction(...args) }))
+			vi.resetModules()
+		}
+	})
+
 	it('runs session, attempt, skipped warning, and commit orchestration', async () => {
 		executeUploadAttemptMock.mockResolvedValue({ skipped: 2 })
 		const args = createRunArgs()
@@ -191,6 +234,32 @@ describe('runUploadTask', () => {
 		expect(args.api.uploads.deleteUpload).not.toHaveBeenCalled()
 		expect(args.uploadAbortByTaskIdRef.current[args.task.id]).toBeUndefined()
 		expect(args.uploadEstimatorByTaskIdRef.current[args.task.id]).toBeUndefined()
+	})
+
+	it.each([false, true])('forwards task cancellation to commit retries (recovering=%s)', async (recovering) => {
+		const task = createUploadTask(recovering ? {
+			pendingCommit: { uploadId: 'session-1', body: '{}' },
+		} : {})
+		const args = createRunArgs({ task })
+		let commitStarted!: () => void
+		const started = new Promise<void>((resolve) => { commitStarted = resolve })
+		let commitSignal: AbortSignal | undefined
+		commitUploadAndTrackJobMock.mockImplementation((commitArgs) => {
+			commitSignal = commitArgs.signal
+			commitStarted()
+			return new Promise((_resolve, reject) => {
+				if (!commitSignal) { reject(new Error('Missing cancellation signal')); return }
+				commitSignal.addEventListener('abort', () => reject(new RequestAbortedError()), { once: true })
+			})
+		})
+		const work = runUploadTask(args)
+		await started
+		expect(commitSignal).toBeInstanceOf(AbortSignal)
+		args.uploadAbortByTaskIdRef.current[task.id]()
+		await work
+		expect(commitSignal?.aborted).toBe(true)
+		expect(args.notifications.info).toHaveBeenCalledWith('Upload canceled')
+		expect(args.api.uploads.deleteUpload).not.toHaveBeenCalled()
 	})
 
 	it('stops before session creation when resume chunk settings are invalid', async () => {

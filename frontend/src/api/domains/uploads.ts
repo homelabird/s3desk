@@ -79,15 +79,16 @@ export function uploadFiles(request: RequestFn, profileId: string, uploadId: str
 	return request(`/uploads/${encodeURIComponent(uploadId)}/files`, { method: 'POST', body: form }, { profileId })
 }
 
-export function commitUpload(request: RequestFn, profileId: string, uploadId: string, req?: UploadCommitRequest): Promise<JobCreatedResponse> {
+export function commitUpload(request: RequestFn, profileId: string, uploadId: string, req?: UploadCommitRequest, signal?: AbortSignal): Promise<JobCreatedResponse> {
 	if (req) {
 		return request(`/uploads/${encodeURIComponent(uploadId)}/commit`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(req),
+			signal,
 		}, { profileId })
 	}
-	return request(`/uploads/${encodeURIComponent(uploadId)}/commit`, { method: 'POST' }, { profileId })
+	return request(`/uploads/${encodeURIComponent(uploadId)}/commit`, { method: 'POST', signal }, { profileId })
 }
 
 export function deleteUpload(request: RequestFn, profileId: string, uploadId: string): Promise<void> {

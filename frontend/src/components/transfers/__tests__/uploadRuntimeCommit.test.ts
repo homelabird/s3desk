@@ -1,9 +1,10 @@
 // @vitest-environment node
 
 import { QueryClient } from '@tanstack/react-query'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
+import { APIError, RequestAbortedError } from '../../../api/client'
 import type { UploadTask } from '../transferTypes'
 import { commitUploadAndTrackJob } from '../uploadRuntimeCommit'
 
@@ -33,6 +34,40 @@ function uploadItem() {
 }
 
 describe('commitUploadAndTrackJob', () => {
+	afterEach(() => vi.useRealTimers())
+
+	it('stops commit retries when the upload task is canceled during queue backoff', async () => {
+		vi.useFakeTimers()
+		const controller = new AbortController()
+		const commitUpload = vi.fn().mockRejectedValue(new APIError({
+			status: 429, code: 'job_queue_full', message: 'Queue full', retryAfterSeconds: 60,
+		}))
+		let task = uploadTask()
+		const item = uploadItem()
+		const notifications = { error: vi.fn(), info: vi.fn(), warning: vi.fn(), uploadCommitted: vi.fn() }
+		const onCommitted = vi.fn()
+		const uploadItemsByTaskIdRef = { current: { [task.id]: [item] } }
+		const outcome = commitUploadAndTrackJob({
+			api: { uploads: { commitUpload } } as never,
+			apiToken: 'token-a', queryClient: new QueryClient(), notifications,
+			taskId: task.id, task, uploadId: 'session-1', items: [item], uploadItemsByTaskIdRef,
+			updateUploadTask: (_taskId, update) => { task = update(task) }, handleUploadJobUpdate: vi.fn(), onCommitted,
+			signal: controller.signal,
+		}).catch((error: unknown) => error)
+
+		await vi.advanceTimersByTimeAsync(0)
+		controller.abort()
+		await vi.runAllTimersAsync()
+		await expect(outcome).resolves.toBeInstanceOf(RequestAbortedError)
+		expect(commitUpload).toHaveBeenCalledOnce()
+		expect(commitUpload.mock.calls[0][3]).toBe(controller.signal)
+		expect(onCommitted).not.toHaveBeenCalled()
+		expect(notifications.uploadCommitted).not.toHaveBeenCalled()
+		expect(uploadItemsByTaskIdRef.current[task.id]).toEqual([item])
+		expect(task.pendingCommit?.uploadId).toBe('session-1')
+		expect(JSON.parse(task.pendingCommit!.body)).toMatchObject({ items: [{ path: item.relPath, size: item.file.size }] })
+	})
+
 	it('commits upload, moves task to job waiting state, schedules job refresh, and invalidates jobs', async () => {
 		const item = uploadItem()
 		const task = uploadTask()
@@ -82,7 +117,7 @@ describe('commitUploadAndTrackJob', () => {
 			totalFiles: 1,
 			totalBytes: item.file.size,
 			items: [{ path: 'report.txt', size: item.file.size }],
-		})
+		}, undefined)
 		expect(onCommitted).toHaveBeenCalledTimes(1)
 		expect(uploadItemsByTaskIdRef.current['upload-1']).toBeUndefined()
 		expect(updateUploadTask).toHaveBeenCalledWith('upload-1', expect.any(Function))

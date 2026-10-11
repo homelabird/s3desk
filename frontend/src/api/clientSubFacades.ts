@@ -329,8 +329,8 @@ export function createUploadsSubFacade(deps: SubFacadeDeps) {
 		uploadFiles(profileId: string, uploadId: string, files: UploadFileItem[]): Promise<void> {
 			return uploadsDomain.uploadFiles(deps.requestFn, profileId, uploadId, files)
 		},
-		commitUpload(profileId: string, uploadId: string, req?: UploadCommitRequest): Promise<JobCreatedResponse> {
-			return uploadsDomain.commitUpload(deps.requestFn, profileId, uploadId, req)
+		commitUpload(profileId: string, uploadId: string, req?: UploadCommitRequest, signal?: AbortSignal): Promise<JobCreatedResponse> {
+			return uploadsDomain.commitUpload(deps.requestFn, profileId, uploadId, req, signal)
 		},
 		deleteUpload(profileId: string, uploadId: string): Promise<void> {
 			return uploadsDomain.deleteUpload(deps.requestFn, profileId, uploadId)

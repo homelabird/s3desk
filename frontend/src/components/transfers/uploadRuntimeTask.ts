@@ -17,9 +17,7 @@ import {
 	planUploadMode,
 	type UploadRuntimeMode,
 } from './uploadRuntimePlanning'
-import { resolveExistingResumeChunks } from './uploadRuntimeResume'
 import { createUploadSessionWithFallback } from './uploadRuntimeSession'
-import { executeUploadAttempt } from './uploadRuntimeAttempt'
 
 function getRetryFileHandleStateForFailure(message: string): UploadTask['retryFileHandleState'] {
 	if (/missing files|select the same|does not match the previous upload|interrupted by refresh/i.test(message)) {
@@ -106,6 +104,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				uploadItemsByTaskIdRef: args.uploadItemsByTaskIdRef,
 				updateUploadTask: args.updateUploadTask, handleUploadJobUpdate: args.handleUploadJobUpdate,
 				onCommitted: () => { committed = true },
+				signal: taskController.signal,
 			})
 			return
 		}
@@ -132,6 +131,8 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		const { resumeChunkSizeBytes, allowPerFileChunkSize } = resumeChunkSettings
 		if (allowResume && task.uploadId && resumeFilesByPath.size > 0) {
 			const resumeUploadId = task.uploadId
+			const { resolveExistingResumeChunks } = await import('./uploadRuntimeResume')
+			if (taskController.signal.aborted) throw new RequestAbortedError()
 			const resumeChunks = await resolveExistingResumeChunks({
 				api: args.api,
 				profileId: task.profileId,
@@ -185,6 +186,8 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		}
 		if (taskController.signal.aborted) throw new RequestAbortedError()
 
+		const { executeUploadAttempt } = await import('./uploadRuntimeAttempt')
+		if (taskController.signal.aborted) throw new RequestAbortedError()
 		const runUploadAttempt = (
 			attemptMode: UploadRuntimeMode,
 			attemptUploadId: string,
@@ -240,6 +243,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			onCommitted: () => {
 				committed = true
 			},
+			signal: taskController.signal,
 		})
 	} catch (error) {
 		if (args.uploadAbortByTaskIdRef.current[taskId] !== abortTask) return

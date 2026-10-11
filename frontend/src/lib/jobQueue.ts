@@ -1,8 +1,10 @@
-import { APIError } from '../api/client'
+import { APIError, RequestAbortedError } from '../api/client'
+import { waitForRetryDelay } from '../api/retryTransport'
 
 type JobQueueRetryOptions = {
 	actionLabel?: string
 	maxRetries?: number
+	signal?: AbortSignal
 }
 
 export type JobQueueBannerDetail = {
@@ -12,8 +14,6 @@ export type JobQueueBannerDetail = {
 
 const defaultRetryAfterSeconds = 3
 const defaultMaxRetries = 3
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const bannerEventName = 'job-queue-banner'
 const bannerClearEventName = 'job-queue-banner:clear'
@@ -59,6 +59,7 @@ export async function withJobQueueRetry<T>(action: () => Promise<T>, options: Jo
 
 	for (;;) {
 		try {
+			if (options.signal?.aborted) throw new RequestAbortedError()
 			const result = await action()
 			if (attempts > 0) clearJobQueueBanner()
 			return result
@@ -80,7 +81,12 @@ export async function withJobQueueRetry<T>(action: () => Promise<T>, options: Jo
 					type: 'warning',
 					message: `Queue full${queueHint}. Retrying${label} in ${Math.ceil((delayMs + jitterMs) / 1000)}s…`,
 				})
-			await sleep(delayMs + jitterMs)
+			try {
+				await waitForRetryDelay(delayMs + jitterMs, options.signal)
+			} catch (error) {
+				clearJobQueueBanner()
+				throw error
+			}
 			attempts += 1
 		}
 	}

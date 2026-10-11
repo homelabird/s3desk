@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createUpload, getUploadChunks, getUploadChunksBatch, uploadFilesWithProgress } from '../domains/uploads'
+import { APIClient, RequestAbortedError } from '../client'
 import type { UploadFileItem } from '../uploads'
 
 type RecordedRequest = {
@@ -9,6 +10,33 @@ type RecordedRequest = {
 	headers: Record<string, string>
 	body: Document | XMLHttpRequestBodyInit | null
 }
+
+it.each([
+	{ body: undefined, durable: false }, { body: { label: 'Upload' }, durable: false },
+	{ body: undefined, durable: true }, { body: { label: 'Upload' }, durable: true },
+])('allows canceling a commit request (body=$body, durable=$durable)', async ({ body, durable }) => {
+	const controller = new AbortController()
+	const fetchMock = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+		if (String(_url).endsWith('/operations/capabilities')) return Promise.resolve(durable
+			? new Response(JSON.stringify({ version: 1, durable: true }), { headers: { 'content-type': 'application/json' } })
+			: new Response(null, { status: 404 }))
+		return new Promise<Response>((_resolve, reject) => {
+			init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+		})
+	})
+	vi.stubGlobal('fetch', fetchMock)
+	try {
+		const outcome = new APIClient().uploads.commitUpload('profile-1', 'upload-1', body, controller.signal).catch((error: unknown) => error)
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+		if (durable) expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('Idempotency-Key')).toMatch(/^[a-f0-9]{32}$/)
+		else expect(fetchMock.mock.calls[1][1]?.signal).toBe(controller.signal)
+		controller.abort()
+		await expect(outcome).resolves.toBeInstanceOf(RequestAbortedError)
+	} finally {
+		vi.unstubAllGlobals()
+		window.sessionStorage.removeItem('s3desk.operationRecovery.v1')
+	}
+})
 
 class FakeXMLHttpRequest {
 	static requests: RecordedRequest[] = []

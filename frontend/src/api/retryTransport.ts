@@ -44,7 +44,7 @@ function retryDelayLabel(delayMs: number): string {
 	return `${Math.max(1, Math.ceil(delayMs / 1000))}s`
 }
 
-function sleep(delayMs: number, signal?: AbortSignal | null): Promise<void> {
+export function waitForRetryDelay(delayMs: number, signal?: AbortSignal | null): Promise<void> {
 	if (!signal) return new Promise((resolve) => setTimeout(resolve, delayMs))
 	return new Promise((resolve, reject) => {
 		const onAbort = () => {
@@ -142,7 +142,7 @@ export async function fetchWithRetry(url: string, init: RequestInit, options: Re
 						logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} in ${delayLabel} (${reason})` })
 						const message = `Temporary request failure (${reason}). Auto-retry in ${delayLabel}.`
 						publishNetworkStatus({ kind: 'unstable', message }, statusScope)
-						await sleep(delayMs, init.signal)
+						await waitForRetryDelay(delayMs, init.signal)
 						publishNetworkStatus({ kind: 'unstable', message: 'Retrying request…' }, statusScope)
 						attempt += 1
 						continue

@@ -1,9 +1,41 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { APIError } from '../../api/client'
+import { APIError, RequestAbortedError } from '../../api/client'
 import { subscribeJobQueueBanner, withJobQueueRetry } from '../jobQueue'
 
 describe('withJobQueueRetry', () => {
+	afterEach(() => vi.useRealTimers())
+
+	it('does not submit an action when already canceled', async () => {
+		const controller = new AbortController()
+		controller.abort()
+		const action = vi.fn().mockResolvedValue('ok')
+		await expect(withJobQueueRetry(action, { signal: controller.signal })).rejects.toBeInstanceOf(RequestAbortedError)
+		expect(action).not.toHaveBeenCalled()
+	})
+
+	it('cancels a queue backoff immediately without submitting another action', async () => {
+		vi.useFakeTimers()
+		const controller = new AbortController()
+		const action = vi.fn().mockRejectedValue(new APIError({
+			status: 429, code: 'job_queue_full', message: 'Queue full', retryAfterSeconds: 60,
+		}))
+		const onClear = vi.fn()
+		const unsubscribe = subscribeJobQueueBanner(() => {}, onClear)
+		try {
+			const outcome = withJobQueueRetry(action, { signal: controller.signal }).catch((error: unknown) => error)
+			await vi.advanceTimersByTimeAsync(0)
+			controller.abort()
+			await vi.advanceTimersByTimeAsync(0)
+			expect(vi.getTimerCount()).toBe(0)
+			await expect(outcome).resolves.toBeInstanceOf(RequestAbortedError)
+			expect(action).toHaveBeenCalledOnce()
+			expect(onClear).toHaveBeenCalled()
+		} finally {
+			unsubscribe()
+		}
+	})
+
 	it('retries on queue full and clears banner after success', async () => {
 		vi.useFakeTimers()
 
