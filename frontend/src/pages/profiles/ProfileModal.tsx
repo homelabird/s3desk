@@ -1,5 +1,5 @@
-import { Button, Grid } from 'antd'
-import { useCallback, useMemo, useState } from 'react'
+import { Alert, Button, ConfigProvider, Grid } from 'antd'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
 import { DialogModal } from '../../components/DialogModal'
@@ -28,12 +28,14 @@ export function ProfileModal(props: {
 	onCancel: () => void
 	onSubmit: (values: ProfileFormValues) => void
 	loading: boolean
+	submitError?: string | null
 	initialValues?: Partial<ProfileFormValues>
 	editMode?: boolean
 	tlsCapability?: TLSCapability | null
 	tlsStatus?: ProfileTLSStatus | null
 	tlsStatusLoading?: boolean
 	tlsStatusError?: string | null
+	onRetryTLSStatus?: () => void
 }) {
 	const sessionKey = [
 		props.open ? 'open' : 'closed',
@@ -53,12 +55,14 @@ function ProfileModalSession(props: {
 	onCancel: () => void
 	onSubmit: (values: ProfileFormValues) => void
 	loading: boolean
+	submitError?: string | null
 	initialValues?: Partial<ProfileFormValues>
 	editMode?: boolean
 	tlsCapability?: TLSCapability | null
 	tlsStatus?: ProfileTLSStatus | null
 	tlsStatusLoading?: boolean
 	tlsStatusError?: string | null
+	onRetryTLSStatus?: () => void
 }) {
 	const defaults: ProfileFormValues = useMemo(
 		() => ({
@@ -107,6 +111,24 @@ function ProfileModalSession(props: {
 	const [errors, setErrors] = useState<FieldErrors>({})
 	const [openSections, setOpenSections] = useState<SectionKey[]>([])
 	const [showTLSInsecureConfirm, setShowTLSInsecureConfirm] = useState(false)
+	const formRef = useRef<HTMLFormElement>(null)
+	const revealValidationErrorsRef = useRef(false)
+
+	useLayoutEffect(() => {
+		if (!revealValidationErrorsRef.current) return
+		revealValidationErrorsRef.current = false
+		const invalidFields = formRef.current?.querySelectorAll<HTMLElement>('[aria-invalid="true"]')
+		for (const field of invalidFields ?? []) {
+			let disclosure = field.closest('details')
+			while (disclosure) {
+				disclosure.open = true
+				disclosure = disclosure.parentElement?.closest('details') ?? null
+			}
+		}
+		const firstInvalidField = invalidFields?.[0]
+		firstInvalidField?.focus({ preventScroll: true })
+		firstInvalidField?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+	}, [errors])
 
 	const viewState = buildProfileModalViewState({
 		values,
@@ -120,11 +142,13 @@ function ProfileModalSession(props: {
 	const isBusy = props.loading
 
 	const applyField = useCallback(<K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
+		if (isBusy) return
 		setValues((prev) => ({ ...prev, [key]: value }))
 		setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev))
-	}, [])
+	}, [isBusy])
 
 	const setField = useCallback(<K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
+		if (isBusy) return
 		if (key === 'tlsInsecureSkipVerify') {
 			const enabled = Boolean(value)
 			if (enabled && !values.tlsInsecureSkipVerify) {
@@ -133,7 +157,7 @@ function ProfileModalSession(props: {
 			}
 		}
 		applyField(key, value)
-	}, [applyField, values.tlsInsecureSkipVerify])
+	}, [applyField, isBusy, values.tlsInsecureSkipVerify])
 
 	const ensureSectionsOpenForErrors = useCallback((nextErrors: FieldErrors) => {
 		const nextSections = new Set(openSections)
@@ -152,6 +176,7 @@ function ProfileModalSession(props: {
 			viewState,
 		})
 
+		revealValidationErrorsRef.current = Object.keys(next).length > 0
 		setErrors(next)
 		if (Object.keys(next).length > 0) {
 			ensureSectionsOpenForErrors(next)
@@ -170,6 +195,9 @@ function ProfileModalSession(props: {
 	const sections = buildProfileModalSections({
 		values,
 		errors,
+		disabled: isBusy,
+		tlsStatusLoading: props.tlsStatusLoading,
+		onRetryTLSStatus: props.onRetryTLSStatus,
 		editMode: props.editMode,
 		setField,
 		viewState,
@@ -182,12 +210,14 @@ function ProfileModalSession(props: {
 	})
 	const modalBody = (
 		<form
+			ref={formRef}
+			aria-busy={isBusy}
 			onSubmit={(event) => {
 				event.preventDefault()
 				void validateAndSubmit()
 			}}
 		>
-			<div className={styles.formShell}>
+			<fieldset className={styles.formShell} disabled={isBusy}>
 				<section className={styles.staticSectionCard}>
 					<div className={styles.staticSectionHeader}>
 						{renderSectionHeader({ title: sections.basic.title })}
@@ -204,7 +234,7 @@ function ProfileModalSession(props: {
 				<div className={styles.optionalSections}>
 					{sections.optionalSections.map((section) => {
 						const key = section.key as SectionKey
-						const statusLabel = formatConfiguredStateLabel(section.configuredCount)
+						const statusLabel = section.statusLabel ?? formatConfiguredStateLabel(section.configuredCount)
 						return (
 							<details
 								key={key}
@@ -231,11 +261,20 @@ function ProfileModalSession(props: {
 						)
 					})}
 				</div>
-			</div>
+			</fieldset>
 		</form>
 	)
 	const modalFooter = (
 		<div className={styles.drawerFooter}>
+			{props.submitError ? (
+				<Alert
+					className={styles.submitError}
+					type="error"
+					showIcon
+					title="Profile settings saved, but mTLS update failed."
+					description={props.submitError}
+				/>
+			) : null}
 			<div className={styles.drawerFooterActions}>
 				<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
 				<Button type="primary" loading={props.loading} disabled={isBusy} onClick={() => void validateAndSubmit()}>
@@ -251,6 +290,7 @@ function ProfileModalSession(props: {
 				<DialogModal
 					open={props.open}
 					onClose={handleCancel}
+					closeDisabled={isBusy}
 					title={props.title}
 					width="min(92vw, 820px)"
 					panelClassName={styles.profileDialog}
@@ -258,12 +298,13 @@ function ProfileModalSession(props: {
 					footerClassName={styles.profileDialogFooter}
 					footer={modalFooter}
 				>
-					{modalBody}
+					<ConfigProvider componentDisabled={isBusy}>{modalBody}</ConfigProvider>
 				</DialogModal>
 			) : (
 				<OverlaySheet
 					open={props.open}
 					onClose={handleCancel}
+					closeDisabled={isBusy}
 					title={props.title}
 					placement={sheetPlacement}
 					width={undefined}
@@ -271,7 +312,7 @@ function ProfileModalSession(props: {
 					panelClassName={styles.profileSheet}
 					footer={modalFooter}
 				>
-					{modalBody}
+					<ConfigProvider componentDisabled={isBusy}>{modalBody}</ConfigProvider>
 				</OverlaySheet>
 			)}
 			{showTLSInsecureConfirm ? (

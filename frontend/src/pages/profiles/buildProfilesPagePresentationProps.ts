@@ -14,6 +14,7 @@ type BuildProfilesPagePresentationPropsArgs = {
 	profilesError: ProfilesStatusProps['profilesError']
 	profilesNeedingAttention: ProfilesStatusProps['profilesNeedingAttention']
 	profilesQueryIsFetching: ProfilesStatusProps['profilesQueryIsFetching']
+	onRetryProfiles: ProfilesStatusProps['onRetryProfiles']
 	tableRows: ProfilesStatusProps['tableRows']
 	onUseProfile: ProfilesStatusProps['onUseProfile']
 	onEditProfile: ProfilesStatusProps['onEditProfile']
@@ -75,6 +76,7 @@ export function buildProfilesPagePresentationProps(
 			profilesError: args.profilesError,
 			profilesNeedingAttention: args.profilesNeedingAttention,
 			profilesQueryIsFetching: args.profilesQueryIsFetching,
+			onRetryProfiles: args.onRetryProfiles,
 			showProfilesEmpty,
 			tableRows: args.tableRows,
 			onUseProfile: args.onUseProfile,

@@ -88,13 +88,14 @@ export function ProfilesTable(props: ProfilesTableProps) {
 	})
 
 	return (
-		<div className={styles.tableWrap}>
+		<div id="profiles-list" tabIndex={-1} className={styles.tableWrap}>
 			{useCompactList ? (
 				<div ref={hostRef} className={styles.mobileList} data-testid="profiles-list-compact" role="list" aria-label="Profiles">
 					<div style={{ height: paddingTop }} aria-hidden />
 					{virtualItems.map((item) => {
 						const row = props.rows[item.index]
 						if (!row) return null
+						const warningFlags = row.flags.filter((flag) => flag.tone === 'warning')
 						return <article
 							key={row.profile.id}
 							ref={measureElement}
@@ -115,9 +116,6 @@ export function ProfilesTable(props: ProfilesTableProps) {
 											</span>
 										) : null}
 									</div>
-									<Typography.Text type="secondary" className={styles.mobileId} title={row.profile.id}>
-										{row.profile.id}
-									</Typography.Text>
 								</div>
 								<span className={styles.providerBadge}>{row.providerLabel}</span>
 							</div>
@@ -130,26 +128,25 @@ export function ProfilesTable(props: ProfilesTableProps) {
 										{row.connection.secondary ? <div className={styles.mobileMetaSecondary}>{row.connection.secondary}</div> : null}
 									</div>
 								</div>
-								<div>
-									<div className={styles.mobileMetaLabel}>Flags</div>
+								{warningFlags.length ? (
 									<div className={styles.flagList}>
-										{row.flags.map((flag) => (
+										{warningFlags.map((flag) => (
 											<span
 												key={`${row.profile.id}-mobile-${flag.label}`}
-												className={flag.tone === 'warning' ? `${styles.flagChip} ${styles.flagChipWarning}` : styles.flagChip}
+												className={`${styles.flagChip} ${styles.flagChipWarning}`}
 												title={flag.title}
 											>
 												{flag.label}
 											</span>
 										))}
-									</div>
 								</div>
+								) : null}
 							</div>
 
 							<div className={styles.mobileActionRow}>
-								<Button type={row.isActive ? 'primary' : 'default'} onClick={() => props.onUseProfile(row.profile.id)}>
-									{row.isActive ? 'Selected' : 'Use profile'}
-								</Button>
+								{!row.isActive ? <Button type="primary" onClick={() => props.onUseProfile(row.profile.id)}>
+									Use profile
+								</Button> : null}
 								<MenuPopover menu={buildRowMenu(row)} align="end" scopeKey={props.scopeKey}>
 									{({ toggle, open }) => (
 										<Button
@@ -228,9 +225,9 @@ export function ProfilesTable(props: ProfilesTableProps) {
 									</td>
 									<td className={styles.td}>
 										<div className={styles.actionGroup}>
-											<Button size="small" type={row.isActive ? 'primary' : 'default'} onClick={() => props.onUseProfile(row.profile.id)}>
-												{row.isActive ? 'Selected' : 'Use'}
-											</Button>
+											{!row.isActive ? <Button size="small" type="primary" onClick={() => props.onUseProfile(row.profile.id)}>
+												Use
+											</Button> : null}
 											<MenuPopover menu={buildRowMenu(row)} align="end" scopeKey={props.scopeKey}>
 												{({ toggle, open }) => (
 													<Button

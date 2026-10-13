@@ -60,7 +60,7 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 													value={values.sessionToken ?? ''}
 													onChange={(e) => setField('sessionToken', e.target.value)}
 													autoComplete="off"
-													disabled={!!editMode && !!values.clearSessionToken}
+														disabled={args.disabled || (!!editMode && !!values.clearSessionToken)}
 												/>
 											</FormField>
 										</div>

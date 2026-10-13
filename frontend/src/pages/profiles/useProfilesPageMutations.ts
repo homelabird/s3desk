@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
 
 import type { APIClientShape } from '../../api/client'
+import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import type { ProfileFormValues } from './profileTypes'
 import {
 	clearPendingModalState,
@@ -47,14 +48,20 @@ export function useProfilesPageMutations(args: {
 	const [deletingProfileState, setDeletingProfileState] = useState<PendingProfileState | null>(null)
 	const [createPendingState, setCreatePendingState] = useState<PendingModalState | null>(null)
 	const [updatePendingState, setUpdatePendingState] = useState<PendingModalState | null>(null)
+	const [editErrorState, setEditErrorState] = useState<(PendingModalState & { error: string }) | null>(null)
 
 	const createRequestTokenRef = useRef(0)
 	const updateRequestTokenRef = useRef(0)
+	const editModalSessionRef = useRef(editModalSession)
 	const deleteRequestTokenRef = useRef(0)
 	const testRequestTokenRef = useRef(0)
 	const benchmarkRequestTokenRef = useRef(0)
 	const testAbortControllerRef = useRef<AbortController | null>(null)
 	const benchmarkAbortControllerRef = useRef<AbortController | null>(null)
+
+	useLayoutEffect(() => {
+		editModalSessionRef.current = editModalSession
+	}, [editModalSession])
 
 	useLayoutEffect(() => () => {
 		testAbortControllerRef.current?.abort()
@@ -129,6 +136,7 @@ export function useProfilesPageMutations(args: {
 		mutationFn: (mutationArgs: { id: string; values: ProfileFormValues }) => api.profiles.updateProfile(mutationArgs.id, toUpdateRequest(mutationArgs.values)),
 		onMutate: () => {
 			updateRequestTokenRef.current += 1
+			setEditErrorState(null)
 			const context = {
 				scopeKey: currentScopeKey,
 				scopeVersion: serverScopeVersionRef.current,
@@ -140,33 +148,38 @@ export function useProfilesPageMutations(args: {
 			return context
 		},
 		onSuccess: async (_, mutationArgs, context) => {
-			const matchesCurrentSession = matchesCurrentMutationRequest({
-				context,
-				isActiveRef,
-				currentScopeKey,
-				currentScopeVersion: serverScopeVersionRef.current,
-				expectedRequestToken: updateRequestTokenRef.current,
-				expectedModalSession: editModalSession,
-			})
-			if (matchesCurrentSession) {
-				profilesFeedback.profileUpdated()
-				closeEditModal()
-			}
 			if (context) {
 				await invalidateProfilesQuery(context.apiToken)
 				try {
 					await applyTLSUpdate(mutationArgs.id, mutationArgs.values, 'edit', context.apiToken)
 				} catch (err) {
-					if (matchesCurrentSession && matchesCurrentMutationRequest({
+					if (matchesCurrentMutationRequest({
 						context,
 						isActiveRef,
 						currentScopeKey,
 						currentScopeVersion: serverScopeVersionRef.current,
 						expectedRequestToken: updateRequestTokenRef.current,
+						expectedModalSession: editModalSessionRef.current,
 					})) {
-						profilesFeedback.mtlsUpdateFailed(err)
+						setEditErrorState({
+							scopeKey: context.scopeKey,
+							session: context.modalSession,
+							error: formatErr(err),
+						})
 					}
+					return
 				}
+			}
+			if (matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: updateRequestTokenRef.current,
+				expectedModalSession: editModalSessionRef.current,
+			})) {
+				profilesFeedback.profileUpdated()
+				closeEditModal()
 			}
 		},
 		onSettled: (_data, _err, _args, context) =>
@@ -337,6 +350,7 @@ export function useProfilesPageMutations(args: {
 		benchmarkMutation,
 		createLoading: createPendingState?.scopeKey === currentScopeKey && createPendingState.session === createModalSession,
 		editLoading: updatePendingState?.scopeKey === currentScopeKey && updatePendingState.session === editModalSession,
+		editError: editErrorState?.scopeKey === currentScopeKey && editErrorState.session === editModalSession ? editErrorState.error : null,
 		testingProfileId: testingProfileState?.scopeKey === currentScopeKey ? testingProfileState.profileId : null,
 		benchmarkingProfileId: benchmarkingProfileState?.scopeKey === currentScopeKey ? benchmarkingProfileState.profileId : null,
 		deletingProfileId: deletingProfileState?.scopeKey === currentScopeKey ? deletingProfileState.profileId : null,

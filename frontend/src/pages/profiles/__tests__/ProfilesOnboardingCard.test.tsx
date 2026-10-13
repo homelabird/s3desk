@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
@@ -62,6 +62,20 @@ describe('ProfilesOnboardingCard', () => {
 		expect(screen.getByRole('button', { name: 'Create profile' })).toBeInTheDocument()
 		expect(screen.getByText('Create a profile to open buckets and objects.')).toBeInTheDocument()
 		expect(screen.queryByRole('link', { name: 'Open buckets' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('link', { name: 'Open objects' })).not.toBeInTheDocument()
+	})
+
+	it('prioritizes choosing an existing profile before creating another', () => {
+		const onCreateProfile = vi.fn()
+		renderOnboardingCard({ profileId: null, profilesCount: 2, onCreateProfile })
+
+		const choose = screen.getByRole('link', { name: 'Choose a profile' })
+		expect(choose).toHaveAttribute('href', '#profiles-list')
+		expect(choose).toHaveClass('ant-btn-primary')
+		const create = screen.getByRole('button', { name: 'Create another profile' })
+		expect(create).not.toHaveClass('ant-btn-primary')
+		fireEvent.click(create)
+		expect(onCreateProfile).toHaveBeenCalledTimes(1)
 		expect(screen.queryByRole('link', { name: 'Open objects' })).not.toBeInTheDocument()
 	})
 })

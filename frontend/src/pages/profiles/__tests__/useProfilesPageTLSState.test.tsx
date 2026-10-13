@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '../../../api/queryKeys'
@@ -60,6 +60,84 @@ function buildValues(overrides: Partial<ProfileFormValues> = {}): ProfileFormVal
 }
 
 describe('useProfilesPageTLSState', () => {
+	it('keeps the failed status visible during retry and suppresses duplicate refetches', async () => {
+		let finish!: () => void
+		const pending = new Promise<void>((resolve) => { finish = resolve })
+		const refetch = vi.fn(() => pending)
+		const query = { data: null, isFetching: false, isError: true, error: new Error('TLS status unavailable'), refetch }
+		useQueryMock.mockReturnValue(query as never)
+		const { result, rerender } = renderHook(() => useProfilesPageTLSState({
+			api: createMockApiClient(), apiToken: 'token-a', queryClient: { invalidateQueries: vi.fn() },
+			activeEditProfile: { id: 'profile-2', name: 'Edited', provider: 's3_compatible' } as never,
+			tlsCapability: { enabled: true },
+		}))
+		act(() => {
+			result.current.retryTLSStatus()
+			result.current.retryTLSStatus()
+		})
+		expect(refetch).toHaveBeenCalledOnce()
+		expect(refetch).toHaveBeenCalledWith({ cancelRefetch: false })
+		useQueryMock.mockReturnValue({ ...query, isFetching: true, isError: false, error: null } as never)
+		rerender()
+		expect(result.current.tlsStatusError).toContain('TLS status unavailable')
+		act(() => result.current.retryTLSStatus())
+		expect(refetch).toHaveBeenCalledOnce()
+		useQueryMock.mockReturnValue({ ...query, data: { mode: 'mtls' }, isFetching: false, isError: false, error: null } as never)
+		await act(async () => { finish(); await pending })
+		rerender()
+		expect(result.current.tlsStatusError).toBeNull()
+		expect(result.current.tlsStatus).toEqual({ mode: 'mtls' })
+	})
+
+	it.each(['profile', 'token'] as const)('ignores an old retry handler after the %s scope changes', (changedScope) => {
+		const refetch = vi.fn().mockResolvedValue(undefined)
+		useQueryMock.mockReturnValue({ data: null, isFetching: false, isError: true, error: new Error('TLS status unavailable'), refetch } as never)
+		const { result, rerender } = renderHook(({ apiToken, profileId }) => useProfilesPageTLSState({
+			api: createMockApiClient(), apiToken, queryClient: { invalidateQueries: vi.fn() },
+			activeEditProfile: { id: profileId, name: 'Edited', provider: 's3_compatible' } as never,
+			tlsCapability: { enabled: true },
+		}), { initialProps: { apiToken: 'token-a', profileId: 'profile-2' } })
+		const oldRetry = result.current.retryTLSStatus
+		rerender(changedScope === 'profile' ? { apiToken: 'token-a', profileId: 'profile-3' } : { apiToken: 'token-b', profileId: 'profile-2' })
+		act(oldRetry)
+		expect(refetch).not.toHaveBeenCalled()
+	})
+
+	it.each(['closed', 'disabled', 'fetching'] as const)('does not refetch TLS status while %s', (blocked) => {
+		const refetch = vi.fn().mockResolvedValue(undefined)
+		useQueryMock.mockReturnValue({ data: null, isFetching: blocked === 'fetching', isError: true, error: new Error('TLS status unavailable'), refetch } as never)
+		const { result } = renderHook(() => useProfilesPageTLSState({
+			api: createMockApiClient(), apiToken: 'token-a', queryClient: { invalidateQueries: vi.fn() },
+			activeEditProfile: blocked === 'closed' ? null : { id: 'profile-2', name: 'Edited', provider: 's3_compatible' } as never,
+			tlsCapability: { enabled: blocked !== 'disabled' },
+		}))
+		act(() => result.current.retryTLSStatus())
+		expect(refetch).not.toHaveBeenCalled()
+	})
+
+	it('keeps a newer retry warning when an earlier profile retry settles', async () => {
+		let finishOld!: () => void
+		let finishNew!: () => void
+		const oldPending = new Promise<void>((resolve) => { finishOld = resolve })
+		const newPending = new Promise<void>((resolve) => { finishNew = resolve })
+		const query = { data: null, isFetching: false, isError: true, error: new Error('Old TLS status unavailable'), refetch: vi.fn(() => oldPending) }
+		useQueryMock.mockReturnValue(query as never)
+		const { result, rerender } = renderHook(({ profileId }) => useProfilesPageTLSState({
+			api: createMockApiClient(), apiToken: 'token-a', queryClient: { invalidateQueries: vi.fn() },
+			activeEditProfile: { id: profileId, name: 'Edited', provider: 's3_compatible' } as never,
+			tlsCapability: { enabled: true },
+		}), { initialProps: { profileId: 'profile-2' } })
+		act(() => result.current.retryTLSStatus())
+		useQueryMock.mockReturnValue({ ...query, error: new Error('New TLS status unavailable'), refetch: vi.fn(() => newPending) } as never)
+		rerender({ profileId: 'profile-3' })
+		act(() => result.current.retryTLSStatus())
+		useQueryMock.mockReturnValue({ ...query, isFetching: true, isError: false, error: null } as never)
+		rerender({ profileId: 'profile-3' })
+		await act(async () => { finishOld(); await oldPending })
+		expect(result.current.tlsStatusError).toContain('New TLS status unavailable')
+		await act(async () => { finishNew(); await newPending })
+	})
+
 	it('configures TLS status query from active edit profile and capability', () => {
 		useQueryMock.mockReturnValue({
 			data: { mode: 'mtls' },

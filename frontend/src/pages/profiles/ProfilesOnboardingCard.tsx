@@ -108,7 +108,12 @@ export function ProfilesOnboardingCard(props: Props) {
 					</>
 				) : (
 					<>
-						<Button size="small" type="primary" onClick={props.onCreateProfile}>
+						{hasProfile ? (
+							<Button href="#profiles-list" size="small" type="primary">
+								Choose a profile
+							</Button>
+						) : null}
+						<Button size="small" type={hasProfile ? 'default' : 'primary'} onClick={props.onCreateProfile}>
 							{hasProfile ? 'Create another profile' : 'Create profile'}
 						</Button>
 						<Typography.Text type="secondary" className={styles.onboardingNextStep}>

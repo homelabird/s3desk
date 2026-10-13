@@ -42,6 +42,9 @@ describe('useProfilesPageState', () => {
 	it('builds shell props and wires delete confirmation through the delete mutation', async () => {
 		const mutateAsync = vi.fn().mockResolvedValue(undefined)
 		const setProfileId = vi.fn()
+		const refetch = vi.fn().mockResolvedValue(undefined)
+		const setSearchParams = vi.fn()
+		const retryTLSStatus = vi.fn()
 
 		useProfilesPageDataMock.mockReturnValue({
 			api: {
@@ -66,10 +69,11 @@ describe('useProfilesPageState', () => {
 				isFetching: false,
 				isError: false,
 				error: null,
+				refetch,
 			},
 			queryClient: new QueryClient(),
 			searchParams: new URLSearchParams(),
-			setSearchParams: vi.fn(),
+			setSearchParams,
 			invalidateProfilesQuery: vi.fn().mockResolvedValue(undefined),
 		})
 		useProfilesPageControllerStateMock.mockReturnValue({
@@ -90,7 +94,7 @@ describe('useProfilesPageState', () => {
 			closeEditModal: vi.fn(),
 			dismissOnboarding: vi.fn(),
 		})
-		useProfilesPageMutationsMock.mockReturnValue({
+		const mutationState = {
 			createMutation: { mutate: vi.fn(), isPending: false },
 			updateMutation: { mutate: vi.fn() },
 			deleteMutation: { mutateAsync, isPending: false },
@@ -101,7 +105,8 @@ describe('useProfilesPageState', () => {
 			testingProfileId: 'profile-1',
 			benchmarkingProfileId: null,
 			deletingProfileId: null,
-		})
+		}
+		useProfilesPageMutationsMock.mockReturnValue(mutationState)
 		useProfilesYamlImportExportMock.mockReturnValue({
 			activeYamlOpen: true,
 			activeYamlProfile: { id: 'profile-2', name: 'Edited Profile', provider: 's3_compatible' },
@@ -132,13 +137,14 @@ describe('useProfilesPageState', () => {
 		})
 		useProfilesPageTLSStateMock.mockReturnValue({
 			applyTLSUpdate: vi.fn(),
+			retryTLSStatus,
 			tlsCapability: { enabled: true },
 			tlsStatus: null,
 			tlsStatusLoading: false,
 			tlsStatusError: 'tls failed',
 		})
 
-		const { result } = renderHook(() =>
+		const { result, rerender } = renderHook(() =>
 			useProfilesPageState({
 				apiToken: 'token-a',
 				profileId: 'profile-1',
@@ -192,6 +198,17 @@ describe('useProfilesPageState', () => {
 		})
 
 		expect(mutateAsync).toHaveBeenCalledWith('profile-1')
+		act(() => result.current.status.onRetryProfiles())
+		expect(refetch).toHaveBeenCalledWith({ cancelRefetch: false })
 		expect(setProfileId).not.toHaveBeenCalled()
+		expect(setSearchParams).not.toHaveBeenCalled()
+		expect(result.current.onboarding.profileId).toBe('profile-1')
+		expect(result.current.status.tableRows).toEqual([{ id: 'profile-1', name: 'Primary' }])
+		act(() => result.current.dialogs.onRetryTLSStatus?.())
+		expect(retryTLSStatus).not.toHaveBeenCalled()
+		mutationState.editLoading = false
+		rerender()
+		act(() => result.current.dialogs.onRetryTLSStatus?.())
+		expect(retryTLSStatus).toHaveBeenCalledOnce()
 	})
 })

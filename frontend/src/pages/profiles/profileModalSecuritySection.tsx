@@ -1,4 +1,4 @@
-import { Alert, Input, Typography } from 'antd'
+import { Alert, Button, Input, Typography } from 'antd'
 
 import { FormField } from '../../components/FormField'
 import { NativeSelect } from '../../components/NativeSelect'
@@ -13,13 +13,31 @@ export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 	return (
 		<div className={styles.sectionBody}>
 			{viewState.tlsUnavailable ? <Alert type="warning" showIcon title="mTLS is disabled" description={viewState.tlsDisabledReason} /> : null}
-			{viewState.showTLSStatusError ? <Alert type="warning" showIcon title="Failed to load TLS status" description={viewState.showTLSStatusError} /> : null}
+			{viewState.showTLSStatusError ? (
+				<Alert
+					type="warning"
+					showIcon
+					title="Failed to load TLS status"
+					description={viewState.showTLSStatusError}
+					action={args.onRetryTLSStatus ? (
+						<Button
+							disabled={args.disabled || args.tlsStatusLoading}
+							loading={args.tlsStatusLoading}
+							onClick={() => {
+								if (!args.disabled && !args.tlsStatusLoading) args.onRetryTLSStatus?.()
+							}}
+						>
+							Retry TLS status
+						</Button>
+					) : undefined}
+				/>
+			) : null}
 
 			{editMode ? (
 				<FormField label="mTLS action" htmlFor="profile-mtls-action">
 					<NativeSelect
 						id="profile-mtls-action"
-						disabled={viewState.tlsUnavailable}
+						disabled={args.disabled || viewState.tlsUnavailable}
 						value={tlsAction}
 						onChange={(v) => setField('tlsAction', v as TLSAction)}
 						options={[
@@ -70,7 +88,7 @@ export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 						<Input.TextArea
 							{...profileFieldA11y('profile-tls-client-cert-pem', errors.tlsClientCertPem)}
 							className={styles.compactTextArea}
-							disabled={viewState.tlsUnavailable}
+							disabled={args.disabled || viewState.tlsUnavailable}
 							value={values.tlsClientCertPem ?? ''}
 							onChange={(e) => setField('tlsClientCertPem', e.target.value)}
 							autoSize={{ minRows: 4, maxRows: 8 }}
@@ -81,7 +99,7 @@ export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 						<Input.TextArea
 							{...profileFieldA11y('profile-tls-client-key-pem', errors.tlsClientKeyPem)}
 							className={styles.compactTextArea}
-							disabled={viewState.tlsUnavailable}
+							disabled={args.disabled || viewState.tlsUnavailable}
 							value={values.tlsClientKeyPem ?? ''}
 							onChange={(e) => setField('tlsClientKeyPem', e.target.value)}
 							autoSize={{ minRows: 4, maxRows: 8 }}
@@ -92,7 +110,7 @@ export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 						<Input.TextArea
 							id="profile-tls-ca-cert-pem"
 							className={styles.compactTextArea}
-							disabled={viewState.tlsUnavailable}
+							disabled={args.disabled || viewState.tlsUnavailable}
 							value={values.tlsCaCertPem ?? ''}
 							onChange={(e) => setField('tlsCaCertPem', e.target.value)}
 							autoSize={{ minRows: 3, maxRows: 6 }}

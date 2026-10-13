@@ -4,7 +4,7 @@ import {
 	installProfilesBucketsMobileResponsiveFixtures,
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
-import { restoreProjectViewport } from './support/geometry'
+import { expectMinTouchTarget, restoreProjectViewport } from './support/geometry'
 import { readServerScopedLocalStorage } from './support/storage'
 import { metaJson } from './support/apiFixtures'
 import { gotoBucketsPage, gotoProfilesPage } from './support/ui'
@@ -23,6 +23,71 @@ function getProfileCard(page: Page, name: string) {
 }
 
 test.describe('@mobile-responsive Profiles mobile workflows', () => {
+	for (const cached of [false, true]) {
+		test(`recovers failed profile inventory at 320px (cached profile: ${cached})`, async ({ page }, testInfo) => {
+			await page.setViewportSize({ width: 320, height: 740 })
+			const profile = {
+				id: 'profiles-buckets-mobile-profile', name: 'Responsive Profile', provider: 's3_compatible',
+				endpoint: 'http://localhost:9000', region: 'us-east-1', forcePathStyle: true,
+				preserveLeadingSlash: false, tlsInsecureSkipVerify: false,
+				createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+			}
+			const initialProfiles = cached ? [profile] : []
+			await installProfilesBucketsMobileResponsiveFixtures(page, { profiles: initialProfiles })
+			await seedProfilesBucketsMobileResponsiveStorage(page, { profileId: cached ? profile.id : '' })
+			await page.route('**/api/v1/bootstrap', (route) => route.fulfill({ json: { meta: metaJson(), profiles: initialProfiles } }))
+			let recovering = false
+			let releaseFailure!: () => void
+			const failureGate = new Promise<void>((resolve) => { releaseFailure = resolve })
+			let releaseRetry!: () => void
+			const retryGate = new Promise<void>((resolve) => { releaseRetry = resolve })
+			await page.route('**/api/v1/profiles', async (route) => {
+				if (route.request().method() !== 'GET') return route.fallback()
+				if (recovering) {
+					await retryGate
+					return route.fulfill({ json: [profile] })
+				}
+				await failureGate
+				return route.fulfill({ status: 400, json: { error: { code: 'invalid_request', message: 'Profile inventory temporarily unavailable.' } } })
+			})
+			try {
+				await gotoProfilesPage(page)
+				const selectedProfile = page.getByRole('combobox', { name: 'Profile', exact: true })
+				if (cached) await expect(selectedProfile).toHaveValue(profile.id)
+				await page.evaluate(() => window.dispatchEvent(new Event('online')))
+				const loading = page.getByRole('status', { name: 'Loading profiles', exact: true })
+				if (!cached) await expect(loading).toBeVisible()
+				releaseFailure()
+				await expect(page.getByText('Failed to load profiles', { exact: true })).toBeVisible({ timeout: 15_000 })
+				await expect(page.getByText('No profiles yet', { exact: true })).toHaveCount(0)
+				const retry = page.getByRole('button', { name: 'Retry loading profiles', exact: true })
+				await expect(retry).toBeEnabled()
+				await expect.poll(() => retry.evaluate((element) => {
+					const rect = element.getBoundingClientRect() // e2e-geometry-allow verifies the recovery action remains contained at 320 CSS px
+					return rect.left >= 0 && rect.right <= window.innerWidth
+				})).toBe(true)
+				if (cached) {
+					await expect(getProfileCard(page, profile.name).getByText('Active', { exact: true })).toBeVisible()
+					await expect(selectedProfile).toHaveValue(profile.id)
+				}
+				await page.screenshot({ path: testInfo.outputPath(`profiles-error-${cached ? 'cached' : 'empty'}-320.png`), fullPage: true })
+				recovering = true
+				await retry.click()
+				await expect(retry).toBeDisabled()
+				if (!cached) await expect(loading).toBeVisible()
+				await page.screenshot({ path: testInfo.outputPath(`profiles-retry-${cached ? 'cached' : 'empty'}-320.png`), fullPage: true })
+				releaseRetry()
+				await expect(page.getByText('Failed to load profiles', { exact: true })).toHaveCount(0)
+				await expect(getProfileCard(page, profile.name).getByText('Active', { exact: true })).toBeVisible()
+				await expect(selectedProfile).toHaveValue(profile.id)
+				await expect(loading).toHaveCount(0)
+			} finally {
+				releaseFailure()
+				releaseRetry()
+			}
+		})
+	}
+
 	test('onboarding guide keeps next navigation hidden before setup is complete', async ({ page }) => {
 		await installProfilesBucketsMobileResponsiveFixtures(page, { profiles: [], buckets: [] })
 		await seedProfilesBucketsMobileResponsiveStorage(page, { profileId: '' })
@@ -43,14 +108,16 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		const primaryCard = getProfileCard(page, 'Responsive Profile')
 		const secondaryCard = getProfileCard(page, 'Backup Profile')
 
-		await expect(primaryCard).toContainText('profiles-buckets-mobile-profile')
-		await expect(secondaryCard).toContainText('profiles-buckets-mobile-secondary')
-		await expect(primaryCard.getByRole('button', { name: 'Selected' })).toBeVisible()
+		await expect(primaryCard).not.toContainText('profiles-buckets-mobile-profile')
+		await expect(secondaryCard).not.toContainText('profiles-buckets-mobile-secondary')
+		await expect(primaryCard.getByText('Active', { exact: true })).toBeVisible()
+		await expect(primaryCard.getByRole('button', { name: 'Selected' })).toHaveCount(0)
 		await expect(secondaryCard.getByRole('button', { name: 'Use profile' })).toBeVisible()
+		await expectMinTouchTarget(secondaryCard.getByRole('button', { name: 'Use profile' }))
 
 		await secondaryCard.getByRole('button', { name: 'Use profile' }).click()
 
-		await expect(secondaryCard.getByRole('button', { name: 'Selected' })).toBeVisible()
+		await expect(secondaryCard.getByText('Active', { exact: true })).toBeVisible()
 		await expect(primaryCard.getByRole('button', { name: 'Use profile' })).toBeVisible()
 		await expect
 			.poll(() =>
@@ -65,7 +132,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await page.reload({ waitUntil: 'load' })
 
 		await expect(
-			getProfileCard(page, 'Backup Profile').getByRole('button', { name: 'Selected' }),
+			getProfileCard(page, 'Backup Profile').getByText('Active', { exact: true }),
 		).toBeVisible()
 		await expect(
 			getProfileCard(page, 'Responsive Profile').getByRole('button', { name: 'Use profile' }),
@@ -117,7 +184,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 			await expect(confirm).toHaveCount(0)
 			await expect(getProfileCard(page, 'Responsive Profile')).toHaveCount(0)
 			await expect(selectedProfile).toHaveValue('profile-2')
-			await expect(getProfileCard(otherTab, 'Chosen Profile').getByRole('button', { name: 'Selected' })).toBeVisible()
+			await expect(getProfileCard(otherTab, 'Chosen Profile').getByText('Active', { exact: true })).toBeVisible()
 		} finally {
 			releaseRefresh()
 			await otherTab.close()
@@ -352,7 +419,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 
 		await warningCard.getByRole('button', { name: 'Use profile' }).click()
 
-		await expect(warningCard.getByRole('button', { name: 'Selected' })).toBeVisible()
+		await expect(warningCard.getByText('Active', { exact: true })).toBeVisible()
 		await expect(warningCard.getByText('Needs update')).toHaveAttribute('title', 'Endpoint URL is required')
 	})
 
@@ -382,7 +449,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await restoreProjectViewport(page, testInfo)
 		await expect(page.getByTestId('profiles-list-compact')).toBeVisible()
 		await expect(page.getByTestId('profiles-table-desktop')).toHaveCount(0)
-		await expect(getProfileCard(page, 'Responsive Profile').getByRole('button', { name: 'Selected' })).toBeVisible()
+		await expect(getProfileCard(page, 'Responsive Profile').getByText('Active', { exact: true })).toBeVisible()
 
 		await appScroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
 		await expect(getProfileCard(page, 'Responsive Profile 79')).toBeVisible()

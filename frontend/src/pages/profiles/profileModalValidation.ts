@@ -162,9 +162,11 @@ export function buildProfileModalViewState(args: {
 		? 'Unavailable'
 		: args.tlsStatusLoading
 			? 'Checking…'
-			: args.tlsStatus?.mode === 'mtls'
-				? 'mTLS enabled'
-				: 'mTLS disabled'
+			: args.tlsStatusError || !args.tlsStatus
+				? 'Status unknown'
+				: args.tlsStatus.mode === 'mtls'
+					? 'mTLS enabled'
+					: 'mTLS disabled'
 	const showTLSStatusError = !tlsUnavailable && args.tlsStatusError ? args.tlsStatusError : null
 	const tlsAction = (args.values.tlsAction ?? 'keep') as TLSAction
 	const showTLSFields = !tlsUnavailable && (args.editMode ? tlsAction === 'enable' : !!args.values.tlsEnabled)

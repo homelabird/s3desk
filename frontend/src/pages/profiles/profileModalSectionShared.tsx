@@ -7,6 +7,9 @@ import type { FieldErrors, ProfileModalViewState } from './profileModalValidatio
 export type ProfileModalSectionContentArgs = {
 	values: ProfileFormValues
 	errors: FieldErrors
+	disabled?: boolean
+	tlsStatusLoading?: boolean
+	onRetryTLSStatus?: () => void
 	editMode?: boolean
 	setField: <K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => void
 	viewState: ProfileModalViewState

@@ -10,6 +10,7 @@ describe('buildProfilesPageDialogsProps', () => {
 		const onCreateSubmit = vi.fn()
 		const closeEditModal = vi.fn()
 		const onEditSubmit = vi.fn()
+		const onRetryTLSStatus = vi.fn()
 		const closeYamlModal = vi.fn()
 		const onYamlCopy = vi.fn()
 		const onYamlDownload = vi.fn()
@@ -31,11 +32,13 @@ describe('buildProfilesPageDialogsProps', () => {
 			closeEditModal,
 			onEditSubmit,
 			editLoading: true,
+			editError: 'TLS temporarily unavailable',
 			editInitialValues: { name: 'Primary' },
 			tlsCapability: { enabled: true } as never,
 			tlsStatus: { mode: 'mtls' } as never,
 			tlsStatusLoading: false,
 			tlsStatusError: 'tls failed',
+			onRetryTLSStatus,
 			yamlOpen: false,
 			closeYamlModal,
 			yamlProfile: null,
@@ -66,6 +69,7 @@ describe('buildProfilesPageDialogsProps', () => {
 		expect(result.hasOpenModal).toBe(true)
 		expect(result.dialogs).toMatchObject({
 			editLoading: true,
+			editError: 'TLS temporarily unavailable',
 			editInitialValues: { name: 'Primary' },
 			tlsStatusError: 'tls failed',
 			yamlFilename: 'primary.yaml',
@@ -77,6 +81,7 @@ describe('buildProfilesPageDialogsProps', () => {
 		expect(result.dialogs.onCreateSubmit).toBe(onCreateSubmit)
 		expect(result.dialogs.closeEditModal).toBe(closeEditModal)
 		expect(result.dialogs.onEditSubmit).toBe(onEditSubmit)
+		expect(result.dialogs.onRetryTLSStatus).toBe(onRetryTLSStatus)
 		expect(result.dialogs.closeYamlModal).toBe(closeYamlModal)
 		expect(result.dialogs.onYamlCopy).toBe(onYamlCopy)
 		expect(result.dialogs.onYamlDownload).toBe(onYamlDownload)

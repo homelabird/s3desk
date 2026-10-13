@@ -67,6 +67,7 @@ export function useProfilesPageState(args: UseProfilesPageStateArgs): ProfilesPa
 		benchmarkMutation,
 		createLoading,
 		editLoading,
+		editError,
 		testingProfileId,
 		benchmarkingProfileId,
 		deletingProfileId,
@@ -132,11 +133,15 @@ export function useProfilesPageState(args: UseProfilesPageStateArgs): ProfilesPa
 			updateMutation.mutate({ id, values })
 		},
 		editLoading,
+		editError,
 		editInitialValues,
 		tlsCapability: tlsState.tlsCapability,
 		tlsStatus: tlsState.tlsStatus,
 		tlsStatusLoading: tlsState.tlsStatusLoading,
 		tlsStatusError: tlsState.tlsStatusError,
+		onRetryTLSStatus: () => {
+			if (!editLoading) tlsState.retryTLSStatus()
+		},
 		yamlOpen: activeYamlOpen,
 		closeYamlModal,
 		yamlProfile: activeYamlProfile,
@@ -172,6 +177,7 @@ export function useProfilesPageState(args: UseProfilesPageStateArgs): ProfilesPa
 		profilesError: profilesQuery.isError ? profilesQuery.error : null,
 		profilesNeedingAttention,
 		profilesQueryIsFetching: profilesQuery.isFetching,
+		onRetryProfiles: () => { void profilesQuery.refetch({ cancelRefetch: false }) },
 		tableRows,
 		onUseProfile: setProfileId,
 		onEditProfile: openEditModal,

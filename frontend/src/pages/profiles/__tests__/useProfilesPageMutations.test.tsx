@@ -167,8 +167,101 @@ describe('useProfilesPageMutations', () => {
 		if (leavePage) unmount()
 		await act(async () => { tls.reject(new Error('TLS unavailable')); await pending })
 		if (leavePage) expect(error).not.toHaveBeenCalled()
-		else expect(error).toHaveBeenCalledWith('mTLS update failed: TLS unavailable')
+		else if (operation === 'create') expect(error).toHaveBeenCalledWith('mTLS update failed: TLS unavailable')
+		else {
+			expect(result.current.editError).toBe('TLS unavailable')
+			expect(args.closeEditModal).not.toHaveBeenCalled()
+			expect(error).not.toHaveBeenCalled()
+		}
 		if (!leavePage) unmount()
+		queryClient.clear()
+	})
+
+	it('keeps edit busy and delays success until the mTLS change finishes', async () => {
+		const tls = deferred<void>()
+		const args = buildBaseArgs({
+			api: createMockApiClient({ profiles: { updateProfile: vi.fn().mockResolvedValue({ id: 'profile-1' }) } }),
+			applyTLSUpdate: vi.fn(() => tls.promise),
+		})
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		const success = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const { result, unmount } = renderHook(() => useProfilesPageMutations(args), { wrapper: createWrapper(queryClient) })
+		let pending!: Promise<unknown>
+		act(() => { pending = result.current.updateMutation.mutateAsync({ id: 'profile-1', values: buildProfileFormValues() }) })
+		await waitFor(() => expect(args.applyTLSUpdate).toHaveBeenCalledTimes(1))
+		expect(result.current.editLoading).toBe(true)
+		expect(args.closeEditModal).not.toHaveBeenCalled()
+		expect(success).not.toHaveBeenCalled()
+		await act(async () => { tls.resolve(undefined); await pending })
+		expect(result.current.editLoading).toBe(false)
+		expect(args.closeEditModal).toHaveBeenCalledTimes(1)
+		expect(success).toHaveBeenCalledWith('Profile updated')
+		unmount()
+		queryClient.clear()
+	})
+
+	it('retains the partial edit error until a same-profile retry succeeds', async () => {
+		const retry = deferred<void>()
+		const args = buildBaseArgs({
+			api: createMockApiClient({ profiles: { updateProfile: vi.fn().mockResolvedValue({ id: 'profile-1' }) } }),
+			applyTLSUpdate: vi.fn().mockRejectedValueOnce(new Error('TLS unavailable')).mockImplementationOnce(() => retry.promise),
+		})
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		const success = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const { result, unmount } = renderHook(() => useProfilesPageMutations(args), { wrapper: createWrapper(queryClient) })
+		const mutationArgs = { id: 'profile-1', values: buildProfileFormValues() }
+		await act(async () => { await result.current.updateMutation.mutateAsync(mutationArgs) })
+		expect(result.current.editError).toBe('TLS unavailable')
+		expect(result.current.editLoading).toBe(false)
+		expect(args.closeEditModal).not.toHaveBeenCalled()
+		expect(success).not.toHaveBeenCalled()
+		let pending!: Promise<unknown>
+		act(() => { pending = result.current.updateMutation.mutateAsync(mutationArgs) })
+		await waitFor(() => expect(args.applyTLSUpdate).toHaveBeenCalledTimes(2))
+		expect(result.current.editError).toBeNull()
+		expect(result.current.editLoading).toBe(true)
+		await act(async () => { retry.resolve(undefined); await pending })
+		expect(args.api.profiles.updateProfile).toHaveBeenCalledTimes(2)
+		expect(args.closeEditModal).toHaveBeenCalledTimes(1)
+		expect(success).toHaveBeenCalledTimes(1)
+		unmount()
+		queryClient.clear()
+	})
+
+	it.each([
+		['edit session', 'success'], ['edit session', 'failure'],
+		['server scope', 'success'], ['server scope', 'failure'],
+	] as const)('ignores late TLS results after %s changes (%s)', async (changedContext, outcome) => {
+		const tls = deferred<void>()
+		const args = buildBaseArgs({
+			api: createMockApiClient({ profiles: { updateProfile: vi.fn().mockResolvedValue({ id: 'profile-1' }) } }),
+			applyTLSUpdate: vi.fn(() => tls.promise),
+		})
+		const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+		const success = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const error = vi.spyOn(message, 'error').mockImplementation(() => undefined as never)
+		const { result, rerender, unmount } = renderHook((hookArgs) => useProfilesPageMutations(hookArgs), {
+			initialProps: args, wrapper: createWrapper(queryClient),
+		})
+		let pending!: Promise<unknown>
+		act(() => { pending = result.current.updateMutation.mutateAsync({ id: 'profile-1', values: buildProfileFormValues() }) })
+		await waitFor(() => expect(args.applyTLSUpdate).toHaveBeenCalledTimes(1))
+		if (changedContext === 'edit session') rerender({ ...args, editModalSession: 2 })
+		else {
+			args.serverScopeVersionRef.current += 1
+			rerender({ ...args, apiToken: 'token-b', currentScopeKey: 'token-b::profiles' })
+		}
+		await act(async () => {
+			if (outcome === 'success') tls.resolve(undefined)
+			else tls.reject(new Error('old TLS failure'))
+			await pending
+		})
+		expect(result.current.editError).toBeNull()
+		expect(result.current.editLoading).toBe(false)
+		expect(args.closeEditModal).not.toHaveBeenCalled()
+		expect(success).not.toHaveBeenCalled()
+		expect(error).not.toHaveBeenCalled()
+		unmount()
 		queryClient.clear()
 	})
 

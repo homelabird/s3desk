@@ -11,11 +11,13 @@ type BuildProfilesPageDialogsPropsArgs = {
 	closeEditModal: ProfilesDialogsProps['closeEditModal']
 	onEditSubmit: ProfilesDialogsProps['onEditSubmit']
 	editLoading: boolean
+	editError?: string | null
 	editInitialValues: ProfilesDialogsProps['editInitialValues']
 	tlsCapability: ProfilesDialogsProps['tlsCapability']
 	tlsStatus: ProfilesDialogsProps['tlsStatus']
 	tlsStatusLoading: boolean
 	tlsStatusError: string | null
+	onRetryTLSStatus?: () => void
 	yamlOpen: boolean
 	closeYamlModal: ProfilesDialogsProps['closeYamlModal']
 	yamlProfile: ProfilesDialogsProps['yamlProfile']
@@ -59,11 +61,13 @@ export function buildProfilesPageDialogsProps(
 			closeEditModal: args.closeEditModal,
 			onEditSubmit: args.onEditSubmit,
 			editLoading: args.editLoading,
+			editError: args.editError,
 			editInitialValues: args.editInitialValues,
 			tlsCapability: args.tlsCapability,
 			tlsStatus: args.tlsStatus,
 			tlsStatusLoading: args.tlsStatusLoading,
 			tlsStatusError: args.tlsStatusError,
+			onRetryTLSStatus: args.onRetryTLSStatus,
 			yamlOpen: args.yamlOpen,
 			closeYamlModal: args.closeYamlModal,
 			yamlProfile: args.yamlProfile,

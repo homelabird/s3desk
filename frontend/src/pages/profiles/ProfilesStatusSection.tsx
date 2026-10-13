@@ -14,6 +14,7 @@ type Props = {
 	profilesError: unknown
 	profilesNeedingAttention: Profile[]
 	profilesQueryIsFetching: boolean
+	onRetryProfiles: () => void
 	showProfilesEmpty: boolean
 	tableRows: ProfileTableRowViewModel[]
 	onUseProfile: (v: string | null) => void
@@ -55,9 +56,26 @@ export function ProfilesStatusSection(props: Props) {
 	const hiddenAttentionCount = props.profilesNeedingAttention.length - visibleAttentionProfiles.length
 
 	return (
-		<>
+		<Space orientation="vertical" size="middle" className={`${styles.fullWidth} ${styles.statusStack}`}>
 			{props.profilesError ? (
-				<Alert type="error" showIcon title="Failed to load profiles" description={formatErr(props.profilesError)} />
+				<Alert
+					type="error"
+					showIcon
+					title="Failed to load profiles"
+					description={
+						<Space orientation="vertical">
+							<div>{formatErr(props.profilesError)}</div>
+							<Button
+								onClick={props.onRetryProfiles}
+								loading={props.profilesQueryIsFetching}
+								disabled={props.profilesQueryIsFetching}
+								aria-label="Retry loading profiles"
+							>
+								Retry
+							</Button>
+						</Space>
+					}
+				/>
 			) : null}
 
 			{props.profilesNeedingAttention.length > 0 ? (
@@ -102,10 +120,11 @@ export function ProfilesStatusSection(props: Props) {
 			) : null}
 
 			{props.profilesQueryIsFetching && props.profiles.length === 0 ? (
-				<div className={styles.loadingRow}>
+				<div className={styles.loadingRow} role="status" aria-live="polite" aria-label="Loading profiles">
 					<Spin />
+					<span className="sr-only">Loading profiles...</span>
 				</div>
-			) : props.showProfilesEmpty ? (
+			) : props.profilesError && props.profiles.length === 0 ? null : props.showProfilesEmpty ? (
 				<Empty description="No profiles yet">
 					<Button type="primary" onClick={props.onCreateProfile}>
 						Create profile
@@ -131,6 +150,6 @@ export function ProfilesStatusSection(props: Props) {
 					deletingProfileId={props.deletingProfileId}
 				/>
 			)}
-		</>
+		</Space>
 	)
 }

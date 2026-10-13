@@ -24,9 +24,8 @@ export function ProfilesPageShell(props: ProfilesPageShellProps) {
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
 			<PageHeader
-				eyebrow="Workspace"
 				title="Profiles"
-				subtitle="Create connection profiles, verify endpoints, and choose the active workspace used across buckets, objects, and Activity."
+				subtitle="Manage storage connections and choose the active profile."
 				actions={
 					<Space wrap>
 						<Button type="primary" onClick={props.onOpenCreateModal}>

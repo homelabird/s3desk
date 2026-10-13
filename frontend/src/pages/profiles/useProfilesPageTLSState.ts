@@ -1,4 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 import { queryKeys } from '../../api/queryKeys'
 import type { APIClientShape } from '../../api/client'
@@ -23,6 +24,29 @@ export function useProfilesPageTLSState(args: UseProfilesPageTLSStateArgs) {
 		enabled: !!activeEditProfile && tlsCapabilityEnabled,
 		queryFn: () => api.profiles.getProfileTLS(activeEditProfile!.id),
 	})
+	const { refetch: refetchTLSStatus } = profileTLSQuery
+	const profileId = activeEditProfile?.id ?? null
+	const queryError = profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null
+	const [retryError, setRetryError] = useState<{ apiToken: string; profileId: string; error: string | null } | null>(null)
+	const queryContextRef = useRef({ apiToken, profileId, enabled: tlsCapabilityEnabled, fetching: profileTLSQuery.isFetching })
+	const tlsStatusError = queryError ?? (
+		profileTLSQuery.isFetching && retryError?.apiToken === apiToken && retryError.profileId === profileId
+			? retryError.error
+			: null
+	)
+	useLayoutEffect(() => {
+		queryContextRef.current = { apiToken, profileId, enabled: tlsCapabilityEnabled, fetching: profileTLSQuery.isFetching }
+	}, [apiToken, profileId, tlsCapabilityEnabled, profileTLSQuery.isFetching])
+	const retryTLSStatus = useCallback(() => {
+		const context = queryContextRef.current
+		if (!profileId || !tlsCapabilityEnabled || !context.enabled || context.fetching || context.apiToken !== apiToken || context.profileId !== profileId) return
+		context.fetching = true
+		const pendingError = { apiToken, profileId, error: queryError }
+		setRetryError(pendingError)
+		void refetchTLSStatus({ cancelRefetch: false }).then(() => {
+			setRetryError((current) => current === pendingError ? null : current)
+		})
+	}, [apiToken, profileId, tlsCapabilityEnabled, queryError, refetchTLSStatus])
 
 	const applyTLSUpdate = async (
 		profileId: string,
@@ -56,9 +80,10 @@ export function useProfilesPageTLSState(args: UseProfilesPageTLSStateArgs) {
 
 	return {
 		applyTLSUpdate,
+		retryTLSStatus,
 		tlsCapability: tlsCapability ?? null,
 		tlsStatus: profileTLSQuery.data ?? null,
 		tlsStatusLoading: profileTLSQuery.isFetching,
-		tlsStatusError: profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null,
+		tlsStatusError,
 	}
 }

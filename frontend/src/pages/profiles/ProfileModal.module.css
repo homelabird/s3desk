@@ -2,7 +2,10 @@
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
+	min-width: 0;
+	margin: 0;
 	padding: 2px 0 0;
+	border: 0;
 }
 
 .profileDialog {
@@ -311,6 +314,19 @@
 	padding-block: 0;
 }
 
+.formShell :is(input, textarea, select)[aria-invalid='true'],
+.formShell :global(.ant-input-affix-wrapper):has([aria-invalid='true']) {
+	border-color: var(--s3d-color-error) !important;
+}
+
+.formShell :global(.ant-input:disabled),
+.formShell :global(.ant-input-affix-wrapper):has(input:disabled) {
+	background: var(--s3d-color-bg-disabled) !important;
+	border-color: var(--s3d-color-border-input) !important;
+	color: var(--s3d-color-text-muted) !important;
+	box-shadow: none !important;
+}
+
 .readOnlyField {
 	color: var(--s3d-color-text);
 	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, var(--s3d-color-bg)) !important;
@@ -496,6 +512,12 @@
 	justify-content: flex-end;
 	gap: 8px;
 	flex: 0 0 auto;
+}
+
+.submitError {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .drawerFooterActions :global(.ant-btn) {

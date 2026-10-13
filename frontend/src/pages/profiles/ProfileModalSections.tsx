@@ -15,6 +15,9 @@ import {
 type ProfileModalSectionsArgs = {
 	values: ProfileFormValues
 	errors: FieldErrors
+	disabled?: boolean
+	tlsStatusLoading?: boolean
+	onRetryTLSStatus?: () => void
 	editMode?: boolean
 	setField: <K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => void
 	viewState: ProfileModalViewState
@@ -25,6 +28,7 @@ type BuiltSection = {
 	title: string
 	description?: string
 	configuredCount?: number
+	statusLabel?: string
 	content: ReactNode
 }
 
@@ -73,7 +77,7 @@ export function buildProfileModalSections(args: ProfileModalSectionsArgs): {
 				<Typography.Text className={styles.switchCardTitle}>{props.title}</Typography.Text>
 				<Typography.Text className={styles.switchCardDescription}>{props.description}</Typography.Text>
 			</div>
-			<ToggleSwitch checked={props.checked} onChange={props.onChange} disabled={props.disabled} ariaLabel={props.ariaLabel ?? props.title} />
+			<ToggleSwitch checked={props.checked} onChange={props.onChange} disabled={args.disabled || props.disabled} ariaLabel={props.ariaLabel ?? props.title} />
 		</div>
 	)
 
@@ -106,6 +110,13 @@ export function buildProfileModalSections(args: ProfileModalSectionsArgs): {
 				title: 'TLS',
 				description: 'mTLS and TLS verification.',
 				configuredCount: securityConfiguredCount,
+				statusLabel: args.viewState.tlsUnavailable
+					? 'mTLS unavailable'
+					: args.editMode
+						? args.viewState.tlsAction === 'keep'
+							? args.viewState.tlsStatusLabel
+							: args.viewState.tlsAction === 'enable' ? 'Enable or update' : 'Disable mTLS'
+						: undefined,
 				content: buildSecuritySection(sectionArgs),
 			},
 		],

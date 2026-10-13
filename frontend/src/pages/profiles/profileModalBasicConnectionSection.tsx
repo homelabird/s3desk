@@ -40,6 +40,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 					) : (
 						<NativeSelect
 							{...profileFieldA11y('profile-provider', errors.provider)}
+							disabled={args.disabled}
 							value={values.provider}
 							onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
 							options={PROVIDER_OPTIONS}

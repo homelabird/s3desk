@@ -16,11 +16,13 @@ type Props = {
 	closeEditModal: () => void
 	onEditSubmit: (id: string, values: ProfileFormValues) => void
 	editLoading: boolean
+	editError?: string | null
 	editInitialValues: Partial<ProfileFormValues> | undefined
 	tlsCapability: TLSCapability | null
 	tlsStatus: ProfileTLSStatus | null
 	tlsStatusLoading: boolean
 	tlsStatusError: string | null
+	onRetryTLSStatus?: () => void
 	yamlOpen: boolean
 	closeYamlModal: () => void
 	yamlProfile: Profile | null
@@ -107,11 +109,13 @@ export function ProfilesDialogs(props: Props) {
 				closeEditModal={props.closeEditModal}
 				onEditSubmit={props.onEditSubmit}
 				editLoading={props.editLoading}
+				editError={props.editError}
 				editInitialValues={props.editInitialValues}
 				tlsCapability={props.tlsCapability}
 				tlsStatus={props.tlsStatus}
 				tlsStatusLoading={props.tlsStatusLoading}
 				tlsStatusError={props.tlsStatusError}
+				onRetryTLSStatus={props.onRetryTLSStatus}
 				yamlOpen={props.yamlOpen}
 				closeYamlModal={props.closeYamlModal}
 				yamlProfile={props.yamlProfile}

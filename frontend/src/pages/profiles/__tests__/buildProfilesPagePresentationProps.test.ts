@@ -40,6 +40,7 @@ describe('buildProfilesPagePresentationProps', () => {
 		const onEditProfile = vi.fn()
 		const onOpenYaml = vi.fn()
 		const onCreateProfile = vi.fn()
+		const onRetryProfiles = vi.fn()
 		const testMutate = vi.fn()
 		const benchmarkMutate = vi.fn()
 		const deleteMutateAsync = vi.fn().mockResolvedValue(undefined)
@@ -52,6 +53,7 @@ describe('buildProfilesPagePresentationProps', () => {
 			profilesError: null,
 			profilesNeedingAttention: [],
 			profilesQueryIsFetching: false,
+			onRetryProfiles,
 			tableRows: [{ id: 'profile-1', name: 'Primary' }] as never,
 			onUseProfile,
 			onEditProfile,
@@ -125,6 +127,7 @@ describe('buildProfilesPagePresentationProps', () => {
 		})
 		expect(props.status).toMatchObject({
 			currentScopeKey: 'token-a::profiles',
+			onRetryProfiles,
 			showProfilesEmpty: false,
 			isTestPending: true,
 			testingProfileId: 'profile-1',
