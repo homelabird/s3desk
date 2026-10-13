@@ -4,7 +4,6 @@ import { createNewFolderMarkerObjectHint, offlineNetworkConnectionHint, selectBu
 import type { ProviderCapabilityMatrix } from '../../lib/providerCapabilities'
 import { getProviderCapabilityReason } from '../../lib/providerCapabilities'
 import type { ObjectsToolbarProps } from './ObjectsToolbar'
-import type { UIAction } from './objectsActions'
 
 export function useObjectsToolbarProps(args: {
 	apiToken: string
@@ -31,9 +30,6 @@ export function useObjectsToolbarProps(args: {
 	objectCrudSupported: boolean
 	profileCapabilities: ProviderCapabilityMatrix | null
 	topMoreMenu: ObjectsToolbarProps['topMoreMenu']
-	showPrimaryActions: boolean
-	primaryDownloadAction?: UIAction
-	primaryDeleteAction?: UIAction
 	activeTransferCount: number
 	onOpenTransfers: () => void
 	dockTree: boolean
@@ -73,9 +69,6 @@ export function useObjectsToolbarProps(args: {
 		objectCrudSupported,
 		profileCapabilities,
 		topMoreMenu,
-		showPrimaryActions,
-		primaryDownloadAction,
-		primaryDeleteAction,
 		activeTransferCount,
 		onOpenTransfers,
 		dockTree,
@@ -146,9 +139,6 @@ export function useObjectsToolbarProps(args: {
 			onRefresh,
 			isRefreshing,
 			topMoreMenu,
-			showPrimaryActions,
-			primaryDownloadAction,
-			primaryDeleteAction,
 			activeTransferCount,
 			onOpenTransfers,
 			dockTree,
@@ -184,13 +174,10 @@ export function useObjectsToolbarProps(args: {
 			onOpenTree,
 			onRefresh,
 			onUpload,
-			primaryDeleteAction,
-			primaryDownloadAction,
 			profileId,
 			recentBuckets,
 			selectedCount,
 			showLabels,
-			showPrimaryActions,
 			topMoreMenu,
 			treeDrawerOpen,
 			uploadDisabledReason,

@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { createEvent, fireEvent, render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import styles from '../ObjectsImageViewer.module.css'
@@ -28,6 +29,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('renders extracted thumbnail previews for video objects', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="clip.mp4"
@@ -63,6 +67,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('hides the URL action when presigned links are unsupported', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="clip.mp4"
@@ -97,6 +104,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('keeps the mobile viewer stage and actions visible', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile
 				objectKey="clip.mp4"
@@ -134,6 +144,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('announces preview metadata and visual loading states', async () => {
 		const { rerender } = render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="hero.png"
@@ -156,6 +169,9 @@ describe('ObjectsImageViewerModal', () => {
 
 		rerender(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="hero.png"
@@ -184,9 +200,84 @@ describe('ObjectsImageViewerModal', () => {
 		expect(screen.getByRole('status', { name: 'Preview loading' })).toHaveTextContent('Fetching preview.')
 	})
 
+	it('replaces failed metadata loading with one retry action and recovers the preview', async () => {
+		const props: ComponentProps<typeof ObjectsImageViewerModal> = {
+			open: true,
+			isMobile: true,
+			objectKey: 'hero.png',
+			objectMeta: null,
+			isMetaFetching: false,
+			isMetaError: true,
+			metaErrorMessage: 'Preview metadata denied',
+			onRetryMeta: vi.fn(),
+			preview: null,
+			onLoadPreview: vi.fn(),
+			onCancelPreview: vi.fn(),
+			canCancelPreview: false,
+			onClose: vi.fn(),
+			onDownload: vi.fn(),
+			onPresign: vi.fn(),
+			isPresignLoading: false,
+		}
+		const { rerender } = render(<ObjectsImageViewerModal {...props} />)
+		expect(await screen.findByRole('alert')).toHaveTextContent('Preview metadata denied')
+		expect(screen.getAllByRole('alert')).toHaveLength(1)
+		expect(screen.getByText('hero.png')).toBeInTheDocument()
+		expect(screen.queryByRole('status', { name: 'Preview loading' })).not.toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: 'Retry metadata' }))
+		expect(props.onRetryMeta).toHaveBeenCalledOnce()
+
+		rerender(<ObjectsImageViewerModal {...props} isMetaFetching />)
+		expect(screen.getByRole('status', { name: 'Loading preview metadata' })).toBeInTheDocument()
+		expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Retry metadata' })).not.toBeInTheDocument()
+
+		const metadata = { key: 'hero.png', contentType: 'image/png', size: 1_048_576 }
+		rerender(<ObjectsImageViewerModal {...props} objectMeta={metadata} isMetaError={false} />)
+		expect(props.onLoadPreview).toHaveBeenCalledOnce()
+		rerender(<ObjectsImageViewerModal {...props} objectMeta={metadata} isMetaError={false} preview={{
+			key: 'hero.png', status: 'ready', kind: 'image', contentType: 'image/png', url: 'blob:hero',
+		}} />)
+		expect(screen.getByTestId('objects-image-viewer-image')).toHaveAttribute('src', 'blob:hero')
+		expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+		expect(screen.queryByRole('status', { name: 'Preview loading' })).not.toBeInTheDocument()
+	})
+
+	it('keeps a ready preview when cached metadata refresh fails or is pending', async () => {
+		const props: ComponentProps<typeof ObjectsImageViewerModal> = {
+			open: true,
+			isMobile: false,
+			objectKey: 'hero.png',
+			objectMeta: { key: 'hero.png', contentType: 'image/png', size: 1_048_576 },
+			isMetaFetching: false,
+			isMetaError: true,
+			metaErrorMessage: 'Metadata refresh failed',
+			onRetryMeta: vi.fn(),
+			preview: { key: 'hero.png', status: 'ready', kind: 'image', contentType: 'image/png', url: 'blob:hero' },
+			onLoadPreview: vi.fn(),
+			onCancelPreview: vi.fn(),
+			canCancelPreview: false,
+			onClose: vi.fn(),
+			onDownload: vi.fn(),
+			onPresign: vi.fn(),
+			isPresignLoading: false,
+		}
+		const { rerender } = render(<ObjectsImageViewerModal {...props} />)
+		const image = await screen.findByTestId('objects-image-viewer-image')
+		expect(image).toHaveAttribute('src', 'blob:hero')
+		expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+		rerender(<ObjectsImageViewerModal {...props} isMetaFetching />)
+		expect(screen.getByTestId('objects-image-viewer-image')).toBe(image)
+		expect(screen.queryByRole('status', { name: 'Loading preview metadata' })).not.toBeInTheDocument()
+		expect(props.onLoadPreview).not.toHaveBeenCalled()
+	})
+
 	it('shows shared recovery copy for oversized image previews', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="oversized.png"
@@ -217,6 +308,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('updates the preview transform while dragging a zoomed image', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="hero.png"
@@ -275,6 +369,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('pans a zoomed image with keyboard arrow keys', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="hero.png"
@@ -323,6 +420,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('zooms the preview with the mouse wheel', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile={false}
 				objectKey="hero.png"
@@ -354,6 +454,9 @@ describe('ObjectsImageViewerModal', () => {
 	it('zooms the mobile preview with a two-finger pinch', async () => {
 		render(
 			<ObjectsImageViewerModal
+				isMetaError={false}
+				metaErrorMessage=""
+				onRetryMeta={vi.fn()}
 				open
 				isMobile
 				objectKey="hero.png"

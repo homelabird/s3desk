@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { SimpleTree } from '../SimpleTree'
@@ -148,6 +148,50 @@ describe('SimpleTree', () => {
 
 		expect(screen.getByRole('treeitem', { name: 'root' })).toHaveAttribute('aria-busy', 'true')
 		expect(screen.getByRole('status')).toHaveTextContent('Loading root')
+	})
+
+	it('keeps external input focus when loaded children replace the previously focused node', () => {
+		const root: TreeNode = { key: '/', title: 'root', isLeaf: false }
+		const props = {
+			expandedKeys: ['/'], selectedKeys: ['/'],
+			onExpandedKeysChange: vi.fn(), onSelectKey: vi.fn(),
+		}
+		const content = (nodes: TreeNode[], loadingKeys: string[]) => <>
+			<SimpleTree {...props} nodes={nodes} loadingKeys={loadingKeys} />
+			<input aria-label="Search current folder" />
+		</>
+		const { rerender } = render(content([root], ['/']))
+		act(() => screen.getByRole('treeitem', { name: 'root' }).focus())
+		const search = screen.getByRole('textbox', { name: 'Search current folder' })
+		act(() => search.focus())
+		expect(search).toHaveFocus()
+
+		rerender(content([{ ...root, children: [{ key: 'docs/', title: 'docs', isLeaf: true }] }], []))
+		expect(screen.getByRole('treeitem', { name: 'docs' })).toBeInTheDocument()
+		expect(search).toHaveFocus()
+	})
+
+	it('focuses the selected row for pointer selection and supports Home and End', () => {
+		const onSelectKey = vi.fn()
+		render(<SimpleTree
+			nodes={[
+				{ key: 'docs/', title: 'docs', isLeaf: true },
+				{ key: 'reports/', title: 'reports', isLeaf: true },
+			]}
+			expandedKeys={[]} selectedKeys={[]}
+			onExpandedKeysChange={vi.fn()} onSelectKey={onSelectKey}
+		/>)
+		const docs = screen.getByRole('treeitem', { name: 'docs' })
+		const reports = screen.getByRole('treeitem', { name: 'reports' })
+		const docsLabel = screen.getByRole('button', { name: 'docs' })
+		act(() => docsLabel.focus())
+		fireEvent.click(docsLabel)
+		expect(onSelectKey).toHaveBeenCalledWith('docs/')
+		expect(docs).toHaveFocus()
+		fireEvent.keyDown(docs, { key: 'End' })
+		expect(reports).toHaveFocus()
+		fireEvent.keyDown(reports, { key: 'Home' })
+		expect(docs).toHaveFocus()
 	})
 
 	it('windows large trees', () => {

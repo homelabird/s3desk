@@ -17,6 +17,9 @@ type ObjectsImageViewerModalProps = {
 	objectKey: string | null
 	objectMeta: ObjectMeta | null
 	isMetaFetching: boolean
+	isMetaError: boolean
+	metaErrorMessage: string
+	onRetryMeta: () => void
 	thumbnail?: ReactNode
 	preview: ObjectPreview | null
 	onLoadPreview: () => void
@@ -37,8 +40,10 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 function ObjectsImageViewerModalSession({
 	canCancelPreview,
 	isMetaFetching,
+	isMetaError,
 	isMobile,
 	isPresignLoading,
+	metaErrorMessage,
 	objectKey,
 	objectMeta,
 	onCancelPreview,
@@ -46,6 +51,7 @@ function ObjectsImageViewerModalSession({
 	onDownload,
 	onLoadPreview,
 	onPresign,
+	onRetryMeta,
 	open,
 	preview,
 	showPresignAction,
@@ -85,11 +91,12 @@ function ObjectsImageViewerModalSession({
 		delete document.body.dataset.objectsImageViewerOpen
 	}, [open])
 
-	const modalTitle = objectMeta ? (
+	const titleKey = objectMeta?.key ?? objectKey
+	const modalTitle = titleKey ? (
 		<Space orientation="vertical" size={0}>
 			<Typography.Text strong>Large preview</Typography.Text>
-			<Typography.Text code ellipsis={{ tooltip: objectMeta.key }}>
-				{objectMeta.key}
+			<Typography.Text code ellipsis={{ tooltip: titleKey }}>
+				{titleKey}
 			</Typography.Text>
 		</Space>
 	) : (
@@ -137,10 +144,13 @@ function ObjectsImageViewerModalSession({
 					imagePreviewTooLarge={imagePreviewTooLarge}
 					imageRef={panZoom.imageRef}
 					isMetaFetching={isMetaFetching}
+					isMetaError={isMetaError}
 					isMobile={isMobile}
+					metaErrorMessage={metaErrorMessage}
 					objectKey={objectKey}
 					objectMeta={objectMeta}
 					offset={panZoom.offset}
+					onRetryMeta={onRetryMeta}
 					open={open}
 					preview={preview}
 					scale={panZoom.scale}

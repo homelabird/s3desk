@@ -39,6 +39,20 @@ const baseArgs: Args = {
 }
 
 describe('useObjectsListDerivedState', () => {
+	it.each([{ extFilter: 'missing' }, { deferredSearch: 'missing' }])('recognizes zero matches while retaining the parent row: %j', (filter) => {
+		const { result } = renderHook(() => useObjectsListDerivedState({
+			...baseArgs,
+			prefix: 'docs/',
+			objectsPages: [page([{ key: 'docs/report.txt', size: 128, lastModified: '2026-08-24T00:00:00Z' }])],
+			...filter,
+		}))
+
+		expect(result.current.rows).toEqual([{ kind: 'parent', prefix: '' }])
+		expect(result.current.visibleFileCount).toBe(0)
+		expect(result.current.rawTotalCount).toBe(1)
+		expect(result.current.emptyKind).toBe('noresults')
+	})
+
 	it('keeps rows stable when an inactive favorite source changes', () => {
 		const { result, rerender } = renderHook(
 			(args: Args) => useObjectsListDerivedState(args),

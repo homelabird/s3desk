@@ -1,4 +1,4 @@
-import { Alert, Empty, Spin, Typography } from 'antd'
+import { Alert, Button, Empty, Spin, Typography } from 'antd'
 import type {
 	KeyboardEvent as ReactKeyboardEvent,
 	PointerEvent as ReactPointerEvent,
@@ -29,10 +29,13 @@ type ObjectsImageViewerBodyProps = {
 	imagePreviewTooLarge: boolean
 	imageRef: RefObject<HTMLImageElement | null>
 	isMetaFetching: boolean
+	isMetaError: boolean
 	isMobile: boolean
+	metaErrorMessage: string
 	objectKey: string | null
 	objectMeta: ObjectMeta | null
 	offset: ImageViewerPanOffset
+	onRetryMeta: () => void
 	open: boolean
 	preview: ObjectPreview | null
 	scale: number
@@ -55,10 +58,13 @@ export function ObjectsImageViewerBody({
 	imagePreviewTooLarge,
 	imageRef,
 	isMetaFetching,
+	isMetaError,
 	isMobile,
+	metaErrorMessage,
 	objectKey,
 	objectMeta,
 	offset,
+	onRetryMeta,
 	open,
 	preview,
 	scale,
@@ -75,6 +81,19 @@ export function ObjectsImageViewerBody({
 			<div className={styles.imageViewerLoadingState} role="status" aria-live="polite" aria-label="Loading preview metadata">
 				<Spin size="large" />
 				<Typography.Text type="secondary">Loading preview metadata…</Typography.Text>
+			</div>
+		)
+	}
+	if (isMetaError && !objectMeta) {
+		return (
+			<div className={styles.imageViewerStateStack}>
+				<Alert
+					type="error"
+					showIcon
+					title="Failed to load preview metadata"
+					description={metaErrorMessage}
+					action={<Button size="small" onClick={onRetryMeta} disabled={isMetaFetching}>Retry metadata</Button>}
+				/>
 			</div>
 		)
 	}

@@ -257,3 +257,28 @@ for (const width of [320, 1440]) {
 		}
 	})
 }
+
+for (const width of [390, 1280]) {
+	test(`Search bucket preserves spaces during sequential typing at ${width}px`, async ({ page }, testInfo) => {
+		await page.setViewportSize({ width, height: width === 390 ? 844 : 900 })
+		await seedStorage(page)
+		await setupApiMocks(page)
+		const queries: string[] = []
+		page.on('request', request => {
+			if (request.url().includes('/objects/search?')) {
+				queries.push(new URL(request.url()).searchParams.get('q') ?? '')
+			}
+		})
+		await gotoWithDynamicImportRecovery(page, '/objects', scope => scope.getByPlaceholder('Search current folder'))
+		const drawer = await openObjectsGlobalSearchDialog(page)
+		const input = drawer.getByRole('textbox', { name: 'Search files or folders', exact: true })
+		await input.pressSequentially(' annual ')
+		await expect.poll(() => queries.at(-1)).toBe('annual')
+		await page.screenshot({ path: testInfo.outputPath('search-whitespace-draft.png') })
+		await expect(input).toHaveValue(' annual ')
+		await input.pressSequentially('report ')
+		await expect.poll(() => queries.at(-1)).toBe('annual report')
+		await expect(input).toHaveValue(' annual report ')
+		await page.screenshot({ path: testInfo.outputPath('search-continued-multiword-query.png') })
+	})
+}

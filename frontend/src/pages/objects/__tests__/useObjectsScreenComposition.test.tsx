@@ -328,6 +328,8 @@ function seedCompositionState(overrides?: { detailsKey?: string | null }) {
 		handleTreePrefixContextMenu: vi.fn(),
 		breadcrumbItems: [{ title: 'bucket-a' }],
 		hasActiveView: true,
+		hasActiveFilters: true,
+		resetFilters: vi.fn(),
 		searchAutoScanCap: 2000,
 		canInteract: true,
 		showUploadDropOverlay: true,
@@ -503,6 +505,10 @@ describe('useObjectsScreenComposition', () => {
 		})
 		expect(panesArgs.favoritesErrorMessage).toBe('favorites failed')
 		expect(panesArgs.objectsErrorMessage).toBe('objects failed')
+		expect(panesArgs.hasActiveFilters).toBe(true)
+		expect(panesArgs.resetFilters).toBe(readRef<UseObjectsScreenListResult>(listStateRef).resetFilters)
+		panesArgs.onRefresh()
+		expect(args.refresh).toHaveBeenCalledOnce()
 		expect(panesArgs.canCreateFolder).toBe(true)
 		expect(panesArgs.createFolderTooltipText).toBe('Create folder')
 		expect(panesArgs.detailsDrawerSuspended).toBe(true)

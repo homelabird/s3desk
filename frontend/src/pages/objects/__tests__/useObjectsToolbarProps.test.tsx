@@ -34,7 +34,6 @@ function buildArgs(overrides: Partial<Parameters<typeof useObjectsToolbarProps>[
 		objectCrudSupported: true,
 		profileCapabilities: null,
 		topMoreMenu: { items: [] },
-		showPrimaryActions: false,
 		activeTransferCount: 0,
 		onOpenTransfers: vi.fn(),
 		dockTree: true,

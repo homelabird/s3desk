@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect } from 'react'
 
+import { formatErrorWithHint } from '../lib/errors'
 import styles from './objects/ObjectsShell.module.css'
 import { ObjectsPagePanes } from './objects/ObjectsPagePanes'
 import { ObjectsImageViewerModal, ObjectsPageHeader, ObjectsPageOverlays } from './objects/objectsPageLazy'
@@ -210,6 +211,9 @@ export function ObjectsPageScreen(props: Props) {
 						objectKey={previewState.largePreviewKey}
 						objectMeta={previewState.largePreviewMeta}
 						isMetaFetching={previewState.largePreviewMetaIsFetching}
+						isMetaError={previewState.largePreviewMetaIsError}
+						metaErrorMessage={formatErrorWithHint(previewState.largePreviewMetaError)}
+						onRetryMeta={previewState.refetchLargePreviewMeta}
 						thumbnail={previewState.largePreviewThumbnail}
 						preview={previewState.largePreview}
 						onLoadPreview={previewState.loadLargePreview}

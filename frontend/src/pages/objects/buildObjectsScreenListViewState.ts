@@ -116,6 +116,7 @@ export function buildObjectsScreenListViewState(args: BuildObjectsScreenListView
 		canClearSearch,
 		canInteract,
 		handleClearSearch,
+		hasActiveFilters,
 		hasActiveView,
 		listIsFetching,
 		listIsFetchingNextPage,

@@ -10,7 +10,7 @@ import type {
 } from './objectsScreenTypes'
 import type { ObjectsScreenListState } from './useObjectsScreenList'
 
-type UseObjectsScreenPanesArgs = Pick<ObjectsScreenArgs, 'props' | 'actions' | 'previewState' | 'viewportState'> & {
+type UseObjectsScreenPanesArgs = Pick<ObjectsScreenArgs, 'props' | 'actions' | 'previewState' | 'viewportState' | 'refresh'> & {
 	locationVm: ObjectsLocationVm
 	listVm: ObjectsListVm
 	selectionVm: ObjectsSelectionVm
@@ -31,6 +31,7 @@ export function useObjectsScreenPanes({
 	actions,
 	previewState,
 	viewportState,
+	refresh,
 	listState,
 	canCreateFolder,
 	createFolderTooltipText,
@@ -103,6 +104,8 @@ export function useObjectsScreenPanes({
 		searchDraft: listVm.searchDraft,
 		setSearchDraft: listVm.setSearchDraft,
 		hasActiveView: listState.hasActiveView,
+		hasActiveFilters: listState.hasActiveFilters,
+		resetFilters: listState.resetFilters,
 		setFiltersDrawerOpen: paneVm.setFiltersDrawerOpen,
 		isAdvanced: listVm.isAdvanced,
 		visiblePrefixCount: listVm.visiblePrefixCount,
@@ -123,6 +126,7 @@ export function useObjectsScreenPanes({
 		setViewMode: listVm.setViewMode,
 		isOffline: operationVm.isOffline,
 		objectsErrorMessage: listVm.objectsQuery.isError ? formatErr(listVm.objectsQuery.error) : null,
+		onRefresh: () => void refresh(),
 		uploadDropActive: listState.showUploadDropOverlay,
 		uploadDropLabel: listState.uploadDropLabel,
 		onUploadDragEnter: listState.onUploadDragEnter,

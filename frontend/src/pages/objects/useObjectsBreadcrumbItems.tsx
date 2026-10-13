@@ -57,6 +57,8 @@ export function useObjectsBreadcrumbItems({
 			<button
 				type="button"
 				className={styles.breadcrumbLink}
+				title={label}
+				aria-current={targetPrefix === normalizePrefix(prefix) ? 'location' : undefined}
 				onClick={() => (canNavigate ? navigateToLocation(bucket, targetPrefix, { recordHistory: true }) : undefined)}
 				disabled={!canNavigate}
 			>
@@ -94,6 +96,7 @@ export function useObjectsBreadcrumbItems({
 							<button
 								type="button"
 								className={styles.breadcrumbLink}
+								aria-label="Parent folders"
 								aria-haspopup="menu"
 								aria-expanded={open}
 								disabled={!canNavigate}

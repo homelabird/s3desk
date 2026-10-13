@@ -9,6 +9,96 @@ import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsScreenPreviewState } from '../useObjectsScreenPreviewState'
 
 describe('useObjectsScreenPreviewState', () => {
+	it('exposes metadata errors and retries the same large-preview key without cancelling a pending retry', async () => {
+		const failure = new Error('Preview metadata denied')
+		const metadata: ObjectMeta = { key: 'hero.png', contentType: 'image/png', size: 1024 }
+		let resolveMetadata!: (metadata: ObjectMeta) => void
+		const getObjectMeta = vi.fn()
+			.mockRejectedValueOnce(failure)
+			.mockImplementationOnce(() => new Promise<ObjectMeta>((resolve) => { resolveMetadata = resolve }))
+		const api = createMockApiClient({ objects: { getObjectMeta } })
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+		const thumbnailCache = createThumbnailCache()
+		const wrapper = ({ children }: PropsWithChildren) => (
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		)
+		const { result } = renderHook(() => useObjectsScreenPreviewState({
+			api,
+			apiToken: 'token',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			selectedKeys: new Set<string>(),
+			selectedCount: 0,
+			detailsVisible: false,
+			favoritesOnly: false,
+			favoriteItems: [],
+			objectPages: [],
+			downloadLinkProxyEnabled: false,
+			presignedDownloadSupported: false,
+			showThumbnails: false,
+			thumbnailCache,
+			setSelectedKeys: vi.fn(),
+			setLastSelectedObjectKey: vi.fn(),
+			setDetailsDrawerOpen: vi.fn(),
+		}), { wrapper })
+
+		act(() => result.current.openLargePreviewForKey('hero.png'))
+		await waitFor(() => expect(result.current.largePreviewMetaIsError).toBe(true))
+		expect(result.current.largePreviewMetaError).toBe(failure)
+		expect(result.current.largePreviewMeta).toBeNull()
+		expect(result.current.largePreviewMetaIsFetching).toBe(false)
+		act(() => {
+			result.current.refetchLargePreviewMeta()
+			result.current.refetchLargePreviewMeta()
+		})
+		await waitFor(() => expect(result.current.largePreviewMetaIsFetching).toBe(true))
+		expect(getObjectMeta).toHaveBeenCalledTimes(2)
+		expect(getObjectMeta.mock.calls[1][0].key).toBe('hero.png')
+		await act(async () => resolveMetadata(metadata))
+		await waitFor(() => expect(result.current.largePreviewMeta).toEqual(metadata))
+		expect(result.current.largePreviewMetaIsError).toBe(false)
+		expect(result.current.largePreviewMetaError).toBeNull()
+		expect(result.current.largePreviewMetaIsFetching).toBe(false)
+	})
+
+	it('preserves cached metadata when its large-preview refresh fails', async () => {
+		const metadata: ObjectMeta = { key: 'hero.png', contentType: 'image/png', size: 1024 }
+		const failure = new Error('Metadata refresh failed')
+		const getObjectMeta = vi.fn().mockResolvedValueOnce(metadata).mockRejectedValueOnce(failure)
+		const api = createMockApiClient({ objects: { getObjectMeta } })
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+		const thumbnailCache = createThumbnailCache()
+		const wrapper = ({ children }: PropsWithChildren) => (
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		)
+		const { result } = renderHook(() => useObjectsScreenPreviewState({
+			api,
+			apiToken: 'token',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			selectedKeys: new Set<string>(),
+			selectedCount: 0,
+			detailsVisible: false,
+			favoritesOnly: false,
+			favoriteItems: [],
+			objectPages: [],
+			downloadLinkProxyEnabled: false,
+			presignedDownloadSupported: false,
+			showThumbnails: false,
+			thumbnailCache,
+			setSelectedKeys: vi.fn(),
+			setLastSelectedObjectKey: vi.fn(),
+			setDetailsDrawerOpen: vi.fn(),
+		}), { wrapper })
+		act(() => result.current.openLargePreviewForKey('hero.png'))
+		await waitFor(() => expect(result.current.largePreviewMeta).toEqual(metadata))
+		act(() => result.current.refetchLargePreviewMeta())
+		await waitFor(() => expect(result.current.largePreviewMetaIsError).toBe(true))
+		expect(result.current.largePreviewMeta).toEqual(metadata)
+		expect(result.current.largePreviewMetaError).toBe(failure)
+		expect(getObjectMeta).toHaveBeenCalledTimes(2)
+	})
+
 	it('aborts details and large-preview metadata when the screen unmounts', async () => {
 		const signals: AbortSignal[] = []
 		const getObjectMeta = vi.fn((request: { key: string; signal?: AbortSignal }) => {

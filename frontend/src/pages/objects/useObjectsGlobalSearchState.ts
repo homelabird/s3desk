@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useState } from 'react'
+import { useCallback, useDeferredValue, useState } from 'react'
 
 import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
@@ -77,9 +77,10 @@ export function useObjectsGlobalSearchState({
 		},
 	)
 	const [globalSearchDraft, setGlobalSearchDraftState] = useState(globalSearch)
+	const [searchSnapshot, setSearchSnapshot] = useState({ apiToken, bucket, profileId, globalSearch })
 	const deferredGlobalSearch = useDeferredValue(globalSearch)
 	const setGlobalSearchDraft = useCallback((next: string) => {
-		setGlobalSearchDraftState(clampText(next, MAX_GLOBAL_SEARCH_TEXT_LENGTH))
+		setGlobalSearchDraftState(next.slice(0, MAX_GLOBAL_SEARCH_TEXT_LENGTH))
 	}, [])
 
 	const [globalSearchPrefix, setGlobalSearchPrefix] = useLocalStorageState<string>(
@@ -149,14 +150,17 @@ export function useObjectsGlobalSearchState({
 	const [indexPrefix, setIndexPrefix] = useState('')
 	const [indexFullReindex, setIndexFullReindex] = useState(true)
 
-	useEffect(() => {
-		setGlobalSearchDraftState(globalSearch)
-	}, [globalSearch])
-
-	useEffect(() => {
-		setIndexPrefix('')
-		setIndexFullReindex(true)
-	}, [apiToken, bucket, profileId])
+	const scopeChanged = searchSnapshot.apiToken !== apiToken || searchSnapshot.bucket !== bucket || searchSnapshot.profileId !== profileId
+	if (scopeChanged || searchSnapshot.globalSearch !== globalSearch) {
+		setSearchSnapshot({ apiToken, bucket, profileId, globalSearch })
+		if (scopeChanged || clampText(globalSearchDraft, MAX_GLOBAL_SEARCH_TEXT_LENGTH) !== globalSearch) {
+			setGlobalSearchDraftState(globalSearch)
+		}
+		if (scopeChanged) {
+			setIndexPrefix('')
+			setIndexFullReindex(true)
+		}
+	}
 
 	const resetGlobalSearch = useCallback(() => {
 		setGlobalSearch('')

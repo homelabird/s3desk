@@ -84,10 +84,14 @@ describe('useObjectsContextMenuLifecycle', () => {
 		}))
 	})
 
-	it('closes the context menu when Escape is pressed', () => {
+	it('closes the context menu and restores list focus when Escape is pressed', () => {
 		const closeContextMenu = vi.fn()
 		const listScrollerEl = document.createElement('div')
+		listScrollerEl.tabIndex = 0
 		document.body.appendChild(listScrollerEl)
+		const menuButton = document.createElement('button')
+		document.body.appendChild(menuButton)
+		menuButton.focus()
 		const scrollContainerRef = { current: listScrollerEl }
 
 		renderHook(() =>
@@ -114,6 +118,53 @@ describe('useObjectsContextMenuLifecycle', () => {
 		})
 
 		expect(closeContextMenu).toHaveBeenCalledWith(undefined, 'escape')
+		expect(document.activeElement).toBe(listScrollerEl)
+	})
+
+	it('leaves button-source focus restoration to its popover', () => {
+		const listScrollerEl = document.createElement('div')
+		listScrollerEl.tabIndex = 0
+		const menuButton = document.createElement('button')
+		document.body.append(listScrollerEl, menuButton)
+		menuButton.focus()
+		const closeContextMenu = vi.fn()
+		renderHook(() => useObjectsContextMenuLifecycle({
+			listScrollerEl,
+			scrollContainerRef: { current: listScrollerEl },
+			selectedCount: 1,
+			contextMenuState: createContextMenuState({ open: true, source: 'button', kind: 'object', key: 'hero.png' }),
+			contextMenuPoint: null,
+			contextMenuVisible: false,
+			recordContextMenuPoint: vi.fn(),
+			openListContextMenu: vi.fn(),
+			closeContextMenu,
+		}))
+		act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+		expect(closeContextMenu).toHaveBeenCalledWith(undefined, 'escape')
+		expect(document.activeElement).toBe(menuButton)
+	})
+
+	it('does not move focus back to the list when a pointer closes the context menu', () => {
+		const listScrollerEl = document.createElement('div')
+		listScrollerEl.tabIndex = 0
+		const outsideButton = document.createElement('button')
+		document.body.append(listScrollerEl, outsideButton)
+		outsideButton.focus()
+		const closeContextMenu = vi.fn()
+		renderHook(() => useObjectsContextMenuLifecycle({
+			listScrollerEl,
+			scrollContainerRef: { current: listScrollerEl },
+			selectedCount: 1,
+			contextMenuState: createContextMenuState({ open: true, source: 'context', kind: 'object', key: 'hero.png' }),
+			contextMenuPoint: { x: 16, y: 20 },
+			contextMenuVisible: true,
+			recordContextMenuPoint: vi.fn(),
+			openListContextMenu: vi.fn(),
+			closeContextMenu,
+		}))
+		act(() => outsideButton.dispatchEvent(new Event('pointerdown', { bubbles: true })))
+		expect(closeContextMenu).toHaveBeenCalledWith(undefined, 'pointerdown')
+		expect(document.activeElement).toBe(outsideButton)
 	})
 
 	it('consumes Escape when closing the context menu', () => {

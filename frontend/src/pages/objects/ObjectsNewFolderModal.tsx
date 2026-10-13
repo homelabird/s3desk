@@ -119,7 +119,6 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 						onChange={(e) => props.onValuesChange({ ...props.values, name: e.target.value })}
 						placeholder="new-folder…"
 						autoComplete="off"
-						autoFocus
 						disabled={props.isSubmitting}
 					/>
 				</FormField>

@@ -16,6 +16,27 @@ function buildAction(overrides: Partial<UIAction> = {}): UIAction {
 }
 
 describe('ObjectsSelectionBar', () => {
+	it('keeps the simple selection download and delete actions available after toolbar deduplication', () => {
+		const download = buildAction({ id: 'download_selected', label: 'Download', shortLabel: 'Download' })
+		const remove = buildAction({ id: 'delete_selected', label: 'Delete', shortLabel: 'Delete', danger: true })
+		render(<ObjectsSelectionBar
+			selectedCount={2}
+			singleSelectedKey={null}
+			isAdvanced={false}
+			downloadAction={download}
+			deleteAction={remove}
+			selectionMenuActions={[]}
+			getObjectActions={() => []}
+			isDownloadLoading={false}
+			isDeleteLoading={false}
+		/> )
+
+		fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+		expect(download.run).toHaveBeenCalledOnce()
+		expect(remove.run).toHaveBeenCalledOnce()
+	})
+
 	it('renders the shared selection shell with compact actions', () => {
 		const copyAction = buildAction({ id: 'copy_selected_keys', label: 'Copy selected keys', shortLabel: 'Copy' })
 		render(

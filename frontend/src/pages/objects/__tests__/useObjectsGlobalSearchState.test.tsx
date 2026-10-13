@@ -1,11 +1,27 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
+import { useObjectsGlobalSearchOverlayState } from '../useObjectsGlobalSearchOverlayState'
 import { useObjectsGlobalSearchState } from '../useObjectsGlobalSearchState'
+
+type SearchScope = { apiToken: string; profileId: string | null; bucket: string }
+
+function useDebouncedGlobalSearch(scope: SearchScope) {
+	const state = useObjectsGlobalSearchState(scope)
+	const overlay = useObjectsGlobalSearchOverlayState({
+		scopeKey: `${scope.apiToken}:${scope.profileId}:${scope.bucket}`,
+		globalSearch: state.globalSearch,
+		setGlobalSearch: state.setGlobalSearch,
+		globalSearchDraft: state.globalSearchDraft,
+		setGlobalSearchDraft: state.setGlobalSearchDraft,
+	})
+	return { ...state, ...overlay }
+}
 
 describe('useObjectsGlobalSearchState', () => {
 	afterEach(() => {
+		vi.useRealTimers()
 		window.localStorage.clear()
 	})
 
@@ -181,5 +197,84 @@ describe('useObjectsGlobalSearchState', () => {
 			expect(result.current.indexPrefix).toBe('')
 			expect(result.current.indexFullReindex).toBe(true)
 		})
+	})
+
+	it('preserves editing spaces after debounce so another word can be typed', () => {
+		vi.useFakeTimers()
+		const { result } = renderHook(() => useDebouncedGlobalSearch({ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a' }))
+		act(() => result.current.setGlobalSearchDraft(' annual '))
+		expect(result.current.globalSearchDraft).toBe(' annual ')
+		act(() => vi.advanceTimersByTime(249))
+		expect(result.current.globalSearch).toBe('')
+		act(() => vi.advanceTimersByTime(1))
+		expect(result.current.globalSearch).toBe('annual')
+		expect(result.current.globalSearchDraft).toBe(' annual ')
+		act(() => result.current.setGlobalSearchDraft(`${result.current.globalSearchDraft}report `))
+		act(() => vi.advanceTimersByTime(250))
+		expect(result.current.globalSearch).toBe('annual report')
+		expect(result.current.globalSearchDraft).toBe(' annual report ')
+		expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'globalSearch'))).toBe(JSON.stringify('annual report'))
+	})
+
+	it('synchronizes a new committed query and clears pending drafts on external clear or reset', () => {
+		vi.useFakeTimers()
+		const { result } = renderHook(() => useDebouncedGlobalSearch({ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a' }))
+		act(() => result.current.setGlobalSearchDraft(' annual '))
+		act(() => vi.advanceTimersByTime(250))
+		act(() => result.current.setGlobalSearch('quarterly report'))
+		expect(result.current.globalSearchDraft).toBe('quarterly report')
+		act(() => result.current.setGlobalSearchDraft('quarterly report revised '))
+		act(() => result.current.setGlobalSearch(''))
+		expect(result.current.globalSearchDraft).toBe('')
+		act(() => vi.advanceTimersByTime(250))
+		expect(result.current.globalSearch).toBe('')
+		act(() => result.current.setGlobalSearchDraft(' '))
+		act(() => result.current.resetGlobalSearch())
+		expect(result.current.globalSearchDraft).toBe('')
+		act(() => result.current.setGlobalSearchDraft('pending report '))
+		act(() => result.current.resetGlobalSearch())
+		act(() => vi.advanceTimersByTime(250))
+		expect(result.current.globalSearch).toBe('')
+		expect(result.current.globalSearchDraft).toBe('')
+	})
+
+	it('keeps the draft length bound while trimming only the committed query', () => {
+		vi.useFakeTimers()
+		const { result } = renderHook(() => useDebouncedGlobalSearch({ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a' }))
+		act(() => result.current.setGlobalSearchDraft(` ${'a'.repeat(200)} `))
+		expect(result.current.globalSearchDraft).toBe(` ${'a'.repeat(159)}`)
+		act(() => vi.advanceTimersByTime(250))
+		expect(result.current.globalSearch).toBe('a'.repeat(159))
+		expect(result.current.globalSearchDraft).toBe(` ${'a'.repeat(159)}`)
+		act(() => result.current.setGlobalSearch(` ${'b'.repeat(200)} `))
+		expect(result.current.globalSearch).toBe('b'.repeat(160))
+		expect(result.current.globalSearchDraft).toBe('b'.repeat(160))
+	})
+
+	it.each([
+		['profile', { apiToken: 'token-a', profileId: 'profile-2', bucket: 'bucket-a' }],
+		['server', { apiToken: 'token-b', profileId: 'profile-1', bucket: 'bucket-a' }],
+		['bucket', { apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-b' }],
+	] as const)('resets drafts and cancels pending commits when the %s scope changes', (_name, nextScope) => {
+		vi.useFakeTimers()
+		const initialScope: SearchScope = { apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a' }
+		for (const scope of [initialScope, nextScope]) {
+			window.localStorage.setItem(profileScopedStorageKey('objects', scope.apiToken, scope.profileId, 'globalSearch'), JSON.stringify('annual'))
+		}
+		const { result, rerender } = renderHook(useDebouncedGlobalSearch, { initialProps: initialScope })
+		act(() => {
+			result.current.openGlobalSearch()
+			result.current.setGlobalSearchDraft('annual report ')
+		})
+		rerender(nextScope)
+		expect(result.current.globalSearchOpen).toBe(false)
+		expect(result.current.globalSearch).toBe('annual')
+		expect(result.current.globalSearchDraft).toBe('annual')
+		act(() => vi.advanceTimersByTime(250))
+		expect(result.current.globalSearch).toBe('annual')
+		expect(window.localStorage.getItem(profileScopedStorageKey('objects', nextScope.apiToken, nextScope.profileId, 'globalSearch'))).toBe(JSON.stringify('annual'))
+		act(() => result.current.setGlobalSearchDraft(' annual '))
+		rerender(initialScope)
+		expect(result.current.globalSearchDraft).toBe('annual')
 	})
 })

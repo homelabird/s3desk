@@ -1,7 +1,5 @@
 import {
 	CloudUploadOutlined,
-	DeleteOutlined,
-	DownloadOutlined,
 	EllipsisOutlined,
 	FolderAddOutlined,
 	InfoCircleOutlined,
@@ -14,8 +12,6 @@ import type { ReactNode } from 'react'
 
 import {
 	bucketFieldPlaceholder,
-	deleteSelectedObjectsLabel,
-	downloadToBrowserHint,
 	loadingBucketsPlaceholder,
 	newFolderShortcutHint,
 	offlineNetworkConnectionHint,
@@ -26,7 +22,6 @@ import {
 } from '../../lib/actionHints'
 import { ObjectsBucketPicker } from './ObjectsBucketPicker'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
-import type { UIAction } from './objectsActions'
 import { OBJECTS_DETAILS_DRAWER_ID } from './objectsOverlayIds'
 import styles from './ObjectsShell.module.css'
 
@@ -59,9 +54,6 @@ export type ObjectsToolbarProps = {
 	onRefresh: () => void
 	isRefreshing: boolean
 	topMoreMenu: MenuProps
-	showPrimaryActions: boolean
-	primaryDownloadAction?: UIAction
-	primaryDeleteAction?: UIAction
 	activeTransferCount: number
 	onOpenTransfers: () => void
 	dockTree: boolean
@@ -89,7 +81,6 @@ type DesktopToolbarLayoutProps = {
 	bucketPicker: ReactNode
 	navButtons: ReactNode
 	primaryActions: ReactNode
-	selectionActions: ReactNode
 	utilityActions: ReactNode
 }
 
@@ -109,7 +100,6 @@ function DesktopToolbarLayout(props: DesktopToolbarLayoutProps) {
 					data-testid="objects-toolbar-desktop-actions"
 					data-compact={props.showLabels ? 'false' : 'true'}
 				>
-					{props.selectionActions}
 					{props.primaryActions}
 					{props.utilityActions}
 				</div>
@@ -132,37 +122,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					? props.uploadDisabledReason ?? uploadsUnsupportedHint()
 					: uploadFilesOrFoldersHint()
 	const createFolderTooltipText = props.createFolderTooltipText
-	const showSelectionPrimaryActions = props.showPrimaryActions && props.selectedCount > 0
-	const downloadDisabledReason = !props.hasProfile
-		? selectProfileFirstHint()
-		: props.isOffline
-			? offlineNetworkConnectionHint()
-			: !props.bucket
-				? selectBucketFirstHint()
-				: downloadToBrowserHint()
-	const deleteDisabledReason = !props.hasProfile
-		? selectProfileFirstHint()
-		: props.isOffline
-			? offlineNetworkConnectionHint()
-			: !props.bucket
-				? selectBucketFirstHint()
-				: deleteSelectedObjectsLabel()
-
-	const renderPrimaryActionButton = (
-		action: UIAction | undefined,
-		opts: { icon: ReactNode; fallbackLabel: string; danger?: boolean; tooltip: string },
-	) => {
-		if (!action) return null
-		const label = props.showLabels ? action.shortLabel ?? action.label ?? opts.fallbackLabel : null
-		const disabled = !action.enabled
-		const ariaLabel = action.label ?? opts.fallbackLabel
-		const button = (
-			<Button size={actionButtonSize} icon={opts.icon} danger={opts.danger} disabled={disabled} onClick={action.run} aria-label={ariaLabel}>
-				{label}
-			</Button>
-		)
-		return renderHinted(button, disabled ? opts.tooltip : action.label ?? opts.fallbackLabel)
-	}
 
 	const uploadButtonDesktop = renderHinted(
 		<Button type="primary" size={actionButtonSize} icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload} aria-label="Upload">
@@ -229,22 +188,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 		/>
 	)
 
-	const selectionActions = showSelectionPrimaryActions ? (
-		<>
-			{renderPrimaryActionButton(props.primaryDownloadAction, {
-				icon: <DownloadOutlined />,
-				fallbackLabel: 'Download',
-				tooltip: downloadDisabledReason,
-			})}
-			{renderPrimaryActionButton(props.primaryDeleteAction, {
-				icon: <DeleteOutlined />,
-				fallbackLabel: 'Delete',
-				danger: true,
-				tooltip: deleteDisabledReason,
-			})}
-		</>
-	) : null
-
 	if (props.isDesktop) {
 		const navButtons = props.bucket && props.isAdvanced ? (
 			<>
@@ -288,7 +231,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				bucketPicker={bucketPicker}
 				navButtons={navButtons}
 				primaryActions={primaryActions}
-				selectionActions={selectionActions}
 				utilityActions={utilityActions}
 			/>
 		)
@@ -331,9 +273,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						</>
 					) : null}
 					{uploadButtonMobile}
-					{showSelectionPrimaryActions ? (
-						selectionActions
-					) : null}
 					{showMobileDetails ? (
 						<Button
 							size="small"

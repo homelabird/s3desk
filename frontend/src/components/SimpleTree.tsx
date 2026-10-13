@@ -68,6 +68,7 @@ export function SimpleTree(props: Props) {
 	const expandedSet = useMemo(() => new Set(props.expandedKeys.map(String)), [props.expandedKeys])
 	const selectedSet = useMemo(() => new Set(props.selectedKeys.map(String)), [props.selectedKeys])
 	const itemRefs = useRef(new Map<string, HTMLDivElement>())
+	const pendingFocusRef = useRef<{ key: string; origin: Element | null } | null>(null)
 	const [focusedKey, setFocusedKey] = useState<string | null>(null)
 	const [treeElement, setTreeElement] = useState<HTMLUListElement | null>(null)
 	const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null)
@@ -164,10 +165,12 @@ export function SimpleTree(props: Props) {
 			: (selectedVisibleKey ?? firstVisibleKey)
 
 	const focusTreeItem = (key: string) => {
+		const element = itemRefs.current.get(key)
+		pendingFocusRef.current = element ? null : { key, origin: document.activeElement }
 		setFocusedKey(key)
 		const index = visibleIndexByKey.get(key)
 		if (typeof index === 'number') treeVirtualizer.scrollToIndex(index, { align: 'auto' })
-		itemRefs.current.get(key)?.focus()
+		element?.focus()
 	}
 
 	const loadRequestedRef = useRef(new Map<string, TreeNode>())
@@ -205,7 +208,7 @@ export function SimpleTree(props: Props) {
 	}
 
 	const selectTreeItem = (key: string) => {
-		setFocusedKey(key)
+		focusTreeItem(key)
 		props.onSelectKey(key)
 	}
 
@@ -292,7 +295,15 @@ export function SimpleTree(props: Props) {
 				ref={(element) => {
 					if (element) {
 						itemRefs.current.set(key, element)
-						if (focusedKey === key) element.focus()
+						const pending = pendingFocusRef.current
+						if (pending?.key === key) {
+							pendingFocusRef.current = null
+							// A virtualized target may mount after its focused origin was removed.
+							const active = document.activeElement
+							if (active === pending.origin || (active === document.body && !pending.origin?.isConnected)) {
+								element.focus()
+							}
+						}
 					} else itemRefs.current.delete(key)
 				}}
 				role="treeitem"
@@ -322,6 +333,7 @@ export function SimpleTree(props: Props) {
 						onClick={(event) => {
 							event.stopPropagation()
 							toggleExpanded(key)
+							focusTreeItem(key)
 						}}
 					>
 						<span className={styles.toggleChevron} aria-hidden="true">

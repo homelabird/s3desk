@@ -1,4 +1,5 @@
-import { Suspense } from 'react'
+import { Button } from 'antd'
+import { Suspense, type ReactNode } from 'react'
 
 import {
 	failedToListObjectsTitle,
@@ -21,7 +22,7 @@ import type { ObjectsPagePanesProps } from './ObjectsPagePaneTypes'
 
 type ObjectsListPaneProps = ObjectsPagePanesProps['listProps']
 
-function InlineAlert(props: { tone: 'info' | 'warning' | 'error'; title: string; description?: string | null }) {
+function InlineAlert(props: { tone: 'info' | 'warning' | 'error'; title: string; description?: string | null; action?: ReactNode }) {
 	return (
 		<div
 			className={[
@@ -36,20 +37,32 @@ function InlineAlert(props: { tone: 'info' | 'warning' | 'error'; title: string;
 		>
 			<strong className={shellStyles.inlineAlertTitle}>{props.title}</strong>
 			{props.description ? <span className={shellStyles.inlineAlertDescription}>{props.description}</span> : null}
+			{props.action ? <div>{props.action}</div> : null}
 		</div>
 	)
 }
 
 function ObjectsListAlerts({ listProps }: { listProps: ObjectsListPaneProps }) {
+	const errorMessage = listProps.favoritesOnly ? listProps.favoritesErrorMessage : listProps.objectsErrorMessage
 	return (
 		<div className={shellStyles.inlineAlertStack}>
 			{listProps.isOffline ? <InlineAlert tone="warning" title={offlineObjectActionsDisabledHint()} /> : null}
-			{listProps.favoritesOnly ? (
-				listProps.favoritesErrorMessage ? (
-					<InlineAlert tone="error" title={failedToLoadFavoritesTitle()} description={listProps.favoritesErrorMessage} />
-				) : null
-			) : listProps.objectsErrorMessage ? (
-				<InlineAlert tone="error" title={failedToListObjectsTitle()} description={listProps.objectsErrorMessage} />
+			{errorMessage ? (
+				<InlineAlert
+					tone="error"
+					title={listProps.favoritesOnly ? failedToLoadFavoritesTitle() : failedToListObjectsTitle()}
+					description={errorMessage}
+					action={
+						<Button
+							size="small"
+							onClick={listProps.onRetryList}
+							loading={listProps.contentProps.isFetching}
+							disabled={listProps.isOffline || !listProps.controlsProps.canInteract || listProps.contentProps.isFetching}
+						>
+							Retry
+						</Button>
+					}
+				/>
 			) : null}
 			{listProps.hasBucket ? null : <InlineAlert tone="info" title={selectBucketToBrowseObjectsHint()} />}
 		</div>
@@ -79,7 +92,8 @@ export function ObjectsListPaneHost({ listProps }: { listProps: ObjectsListPaneP
 				<ObjectsListHeader {...listProps.listHeaderProps} />
 			</Suspense>
 		)
-	const listContent = (
+	const hasListError = Boolean(listProps.favoritesOnly ? listProps.favoritesErrorMessage : listProps.objectsErrorMessage)
+	const listContent = hasListError && listProps.contentProps.rows.length === 0 && listProps.contentProps.emptyKind !== 'noresults' ? null : (
 		<Suspense fallback={listFallback}>
 			<ObjectsListContent {...listProps.contentProps} />
 		</Suspense>

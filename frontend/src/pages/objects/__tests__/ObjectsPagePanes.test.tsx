@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -129,6 +129,7 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 			favoritesOnly: false,
 			favoritesErrorMessage: null,
 			objectsErrorMessage: null,
+			onRetryList: vi.fn(),
 			hasBucket: false,
 			uploadDropActive: false,
 			uploadDropLabel: 's3://bucket-a/',
@@ -178,6 +179,8 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 				emptyKind: 'empty',
 				canClearSearch: false,
 				onClearSearch: () => {},
+				hasActiveFilters: false,
+				onResetView: vi.fn(),
 				viewMode: 'list',
 				renderPrefixRow: () => null,
 				renderParentRow: () => null,
@@ -313,6 +316,64 @@ describe('ObjectsPagePanes', () => {
 		expect(screen.getByText(offlineObjectActionsDisabledHint())).toBeInTheDocument()
 		expect(screen.getByText(failedToListObjectsTitle())).toBeInTheDocument()
 		expect(screen.getByText('temporary outage')).toBeInTheDocument()
+	})
+
+	it.each([false, true])('keeps a failed initial listing out of the empty folder content and provides guarded Retry, favorites: %s', (favoritesOnly) => {
+		const base = buildProps()
+		const props = {
+			...base,
+			listProps: {
+				...base.listProps,
+				hasBucket: true,
+				favoritesOnly,
+				objectsErrorMessage: 'Objects unavailable',
+				favoritesErrorMessage: favoritesOnly ? 'Favorites unavailable' : null,
+				onRetryList: vi.fn(),
+			},
+		}
+		const { rerender } = render(<ObjectsPagePanes {...props} />)
+
+		expect(screen.getByText(favoritesOnly ? failedToLoadFavoritesTitle() : failedToListObjectsTitle())).toBeInTheDocument()
+		expect(screen.queryByTestId('objects-list-content')).not.toBeInTheDocument()
+		const retry = screen.getByRole('button', { name: 'Retry' })
+		expect(retry).toBeEnabled()
+		fireEvent.click(retry)
+		expect(props.listProps.onRetryList).toHaveBeenCalledOnce()
+
+		for (const override of [{ isOffline: true }, { controlsProps: { ...props.listProps.controlsProps, canInteract: false } }, { contentProps: { ...props.listProps.contentProps, isFetching: true } }]) {
+			rerender(<ObjectsPagePanes {...props} listProps={{ ...props.listProps, ...override }} />)
+			expect(retry).toBeDisabled()
+			fireEvent.click(retry)
+		}
+		expect(props.listProps.onRetryList).toHaveBeenCalledOnce()
+	})
+
+	it('preserves cached rows and filtered cache feedback during refresh errors, then restores successful empty content', () => {
+		const base = buildProps()
+		const props = {
+			...base,
+			listProps: {
+				...base.listProps,
+				hasBucket: true,
+				objectsErrorMessage: 'Refresh failed',
+				contentProps: {
+					...base.listProps.contentProps,
+					rows: [{ kind: 'object' as const, object: { key: 'cached.txt', size: 1, lastModified: '2026-10-11T00:00:00Z' } }],
+				},
+			},
+		}
+		const { rerender } = render(<ObjectsPagePanes {...props} />)
+		expect(screen.getByTestId('objects-list-content')).toBeInTheDocument()
+		expect(screen.getByText('Refresh failed')).toBeInTheDocument()
+
+		rerender(<ObjectsPagePanes {...props} listProps={{ ...props.listProps, contentProps: { ...base.listProps.contentProps, emptyKind: 'noresults', hasActiveFilters: true } }} />)
+		expect(screen.getByTestId('objects-list-content')).toBeInTheDocument()
+		expect(screen.getByText('Refresh failed')).toBeInTheDocument()
+
+		rerender(<ObjectsPagePanes {...base} listProps={{ ...base.listProps, hasBucket: true }} />)
+		expect(screen.getByTestId('objects-list-content')).toBeInTheDocument()
+		expect(screen.queryByText('Refresh failed')).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
 	})
 
 	it('renders the shared favorites-error alert copy when favorites-only loading fails', () => {

@@ -47,8 +47,19 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 	const moveConfirmInputId = 'objects-copy-prefix-confirm'
 	const includePatternsInputId = 'objects-copy-prefix-include-patterns'
 	const excludePatternsInputId = 'objects-copy-prefix-exclude-patterns'
+	const destinationBucket = props.values.dstBucket.trim()
+	const destinationPrefix = props.normalizePrefix(props.values.dstPrefix)
+	const canSubmit =
+		!props.isSubmitting &&
+		!!props.bucket &&
+		!!props.srcPrefix &&
+		!!destinationBucket &&
+		!!destinationPrefix &&
+		!destinationPrefix.includes('*') &&
+		(destinationBucket !== props.bucket || !destinationPrefix.startsWith(props.srcPrefix)) &&
+		(!isMove || props.values.dryRun || props.values.confirm === 'MOVE')
 	const submit = () => {
-		if (props.isSubmitting) return
+		if (!canSubmit) return
 		props.onFinish(props.values)
 	}
 
@@ -63,7 +74,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 			footer={
 				<>
 					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
-					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={submit}>
+					<Button type="primary" danger={isMove} loading={props.isSubmitting} disabled={!canSubmit} onClick={submit}>
 						{isMove ? 'Start move' : 'Start copy'}
 					</Button>
 				</>

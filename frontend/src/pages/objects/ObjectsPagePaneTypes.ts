@@ -32,6 +32,7 @@ type ObjectsListPaneProps = {
 	favoritesOnly: boolean
 	favoritesErrorMessage: string | null
 	objectsErrorMessage: string | null
+	onRetryList: () => void
 	hasBucket: boolean
 	uploadDropActive: boolean
 	uploadDropLabel: string

@@ -14,7 +14,6 @@ export function useObjectsGlobalSearchOverlayState({
 	globalSearch,
 	setGlobalSearch,
 	globalSearchDraft,
-	setGlobalSearchDraft,
 	debounceMs = 250,
 }: UseObjectsGlobalSearchOverlayStateArgs) {
 	const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
@@ -23,16 +22,13 @@ export function useObjectsGlobalSearchOverlayState({
 	const globalSearchOpenVisible = globalSearchOpen && globalSearchScopeMatches
 
 	useEffect(() => {
-		setGlobalSearchDraft(globalSearch)
-	}, [globalSearch, setGlobalSearchDraft])
-
-	useEffect(() => {
-		if (globalSearchDraft === globalSearch) return
+		const query = globalSearchDraft.trim()
+		if (query === globalSearch) return
 		const id = window.setTimeout(() => {
-			setGlobalSearch(globalSearchDraft)
+			setGlobalSearch(query)
 		}, debounceMs)
 		return () => window.clearTimeout(id)
-	}, [debounceMs, globalSearch, globalSearchDraft, setGlobalSearch])
+	}, [debounceMs, globalSearch, globalSearchDraft, scopeKey, setGlobalSearch])
 
 	const setScopedGlobalSearchOpen = useCallback(
 		(open: boolean) => {

@@ -71,6 +71,14 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 
 	return (
 		<div className={styles.detailsContent} data-testid="objects-details-content">
+			{!props.detailsMeta || props.isMetaError ? (
+				<div className={styles.detailsMessageStack} data-testid="objects-details-target">
+					<Typography.Text type="secondary">Object key</Typography.Text>
+					<Typography.Text code className={styles.detailsCodeValueWrap}>
+						{props.detailsKey}
+					</Typography.Text>
+				</div>
+			) : null}
 			<ObjectsDetailsActions
 				isAdvanced={props.isAdvanced}
 				isDeleteLoading={props.isDeleteLoading}

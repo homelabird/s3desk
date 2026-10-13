@@ -4,8 +4,6 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-	deleteSelectedObjectsLabel,
-	downloadToBrowserHint,
 	newFolderShortcutHint,
 	offlineNetworkConnectionHint,
 	uploadFilesOrFoldersHint,
@@ -54,7 +52,6 @@ function buildProps(overrides: Partial<Parameters<typeof ObjectsToolbar>[0]> = {
 		onRefresh: vi.fn(),
 		isRefreshing: false,
 		topMoreMenu: { items: [] },
-		showPrimaryActions: false,
 		activeTransferCount: 0,
 		onOpenTransfers: vi.fn(),
 		dockTree: true,
@@ -88,31 +85,13 @@ describe('ObjectsToolbar', () => {
 		expect(screen.getByTitle(uploadFilesOrFoldersHint())).toBeInTheDocument()
 	})
 
-	it('uses shared selection-action tooltip copy for disabled primary actions', () => {
-		render(
-			<ObjectsToolbar
-				{...buildProps({
-					selectedCount: 2,
-					showPrimaryActions: true,
-					primaryDownloadAction: {
-						id: 'download',
-						label: 'Download',
-						enabled: false,
-						run: vi.fn(),
-					},
-					primaryDeleteAction: {
-						id: 'delete',
-						label: 'Delete',
-						enabled: false,
-						danger: true,
-						run: vi.fn(),
-					},
-				})}
-			/>,
-		)
+	it.each([false, true])('keeps simple selection actions in the selection bar, desktop: %s', (isDesktop) => {
+		render(<ObjectsToolbar {...buildProps({ isDesktop, isAdvanced: false, selectedCount: 2 })} />)
 
-		expect(screen.getByTitle(downloadToBrowserHint())).toBeInTheDocument()
-		expect(screen.getByTitle(deleteSelectedObjectsLabel())).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: /Delete/ })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Upload' })).toBeEnabled()
+		expect(screen.getByRole('button', { name: isDesktop ? 'Object tools' : 'More actions' })).toBeEnabled()
 	})
 
 	it('uses shared new-folder shortcut copy when folder creation is enabled', () => {

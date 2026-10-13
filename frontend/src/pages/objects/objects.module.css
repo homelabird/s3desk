@@ -5,7 +5,7 @@
 
 .toolbarMenuPopover,
 .contextMenuPanel {
-  min-width: 220px;
+  min-width: min(220px, var(--popover-available-width, calc(100vw - 32px)));
   max-width: min(360px, var(--popover-available-width, calc(100vw - 32px)));
 }
 
@@ -44,6 +44,7 @@
 
 .toolbarMenuItem {
   width: 100%;
+  min-width: 0;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -88,6 +89,8 @@
 .toolbarMenuItemLabel {
   min-width: 0;
   flex: 1 1 auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .toolbarMenuItemChevron {

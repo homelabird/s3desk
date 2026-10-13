@@ -262,6 +262,63 @@ test.describe('Objects favorites/tree/details sync', () => {
 		await expect(objectsSelectionCheckbox(page, 'guide.txt')).toBeVisible()
 	})
 
+	test('keeps search focus after asynchronous folder loading and preserves tree navigation', async ({ page }, testInfo) => {
+		let releaseTreeListing!: () => void
+		const treeListing = new Promise<void>((resolve) => { releaseTreeListing = resolve })
+		await page.route(`**/api/v1/buckets/${bucket}/objects?*`, async (route) => {
+			const url = new URL(route.request().url())
+			if (url.searchParams.get('prefixesOnly') !== 'true') {
+				await route.fallback()
+				return
+			}
+			const prefix = url.searchParams.get('prefix') ?? ''
+			if (prefix === '') await treeListing
+			await route.fulfill({ json: buildObjectsListFixture({
+				bucket, prefix,
+				commonPrefixes: prefix === ''
+					? ['docs/', 'reports/', ...Array.from({ length: 80 }, (_, index) => `folder-${String(index).padStart(3, '0')}/`)]
+					: [],
+			}) })
+		})
+		await seedObjectsStorage(page, { objectsFavoritesPaneExpanded: false })
+		try {
+			await gotoObjectsPage(page)
+			const root = page.getByRole('treeitem', { name: bucket, exact: true })
+			await expect(root).toBeVisible()
+			await root.focus()
+			await root.press('ArrowRight')
+			await expect(root).toHaveAttribute('aria-busy', 'true')
+			const search = page.getByLabel('Search current folder', { exact: true })
+			await search.focus()
+			await expect(search).toBeFocused()
+			releaseTreeListing()
+			await expect(page.getByRole('treeitem', { name: 'docs', exact: true })).toBeVisible()
+			await expect(root).not.toHaveAttribute('aria-busy')
+			await page.screenshot({ path: testInfo.outputPath('folder-load-search-focus.png') })
+			await expect(search).toBeFocused()
+			await search.fill('spec')
+			await expect(search).toBeFocused()
+			await search.fill('')
+
+			// End must mount and focus the last virtualized row, rather than only changing tabindex.
+			await root.focus()
+			await root.press('End')
+			const reports = page.getByRole('treeitem', { name: 'reports', exact: true })
+			await expect(reports).toBeFocused()
+			await expect(reports).toBeVisible()
+			await reports.press('Home')
+			await expect(root).toBeFocused()
+			await root.press('ArrowDown')
+			const docs = page.getByRole('treeitem', { name: 'docs', exact: true })
+			await expect(docs).toBeFocused()
+			await docs.press('Enter')
+			await expect(page.getByText(`s3://${bucket}/docs/`)).toBeVisible()
+			await expect(objectsSelectionCheckbox(page, 'spec.md')).toBeVisible()
+		} finally {
+			releaseTreeListing()
+		}
+	})
+
 	test('keeps expanded descendants usable after creating a sibling folder', async ({ page }) => {
 		let created = false
 		await page.route(`**/api/v1/buckets/${bucket}/objects/folder`, (route) => {

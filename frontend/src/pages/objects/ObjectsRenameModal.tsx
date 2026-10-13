@@ -24,7 +24,7 @@ type ObjectsRenameModalProps = {
 export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 	const isPrefix = props.kind === 'prefix'
 	const sourceLabel = props.bucket && props.source ? `s3://${props.bucket}/${isPrefix ? `${props.source}*` : props.source}` : '-'
-	const canSubmit = !!props.source && !!props.values.name.trim() && !props.isSubmitting
+	const canSubmit = !!props.source && !!props.values.name.trim() && props.values.confirm === 'RENAME' && !props.isSubmitting
 	const submit = () => {
 		if (!canSubmit) return
 		props.onFinish(props.values)

@@ -113,6 +113,7 @@ export function useObjectsContextMenuLifecycle(args: UseObjectsContextMenuLifecy
 			event.preventDefault()
 			event.stopPropagation()
 			closeContextMenu(undefined, 'escape')
+			if (contextMenuState.source === 'context') el?.focus({ preventScroll: true })
 		}
 		if (el) {
 			el.addEventListener('scroll', handleClose, { passive: true })
@@ -136,7 +137,7 @@ export function useObjectsContextMenuLifecycle(args: UseObjectsContextMenuLifecy
 			document.removeEventListener('pointerdown', handlePointerDown, true)
 			document.removeEventListener('keydown', handleKeyDown, true)
 		}
-	}, [closeContextMenu, contextMenuState.open, getListScrollerElement, shouldIgnoreContextMenuClose])
+	}, [closeContextMenu, contextMenuState.open, contextMenuState.source, getListScrollerElement, shouldIgnoreContextMenuClose])
 
 	const handleListScrollerContextMenu = useCallback(
 		(event: React.MouseEvent<HTMLDivElement>) => {

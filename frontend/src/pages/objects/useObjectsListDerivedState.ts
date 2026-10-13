@@ -137,7 +137,7 @@ export function useObjectsListDerivedState(args: {
 	}, [args.favoriteItems, args.favoritesOnly, args.objectsPages, args.prefix])
 
 	const rawTotalCount = rawPrefixCount + rawFileCount
-	const emptyKind = rawTotalCount === 0 ? 'empty' : rows.length === 0 ? 'noresults' : null
+	const emptyKind = rawTotalCount === 0 ? 'empty' : visiblePrefixCount + visibleFileCount === 0 ? 'noresults' : null
 
 	const loadedSelectedCount = useMemo(() => {
 		if (visibleObjectKeys.length === 0 || args.selectedKeys.size === 0) return 0

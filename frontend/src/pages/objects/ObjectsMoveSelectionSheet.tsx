@@ -22,7 +22,7 @@ type ObjectsMoveSelectionSheetProps = {
 	onFinish: (values: MoveSelectionValues) => void
 }
 
-function Content(props: ObjectsMoveSelectionSheetProps) {
+function Content(props: ObjectsMoveSelectionSheetProps & { onSubmit: () => void }) {
 	const controlsDisabled = props.isSubmitting
 	const destinationBucketInputId = 'objects-move-selection-destination-bucket'
 	const destinationFolderInputId = 'objects-move-selection-destination-folder'
@@ -42,8 +42,7 @@ function Content(props: ObjectsMoveSelectionSheetProps) {
 				className={styles.form}
 				onSubmit={(event) => {
 					event.preventDefault()
-					if (props.isSubmitting) return
-					props.onFinish(props.values)
+					props.onSubmit()
 				}}
 			>
 				<FormField label="Selection">
@@ -99,6 +98,16 @@ function Content(props: ObjectsMoveSelectionSheetProps) {
 
 export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps) {
 	const destinationBucketFocusSelector = '#objects-move-selection-destination-bucket'
+	const canSubmit =
+		!!props.bucket &&
+		props.selectedCount > 0 &&
+		!!props.values.dstBucket.trim() &&
+		props.values.confirm === 'MOVE' &&
+		!props.isSubmitting
+	const submit = () => {
+		if (!canSubmit) return
+		props.onFinish(props.values)
+	}
 	const actions = (
 		<div className={styles.sheetActions}>
 			<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
@@ -106,11 +115,8 @@ export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps)
 				type="primary"
 				danger
 				loading={props.isSubmitting}
-				disabled={props.isSubmitting}
-				onClick={() => {
-					if (props.isSubmitting) return
-					props.onFinish(props.values)
-				}}
+				disabled={!canSubmit}
+				onClick={submit}
 			>
 				Start move
 			</Button>
@@ -130,7 +136,7 @@ export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps)
 				closeDisabled={props.isSubmitting}
 				initialFocusSelector={destinationBucketFocusSelector}
 			>
-				<Content {...props} />
+				<Content {...props} onSubmit={submit} />
 				{actions}
 			</ObjectsOverlaySheet>
 		)
@@ -146,7 +152,7 @@ export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps)
 			closeDisabled={props.isSubmitting}
 			initialFocusSelector={destinationBucketFocusSelector}
 		>
-			<Content {...props} />
+			<Content {...props} onSubmit={submit} />
 		</DialogModal>
 	)
 }

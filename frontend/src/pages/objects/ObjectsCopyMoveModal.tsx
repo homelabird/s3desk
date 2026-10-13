@@ -31,8 +31,19 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 	const destinationBucketInputId = 'objects-copy-move-destination-bucket'
 	const destinationKeyInputId = 'objects-copy-move-destination-key'
 	const moveConfirmInputId = 'objects-copy-move-confirm'
+	const destinationBucket = props.values.dstBucket.trim()
+	const destinationKey = props.values.dstKey.trim().replace(/^\/+/, '')
+	const canSubmit =
+		!props.isSubmitting &&
+		!!props.bucket &&
+		!!props.srcKey &&
+		!!destinationBucket &&
+		!!destinationKey &&
+		!destinationKey.includes('*') &&
+		(destinationBucket !== props.bucket || destinationKey !== props.srcKey) &&
+		(!isMove || props.values.dryRun || props.values.confirm === 'MOVE')
 	const submit = () => {
-		if (props.isSubmitting) return
+		if (!canSubmit) return
 		props.onFinish(props.values)
 	}
 
@@ -47,7 +58,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 			footer={
 				<>
 					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
-					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={submit}>
+					<Button type="primary" danger={isMove} loading={props.isSubmitting} disabled={!canSubmit} onClick={submit}>
 						{isMove ? 'Start move' : 'Start copy'}
 					</Button>
 				</>

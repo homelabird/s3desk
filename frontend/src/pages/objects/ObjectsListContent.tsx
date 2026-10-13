@@ -30,6 +30,8 @@ type ObjectsListContentProps = {
   emptyKind: "empty" | "noresults" | null;
   canClearSearch: boolean;
   onClearSearch: () => void;
+  hasActiveFilters: boolean;
+  onResetView: () => void;
   viewMode: ObjectsViewMode;
   renderParentRow: (
     prefix: string,
@@ -194,8 +196,11 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
           { rows: props.rows.length, mountedRows: virtualGridRows.length },
         );
 
-  if (props.rows.length === 0) {
-    const empty = (
+  const showFilteredEmpty =
+    props.emptyKind === "noresults" &&
+    props.rows.length > 0 &&
+    props.rows.every((row) => row.kind === "parent");
+  const empty = (
       <div className={listStyles.listEmptyState}>
         {!props.hasProfile ? (
           <Empty description="Select a profile to browse objects." />
@@ -217,13 +222,15 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
               props.emptyKind === "empty" ? "Empty folder" : "No results"
             }
           >
-            {props.emptyKind === "noresults" ? (
-              <Button
-                onClick={props.onClearSearch}
-                disabled={!props.canClearSearch}
-              >
-                Clear search
-              </Button>
+            {props.emptyKind === "noresults" || props.hasActiveFilters ? (
+              <div className={listStyles.listEmptyActions}>
+                {props.canClearSearch ? (
+                  <Button onClick={props.onClearSearch}>Clear search</Button>
+                ) : null}
+                {props.hasActiveFilters ? (
+                  <Button onClick={props.onResetView}>Reset view</Button>
+                ) : null}
+              </div>
             ) : null}
           </Empty>
         )}
@@ -232,7 +239,8 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
           <div className={listStyles.listFooterAction}>{loadMoreButton}</div>
         ) : null}
       </div>
-    );
+  );
+  if (props.rows.length === 0) {
     return (
       <Profiler id="ObjectsListContent.empty" onRender={logReactRender}>
         {empty}
@@ -257,13 +265,13 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
         >
           {renderedGridRows}
         </div>
-        {props.isFetchingNextPage ? (
+        {props.isFetchingNextPage && !showFilteredEmpty ? (
           <div className={gridStyles.gridFooter}>
             <div className={gridStyles.gridFooterCell}>
               <Spin />
             </div>
           </div>
-        ) : loadMoreButton ? (
+        ) : loadMoreButton && !showFilteredEmpty ? (
           <div className={gridStyles.gridFooter}>
             <div className={gridStyles.gridFooterCell}>{loadMoreButton}</div>
           </div>
@@ -273,6 +281,7 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
     return (
       <Profiler id="ObjectsListContent.grid" onRender={logReactRender}>
         {content}
+        {showFilteredEmpty ? empty : null}
       </Profiler>
     );
   }
@@ -284,11 +293,11 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
     >
       {renderedRows}
 
-      {props.isFetchingNextPage ? (
+      {props.isFetchingNextPage && !showFilteredEmpty ? (
         <div className={listStyles.virtualListFooter}>
           <Spin />
         </div>
-      ) : loadMoreButton ? (
+      ) : loadMoreButton && !showFilteredEmpty ? (
         <div className={listStyles.virtualListFooter}>{loadMoreButton}</div>
       ) : null}
     </div>
@@ -296,6 +305,7 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
   return (
     <Profiler id="ObjectsListContent.rows" onRender={logReactRender}>
       {content}
+      {showFilteredEmpty ? empty : null}
     </Profiler>
   );
 }

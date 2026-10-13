@@ -65,6 +65,8 @@ export type BuildObjectsPagePanesPropsArgs = {
 	searchDraft: string
 	setSearchDraft: (value: string) => void
 	hasActiveView: boolean
+	hasActiveFilters: boolean
+	resetFilters: () => void
 	setFiltersDrawerOpen: (value: boolean) => void
 	isAdvanced: boolean
 	visiblePrefixCount: number
@@ -85,6 +87,7 @@ export type BuildObjectsPagePanesPropsArgs = {
 	setViewMode: (value: ObjectsViewMode) => void
 	isOffline: boolean
 	objectsErrorMessage: string | null
+	onRefresh: () => void
 	uploadDropActive: boolean
 	uploadDropLabel: string
 	onUploadDragEnter: ListProps['onUploadDragEnter']

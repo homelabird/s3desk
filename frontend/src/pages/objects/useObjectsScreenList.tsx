@@ -254,6 +254,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		handleListScrollerWheel: interactions.handleListScrollerWheel,
 		handleLoadMore,
 		handleTreePrefixContextMenu: interactions.handleTreePrefixContextMenu,
+		hasActiveFilters: viewState.hasActiveFilters,
 		hasActiveView: viewState.hasActiveView,
 		listGridClassName: interactions.listGridClassName,
 		listIsFetching: viewState.listIsFetching,

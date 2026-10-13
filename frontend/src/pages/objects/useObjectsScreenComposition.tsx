@@ -59,6 +59,7 @@ export function useObjectsScreenComposition({
 		actions,
 		previewState,
 		viewportState,
+		refresh,
 		listState,
 		canCreateFolder,
 		createFolderTooltipText,

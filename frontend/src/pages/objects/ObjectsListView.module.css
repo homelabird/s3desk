@@ -435,6 +435,13 @@
   padding: 24px;
 }
 
+.listEmptyActions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .listEmptyLoading {
   display: flex;
   justify-content: center;
@@ -469,6 +476,7 @@
 
 .breadcrumbListItem {
   min-width: 0;
+  max-width: 100%;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -481,6 +489,8 @@
 
 .breadcrumbDropTarget {
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   padding-inline: 4px;
   border-radius: 4px;
@@ -491,6 +501,8 @@
 }
 
 .breadcrumbLink {
+  min-width: 0;
+  max-width: 100%;
   border: none;
   padding: 0;
   margin: 0;
@@ -498,14 +510,20 @@
   color: var(--s3d-color-primary);
   font: inherit;
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .breadcrumbLink:hover,
 .breadcrumbLink:focus-visible {
   color: color-mix(in srgb, var(--s3d-color-primary) 82%, black 18%);
-  outline: none;
   text-decoration: underline;
+}
+
+.breadcrumbLink:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 .breadcrumbLink:disabled {
