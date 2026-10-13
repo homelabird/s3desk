@@ -70,6 +70,11 @@ describe('BucketModal', () => {
 		fireEvent.change(screen.getByRole('textbox', { name: /bucket name/i }), { target: { value: 'analytics' } })
 		fireEvent.change(screen.getByRole('textbox', { name: /location \(optional\)/i }), { target: { value: 'asia-northeast3' } })
 		fireEvent.click(screen.getByRole('switch', { name: 'Apply recommended GCS secure defaults' }))
+		expect(screen.getByText('Private baseline')).toBeInTheDocument()
+		fireEvent.change(screen.getByRole('combobox', { name: 'GCS access mode' }), { target: { value: 'public' } })
+		expect(screen.queryByText('Private baseline')).not.toBeInTheDocument()
+		fireEvent.change(screen.getByRole('combobox', { name: 'GCS access mode' }), { target: { value: 'private' } })
+		expect(screen.getByText('Private baseline')).toBeInTheDocument()
 		fireEvent.change(screen.getByRole('combobox', { name: 'GCS access mode' }), { target: { value: 'public' } })
 		fireEvent.click(screen.getByRole('switch', { name: 'Seed GCS IAM bindings during creation' }))
 		fireEvent.click(screen.getByRole('button', { name: /add binding/i }))
@@ -107,6 +112,13 @@ describe('BucketModal', () => {
 
 		fireEvent.change(screen.getByRole('textbox', { name: /bucket name/i }), { target: { value: 'archive' } })
 		fireEvent.click(screen.getByRole('switch', { name: 'Apply recommended Azure secure defaults' }))
+		expect(screen.getByText('Private baseline')).toBeInTheDocument()
+		fireEvent.change(screen.getByRole('combobox', { name: 'Azure visibility' }), { target: { value: 'blob' } })
+		expect(screen.queryByText('Private baseline')).not.toBeInTheDocument()
+		fireEvent.change(screen.getByRole('combobox', { name: 'Azure visibility' }), { target: { value: 'container' } })
+		expect(screen.queryByText('Private baseline')).not.toBeInTheDocument()
+		fireEvent.change(screen.getByRole('combobox', { name: 'Azure visibility' }), { target: { value: 'private' } })
+		expect(screen.getByText('Private baseline')).toBeInTheDocument()
 		fireEvent.change(screen.getByRole('combobox', { name: 'Azure visibility' }), { target: { value: 'blob' } })
 		fireEvent.click(screen.getByRole('switch', { name: 'Seed Azure stored access policies during creation' }))
 		fireEvent.click(screen.getByRole('button', { name: /add stored access policy/i }))
@@ -164,6 +176,43 @@ describe('BucketModal', () => {
 		expect(screen.getByText('Secure defaults are invalid')).toBeInTheDocument()
 		expect(screen.getByText(/at least one member is required/i)).toBeInTheDocument()
 	})
+
+	it.each(['gcp_gcs', 'azure_blob'] as const)('clears stale %s defaults errors when the invalid row is removed', (provider) => {
+		const onSubmit = vi.fn()
+		const isGCS = provider === 'gcp_gcs'
+		render(<BucketModal open onCancel={vi.fn()} onSubmit={onSubmit} loading={false} provider={provider} />)
+		fireEvent.change(screen.getByRole('textbox', { name: /bucket name/i }), { target: { value: 'archive' } })
+		fireEvent.click(screen.getByRole('switch', { name: `Apply recommended ${isGCS ? 'GCS' : 'Azure'} secure defaults` }))
+		fireEvent.click(screen.getByRole('switch', { name: isGCS ? 'Seed GCS IAM bindings during creation' : 'Seed Azure stored access policies during creation' }))
+		const addRow = screen.getByRole('button', { name: isGCS ? /add binding/i : /add stored access policy/i })
+		fireEvent.click(addRow)
+		if (isGCS) {
+			fireEvent.change(screen.getByRole('textbox', { name: 'GCS binding 1 role' }), { target: { value: 'roles/storage.objectViewer' } })
+			fireEvent.change(screen.getByRole('textbox', { name: 'GCS binding 1 members' }), { target: { value: 'user:ops@example.com' } })
+		} else {
+			fireEvent.change(screen.getByRole('textbox', { name: 'Azure stored access policy 1 id' }), { target: { value: 'readonly' } })
+			fireEvent.change(screen.getByRole('textbox', { name: 'Azure stored access policy 1 permission' }), { target: { value: 'r' } })
+		}
+		fireEvent.click(addRow)
+		fireEvent.change(screen.getByRole('textbox', { name: isGCS ? 'GCS binding 2 role' : 'Azure stored access policy 2 permission' }), {
+			target: { value: isGCS ? 'roles/storage.objectViewer' : 'r' },
+		})
+		fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+		expect(onSubmit).not.toHaveBeenCalled()
+		expect(screen.getByText('Secure defaults are invalid')).toBeInTheDocument()
+		fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[1])
+		expect(screen.queryByText('Secure defaults are invalid')).not.toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: isGCS ? 'GCS binding 1 role' : 'Azure stored access policy 1 id' })).toHaveValue(isGCS ? 'roles/storage.objectViewer' : 'readonly')
+		fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+		expect(onSubmit).toHaveBeenCalledOnce()
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+			defaults: expect.objectContaining({
+				access: isGCS
+					? { bindings: [{ role: 'roles/storage.objectViewer', members: ['user:ops@example.com'] }] }
+					: { storedAccessPolicies: [{ id: 'readonly', start: undefined, expiry: undefined, permission: 'r' }] },
+			}),
+		}))
+	}, SLOW_BUCKET_MODAL_TIMEOUT_MS)
 
 	it('shows provider hint for unsupported providers', () => {
 		const onSubmit = vi.fn()

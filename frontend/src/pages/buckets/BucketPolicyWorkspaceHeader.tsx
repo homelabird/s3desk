@@ -25,6 +25,7 @@ export function BucketPolicyWorkspaceHeader(props: {
   policyKind: PolicyKind;
   controlsShortcut: { title: string; description: string } | null;
   bucket: string;
+  isBusy: boolean;
   onOpenControls?: (bucket: string) => void;
 }) {
   const guide = getBucketPolicyDecisionGuide(props.policyKind);
@@ -66,7 +67,10 @@ export function BucketPolicyWorkspaceHeader(props: {
               {props.controlsShortcut.description}
             </Typography.Text>
           </div>
-          <Button onClick={() => props.onOpenControls?.(props.bucket)}>
+          <Button disabled={props.isBusy} onClick={() => {
+            if (props.isBusy) return;
+            props.onOpenControls?.(props.bucket);
+          }}>
             Open Controls
           </Button>
         </div>

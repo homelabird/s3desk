@@ -22,9 +22,9 @@ export function GcsBucketCreateDefaults(props: {
 					<Typography.Text type="secondary">
 						Start new GCS buckets with private exposure, then optionally seed the first IAM bindings during creation.
 					</Typography.Text>
-					<Tag color="green" variant="filled">
-						Private baseline
-					</Tag>
+					{state.publicMode === 'private' ? (
+						<Tag color="green" variant="filled">Private baseline</Tag>
+					) : null}
 				</div>
 				<ToggleSwitch
 					checked={state.enabled}
@@ -101,12 +101,13 @@ export function GcsBucketCreateDefaults(props: {
 														<Button
 															danger
 															size="small"
-															onClick={() =>
+																onClick={() => {
+																props.clearSubmitError()
 																props.onChange({
 																	...state,
 																	bindings: state.bindings.filter((binding) => binding.key !== row.key),
 																})
-															}
+															}}
 														>
 															Remove
 														</Button>

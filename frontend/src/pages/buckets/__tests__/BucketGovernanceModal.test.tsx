@@ -762,11 +762,16 @@ describe("BucketGovernanceModal", () => {
     async (provider) => {
       const pendingSave = new Promise<void>(() => {});
       const api = createApi(provider, {
+        getBucketGovernance: vi.fn().mockResolvedValue({
+          ...createGovernance(provider),
+          advanced: { rawPolicySupported: provider !== "oci_object_storage", rawPolicyEditable: true },
+        }),
         putBucketPublicExposure: vi.fn().mockReturnValue(pendingSave),
       });
       const onClose = vi.fn();
+      const onOpenAdvancedPolicy = vi.fn();
 
-      renderModal(api, { provider, onClose });
+      renderModal(api, { provider, onClose, onOpenAdvancedPolicy });
 
       const publicExposureSection = await screen.findByTestId(
         "bucket-governance-public-exposure",
@@ -791,6 +796,12 @@ describe("BucketGovernanceModal", () => {
         fireEvent.click(button);
       });
       expect(onClose).not.toHaveBeenCalled();
+      if (provider !== "oci_object_storage") {
+        const openPolicy = screen.getByRole("button", { name: "Open Policy", hidden: true });
+        expect(openPolicy).toBeDisabled();
+        fireEvent.click(openPolicy);
+        expect(onOpenAdvancedPolicy).not.toHaveBeenCalled();
+      }
     },
     SLOW_GOVERNANCE_TIMEOUT_MS,
   );

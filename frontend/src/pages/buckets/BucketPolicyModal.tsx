@@ -550,6 +550,7 @@ function BucketPolicyEditor(props: {
         policyKind={policyKind}
         controlsShortcut={controlsShortcut}
         bucket={bucket}
+        isBusy={isBusy}
         onOpenControls={props.onOpenControls}
       />
       <BucketPolicyContentTabs

@@ -341,6 +341,7 @@ export function GovernanceNestedSectionCard(props: {
 export function AdvancedPolicySection(props: {
   bucket: string;
   advancedPolicy?: BucketAdvancedView;
+  disabled: boolean;
   onOpenAdvancedPolicy?: (bucket: string) => void;
 }) {
   if (!props.advancedPolicy?.rawPolicySupported) return null;
@@ -364,8 +365,11 @@ export function AdvancedPolicySection(props: {
               </Typography.Text>
             </div>
             <Button
-              onClick={() => props.onOpenAdvancedPolicy?.(props.bucket)}
-              disabled={!props.onOpenAdvancedPolicy || !props.advancedPolicy.rawPolicyEditable}
+              onClick={() => {
+                if (props.disabled) return;
+                props.onOpenAdvancedPolicy?.(props.bucket);
+              }}
+              disabled={props.disabled || !props.onOpenAdvancedPolicy || !props.advancedPolicy.rawPolicyEditable}
             >
               Open Policy
             </Button>
@@ -438,6 +442,7 @@ export function GovernanceControlsLayout(props: {
       <AdvancedPolicySection
         bucket={props.bucket}
         advancedPolicy={props.advancedPolicy}
+        disabled={props.closeDisabled}
         onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
       />
 

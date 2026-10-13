@@ -10,15 +10,16 @@ import { BucketsList } from './BucketsList'
 import type { BucketsPageShellProps } from './bucketsPagePresentationTypes'
 
 export function BucketsPageShell(props: BucketsPageShellProps) {
+	const hasCachedBuckets = props.buckets.length > 0
+
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
 			<PageHeader
-				eyebrow="Storage"
 				title="Buckets"
 				subtitle={
 					props.selectedProfile
-						? `${props.selectedProfile.name} profile is active. Review bucket inventory, open policy management, and create new buckets from one place.`
-						: 'Review bucket inventory, open policy management, and create new buckets from one place.'
+						? `Buckets in ${props.selectedProfile.name}.`
+						: 'Choose a profile to view its buckets.'
 				}
 				actions={
 					<Tooltip title={props.bucketCrudSupported ? 'Create a new bucket' : props.bucketCrudUnsupportedReason}>
@@ -42,11 +43,12 @@ export function BucketsPageShell(props: BucketsPageShellProps) {
 
 			{props.bucketsQueryError ? (
 				<Alert
-					type="error"
+					type={hasCachedBuckets ? 'warning' : 'error'}
 					showIcon
-					title={failedToLoadBucketsTitle()}
+					title={hasCachedBuckets ? 'Could not refresh buckets' : failedToLoadBucketsTitle()}
 					description={
 						<Space orientation="vertical">
+							{hasCachedBuckets ? <Typography.Text>Showing the last loaded bucket inventory.</Typography.Text> : null}
 							<div>{formatErr(props.bucketsQueryError)}</div>
 							<Button
 								onClick={props.onRetryBuckets}
@@ -66,7 +68,7 @@ export function BucketsPageShell(props: BucketsPageShellProps) {
 					<Spin />
 					<span className="sr-only">Loading buckets...</span>
 				</div>
-			) : props.bucketsQueryError ? null : props.showBucketsEmpty ? (
+			) : props.bucketsQueryError && !hasCachedBuckets ? null : props.showBucketsEmpty ? (
 				<Empty
 					description={
 						<Space orientation="vertical" size={4}>

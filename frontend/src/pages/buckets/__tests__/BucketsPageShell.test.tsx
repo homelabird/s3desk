@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createMockApiClient } from '../../../test/mockApiClient'
@@ -22,7 +22,7 @@ vi.mock('../BucketsDialogsPanel', () => ({
 }))
 
 describe('BucketsPageShell', () => {
-	it('announces bucket loading status', () => {
+	it.each([true, false])('shows initial bucket loading or failure (loading: %s)', (loading) => {
 		render(
 			<BucketsPageShell
 				api={createMockApiClient()}
@@ -31,10 +31,10 @@ describe('BucketsPageShell', () => {
 				selectedProfile={{ name: 'Primary Profile' } as never}
 				bucketCrudSupported
 				bucketCrudUnsupportedReason="Bucket operations are unavailable."
-				bucketsQueryError={null}
+				bucketsQueryError={loading ? null : new Error('Inventory unavailable')}
 				bucketsRetrying={false}
 				onRetryBuckets={vi.fn()}
-				bucketsLoading
+				bucketsLoading={loading}
 				buckets={[]}
 				showBucketsEmpty={false}
 				openCreateModal={vi.fn()}
@@ -73,7 +73,15 @@ describe('BucketsPageShell', () => {
 			/>,
 		)
 
-		expect(screen.getByRole('status', { name: 'Loading buckets' })).toHaveTextContent('Loading buckets...')
+		if (loading) {
+			expect(screen.getByRole('status', { name: 'Loading buckets' })).toHaveTextContent('Loading buckets...')
+		} else {
+			expect(screen.getByText('Failed to load buckets')).toBeInTheDocument()
+			expect(screen.getByRole('button', { name: 'Retry loading buckets' })).toBeEnabled()
+			expect(screen.queryByRole('status', { name: 'Loading buckets' })).not.toBeInTheDocument()
+		}
+		expect(screen.queryByTestId('buckets-list')).not.toBeInTheDocument()
+		expect(screen.queryByText('Your S3Desk workspace has no buckets yet.')).not.toBeInTheDocument()
 	})
 
 	it('shows the unsupported warning and still wires the dialogs panel', () => {
@@ -139,7 +147,12 @@ describe('BucketsPageShell', () => {
 		)
 	})
 
-	it('renders the list surface and forwards list props', () => {
+	it.each([
+		{ state: 'loaded', error: null, retrying: false },
+		{ state: 'refresh failed', error: new Error('Inventory unavailable'), retrying: false },
+		{ state: 'retry pending', error: new Error('Inventory unavailable'), retrying: true },
+	])('keeps the list surface and forwards list props ($state)', ({ error, retrying }) => {
+		const onRetryBuckets = vi.fn()
 		render(
 			<BucketsPageShell
 				api={createMockApiClient()}
@@ -148,9 +161,9 @@ describe('BucketsPageShell', () => {
 				selectedProfile={{ name: 'Primary Profile' } as never}
 				bucketCrudSupported
 				bucketCrudUnsupportedReason="Bucket operations are unavailable."
-				bucketsQueryError={null}
-				bucketsRetrying={false}
-				onRetryBuckets={vi.fn()}
+				bucketsQueryError={error}
+				bucketsRetrying={retrying}
+				onRetryBuckets={onRetryBuckets}
 				bucketsLoading={false}
 				buckets={[{ name: 'primary-bucket', createdAt: '2026-04-08T00:00:00Z' }]}
 				showBucketsEmpty={false}
@@ -192,6 +205,17 @@ describe('BucketsPageShell', () => {
 		)
 
 		expect(screen.getByTestId('buckets-list')).toBeInTheDocument()
+		if (error) {
+			expect(screen.getByText('Could not refresh buckets')).toBeInTheDocument()
+			expect(screen.getByText('Showing the last loaded bucket inventory.')).toBeInTheDocument()
+			const retry = screen.getByRole('button', { name: 'Retry loading buckets' })
+			if (retrying) {
+				expect(retry).toBeDisabled()
+			} else {
+				fireEvent.click(retry)
+				expect(onRetryBuckets).toHaveBeenCalledOnce()
+			}
+		}
 		expect(screen.getByTestId('buckets-dialogs')).toBeInTheDocument()
 		expect(bucketsListMock).toHaveBeenCalledWith(
 			expect.objectContaining({

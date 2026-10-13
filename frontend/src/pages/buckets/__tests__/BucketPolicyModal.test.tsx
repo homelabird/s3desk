@@ -706,6 +706,27 @@ describe("BucketPolicyModal", () => {
     expect(api.buckets.putBucketPolicy).not.toHaveBeenCalled();
   });
 
+  it("blocks the controls shortcut while saving and enables it after failure", async () => {
+    const pending = deferred<void>();
+    const api = createApi({ putBucketPolicy: vi.fn().mockReturnValue(pending.promise) });
+    const onOpenControls = vi.fn();
+    renderModal(api, { onOpenControls });
+    const editor = await screen.findByRole("textbox", { name: "Raw policy JSON" });
+    fireEvent.change(editor, { target: { value: JSON.stringify({ Id: "draft", Statement: [] }) } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(api.buckets.putBucketPolicy).toHaveBeenCalledTimes(1));
+    const controls = screen.getByRole("button", { name: "Open Controls" });
+    expect(controls).toBeDisabled();
+    fireEvent.click(controls);
+    expect(onOpenControls).not.toHaveBeenCalled();
+    await act(async () => { pending.reject(new Error("write unavailable")); });
+    await waitFor(() => expect(controls).toBeEnabled());
+    fireEvent.click(controls);
+    expect(onOpenControls).toHaveBeenCalledWith("demo-bucket");
+    expect(editor).toHaveValue(JSON.stringify({ Id: "draft", Statement: [] }));
+  });
+
   it("rejects a draft changed while its approval is open", async () => {
     const api = createApi();
     renderModal(api);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 
 import {
 	installProfilesBucketsMobileResponsiveFixtures,
@@ -72,6 +73,106 @@ function getBucketCard(page: Page, bucketName: string) {
 }
 
 test.describe('@mobile-responsive Buckets mobile workflows', () => {
+	for (const cached of [false, true]) {
+		test(`recovers failed bucket inventory at 320px (cached buckets: ${cached})`, async ({ page }, testInfo) => {
+			await page.setViewportSize({ width: 320, height: 900 })
+			const buckets = [{ name: primaryBucket }, { name: 'logs-bucket' }]
+			await installProfilesBucketsMobileResponsiveFixtures(page, { buckets })
+			await seedProfilesBucketsMobileResponsiveStorage(page)
+			let failRefresh = !cached
+			let recovering = false
+			let releaseRetry!: () => void
+			const retryGate = new Promise<void>((resolve) => { releaseRetry = resolve })
+			await page.route('**/api/v1/buckets', async (route) => {
+				if (route.request().method() === 'POST') return route.fulfill({ status: 201, json: { name: 'created-bucket' } })
+				if (route.request().method() !== 'GET') return route.fallback()
+				if (recovering) {
+					await retryGate
+					return route.fulfill({ json: [...buckets, { name: 'created-bucket' }] })
+				}
+				if (failRefresh) return route.fulfill({ status: 500, json: { error: { code: 'internal_error', message: 'Bucket refresh temporarily unavailable.' } } })
+				return route.fallback()
+			})
+			try {
+				await gotoBucketsPage(page)
+				const search = page.getByRole('searchbox', { name: 'Search buckets' })
+				if (cached) {
+					await search.fill('responsive')
+					await expect(page.getByText('1 of 2 buckets', { exact: true })).toBeVisible()
+					failRefresh = true
+					await page.getByRole('button', { name: 'New Bucket' }).click()
+					const dialog = page.getByRole('dialog', { name: 'Create Bucket' })
+					await dialog.getByLabel('Bucket name').fill('created-bucket')
+					await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+					await expect(dialog).toHaveCount(0)
+				}
+				const errorTitle = page.getByText(cached ? 'Could not refresh buckets' : 'Failed to load buckets', { exact: true })
+				await expect(errorTitle).toBeVisible()
+				await expect(page.getByText('Your S3Desk workspace has no buckets yet.')).toHaveCount(0)
+				if (cached) {
+					await expect(getBucketCard(page, primaryBucket)).toBeVisible()
+					await expect(search).toHaveValue('responsive')
+					await expect(page.getByText('Showing the last loaded bucket inventory.')).toBeVisible()
+				} else {
+					await expect(page.getByTestId('buckets-list-compact')).toHaveCount(0)
+				}
+				await page.screenshot({ path: testInfo.outputPath(`buckets-error-${cached ? 'cached' : 'initial'}-320.png`), fullPage: true })
+				recovering = true
+				const retry = page.getByRole('button', { name: 'Retry loading buckets', exact: true })
+				await retry.click()
+				if (cached) {
+					await expect(retry).toBeDisabled()
+					await expect(getBucketCard(page, primaryBucket)).toBeVisible()
+					await expect(search).toHaveValue('responsive')
+				} else {
+					await expect(page.getByRole('status', { name: 'Loading buckets' })).toBeVisible()
+					await expect(retry).toHaveCount(0)
+				}
+				releaseRetry()
+				await expect(errorTitle).toHaveCount(0)
+				await expect(getBucketCard(page, primaryBucket)).toBeVisible()
+				if (cached) await expect(page.getByText('1 of 3 buckets', { exact: true })).toBeVisible()
+			} finally {
+				releaseRetry()
+			}
+		})
+	}
+
+	for (const theme of ['light', 'dark']) {
+		test(`keeps governance save text readable in ${theme} mode at 320px`, async ({ page }, testInfo) => {
+			await page.setViewportSize({ width: 320, height: 900 })
+			await page.emulateMedia({ reducedMotion: 'reduce' })
+			await page.addInitScript((mode) => localStorage.setItem('themeMode', JSON.stringify(mode)), theme)
+			await setupBucketsPage(page, { profileProvider: 'aws_s3', bucketGovernance: buildAwsGovernance(primaryBucket) })
+			await clickBucketCardManageAction(page, getBucketCard(page, primaryBucket), primaryBucket, /Controls/)
+			const section = page.getByTestId('bucket-governance-public-exposure')
+			const save = section.getByRole('button', { name: 'Save', exact: true })
+			await expect(save).toBeEnabled()
+			await save.scrollIntoViewIfNeeded()
+			await page.mouse.move(0, 0)
+			expect(await save.evaluate((element) => element.matches(':hover'))).toBe(false)
+			const checkContrast = async () => {
+				await save.evaluate(async (element) => {
+					await Promise.all(element.getAnimations().map((animation) => animation.finished.catch(() => undefined)))
+				})
+				const result = await new AxeBuilder({ page }).include('[data-testid="bucket-governance-public-exposure"]').withRules(['color-contrast']).analyze()
+				expect(result.violations).toEqual([])
+			}
+			await checkContrast()
+			await section.screenshot({ path: testInfo.outputPath(`governance-save-${theme}-320.png`) })
+			await save.hover()
+			expect(await save.evaluate((element) => element.matches(':hover'))).toBe(true)
+			await checkContrast()
+			await page.mouse.move(0, 0)
+			await save.focus()
+			await page.keyboard.press('Tab')
+			await page.keyboard.press('Shift+Tab')
+			await expect(save).toBeFocused()
+			expect(await save.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
+			await checkContrast()
+		})
+	}
+
 	test('finds a bucket beyond the virtual window and clears search on profile changes', async ({ page }) => {
 		const buckets = Array.from({ length: 50 }, (_, index) => ({ name: `audit-bucket-${String(index + 1).padStart(2, '0')}` }))
 		await installProfilesBucketsMobileResponsiveFixtures(page, { buckets })

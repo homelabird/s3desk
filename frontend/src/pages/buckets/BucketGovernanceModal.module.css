@@ -5,19 +5,6 @@
 	gap: 20px;
 }
 
-.mobileShell :global(.ant-btn-primary:not(:disabled)) {
-	background: var(--s3d-color-primary-btn) !important;
-	border-color: var(--s3d-color-primary-btn) !important;
-	color: var(--s3d-color-bg) !important;
-}
-
-.mobileShell :global(.ant-btn-primary:not(:disabled):hover),
-.mobileShell :global(.ant-btn-primary:not(:disabled):focus-visible) {
-	background: var(--s3d-color-primary-hover) !important;
-	border-color: var(--s3d-color-primary-hover) !important;
-	color: var(--s3d-color-bg) !important;
-}
-
 .summaryCard,
 .sectionCard {
 	border: 1px solid var(--s3d-color-border);

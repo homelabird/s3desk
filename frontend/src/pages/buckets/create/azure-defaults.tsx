@@ -22,9 +22,9 @@ export function AzureBucketCreateDefaults(props: {
 					<Typography.Text type="secondary">
 						Start new Azure containers with private anonymous access, then optionally seed stored access policies during creation.
 					</Typography.Text>
-					<Tag color="green" variant="filled">
-						Private baseline
-					</Tag>
+					{state.visibility === 'private' ? (
+						<Tag color="green" variant="filled">Private baseline</Tag>
+					) : null}
 				</div>
 				<ToggleSwitch
 					checked={state.enabled}
@@ -102,12 +102,13 @@ export function AzureBucketCreateDefaults(props: {
 														<Button
 															danger
 															size="small"
-															onClick={() =>
+																onClick={() => {
+																props.clearSubmitError()
 																props.onChange({
 																	...state,
 																	storedPolicies: state.storedPolicies.filter((policy) => policy.key !== row.key),
 																})
-															}
+															}}
 														>
 															Remove
 														</Button>
