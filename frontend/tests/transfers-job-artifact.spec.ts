@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockApi } from './support/apiFixtures'
@@ -118,6 +119,7 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	await page.addInitScript((seed) => {
 		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
 		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
+		window.localStorage.setItem('apiRetryCount', JSON.stringify(0))
 	}, storage)
 }
 
@@ -138,12 +140,50 @@ function buildZipJob(status: JobStatus, error: string | null = null): Job {
 
 async function setupApiMocks(page: Page, scenario: JobArtifactApiScenario) {
 	let jobPollCount = 0
-	let artifactRequestCount = 0
+	let artifactPreparationCount = 0
+	const completedArtifactPreparations: number[] = []
+	const artifactByteAttempts: number[] = []
 	const polledJobs = scenario.polledJobs?.length ? scenario.polledJobs : [scenario.listedJob]
 	const artifactResponses =
 		scenario.artifactResponses?.length
 			? scenario.artifactResponses
 			: [{ kind: 'success', delayMs: 1200, filename: 'reports.zip', body: 'zip-artifact' } satisfies ArtifactResponseStep]
+
+	// Native browser downloads bypass Playwright's routed requests.
+	const artifactServer = createServer((request, response) => {
+		const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+		const attempt = Number(url.searchParams.get('attempt'))
+		if (request.method !== 'GET' || url.pathname !== '/artifact' || !Number.isInteger(attempt) || attempt < 1 || attempt > artifactPreparationCount) {
+			response.writeHead(404)
+			response.end()
+			return
+		}
+		artifactByteAttempts.push(attempt)
+		const step = artifactResponses[Math.min(attempt - 1, artifactResponses.length - 1)] ?? artifactResponses[0]
+		if (step.kind === 'error') {
+			response.writeHead(step.status, { 'content-type': 'application/json' })
+			response.end(JSON.stringify({ error: { code: step.code, message: step.message } }))
+			return
+		}
+		const body = step.body ?? 'zip-artifact'
+		response.writeHead(200, {
+			'content-type': 'application/zip',
+			'content-disposition': `attachment; filename="${step.filename ?? 'reports.zip'}"`,
+			'content-length': Buffer.byteLength(body),
+		})
+		response.end(body)
+	})
+	page.on('close', () => {
+		artifactServer.closeAllConnections()
+		if (artifactServer.listening) artifactServer.close()
+	})
+	await new Promise<void>((resolve, reject) => {
+		artifactServer.once('error', reject)
+		artifactServer.listen(0, '127.0.0.1', resolve)
+	})
+	const address = artifactServer.address()
+	if (!address || typeof address === 'string') throw new Error('Artifact fixture did not bind a TCP port')
+	const artifactOrigin = `http://127.0.0.1:${address.port}`
 
 	await installMockApi(page, [
 		{ method: 'GET', path: '/meta', handle: (ctx) => ctx.json(metaResponse) },
@@ -169,24 +209,20 @@ async function setupApiMocks(page: Page, scenario: JobArtifactApiScenario) {
 		},
 		{
 			method: 'GET',
-			path: new RegExp(`^/api/v1/jobs/${zipJobId}/artifact$`),
+			path: new RegExp(`^/api/v1/jobs/${zipJobId}/artifact-url$`),
 			handle: async (ctx) => {
-				artifactRequestCount += 1
-				const response = artifactResponses[Math.min(artifactRequestCount - 1, artifactResponses.length - 1)] ?? artifactResponses[0]
+				const attempt = ++artifactPreparationCount
+				const response = artifactResponses[Math.min(attempt - 1, artifactResponses.length - 1)] ?? artifactResponses[0]
 				if (response.delayMs && response.delayMs > 0) {
 					await ctx.delay(response.delayMs)
 				}
+				completedArtifactPreparations.push(attempt)
 				if (response.kind === 'error') {
 					return ctx.json({ error: { code: response.code, message: response.message } }, response.status)
 				}
-				await ctx.route.fulfill({
-					status: 200,
-					contentType: 'application/zip',
-					headers: {
-						'content-disposition': `attachment; filename="${response.filename ?? 'reports.zip'}"`,
-						'content-length': String((response.body ?? 'zip-artifact').length),
-					},
-					body: response.body ?? 'zip-artifact',
+				return ctx.json({
+					url: `${artifactOrigin}/artifact?attempt=${attempt}`,
+					expiresAt: new Date(Date.now() + 300_000).toISOString(),
 				})
 			},
 		},
@@ -195,7 +231,9 @@ async function setupApiMocks(page: Page, scenario: JobArtifactApiScenario) {
 
 	return {
 		getJobPollCount: () => jobPollCount,
-		getArtifactRequestCount: () => artifactRequestCount,
+		getArtifactPreparationCount: () => artifactPreparationCount,
+		getCompletedArtifactPreparations: () => completedArtifactPreparations,
+		getArtifactByteAttempts: () => artifactByteAttempts,
 	}
 }
 
@@ -223,7 +261,7 @@ async function queueZipArtifactDownload(page: Page) {
 	return { row }
 }
 
-test('zip artifact download moves from waiting to done in Transfers', async ({ page }) => {
+test('zip artifact download waits for the job and saves the prepared ZIP through the browser', async ({ page }) => {
 	test.setTimeout(zipArtifactTestTimeoutMs)
 	const apiState = await setupApiMocks(page, {
 		listedJob: buildZipJob('running'),
@@ -232,8 +270,15 @@ test('zip artifact download moves from waiting to done in Transfers', async ({ p
 	await seedStorage(page)
 
 	const { row } = await queueZipArtifactDownload(page)
-	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(1)
-	await expectTransferRowState(row, 'Done', { timeout: 10_000 })
+	await expect.poll(() => apiState.getArtifactPreparationCount(), { timeout: 10_000 }).toBe(1)
+	await expectTransferRowState(row, 'Ready to save', { timeout: 10_000 })
+	const saved = page.waitForEvent('download')
+	await row.getByRole('link', { name: /^Save download / }).click()
+	const download = await saved
+	await expectTransferRowState(row, 'Sent to browser')
+	expect(download.suggestedFilename()).toBe('reports.zip')
+	expect(await readFile((await download.path())!, 'utf8')).toBe('zip-artifact')
+	await expect.poll(() => apiState.getArtifactByteAttempts()).toEqual([1])
 })
 
 test('zip artifact waiting task becomes failed when the job fails', async ({ page }) => {
@@ -250,7 +295,8 @@ test('zip artifact waiting task becomes failed when the job fails', async ({ pag
 	await expectTransferRowState(row, 'Failed', { timeout: 10_000 })
 	await expect(row.getByText('zip artifact job failed')).toBeVisible()
 	await expectTransferRowButton(row, 'Retry')
-	expect(apiState.getArtifactRequestCount()).toBe(0)
+	expect(apiState.getArtifactPreparationCount()).toBe(0)
+	expect(apiState.getArtifactByteAttempts()).toEqual([])
 })
 
 test('zip artifact waiting task becomes canceled when the job is canceled', async ({ page }) => {
@@ -267,7 +313,8 @@ test('zip artifact waiting task becomes canceled when the job is canceled', asyn
 	await expectTransferRowState(row, 'Canceled', { timeout: 10_000 })
 	await expect(row.getByText('zip canceled by operator')).toBeVisible()
 	await expectTransferRowButton(row, 'Retry')
-	expect(apiState.getArtifactRequestCount()).toBe(0)
+	expect(apiState.getArtifactPreparationCount()).toBe(0)
+	expect(apiState.getArtifactByteAttempts()).toEqual([])
 })
 
 test('zip artifact download can be retried after the artifact request fails', async ({ page }) => {
@@ -295,13 +342,20 @@ test('zip artifact download can be retried after the artifact request fails', as
 
 	await expectTransferRowState(row, 'Failed', { timeout: 10_000 })
 	await expect(row.getByText(/artifact_unavailable: artifact still uploading/i)).toBeVisible()
-	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(1)
+	await expect.poll(() => apiState.getArtifactPreparationCount(), { timeout: 10_000 }).toBe(1)
+	expect(apiState.getArtifactByteAttempts()).toEqual([])
 	await clickTransferRowButton(row, 'Retry')
 
-	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(2)
-	await expectTransferRowState(row, 'Done', { timeout: 10_000 })
+	await expect.poll(() => apiState.getArtifactPreparationCount(), { timeout: 10_000 }).toBe(2)
+	await expectTransferRowState(row, 'Ready to save', { timeout: 10_000 })
+	const saved = page.waitForEvent('download')
+	await row.getByRole('link', { name: /^Save download / }).click()
+	const download = await saved
+	await expectTransferRowState(row, 'Sent to browser')
+	expect(download.suggestedFilename()).toBe('reports.zip')
+	expect(await readFile((await download.path())!, 'utf8')).toBe('zip-artifact-retry')
+	await expect.poll(() => apiState.getArtifactByteAttempts()).toEqual([2])
 })
-
 
 test('canceling an artifact download allows a fresh retry to complete', async ({ page }) => {
 	test.setTimeout(zipArtifactTestTimeoutMs)
@@ -314,14 +368,21 @@ test('canceling an artifact download allows a fresh retry to complete', async ({
 	})
 	await seedStorage(page)
 	const { row } = await queueZipArtifactDownload(page)
-	await expect.poll(() => apiState.getArtifactRequestCount()).toBe(1)
+	await expect.poll(() => apiState.getArtifactPreparationCount()).toBe(1)
 	await clickTransferRowButton(row, 'Cancel')
 	await expectTransferRowState(row, 'Canceled')
-	const saved = page.waitForEvent('download')
+	expect(apiState.getArtifactByteAttempts()).toEqual([])
 	await clickTransferRowButton(row, 'Retry')
+	await expect.poll(() => apiState.getArtifactPreparationCount()).toBe(2)
+	await expectTransferRowState(row, 'Ready to save')
+	const saved = page.waitForEvent('download')
+	await row.getByRole('link', { name: /^Save download / }).click()
 	const download = await saved
-	await expectTransferRowState(row, 'Done')
-	expect(apiState.getArtifactRequestCount()).toBe(2)
+	await expectTransferRowState(row, 'Sent to browser')
 	expect(download.suggestedFilename()).toBe('retried.zip')
 	expect(await readFile((await download.path())!, 'utf8')).toBe('fresh-attempt')
+	await expect.poll(() => apiState.getCompletedArtifactPreparations(), { timeout: 10_000 }).toContain(1)
+	await expectTransferRowState(row, 'Sent to browser')
+	expect(apiState.getArtifactPreparationCount()).toBe(2)
+	await expect.poll(() => apiState.getArtifactByteAttempts()).toEqual([2])
 })

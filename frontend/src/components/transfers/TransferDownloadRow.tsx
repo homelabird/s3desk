@@ -1,7 +1,7 @@
 import { isDownloadLinkFresh } from './nativeDownloadLink'
-import { memo } from 'react'
+import { memo, type MouseEvent } from 'react'
 import { Button, Progress, Tag, Typography } from 'antd'
-import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CloseOutlined, ReloadOutlined } from '@ant-design/icons'
 
 import { isTransferFinished, type DownloadTask } from './transferTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
@@ -12,7 +12,7 @@ type TransferDownloadRowProps = {
 	onCancel: (taskId: string) => void
 	onRetry: (taskId: string) => void
 	onHandOff?: (taskId: string) => void
-	onRemove: (taskId: string) => void
+	onRemove: (taskId: string, event?: MouseEvent<HTMLElement>) => void
 	onOpenJobs?: (profileId: string, jobId: string) => void
 }
 
@@ -45,14 +45,17 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 						: t.status === 'failed'
 							? 'Failed'
 							: 'Canceled'
+	const byteProgressText = `${formatBytes(t.loadedBytes)}${t.totalBytes != null ? `/${formatBytes(t.totalBytes)}` : t.status === 'running' ? ' · Total size unknown' : ''}`
 	const progressText =
 		t.status === 'queued'
 			? null
 			: t.status === 'waiting'
 				? 'Waiting for job to finish…'
-				: `${formatBytes(t.loadedBytes)}${t.totalBytes != null ? `/${formatBytes(t.totalBytes)}` : ''} · ${
+				: t.status === 'running'
+					? `${byteProgressText} · ${
 						t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'
 					} · ${t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'}`
+					: byteProgressText
 	const subtitle =
 		t.kind === 'object'
 			? `s3://${t.bucket}/${t.key}`
@@ -85,11 +88,6 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 							{subtitle}
 						</Typography.Text>
 					</div>
-					{t.error ? (
-						<div className={styles.rowError}>
-							<Typography.Text type="danger">{t.error}</Typography.Text>
-						</div>
-					) : null}
 				</div>
 
 				<div className={styles.rowActions}>
@@ -143,16 +141,21 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 					{isTransferFinished(t.status) ? (
 						<Button
 							size="small"
-							danger
-							icon={<DeleteOutlined />}
+							icon={<CloseOutlined />}
 							aria-label={`Remove ${downloadActionContext}`}
-							onClick={() => props.onRemove(t.id)}
+							title="Remove from transfer history"
+							onClick={(event) => props.onRemove(t.id, event)}
 						>
 							Remove
 						</Button>
 					) : null}
 				</div>
 			</div>
+			{t.error ? (
+				<div className={styles.rowError}>
+					<Typography.Text type="danger">{t.error}</Typography.Text>
+				</div>
+			) : null}
 
 			{t.status === 'ready' || t.status === 'handed_off' ? (
 				<Typography.Text type="secondary">
@@ -161,12 +164,12 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 						: 'Sent to the browser download manager. This page cannot confirm disk saving or cancel the browser download. Check the download manager before preparing another link to avoid duplicates.'}
 				</Typography.Text>
 			) : <div className={styles.rowProgress}>
-				<Progress
+				{t.totalBytes != null || t.status === 'succeeded' ? <Progress
 					aria-label={`Download progress for ${t.label}`}
 					percent={progressPercent}
 					status={status}
 					showInfo={t.status !== 'queued' && t.status !== 'waiting'}
-				/>
+				/> : null}
 				{progressText ? (
 					<Typography.Text type="secondary">
 						{progressText}

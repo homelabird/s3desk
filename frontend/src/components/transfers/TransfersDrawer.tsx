@@ -1,7 +1,7 @@
 import { Badge, Button, Empty, Space, Tag, Typography } from 'antd'
 import { CloudUploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, type MouseEvent, type ReactNode } from 'react'
 
 import { AppTabs } from '../AppTabs'
 import { OverlaySheet } from '../OverlaySheet'
@@ -100,8 +100,52 @@ function TransferVirtualList<T extends { id: string }>(props: {
 }
 
 export function TransfersDrawer(props: TransfersDrawerProps) {
+	const { onRemoveDownload: removeDownloadTask, onRemoveUpload: removeUploadTask } = props
 	const hasClearableTransfers = [...props.downloadTasks, ...props.uploadTasks].some((task) => isTransferFinished(task.status))
 	const hasCompletedTransfers = props.tab === 'downloads' ? props.hasCompletedDownloads : props.hasCompletedUploads
+	const removalFocusRef = useRef<{
+		tab: TransfersTab
+		taskId: string
+		owner: HTMLElement
+		dialog: HTMLElement
+		targets: (HTMLElement | null | undefined)[]
+	} | null>(null)
+	const rememberRemovalFocus = useCallback((tab: TransfersTab, taskId: string, event?: MouseEvent<HTMLElement>) => {
+		removalFocusRef.current = null
+		const owner = event?.currentTarget
+		if (!owner || event?.detail !== 0 || document.activeElement !== owner) return
+		const list = owner.closest('[role="list"]')
+		const dialog = owner.closest<HTMLElement>('[role="dialog"]')
+		if (!list || !dialog) return
+		const removeActions = Array.from(list.querySelectorAll<HTMLElement>('button[aria-label^="Remove "]'))
+		const index = removeActions.indexOf(owner)
+		if (index < 0) return
+		removalFocusRef.current = {
+			tab, taskId, owner, dialog,
+			targets: [removeActions[index + 1], removeActions[index - 1], dialog.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')],
+		}
+	}, [])
+	const onRemoveDownload = useCallback((taskId: string, event?: MouseEvent<HTMLElement>) => {
+		rememberRemovalFocus('downloads', taskId, event)
+		removeDownloadTask(taskId)
+	}, [rememberRemovalFocus, removeDownloadTask])
+	const onRemoveUpload = useCallback((taskId: string, event?: MouseEvent<HTMLElement>) => {
+		rememberRemovalFocus('uploads', taskId, event)
+		removeUploadTask(taskId)
+	}, [rememberRemovalFocus, removeUploadTask])
+
+	useLayoutEffect(() => {
+		const pending = removalFocusRef.current
+		if (!pending) return
+		const tasks = pending.tab === 'downloads' ? props.downloadTasks : props.uploadTasks
+		if (tasks.some((task) => task.id === pending.taskId)) return
+		removalFocusRef.current = null
+		if (!props.open || props.tab !== pending.tab) return
+		if (document.activeElement !== document.body && document.activeElement !== pending.owner) return
+		const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]')
+		if (dialogs[dialogs.length - 1] !== pending.dialog) return
+		pending.targets.find((target) => target?.isConnected)?.focus()
+	}, [props.open, props.tab, props.downloadTasks, props.uploadTasks])
 
 	return (
 		<OverlaySheet
@@ -128,7 +172,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 						) : null}
 						{hasClearableTransfers ? (
 							<Button size="small" title="Clear completed, failed and canceled transfers from both queues" onClick={props.onClearFinished}>
-								Clear finished
+								Clear all finished
 							</Button>
 						) : null}
 					</Space>
@@ -169,7 +213,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 													onCancel={props.onCancelDownload}
 													onRetry={props.onRetryDownload}
 													onHandOff={props.onHandOffDownload}
-													onRemove={props.onRemoveDownload}
+													onRemove={onRemoveDownload}
 													onOpenJobs={props.onOpenJobs}
 												/>
 											)}
@@ -216,7 +260,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 													onOpenJobs={props.onOpenJobs}
 													onCancel={props.onCancelUpload}
 													onRetry={props.onRetryUpload}
-													onRemove={props.onRemoveUpload}
+													onRemove={onRemoveUpload}
 												/>
 											)}
 										/>

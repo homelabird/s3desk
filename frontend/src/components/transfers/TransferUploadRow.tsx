@@ -1,6 +1,6 @@
-import { memo } from 'react'
+import { memo, type MouseEvent } from 'react'
 import { Button, Progress, Tag, Typography } from 'antd'
-import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CloseOutlined, ReloadOutlined } from '@ant-design/icons'
 
 import { isTransferFinished, type UploadTask } from './transferTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
@@ -12,7 +12,7 @@ type TransferUploadRowProps = {
 	onOpenJobs?: (profileId: string, jobId: string) => void
 	onCancel: (taskId: string) => void
 	onRetry: (taskId: string) => void
-	onRemove: (taskId: string) => void
+	onRemove: (taskId: string, event?: MouseEvent<HTMLElement>) => void
 }
 
 export const TransferUploadRow = memo(function TransferUploadRow(props: TransferUploadRowProps) {
@@ -127,11 +127,6 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 								))}
 							</div>
 						) : null}
-						{t.error ? (
-							<div className={styles.rowError}>
-								<Typography.Text type="danger">{t.error}</Typography.Text>
-							</div>
-						) : null}
 					</div>
 				</div>
 
@@ -177,16 +172,21 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 					) : isTransferFinished(t.status) ? (
 						<Button
 							size="small"
-							danger
-							icon={<DeleteOutlined />}
+							icon={<CloseOutlined />}
 							aria-label={`Remove ${uploadActionContext}`}
-							onClick={() => props.onRemove(t.id)}
+							title="Remove from transfer history"
+							onClick={(event) => props.onRemove(t.id, event)}
 						>
 							Remove
 						</Button>
 					) : null}
 				</div>
 			</div>
+			{t.error ? (
+				<div className={styles.rowError}>
+					<Typography.Text type="danger">{t.error}</Typography.Text>
+				</div>
+			) : null}
 
 			<div className={styles.rowProgress}>
 				<Progress

@@ -96,7 +96,7 @@
 }
 
 .rowError {
-	margin-top: 6px;
+	overflow-wrap: anywhere;
 }
 
 .rowActions {

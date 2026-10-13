@@ -249,7 +249,7 @@ test('transfers drawer preserves active jobs when clearing finished transfers, t
 	await queueSelectedUpload(page, { count: 1 })
 	const { dialog, row: finishedRow } = await openTransfersUploadRow(page, 'finished.txt', { triggerButtonName: 'Open Transfers' })
 	await expectTransferRowState(finishedRow, 'Done')
-	await dialog.getByRole('button', { name: 'Clear finished', exact: true }).click()
+	await dialog.getByRole('button', { name: 'Clear all finished', exact: true }).click()
 	await expect(finishedRow).toHaveCount(0)
 	await expectTransferRowState(row, 'Transferring')
 	await expect(dialog.getByText('1 active', { exact: true })).toBeVisible()

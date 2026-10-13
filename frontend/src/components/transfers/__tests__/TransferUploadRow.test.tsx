@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MouseEvent } from 'react'
 
 import { TransferUploadRow } from '../TransferUploadRow'
 import type { UploadTask } from '../transferTypes'
@@ -31,6 +32,15 @@ function buildUploadTask(): UploadTask {
 }
 
 describe('TransferUploadRow', () => {
+	it.each([0, 1])('forwards removal click detail %s with the task identity', (detail) => {
+		const onRemove = vi.fn((taskId: string, event?: MouseEvent<HTMLElement>) => ({ taskId, detail: event?.detail, ownsFocus: document.activeElement === event?.currentTarget }))
+		render(<TransferUploadRow task={{ ...buildUploadTask(), status: 'succeeded' }} onCancel={vi.fn()} onRetry={vi.fn()} onRemove={onRemove} />)
+		const remove = screen.getByRole('button', { name: 'Remove upload Upload: 2 file(s)' })
+		remove.focus()
+		fireEvent.click(remove, { detail })
+		expect(onRemove).toHaveReturnedWith({ taskId: 'upload-1', detail, ownsFocus: true })
+	})
+
 	beforeEach(() => {
 		vi.stubGlobal(
 			'ResizeObserver',
@@ -137,6 +147,8 @@ describe('TransferUploadRow', () => {
 
 		expect(screen.getByRole('button', { name: 'Retry upload Upload: 2 file(s)' })).toHaveTextContent('Retry')
 		expect(screen.getByRole('button', { name: 'Remove upload Upload: 2 file(s)' })).toHaveTextContent('Remove')
+		expect(screen.getByRole('button', { name: 'Remove upload Upload: 2 file(s)' })).not.toHaveClass('ant-btn-dangerous')
+		expect(screen.getByRole('button', { name: 'Remove upload Upload: 2 file(s)' })).toHaveAttribute('title', 'Remove from transfer history')
 		expect(screen.getByText('Recovery: Retry will reuse remembered local files.')).toBeInTheDocument()
 	})
 
