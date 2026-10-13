@@ -75,6 +75,7 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 			onBucketChange,
 			bucketPlaceholder: bucketFieldPlaceholder(),
 			bucketDisabled: false,
+			bucketsLoading: false,
 			bucketOptions: [{ label: 'primary-bucket', value: 'primary-bucket' }],
 			prefixValue: 'photos/',
 			onPrefixChange,
@@ -106,6 +107,44 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 }
 
 describe('UploadsPageShell', () => {
+	it('puts destination inputs before the source selection they enable', () => {
+		render(
+			<MemoryRouter>
+				<UploadsPageShell presentation={buildPresentation()} />
+			</MemoryRouter>,
+		)
+
+		expect(screen.getByRole('heading', { name: 'Destination' })).toBeInTheDocument()
+		expect(screen.getByLabelText('Bucket').compareDocumentPosition(screen.getByTestId('uploads-selection-section')))
+			.toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+	})
+
+	it('announces initial bucket loading and removes the status after a lookup error', () => {
+		const presentation = buildPresentation()
+		presentation.targetSource.bucketsLoading = true
+		presentation.targetSource.bucketDisabled = true
+		const { rerender } = render(
+			<MemoryRouter>
+				<UploadsPageShell presentation={presentation} />
+			</MemoryRouter>,
+		)
+
+		expect(screen.getByRole('status', { name: 'Loading buckets' })).toHaveTextContent('Loading buckets')
+		expect(screen.getByLabelText('Bucket')).toBeDisabled()
+
+		presentation.targetSource.bucketsLoading = false
+		presentation.targetSource.bucketDisabled = false
+		presentation.alerts.bucketsErrorDescription = 'lookup failed'
+		rerender(
+			<MemoryRouter>
+				<UploadsPageShell presentation={presentation} />
+			</MemoryRouter>,
+		)
+
+		expect(screen.queryByRole('status', { name: 'Loading buckets' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Retry loading buckets' })).toBeEnabled()
+	})
+
 	it('does not show the disabled queue action before a source is selected', () => {
 		render(
 			<MemoryRouter>

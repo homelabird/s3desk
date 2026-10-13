@@ -75,6 +75,7 @@ describe('UploadsSelectionSection', () => {
 				selectedFiles={selectedFiles}
 				destinationLabel="s3://primary-bucket/photos"
 				selectionKind="folder"
+				actions={<button>Queue upload (7)</button>}
 			/>,
 		)
 
@@ -87,6 +88,8 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.getByRole('status')).toHaveTextContent('7.00 KB')
 		expect(screen.getByRole('status')).toHaveTextContent('Folder')
 		expect(screen.getByRole('button', { name: /Replace selection/i }).className).not.toContain('ant-btn-primary')
+		expect(screen.getByRole('button', { name: 'Queue upload (7)' }).compareDocumentPosition(screen.getByText('photos/a.txt')))
+			.toBe(Node.DOCUMENT_POSITION_FOLLOWING)
 	})
 
 	it('disables the picker when uploads are unavailable', () => {

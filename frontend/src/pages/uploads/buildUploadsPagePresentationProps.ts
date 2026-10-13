@@ -32,6 +32,7 @@ export type UploadsPagePresentationProps = {
 		onBucketChange: (value: string) => void
 		bucketPlaceholder: string
 		bucketDisabled: boolean
+		bucketsLoading: boolean
 		bucketOptions: Array<{ label: string; value: string }>
 		prefixValue: string
 		onPrefixChange: (value: string) => void
@@ -70,6 +71,7 @@ export function buildUploadsPagePresentationProps(state: UploadsPageState): Uplo
 			onBucketChange: state.setBucket,
 			bucketPlaceholder: state.bucketsQuery.isFetching && !state.bucketsQuery.data ? loadingBucketsPlaceholder() : bucketFieldPlaceholder(),
 			bucketDisabled: state.isOffline || !state.uploadsSupported || (state.bucketsQuery.isFetching && !state.bucketsQuery.data),
+			bucketsLoading: state.bucketsQuery.isFetching && !state.bucketsQuery.data,
 			bucketOptions: state.bucketOptions.map((option) => ({ value: option.value, label: option.label })),
 			prefixValue: state.prefix,
 			onPrefixChange: state.setPrefix,

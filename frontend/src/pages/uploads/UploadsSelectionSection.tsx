@@ -1,6 +1,6 @@
 import { Button, Typography } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import type { UploadSelectionKind } from '../../lib/uploadSelection'
 
 import { PageSection } from '../../components/PageSection'
@@ -17,6 +17,7 @@ type Props = {
 	selectedFiles: File[]
 	destinationLabel: string
 	selectionKind: UploadSelectionKind
+	actions?: ReactNode
 }
 
 export type UploadsSelectionSectionProps = Props
@@ -63,6 +64,7 @@ export function UploadsSelectionSection(props: Props) {
 						{selectedFileCount.toLocaleString()} item(s) · {formatBytes(selectedTotalBytes)} · {selectionTypeLabel}
 					</Typography.Text>
 				) : null}
+				{props.actions}
 
 				{previewFiles.length > 0 ? (
 					<div className={styles.previewWrap}>

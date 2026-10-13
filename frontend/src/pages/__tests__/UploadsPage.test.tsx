@@ -200,7 +200,7 @@ describe("UploadsPage", () => {
     expect(await screen.findByText(failedToLoadBucketsTitle())).toBeInTheDocument();
     expect(screen.queryByText(noBucketsAvailableHint())).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Target & source" }),
+      screen.getByRole("heading", { name: "Destination" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Bucket")).toBeInTheDocument();
   });

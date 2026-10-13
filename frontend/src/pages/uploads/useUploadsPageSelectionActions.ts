@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 
 import type { TransfersRuntimeApi } from '../../components/transfersTypes'
 import { promptForFiles, promptForFolderFiles } from '../../components/transfers/transfersUploadUtils'
+import { normalizeUploadPath } from '../../components/transfers/uploadPaths'
 import {
 	addFilesOrFolderFirstSentenceHint,
 	noBucketSelectedLabel,
@@ -33,6 +34,8 @@ type UseUploadsPageSelectionActionsArgs = {
 
 export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionActionsArgs) {
 	const { setUploadSourceBusy, setUploadSourceOpen } = props
+	const destinationBucket = props.bucket.trim()
+	const normalizedPrefix = normalizeUploadPath(props.prefix)
 	const currentScopeKey = `${props.profileId ?? ''}:${props.bucket}:${props.prefix}:${props.isOffline}:${props.uploadsSupported}`
 	const currentScopeKeyRef = useRef(currentScopeKey)
 	const selectionVersionRef = useRef(0)
@@ -43,15 +46,14 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 	const queueDisabledReason = useMemo(() => {
 		if (props.isOffline) return offlineUploadsDisabledHint()
 		if (!props.uploadsSupported) return props.uploadsUnsupportedReason ?? uploadsUnsupportedHint()
-		if (!props.bucket) return selectBucketFirstSentenceHint()
+		if (!destinationBucket) return selectBucketFirstSentenceHint()
 		if (selectedFileCount === 0) return addFilesOrFolderFirstSentenceHint()
 		return null
-	}, [props.bucket, props.isOffline, props.uploadsSupported, props.uploadsUnsupportedReason, selectedFileCount])
+	}, [destinationBucket, props.isOffline, props.uploadsSupported, props.uploadsUnsupportedReason, selectedFileCount])
 
-	const canQueueUpload = !props.isOffline && props.uploadsSupported && !!props.bucket && props.selectedFiles.length > 0
-	const canOpenPicker = !props.isOffline && props.uploadsSupported && !!props.bucket
-	const normalizedPrefix = props.prefix.trim().replace(/^\/+/, '')
-	const destinationLabel = props.bucket ? `s3://${props.bucket}${normalizedPrefix ? `/${normalizedPrefix}` : '/'}` : noBucketSelectedLabel()
+	const canQueueUpload = !props.isOffline && props.uploadsSupported && !!destinationBucket && props.selectedFiles.length > 0
+	const canOpenPicker = !props.isOffline && props.uploadsSupported && !!destinationBucket
+	const destinationLabel = destinationBucket ? `s3://${destinationBucket}${normalizedPrefix ? `/${normalizedPrefix}` : '/'}` : noBucketSelectedLabel()
 
 	useLayoutEffect(() => {
 		const scopeChanged = currentScopeKeyRef.current !== currentScopeKey
@@ -85,7 +87,7 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 			uploadsFeedback.uploadsUnsupported(props.uploadsUnsupportedReason)
 			return
 		}
-		if (!props.bucket) {
+		if (!destinationBucket) {
 			uploadsFeedback.selectBucketFirst()
 			return
 		}
@@ -95,8 +97,8 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 		}
 		props.transfers.queueUploadFiles({
 			profileId: props.profileId!,
-			bucket: props.bucket,
-			prefix: props.prefix,
+			bucket: destinationBucket,
+			prefix: normalizedPrefix,
 			files: props.selectedFiles,
 			label: props.selectedFolderLabel || undefined,
 			directorySelectionMode: props.selectedDirectorySelectionMode,
@@ -113,7 +115,7 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 			uploadsFeedback.uploadsUnsupported(props.uploadsUnsupportedReason)
 			return
 		}
-		if (!props.bucket) {
+		if (!destinationBucket) {
 			uploadsFeedback.selectBucketFirst()
 			return
 		}

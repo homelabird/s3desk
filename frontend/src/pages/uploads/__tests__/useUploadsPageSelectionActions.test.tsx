@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { offlineUploadsDisabledHint, selectBucketFirstHint, uploadsUnsupportedHint } from '../../../lib/actionHints'
+import { noBucketSelectedLabel, offlineUploadsDisabledHint, selectBucketFirstHint, selectBucketFirstSentenceHint, uploadsUnsupportedHint } from '../../../lib/actionHints'
 import { transfersStub } from '../../../test/transfersStub'
 import { useUploadsPageSelectionActions } from '../useUploadsPageSelectionActions'
 
@@ -274,5 +274,63 @@ describe('useUploadsPageSelectionActions', () => {
 
 		expect(setUploadSourceOpen).not.toHaveBeenCalled()
 		expect(messageInfoMock).toHaveBeenCalledWith(selectBucketFirstHint())
+	})
+
+	it('keeps staged files when the bucket contains only whitespace', () => {
+		const queueUploadFiles = vi.fn()
+		const setSelectedFiles = vi.fn()
+		const setSelectedFolderLabel = vi.fn()
+		const setSelectedDirectorySelectionMode = vi.fn()
+		const setUploadSourceOpen = vi.fn()
+		const { result } = renderHook(() => useUploadsPageSelectionActions({
+			transfers: createTransfersValue({ queueUploadFiles }),
+			isOffline: false, profileId: 'profile-1', uploadsSupported: true, uploadsUnsupportedReason: null,
+			bucket: ' \t ', prefix: 'photos/',
+			selectedFiles: [new File(['keep'], 'keep.txt')],
+			selectedFolderLabel: 'photos', selectedDirectorySelectionMode: 'input',
+			setSelectedFiles, setSelectedFolderLabel, setSelectedDirectorySelectionMode,
+			setUploadSourceOpen, setUploadSourceBusy: vi.fn(),
+		}))
+		expect(result.current.canQueueUpload).toBe(false)
+		expect(result.current.canOpenPicker).toBe(false)
+		expect(result.current.queueDisabledReason).toBe(selectBucketFirstSentenceHint())
+		expect(result.current.destinationLabel).toBe(noBucketSelectedLabel())
+		act(() => {
+			result.current.queueUpload()
+			result.current.openUploadPicker()
+		})
+		expect(queueUploadFiles).not.toHaveBeenCalled()
+		expect(setSelectedFiles).not.toHaveBeenCalled()
+		expect(setSelectedFolderLabel).not.toHaveBeenCalled()
+		expect(setSelectedDirectorySelectionMode).not.toHaveBeenCalled()
+		expect(setUploadSourceOpen).not.toHaveBeenCalled()
+		expect(messageInfoMock).toHaveBeenCalledWith(selectBucketFirstHint())
+	})
+
+	it.each([
+		[' /incoming\\photos/../reports/./2026/ ', 'incoming/reports/2026'],
+		[' photos//2026/ ', 'photos/2026'],
+		[' ../photos ', ''],
+	])('shows the queued destination for prefix %j while preserving the raw draft', (prefix, normalizedPrefix) => {
+		const queueUploadFiles = vi.fn()
+		const files = [new File(['target'], 'target.txt')]
+		const props = {
+			transfers: createTransfersValue({ queueUploadFiles }),
+			isOffline: false, profileId: 'profile-1', uploadsSupported: true, uploadsUnsupportedReason: null,
+			bucket: ' media-bucket ', prefix, selectedFiles: files,
+			selectedFolderLabel: '', selectedDirectorySelectionMode: undefined,
+			setSelectedFiles: vi.fn(), setSelectedFolderLabel: vi.fn(), setSelectedDirectorySelectionMode: vi.fn(),
+			setUploadSourceOpen: vi.fn(), setUploadSourceBusy: vi.fn(),
+		}
+		const { result } = renderHook(() => useUploadsPageSelectionActions(props))
+		expect(result.current.canQueueUpload).toBe(true)
+		expect(result.current.canOpenPicker).toBe(true)
+		expect(result.current.destinationLabel).toBe(`s3://media-bucket/${normalizedPrefix}`)
+		act(() => result.current.queueUpload())
+		expect(queueUploadFiles).toHaveBeenCalledWith(expect.objectContaining({
+			bucket: 'media-bucket', prefix: normalizedPrefix, files,
+		}))
+		expect(props.bucket).toBe(' media-bucket ')
+		expect(props.prefix).toBe(prefix)
 	})
 })

@@ -60,6 +60,7 @@ describe('buildUploadsPagePresentationProps', () => {
 		expect(presentation.header.queueButtonLabel).toBe('Queue upload (1)')
 		expect(presentation.header.queueButtonDisabled).toBe(false)
 		expect(presentation.targetSource.bucketPlaceholder).toBe(bucketFieldPlaceholder())
+		expect(presentation.targetSource.bucketsLoading).toBe(false)
 		expect(presentation.targetSource.bucketValue).toBe('primary-bucket')
 		expect(presentation.targetSource.onBucketChange).toBe(setBucket)
 		expect(presentation.targetSource.prefixValue).toBe('photos/')
@@ -122,5 +123,7 @@ describe('buildUploadsPagePresentationProps', () => {
 		})
 
 		expect(presentation.targetSource.bucketPlaceholder).toBe(loadingBucketsPlaceholder())
+		expect(presentation.targetSource.bucketsLoading).toBe(true)
+		expect(presentation.targetSource.bucketDisabled).toBe(true)
 	})
 })

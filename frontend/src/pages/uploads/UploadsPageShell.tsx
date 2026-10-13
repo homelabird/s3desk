@@ -1,11 +1,11 @@
-import { Alert, Button, Empty, Input, Space, Tooltip, Typography } from 'antd'
+import { Alert, Button, Empty, Input, Space, Spin, Tooltip, Typography } from 'antd'
 
 import { DatalistInput } from '../../components/DatalistInput'
 import { LinkButton } from '../../components/LinkButton'
 import { PageHeader } from '../../components/PageHeader'
 import { PageSection } from '../../components/PageSection'
 import { UploadSourceSheet } from '../../components/UploadSourceSheet'
-import { failedToLoadBucketsTitle, goToBucketsLabel, noBucketsAvailableHint, offlineUploadsDisabledHint } from '../../lib/actionHints'
+import { failedToLoadBucketsTitle, goToBucketsLabel, loadingBucketsPlaceholder, noBucketsAvailableHint, offlineUploadsDisabledHint } from '../../lib/actionHints'
 import styles from '../UploadsPage.module.css'
 import { UploadsSelectionSection } from './UploadsSelectionSection'
 import type { UploadsPagePresentationProps } from './buildUploadsPagePresentationProps'
@@ -18,7 +18,7 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 	const { presentation } = props
 	const hasSelection = !presentation.header.clearSelectionDisabled
 	const uploadActions = hasSelection ? (
-		<Space wrap className={styles.uploadActions}>
+		<div className={styles.uploadActions}>
 			<Tooltip title={presentation.header.queueButtonTooltip}>
 				<span>
 					<Button
@@ -32,13 +32,12 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 			</Tooltip>
 			<Button onClick={presentation.header.onOpenTransfers}>Open Transfers</Button>
 			<Button onClick={presentation.header.onClearSelection}>Clear selection</Button>
-		</Space>
+		</div>
 	) : null
 
 	return (
 		<div className={styles.pageStack}>
 			<PageHeader
-				eyebrow="Transfer"
 				title="Uploads"
 			/>
 
@@ -86,10 +85,8 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 
 			{presentation.targetSource.show ? (
 				<>
-					<UploadsSelectionSection {...presentation.selection} />
-
 					<PageSection
-						title="Target & source"
+						title="Destination"
 						description="Choose a bucket and optional prefix."
 						actions={
 							<Typography.Text type="secondary" className={styles.destinationLabel}>
@@ -110,6 +107,12 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 									disabled={presentation.targetSource.bucketDisabled}
 									options={presentation.targetSource.bucketOptions}
 								/>
+								{presentation.targetSource.bucketsLoading ? (
+									<Typography.Text role="status" aria-live="polite" aria-label="Loading buckets" className={styles.bucketLoading}>
+										<Spin size="small" aria-hidden="true" />
+										{loadingBucketsPlaceholder()}
+									</Typography.Text>
+								) : null}
 							</label>
 							<label className={styles.fieldBlock}>
 								<span className={styles.fieldLabel}>Prefix</span>
@@ -123,8 +126,8 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 								/>
 							</label>
 						</div>
-						{uploadActions}
 					</PageSection>
+					<UploadsSelectionSection {...presentation.selection} actions={uploadActions} />
 				</>
 			) : null}
 			{!presentation.targetSource.show ? uploadActions : null}
