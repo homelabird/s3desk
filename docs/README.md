@@ -34,6 +34,7 @@ Supporting assets that still live under `docs/`:
 
 Reports and audit indexes:
 
+- [Frontend design review and improvements (2026-10-11)](../frontend/docs/FRONTEND_DESIGN_REVIEW_2026-10-11.ko.md): current-worktree design findings, applied interaction and responsive refinements, and verification boundaries
 - [../notes/INDEX.md](../notes/INDEX.md): engineering notes, project quality reports, and frontend design reports
 - [../frontend/docs/DESIGN_AUDIT_IMPLEMENTATION_STATUS.md](../frontend/docs/DESIGN_AUDIT_IMPLEMENTATION_STATUS.md) and [latest validation log](../frontend/docs/DESIGN_AUDIT_VALIDATION_LOG.md): maintained frontend design status, current checks, and evidence boundaries
 - [../frontend/docs/DESIGN_TOKEN_USAGE.md](../frontend/docs/DESIGN_TOKEN_USAGE.md): maintained CSS token, hierarchy, and ownership-cleanup rules
