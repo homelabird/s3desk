@@ -352,6 +352,8 @@ python3 "${GITLAB_PUBLISH_DAG_CHECK}"
 python3 "${RELEASE_EVIDENCE_CHECKLIST_CHECK}" --candidate-id "${LATEST_RELEASE_CANDIDATE}"
 check_shell_script_syntax
 python3 "${ROOT}/scripts/check_demo_seaweedfs_test.py"
+python3 "${ROOT}/scripts/check_compose_cli_test.py"
+python3 "${ROOT}/scripts/check_deploy_release_cli_test.py"
 python3 "${ROOT}/scripts/check_seaweedfs_unified_test.py"
 
 require_text "${CHANGELOG}" "## Unreleased" "Unreleased changelog section"

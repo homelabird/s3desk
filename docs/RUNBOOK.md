@@ -24,16 +24,68 @@ Containerized defaults:
 
 ## Start and Stop
 
+For a new deployment, run these commands on the server:
+
 ```bash
-cp .env.example .env.local
-$EDITOR .env.local
-set -a; . ./.env.local; set +a
-./scripts/compose.sh remote up -d
-./scripts/compose.sh remote down
-./scripts/compose.sh remote logs -f
+./scripts/compose.sh setup
+./scripts/compose.sh up
+./scripts/compose.sh status
+./scripts/compose.sh logs
+./scripts/compose.sh stop
 ```
 
-Use [.env.example](../.env.example) as the starting point for remote/Postgres deployments.
+Docker or Podman with Compose is required. Setup also needs OpenSSL and never
+starts containers. It asks for an access mode, the web port (HTTP modes), and
+the image repository/tag; pressing Enter keeps the displayed defaults.
+
+| Access mode | Binding and URL | Before starting |
+| --- | --- | --- |
+| This server / SSH tunnel (default) | `127.0.0.1:8080`, HTTP | For access from another machine, use the SSH tunnel command shown by setup |
+| Trusted LAN | All interfaces, chosen port, HTTP | Enter the server IP/hostname used by browsers; restrict access to a trusted network |
+| Public HTTPS | Caddy on ports 80/443, S3Desk internal | Enter a public DNS domain pointing to the server; allow inbound ports 80/443 |
+
+Setup writes `.env.local` with permissions `600`, random `API_TOKEN`, a 32-byte
+base64 `ENCRYPTION_KEY`, and a random PostgreSQL password. Find the login token
+in that private file; setup does not print secrets. Back up the file together
+with the persistent data. Setup refuses to overwrite an existing file, so keep
+an existing deployment's encryption key and database password when reusing data.
+
+`up` validates the Compose configuration without printing it, pulls images,
+starts containers, and shows their state. A container starting is not an
+application readiness check; inspect `status`, `logs`, and `/readyz` below.
+`stop` stops containers without removing volumes or configuration. The shortcuts
+remember `S3DESK_DEPLOY_STACK=remote` or `caddy` from `.env.local`.
+
+For manual configuration, copy [.env.example](../.env.example) to `.env.local`,
+set `S3DESK_DEPLOY_STACK` and replace the required secrets and public host values.
+Remote/Caddy commands pass that file to Compose automatically, without executing
+it as shell code. Exported variables override file values. Local demo/development
+stacks continue using their own settings and do not load deployment `.env.local`.
+
+The explicit stack commands accept all Compose options:
+
+```bash
+./scripts/compose.sh remote up -d
+./scripts/compose.sh remote logs -f s3desk
+./scripts/compose.sh caddy logs -f caddy s3desk
+```
+
+To update, back up data and `.env.local`, change `S3DESK_TAG` to the desired
+published version, then run `./scripts/compose.sh up`. Keep the same stack and
+secrets. `up` uses the existing volumes and does not delete data.
+
+If startup fails:
+
+- Missing Compose: install the Docker Compose plugin or Podman Compose provider.
+  Use `S3DESK_COMPOSE_PROVIDER=docker` or `podman` to select explicitly.
+- Image pull denied/not found: check the image repository/tag in `.env.local`
+  and log in to the registry if the image is private. The shortcut stops before
+  changing containers if the pull fails.
+- Port already in use: change `S3DESK_PORT` and `EXTERNAL_BASE_URL` for HTTP mode.
+  Caddy uses 80/443; release those ports before starting it.
+- Host/origin rejected: include the browser-facing hostname/IP in `ALLOWED_HOSTS`
+  and ensure `EXTERNAL_BASE_URL` matches the URL used in the browser.
+
 The repository root `.env` is checked in for non-secret compose defaults. Keep
 real deployment secrets in exported environment variables or ignored local files
 such as `.env.local`; do not commit real `API_TOKEN`, `POSTGRES_PASSWORD`,
@@ -87,8 +139,9 @@ evidence.
 
 ## Public HTTPS with Caddy
 
-Use `./scripts/compose.sh caddy` when you want Caddy to terminate TLS in front
-of S3Desk.
+Choose public HTTPS in `./scripts/compose.sh setup`, then run
+`./scripts/compose.sh up` to use Caddy for TLS termination. For existing manual
+configuration, use `./scripts/compose.sh caddy`.
 
 Required environment:
 

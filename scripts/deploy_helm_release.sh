@@ -1,8 +1,55 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ $# -gt 1 ]]; then
+  printf '%s\n' 'Expected one release tag. Run bash scripts/deploy_helm_release.sh --help.' >&2
+  exit 2
+fi
+case "${1:-}" in
+  -h|--help)
+    printf '%s\n' \
+      'Usage: bash scripts/deploy_helm_release.sh [TAG]' \
+      '' \
+      'Deploy an approved release to Kubernetes (CI/release automation).' \
+      'For first server setup with Docker Compose, run on that server:' \
+      '  ./scripts/compose.sh setup' \
+      '  ./scripts/compose.sh up' \
+      '' \
+      'Required release settings:' \
+      '  TAG or CI_COMMIT_TAG     Release tag: MAJOR.MINORv or MAJOR.MINORv-rcN' \
+      '  DOCKERHUB_REPO           Published image repository: namespace/repo' \
+      '  GH_TOKEN or GITHUB_TOKEN GitHub access for release readiness checks' \
+      '' \
+      'Required Kubernetes settings:' \
+      '  DEPLOY_HELM_RELEASE      Helm release name' \
+      '  DEPLOY_K8S_NAMESPACE     Target namespace' \
+      '  DEPLOY_API_TOKEN         API token configured in the chart or Secret' \
+      '  A working kubectl context or DEPLOY_KUBECONFIG_B64 is required.' \
+      '' \
+      'Required post-deployment smoke settings:' \
+      '  DEPLOY_BASE_URL or DEPLOY_HEALTHCHECK_URL' \
+      '  DEPLOY_PROFILE_ID, DEPLOY_SMOKE_BUCKET, DEPLOY_SMOKE_OBJECT_KEY' \
+      '  Use an existing profile and object that the API token can access.' \
+      '' \
+      'Optional: DEPLOY_HELM_CHART_REF (OCI chart), DEPLOY_HELM_VALUES_FILES' \
+      '          (comma-separated paths), HELM_TIMEOUT (300s),' \
+      '          DEPLOY_SMOKE_EVIDENCE_FILE.' \
+      'The default chart registry is harbor.k8s.homelabird.com; override for your registry.' \
+      'Requires bash, git, curl, python3, helm and kubectl.' \
+      'Release readiness, smoke configuration and a Helm dry-run precede deployment.'
+    exit 0
+    ;;
+  -*)
+    printf 'Unknown option: %s. Run bash scripts/deploy_helm_release.sh --help.\n' "$1" >&2
+    exit 2
+    ;;
+esac
 TAG="${1:-${CI_COMMIT_TAG:-}}"
+if [[ -z "${TAG}" ]]; then
+  printf '%s\n' 'Missing release tag. Pass TAG or set CI_COMMIT_TAG; run bash scripts/deploy_helm_release.sh --help for setup instructions.' >&2
+  exit 2
+fi
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 bash "${ROOT}/scripts/validate_release_tag.sh" "${TAG}" >/dev/null
 bash "${ROOT}/scripts/verify_release_readiness.sh" "${TAG}" >/dev/null

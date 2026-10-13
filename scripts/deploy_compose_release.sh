@@ -1,8 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ $# -gt 1 ]]; then
+  printf '%s\n' 'Expected one release tag. Run bash scripts/deploy_compose_release.sh --help.' >&2
+  exit 2
+fi
+case "${1:-}" in
+  -h|--help)
+    printf '%s\n' \
+      'Usage: bash scripts/deploy_compose_release.sh [TAG]' \
+      '' \
+      'Deploy an approved release to an existing server over SSH (CI/release automation).' \
+      'For first server setup, run on that server:' \
+      '  ./scripts/compose.sh setup' \
+      '  ./scripts/compose.sh up' \
+      '' \
+      'Required release settings:' \
+      '  TAG or CI_COMMIT_TAG     Release tag: MAJOR.MINORv or MAJOR.MINORv-rcN' \
+      '  DOCKERHUB_REPO           Published image repository: namespace/repo' \
+      '  GH_TOKEN or GITHUB_TOKEN GitHub access for release readiness checks' \
+      '' \
+      'Required server settings:' \
+      '  DEPLOY_SSH_HOST          Server hostname or IP address' \
+      '  DEPLOY_SSH_USER          SSH user with Docker Compose access' \
+      '  DEPLOY_COMPOSE_PATH      Existing repository directory on the server' \
+      '  DEPLOY_API_TOKEN         API token already configured on the server' \
+      '  A working SSH key and populated ~/.ssh/known_hosts are required.' \
+      '' \
+      'Required post-deployment smoke settings:' \
+      '  DEPLOY_BASE_URL or DEPLOY_HEALTHCHECK_URL' \
+      '  DEPLOY_PROFILE_ID, DEPLOY_SMOKE_BUCKET, DEPLOY_SMOKE_OBJECT_KEY' \
+      '  Use an existing profile and object that the API token can access.' \
+      '' \
+      'Optional: DEPLOY_SSH_PORT (22), DEPLOY_COMPOSE_FILE (compose/remote/compose.yml),' \
+      '          DEPLOY_COMPOSE_SERVICE (s3desk), DEPLOY_SMOKE_EVIDENCE_FILE.' \
+      'Requires local bash, git, curl, python3, ssh; Docker Compose on the server.' \
+      'Release readiness and smoke configuration are checked before deployment.'
+    exit 0
+    ;;
+  -*)
+    printf 'Unknown option: %s. Run bash scripts/deploy_compose_release.sh --help.\n' "$1" >&2
+    exit 2
+    ;;
+esac
 TAG="${1:-${CI_COMMIT_TAG:-}}"
+if [[ -z "${TAG}" ]]; then
+  printf '%s\n' 'Missing release tag. Pass TAG or set CI_COMMIT_TAG; run bash scripts/deploy_compose_release.sh --help for setup instructions.' >&2
+  exit 2
+fi
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 bash "${ROOT}/scripts/validate_release_tag.sh" "${TAG}" >/dev/null
 bash "${ROOT}/scripts/verify_release_readiness.sh" "${TAG}" >/dev/null

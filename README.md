@@ -40,20 +40,37 @@ limits of offline validation.
 
 ## Remote deployment
 
-```bash
-cp .env.example .env.local
-# Edit .env.local, then load it into the shell.
-set -a; . ./.env.local; set +a
-./scripts/compose.sh remote up -d
-```
-
-Set these values before starting: `API_TOKEN`, `ENCRYPTION_KEY`, `POSTGRES_PASSWORD`, `S3DESK_BIND_ADDRESS`, `ALLOWED_HOSTS`, and `ALLOWED_LOCAL_DIRS`. Use `./scripts/compose.sh caddy up -d` for the Caddy stack.
+Run these commands **on the deployment server**. Docker or Podman with Compose
+is required; setup also uses OpenSSL to generate secrets.
 
 ```bash
-./scripts/compose.sh remote ps
-./scripts/compose.sh remote logs -f
-./scripts/compose.sh remote down
+./scripts/compose.sh setup
+./scripts/compose.sh up
 ```
+
+Setup asks how you want to connect: this server/SSH tunnel (the default), a
+trusted LAN, or a public domain with Caddy HTTPS. It creates a small private
+`.env.local` with random secrets, the chosen URL, and a pinned image tag.
+Use `API_TOKEN` from that file to log in. Public HTTPS requires DNS pointing to
+the server and inbound ports 80/443. LAN mode uses HTTP and binds all interfaces.
+
+```bash
+./scripts/compose.sh status
+./scripts/compose.sh logs
+./scripts/compose.sh stop
+```
+
+`up` validates configuration before pulling images and starting containers.
+`stop` preserves data; setup refuses to overwrite existing configuration.
+Remote/Caddy commands load `.env.local` automatically; no shell export step is
+needed. Exported variables still take precedence.
+
+For an existing deployment, keep its secrets and volumes, edit `.env.local`,
+and use the same stack as before. The explicit commands such as
+`./scripts/compose.sh remote up -d` and `./scripts/compose.sh caddy up -d`
+remain available. See [the runbook](docs/RUNBOOK.md#start-and-stop) for manual
+configuration, updates, and troubleshooting; use `./scripts/compose.sh --help`
+for all commands. Kubernetes deployments use the [Helm chart](charts/s3desk/README.md).
 
 ## Storage credentials
 
