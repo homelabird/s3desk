@@ -56,6 +56,13 @@ describe('JobsTableSection', () => {
 		expect(screen.queryByRole('button', { name: 'New delete job' })).not.toBeInTheDocument()
 	})
 
+	it('announces loading compact history without presenting an empty result', () => {
+		renderJobsTableSection({ isCompact: true, isLoading: true })
+
+		expect(screen.getByRole('status', { name: 'Loading activity' })).toHaveTextContent('Loading activity…')
+		expect(screen.queryByText('No activity yet.')).not.toBeInTheDocument()
+	})
+
 	it('expands and restores the History panel', () => {
 		renderJobsTableSection()
 

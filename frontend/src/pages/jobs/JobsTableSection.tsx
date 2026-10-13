@@ -115,8 +115,9 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 				<div ref={onTableContainerRef} className={styles.surfaceBody}>
 					{isCompact ? (
 						isLoading && sortedJobs.length === 0 ? (
-							<div className={styles.loadingState}>
+							<div className={styles.loadingState} role="status" aria-live="polite" aria-label="Loading activity">
 								<Spin />
+								<span className="sr-only">Loading activity…</span>
 							</div>
 						) : sortedJobs.length === 0 ? (
 							<div className={styles.emptyState}>{emptyState}</div>

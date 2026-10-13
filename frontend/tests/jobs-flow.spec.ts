@@ -165,6 +165,34 @@ test('jobs cancel and retry flow', async ({ page }) => {
 	await expect(jobsTableRow(page, 'job-retry-1')).toBeVisible()
 })
 
+test('diagnostic filters support keyboard traversal and preserve values after Escape', async ({ page }) => {
+	await seedStorage(page)
+	await setupApiMocks(page)
+	await gotoJobsPage(page)
+
+	const trigger = page.getByTestId('jobs-diagnostics-trigger')
+	await trigger.focus()
+	await page.keyboard.press('Enter')
+	const filters = page.getByRole('dialog', { name: 'Job diagnostic filters' })
+	const typeFilter = filters.getByRole('combobox', { name: 'Job type filter' })
+	const errorFilter = filters.getByRole('combobox', { name: 'Job error code filter' })
+	await expect(typeFilter).toBeFocused()
+	await page.keyboard.press('Tab')
+	await expect(errorFilter).toBeFocused()
+	await page.keyboard.press('Shift+Tab')
+	await expect(typeFilter).toBeFocused()
+	await typeFilter.fill('transfer_delete_prefix')
+	await errorFilter.fill('job_failed')
+	await page.keyboard.press('Escape')
+	await expect(filters).toHaveCount(0)
+	await expect(trigger).toBeFocused()
+	await expect(page.getByRole('button', { name: 'Reset filters' })).toBeVisible()
+
+	await page.keyboard.press('Enter')
+	await expect(typeFilter).toHaveValue('transfer_delete_prefix')
+	await expect(errorFilter).toHaveValue('job_failed')
+})
+
 for (const width of [1280, 390]) {
 	test(`retry opens the new job while preserving the failed filter (${width}px)`, async ({ page }) => {
 		await page.setViewportSize({ width, height: 844 })

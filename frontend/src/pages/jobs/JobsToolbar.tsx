@@ -239,6 +239,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							type="button"
 							data-testid={`jobs-health-${item.key}`}
 							aria-label={`Filter to ${item.label.toLowerCase()} jobs`}
+							aria-pressed={props.statusFilter === item.filter}
 							className={`${styles.healthCard} ${styles[`healthCard${item.tone[0].toUpperCase()}${item.tone.slice(1)}`]}`}
 							onClick={() => props.onStatusFilterChange(item.filter)}
 						>
@@ -279,6 +280,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							<PopoverSurface
 								key={`diagnostics:${props.scopeKey}`}
 								align="end"
+								closeOnTab={false}
 								contentClassName={styles.diagnosticsDropdown}
 								contentProps={{
 									id: diagnosticsPopoverId,

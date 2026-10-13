@@ -10,6 +10,35 @@ beforeAll(() => {
 })
 
 describe('JobsLogsDrawer', () => {
+	it('keeps the job target and distinguishes the first load from an empty result or failure', () => {
+		const props = {
+			open: true, onClose: vi.fn(), drawerWidth: 720, activeLogJobId: 'job-loading', isLogsLoading: true, logsError: null, onRefresh: vi.fn(),
+			followLogs: true, onFollowLogsChange: vi.fn(), logPollPaused: false, logPollFailures: 0, onResumeLogPolling: vi.fn(),
+			logSearchQuery: '', onLogSearchQueryChange: vi.fn(), onCopyVisibleLogs: vi.fn(async () => {}), normalizedLogSearchQuery: '',
+			visibleLogEntries: [], visibleLogSeveritySummary: { error: 0, warn: 0 }, latestErrorIndex: -1,
+			activeLogLines: 0, onLogsContainerRef: vi.fn(), visibleLogText: '', searchInputWidth: 320,
+		}
+		const { rerender } = render(<JobsLogsDrawer {...props} />)
+		expect(screen.getByText('job-loading')).toBeInTheDocument()
+		expect(screen.getByRole('status', { name: 'Loading job logs' })).toBeInTheDocument()
+		expect(screen.queryByText('Loaded lines: 0')).not.toBeInTheDocument()
+		expect(screen.queryByText(/No log output was recorded/)).not.toBeInTheDocument()
+
+		rerender(<JobsLogsDrawer {...props} isLogsLoading={false} logsError={new Error('Log read denied')} />)
+		expect(screen.getByText('job-loading')).toBeInTheDocument()
+		expect(screen.queryByRole('status', { name: 'Loading job logs' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('region', { name: 'Job log output' })).not.toBeInTheDocument()
+		expect(screen.queryByText('Loaded lines: 0')).not.toBeInTheDocument()
+
+		rerender(<JobsLogsDrawer {...props} isLogsLoading={false} />)
+		expect(screen.getByText(/No log output was recorded/)).toBeInTheDocument()
+		expect(screen.getByRole('status')).toHaveTextContent('Loaded lines: 0')
+
+		rerender(<JobsLogsDrawer {...props} activeLogLines={1} visibleLogEntries={['[info] cached output']} visibleLogText="[info] cached output" />)
+		expect(screen.getByText('cached output')).toBeInTheDocument()
+		expect(screen.queryByRole('status', { name: 'Loading job logs' })).not.toBeInTheDocument()
+	})
+
 	it('surfaces severity counts and quick navigation for visible log lines', () => {
 		render(
 			<JobsLogsDrawer
@@ -48,7 +77,9 @@ describe('JobsLogsDrawer', () => {
 		)
 
 		const logCounts = screen.getByRole('status')
-		expect(logCounts).toHaveTextContent('Lines: 3')
+		expect(logCounts).toHaveTextContent('Loaded lines: 3')
+		expect(screen.getByRole('button', { name: 'Copy loaded' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Download loaded' })).toBeInTheDocument()
 		expect(logCounts).toHaveTextContent('Errors: 1')
 		expect(logCounts).toHaveTextContent('Warnings: 1')
 		expect(screen.getByRole('button', { name: 'Jump to latest error' })).toBeInTheDocument()
@@ -94,6 +125,8 @@ describe('JobsLogsDrawer', () => {
 		expect(screen.getByText('#2')).toBeInTheDocument()
 		expect(screen.getByText('#4')).toBeInTheDocument()
 		expect(screen.queryByText('#1')).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Copy visible' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Download visible' })).toBeInTheDocument()
 	})
 
 	it('parses legacy backend lines and explains empty logs', () => {
@@ -185,7 +218,7 @@ describe('JobsLogsDrawer', () => {
 				/>,
 			)
 
-			expect(screen.getByText(/Lines: 650/)).toBeInTheDocument()
+			expect(screen.getByText(/Loaded lines: 650/)).toBeInTheDocument()
 			expect(screen.queryByText(/Virtualized rows/)).not.toBeInTheDocument()
 			expect(screen.getByRole('region', { name: 'Job log output' })).toHaveAttribute('tabindex', '0')
 			expect(screen.getByText('line-1')).toBeInTheDocument()

@@ -273,6 +273,11 @@ export function JobsDetailsDrawer(props: Props) {
 			placement="right"
 			width={typeof props.drawerWidth === 'number' ? `${props.drawerWidth}px` : props.drawerWidth}
 		>
+			{props.detailsJobId && !props.job ? (
+				<Typography.Paragraph type="secondary">
+					Job: <Typography.Text code className={sharedStyles.detailValue}>{props.detailsJobId}</Typography.Text>
+				</Typography.Paragraph>
+			) : null}
 			<div className={sharedStyles.drawerExtra}>
 				<Button icon={<ReloadOutlined />} disabled={!props.detailsJobId || props.isOffline} loading={props.isFetching} onClick={props.onRefresh}>
 					Refresh
@@ -282,6 +287,7 @@ export function JobsDetailsDrawer(props: Props) {
 					disabled={
 						props.isOffline ||
 						!props.detailsJobId ||
+						!props.job ||
 						props.job?.status === 'queued' ||
 						props.job?.status === 'running'
 					}
@@ -487,11 +493,12 @@ export function JobsDetailsDrawer(props: Props) {
 							]}
 						/>
 					</>
-				) : (
-					<div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+				) : props.isFetching ? (
+					<div role="status" aria-live="polite" aria-label="Loading job details" style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
 						<Spin />
+						<span className="sr-only">Loading job details…</span>
 					</div>
-				)
+				) : null
 			) : (
 				<Typography.Text type="secondary">Select a job</Typography.Text>
 			)}

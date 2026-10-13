@@ -140,6 +140,35 @@ async function mockJobsOverlayApi(page: Page) {
 }
 
 test.describe('Jobs overlays', () => {
+	test('failed details stop loading and recover through Refresh', async ({ page }) => {
+		await seedStorage(page)
+		await seedLocalStorage(page, { apiRetryCount: 0 })
+		await mockJobsOverlayApi(page)
+		await page.route(/\/api\/v1\/jobs(?:\?.*)?$/, (route) => route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({ items: [failedJob], nextCursor: null }),
+		}))
+		await page.addInitScript(({ jobId, profileId }) => {
+			window.history.replaceState({ ...window.history.state, usr: { jobId, profileId } }, '')
+		}, { jobId: uploadJob.id, profileId })
+		let failDetails = true
+		await page.route('**/api/v1/jobs/job-upload-success*', (route) => route.fulfill({
+			status: failDetails ? 503 : 200,
+			contentType: 'application/json',
+			body: JSON.stringify(failDetails ? { error: { code: 'unavailable', message: 'Details temporarily unavailable' } } : uploadJob),
+		}))
+		await gotoJobsPage(page)
+		const drawer = page.getByRole('dialog', { name: 'Job Details' })
+		await expect(drawer.getByText('Failed to load job')).toBeVisible({ timeout: 15_000 })
+		await expect(drawer.getByRole('status', { name: 'Loading job details' })).toHaveCount(0)
+		await expect(drawer.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled()
+
+		failDetails = false
+		await drawer.getByRole('button', { name: /Refresh/ }).click()
+		await expect(drawer.getByText('job-upload-success', { exact: true })).toBeVisible()
+		await expect(drawer.getByText('Failed to load job')).toHaveCount(0)
+	})
+
 	for (const lineCount of [3, 650]) {
 		test(`jumps to the latest error in ${lineCount} desktop log lines`, async ({ page }) => {
 			await seedStorage(page)
@@ -148,7 +177,7 @@ test.describe('Jobs overlays', () => {
 			await page.route('**/jobs/*/logs*', (route) => route.fulfill({ contentType: 'text/plain', headers: { 'x-log-next-offset': String(logs.length) }, body: logs }))
 			await gotoJobsPage(page)
 			const drawer = await openJobLogsDrawer(page, jobsTableRow(page, 'job-failed-logs'))
-			await expect(drawer.getByText(`Lines: ${lineCount}`, { exact: false })).toBeVisible()
+			await expect(drawer.getByText(`Loaded lines: ${lineCount}`, { exact: false })).toBeVisible()
 			await drawer.getByRole('switch', { name: 'Follow job logs' }).uncheck()
 			await drawer.getByRole('button', { name: 'Jump to latest error', exact: true }).click()
 			await expect(drawer.getByText('final failure', { exact: true })).toBeInViewport({ ratio: 1 })

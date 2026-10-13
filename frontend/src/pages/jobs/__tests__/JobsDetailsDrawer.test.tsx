@@ -66,6 +66,54 @@ const deleteObjectsJob: Job = {
 }
 
 describe('JobsDetailsDrawer', () => {
+	it('stops loading after a failed fetch and resumes the loading status during retry', () => {
+		const onRefresh = vi.fn()
+		const drawerProps = {
+			open: true,
+			onClose: vi.fn(),
+			drawerWidth: 720,
+			isOffline: false,
+			detailsJobId: directUploadJob.id,
+			job: undefined,
+			isFetching: true,
+			isError: false,
+			error: null,
+			onRefresh,
+			onDeleteJob: vi.fn(async () => {}),
+			deleteLoading: false,
+			onOpenLogs: vi.fn(),
+			uploadDetails: null,
+			uploadRootLabel: null,
+			uploadTablePageItems: [],
+			uploadTableDataLength: 0,
+			uploadTablePageSize: 20,
+			uploadTablePageSafe: 1,
+			uploadTableTotalPages: 1,
+			onUploadTablePrevPage: vi.fn(),
+			onUploadTableNextPage: vi.fn(),
+			uploadHashesLoading: false,
+			uploadHashFailures: 0,
+			borderColor: '#ddd',
+			backgroundColor: '#fff',
+			borderRadius: 12,
+		}
+		const view = render(<JobsDetailsDrawer {...drawerProps} />)
+		expect(screen.getByText(directUploadJob.id)).toBeInTheDocument()
+		expect(screen.getByRole('status', { name: 'Loading job details' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+
+		view.rerender(<JobsDetailsDrawer {...drawerProps} isFetching={false} isError error={new Error('Temporarily unavailable')} />)
+		expect(screen.getByText(directUploadJob.id)).toBeInTheDocument()
+		expect(screen.getByText('Failed to load job')).toBeInTheDocument()
+		expect(screen.queryByRole('status', { name: 'Loading job details' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+		fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
+		expect(onRefresh).toHaveBeenCalledTimes(1)
+
+		view.rerender(<JobsDetailsDrawer {...drawerProps} isFetching isError error={new Error('Temporarily unavailable')} />)
+		expect(screen.getByRole('status', { name: 'Loading job details' })).toBeInTheDocument()
+	})
+
 	it('renders typed operational sections before raw payload data', () => {
 		render(
 			<JobsDetailsDrawer

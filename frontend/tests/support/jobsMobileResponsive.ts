@@ -24,9 +24,9 @@ const jobLogText = [
 const jobs = [
 	{
 		id: 'job-queued',
-		type: 'transfer_upload',
+		type: 'transfer_sync_staging_to_s3',
 		status: 'queued',
-		payload: { bucket: defaultStorage.bucket, prefix: 'queued/' },
+		payload: { bucket: defaultStorage.bucket, prefix: 'queued/', rootKind: 'folder', rootName: 'photos', totalFiles: 2, totalBytes: 2048 },
 		progress: null,
 		createdAt: now,
 		startedAt: null,

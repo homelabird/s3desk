@@ -20,7 +20,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 			await gotoJobsPage(page)
 			await page.getByRole('button', { name: 'Logs for job job-running', exact: true }).click()
 			const drawer = page.getByRole('dialog', { name: 'Job Logs', exact: true })
-			await expect(drawer.getByText(`Lines: ${lineCount}`, { exact: false })).toBeVisible()
+			await expect(drawer.getByText(`Loaded lines: ${lineCount}`, { exact: false })).toBeVisible()
 			await drawer.getByRole('switch', { name: 'Follow job logs' }).uncheck()
 			await drawer.getByRole('button', { name: 'Jump to latest error', exact: true }).click()
 			await expect(drawer.getByText('final failure', { exact: true })).toBeInViewport({ ratio: 1 })
@@ -41,10 +41,14 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await gotoJobsPage(page)
 
 		await expect(page.getByTestId('jobs-health-active')).toContainText('2')
+		await expect(page.getByTestId('jobs-health-active')).toHaveAttribute('aria-pressed', 'false')
 		await expect(page.getByText('job-queued')).toBeVisible()
 		await expect(page.getByText('job-running')).toBeVisible()
 
 		await page.getByTestId('jobs-health-active').click()
+		await expect(page.getByTestId('jobs-health-active')).toHaveAttribute('aria-pressed', 'true')
+		await expect(page.getByTestId('jobs-health-failed')).toHaveAttribute('aria-pressed', 'false')
+		await expect(page.getByTestId('jobs-health-succeeded')).toHaveAttribute('aria-pressed', 'false')
 		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toContainText('Filters active')
 		await expect
 			.poll(() =>
@@ -152,6 +156,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(reopenedSheet.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('all')
 		await closeJobsMobileFilters(reopenedSheet)
 		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toHaveText('Filters')
+		await expect(page.getByTestId('jobs-health-failed')).toHaveAttribute('aria-pressed', 'false')
 	})
 
 	test('mobile job details keep status visible at 320px and logs stay readable', async ({ page }, testInfo) => {

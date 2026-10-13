@@ -1,5 +1,5 @@
 import { CopyOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Input, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Input, Spin, Tag, Typography } from 'antd'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 
@@ -8,6 +8,7 @@ import { ToggleSwitch } from '../../components/ToggleSwitch'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { parseJobLogLine, type ParsedJobLogLine } from './jobLogParsing'
 import styles from './JobsLogsDrawer.module.css'
+import sharedStyles from './JobsShared.module.css'
 import type { JobsLogSeveritySummary } from './useJobsLogsState'
 
 const ESTIMATED_LOG_ROW_HEIGHT_PX = 58
@@ -212,6 +213,9 @@ export function JobsLogsDrawer(props: Props) {
 		>
 			{activeLogJobId ? (
 				<>
+					<Typography.Paragraph type="secondary">
+						Job: <Typography.Text code className={sharedStyles.detailValue}>{activeLogJobId}</Typography.Text>
+					</Typography.Paragraph>
 					{logPollPaused ? (
 						<Alert
 							type="warning"
@@ -245,11 +249,11 @@ export function JobsLogsDrawer(props: Props) {
 							onChange={(event) => onLogSearchQueryChange(event.target.value)}
 							style={{ width: searchInputWidth }}
 						/>
-						<Button icon={<CopyOutlined />} onClick={() => void onCopyVisibleLogs()} disabled={visibleLogEntries.length === 0}>
-							Copy {normalizedLogSearchQuery ? 'visible' : 'all'}
+							<Button icon={<CopyOutlined aria-hidden={true} />} onClick={() => void onCopyVisibleLogs()} disabled={visibleLogEntries.length === 0}>
+								Copy {normalizedLogSearchQuery ? 'visible' : 'loaded'}
 						</Button>
 						<Button onClick={handleDownloadVisibleLogs} disabled={visibleLogEntries.length === 0}>
-							Download {normalizedLogSearchQuery ? 'visible' : 'all'}
+								Download {normalizedLogSearchQuery ? 'visible' : 'loaded'}
 						</Button>
 						{latestErrorIndex >= 0 ? (
 							<Button onClick={() => {
@@ -260,13 +264,20 @@ export function JobsLogsDrawer(props: Props) {
 						) : null}
 						</div>
 					) : null}
-					<Typography.Text type="secondary" className={styles.metaLine} role="status" aria-live="polite" aria-atomic="true">
-						Lines: {activeLogLines.toLocaleString()}
-						{normalizedLogSearchQuery ? ` · Matches: ${visibleLogEntries.length.toLocaleString()}` : ''}
-						{visibleLogSeveritySummary.error ? ` · Errors: ${visibleLogSeveritySummary.error.toLocaleString()}` : ''}
-						{visibleLogSeveritySummary.warn ? ` · Warnings: ${visibleLogSeveritySummary.warn.toLocaleString()}` : ''}
-					</Typography.Text>
-					{!isLogsLoading && !logsError && activeLogLines === 0 ? (
+					{activeLogLines > 0 || (!isLogsLoading && !logsError) ? (
+						<Typography.Text type="secondary" className={styles.metaLine} role="status" aria-live="polite" aria-atomic="true">
+							Loaded lines: {activeLogLines.toLocaleString()}
+							{normalizedLogSearchQuery ? ` · Matches: ${visibleLogEntries.length.toLocaleString()}` : ''}
+							{visibleLogSeveritySummary.error ? ` · Errors: ${visibleLogSeveritySummary.error.toLocaleString()}` : ''}
+							{visibleLogSeveritySummary.warn ? ` · Warnings: ${visibleLogSeveritySummary.warn.toLocaleString()}` : ''}
+						</Typography.Text>
+					) : null}
+					{isLogsLoading && activeLogLines === 0 ? (
+						<div className={styles.loadingLogs} role="status" aria-live="polite" aria-label="Loading job logs">
+							<Spin size="small" />
+							<Typography.Text type="secondary">Loading job logs…</Typography.Text>
+						</div>
+					) : logsError && activeLogLines === 0 ? null : activeLogLines === 0 ? (
 						<div className={styles.emptyLogs}>
 							<Empty description="No log output was recorded for this job. Open Details to review its result and metadata." />
 						</div>
