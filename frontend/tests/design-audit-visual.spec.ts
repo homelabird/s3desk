@@ -72,6 +72,32 @@ test.describe('Design audit visual smoke @visual', () => {
 		await expect(page).toHaveScreenshot('design-audit-objects-shell-dark.png', visualScreenshotOptions)
 	})
 
+	test('Collapsed navigation keeps route context and keyboard labels', async ({ page }) => {
+		await setupObjectsAuditPage(page, 'light')
+		await page.getByRole('button', { name: 'Collapse navigation' }).click()
+		const navigation = page.getByRole('navigation', { name: 'Primary' })
+		await expect(navigation.getByRole('link')).toHaveCount(5)
+		await expect(navigation.getByRole('link', { name: 'Objects', exact: true })).toHaveAttribute('aria-current', 'page')
+		await navigation.getByRole('link', { name: 'Objects', exact: true }).focus()
+		await page.keyboard.press('Tab')
+		await expect(navigation.getByRole('link', { name: 'Uploads', exact: true })).toBeFocused()
+		await expect(page.getByRole('tooltip', { name: 'Uploads', exact: true })).toBeVisible()
+		await expect(navigation.getByRole('link', { name: 'Uploads', exact: true })).toHaveCSS('outline-width', '2px')
+		await expect(page.getByRole('complementary')).toHaveScreenshot('design-audit-navigation-collapsed.png', visualScreenshotOptions)
+	})
+
+	test('Activity status filter visibly identifies the selected result set', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await installJobsMobileResponsiveFixtures(page)
+		await seedJobsMobileResponsiveStorage(page)
+		await gotoJobsPage(page)
+		const active = page.getByRole('button', { name: 'Filter to active jobs' })
+		await active.click()
+		await expect(active).toHaveAttribute('aria-pressed', 'true')
+		await expect(page.getByRole('button', { name: 'Filter to failed jobs' })).toHaveAttribute('aria-pressed', 'false')
+		await expect(page).toHaveScreenshot('design-audit-jobs-selected-filter-mobile.png', visualScreenshotOptions)
+	})
+
 	test('Objects shell hierarchy remains visible at tablet width', async ({ page }) => {
 		await setupObjectsAuditPage(page, 'light', { width: 768, height: 1024 })
 
