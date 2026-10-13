@@ -108,8 +108,12 @@
 
 .close:hover,
 .close:focus-visible {
-	border-color: var(--s3d-color-focus);
-	outline: none;
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, transparent);
+}
+
+.close:focus-visible {
+	outline: 2px solid var(--s3d-color-focus);
+	outline-offset: 2px;
 }
 
 .close:disabled {

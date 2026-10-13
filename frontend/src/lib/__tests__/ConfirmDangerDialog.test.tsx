@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { message } from 'antd'
+import { useState } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { isDialogDismissed } from '../dialogPreferences'
@@ -23,6 +24,28 @@ describe('ConfirmDangerDialog', () => {
 		await waitFor(() => {
 			expect(screen.getByRole('textbox', { name: 'Type "DELETE" to confirm' })).toHaveFocus()
 		})
+	})
+
+	it('restores the opener after closing the confirmation on a fine pointer device', async () => {
+		const matchMedia = window.matchMedia.bind(window)
+		vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({ ...matchMedia(query), matches: query === '(pointer: fine)' }))
+		const onConfirm = vi.fn()
+		function Harness() {
+			const [open, setOpen] = useState(false)
+			return <>
+				<button onClick={() => setOpen(true)}>Delete bucket</button>
+				{open ? <ConfirmDangerDialog title="Delete bucket" onConfirm={onConfirm} onClose={() => setOpen(false)} /> : null}
+			</>
+		}
+		render(<Harness />)
+		const opener = screen.getByRole('button', { name: 'Delete bucket' })
+		opener.focus()
+		fireEvent.click(opener)
+		await waitFor(() => expect(screen.getByRole('textbox', { name: 'Type "DELETE" to confirm' })).toHaveFocus())
+		fireEvent.keyDown(document, { key: 'Escape', bubbles: true, cancelable: true })
+		await waitFor(() => expect(opener).toHaveFocus())
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+		expect(onConfirm).not.toHaveBeenCalled()
 	})
 
 	it('stores the dismissal preference in the dialog scope token even if the current token changes before submit', async () => {

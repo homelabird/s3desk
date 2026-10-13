@@ -24,7 +24,6 @@ export function ConfirmDangerDialog(props: Props) {
 	const confirmHint = props.confirmHint ?? `Type "${confirmToken}" to confirm`
 	const confirmInputId = `${useId()}-confirm-input`
 	const confirmInputSelector = '[data-confirm-danger-token-input="true"]'
-	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 	const [currentValue, setCurrentValue] = useState('')
 	const [submitting, setSubmitting] = useState(false)
 	const [dismissNextTime, setDismissNextTime] = useState(false)
@@ -77,7 +76,6 @@ export function ConfirmDangerDialog(props: Props) {
 						data-confirm-danger-token-input="true"
 						placeholder={confirmToken}
 						autoComplete="off"
-						autoFocus={shouldAutoFocus}
 						value={currentValue}
 						onChange={(event) => setCurrentValue(event.target.value)}
 					/>

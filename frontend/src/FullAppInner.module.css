@@ -45,6 +45,19 @@
 	font-weight: 700;
 }
 
+.navListCompact {
+	padding-inline: 8px;
+}
+
+.navListCompact .navLink {
+	justify-content: center;
+	padding-inline: 0;
+}
+
+.desktopSiderCollapsed .sidebarToggleRow {
+	justify-content: center;
+}
+
 .skipLink {
 	position: absolute;
 	top: max(8px, env(safe-area-inset-top));
@@ -374,8 +387,7 @@
 }
 
 .desktopSiderCollapsed {
-	border-right: 0;
-	overflow: hidden;
+	overflow: visible;
 }
 
 @media (prefers-reduced-motion: reduce) {

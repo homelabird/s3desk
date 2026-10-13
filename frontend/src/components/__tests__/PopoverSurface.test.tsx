@@ -53,10 +53,43 @@ function readPanelPlacement(panel: HTMLElement) {
 
 afterEach(() => {
 	vi.restoreAllMocks()
+	vi.unstubAllGlobals()
 	document.querySelector('[data-popover-safe-area-probe="true"]')?.remove()
 })
 
 describe('PopoverSurface', () => {
+	it('repositions an open panel after its content grows and disconnects its observer on close', async () => {
+		const viewportRect = createRect({ top: 0, left: 0, width: 320, height: 568 })
+		const anchorRect = createRect({ top: 250, left: 30, width: 48, height: 48 })
+		let panelHeight = 120
+		let onResize: (() => void) | undefined
+		const observe = vi.fn()
+		const disconnect = vi.fn()
+		vi.stubGlobal('ResizeObserver', class {
+			constructor(callback: () => void) { onResize = callback }
+			observe = observe
+			disconnect = disconnect
+		})
+		vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function mockRect(this: HTMLElement) {
+			if (this.getAttribute('data-testid') === 'anchor') return anchorRect
+			if (this.getAttribute('data-testid') === 'panel') return createRect({ top: 0, left: 0, width: 220, height: panelHeight })
+			return createRect({ top: 0, left: 0, width: 0, height: 0 })
+		})
+		const { unmount } = render(
+			<PopoverSurface open getViewportRect={() => viewportRect} rootProps={{ 'data-testid': 'anchor' }} contentProps={{ 'data-testid': 'panel' }} content={() => <div>Menu</div>}>
+				{() => <button type="button">Open</button>}
+			</PopoverSurface>,
+		)
+		const panel = screen.getByTestId('panel')
+		await waitFor(() => expect(readPanelPlacement(panel).top).toBe(306))
+		expect(observe).toHaveBeenCalledWith(panel)
+		panelHeight = 400
+		onResize?.()
+		expect(readPanelPlacement(panel).top).toBe(152)
+		unmount()
+		expect(disconnect).toHaveBeenCalled()
+	})
+
 	it('clamps the panel within a custom viewport rect and publishes panel size budget variables', async () => {
 		const viewportRect = createRect({ top: 100, left: 20, width: 740, height: 240 })
 		const anchorRect = createRect({ top: 0, left: 25, width: 32, height: 25 })

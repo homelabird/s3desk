@@ -55,6 +55,71 @@ afterEach(() => {
 })
 
 describe('useOverlayLayer', () => {
+	it.each([
+		['display-none control', <button key="display" style={{ display: 'none' }}>Hidden action</button>],
+		['display-none ancestor', <div key="ancestor" style={{ display: 'none' }}><button>Hidden action</button></div>],
+		['native hidden ancestor', <div key="hidden" hidden><button>Hidden action</button></div>],
+		['inert ancestor', <div key="inert" inert><button>Hidden action</button></div>],
+		['hidden visibility', <button key="visibility" style={{ visibility: 'hidden' }}>Hidden action</button>],
+		['collapsed visibility', <button key="collapse" style={{ visibility: 'collapse' }}>Hidden action</button>],
+	] as const)('ignores a %s when wrapping Tab in either direction', (_name, hiddenControl) => {
+		render(
+			<TestOverlay open onEscape={() => {}} testId="visibility">
+				<button>Last visible action</button>
+				{hiddenControl}
+			</TestOverlay>,
+		)
+		const first = screen.getByRole('button', { name: 'visibility initial action' })
+		const last = screen.getByRole('button', { name: 'Last visible action' })
+		first.focus()
+		fireEvent.keyDown(first, { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+		expect(last).toHaveFocus()
+		fireEvent.keyDown(last, { key: 'Tab', bubbles: true, cancelable: true })
+		expect(first).toHaveFocus()
+	})
+
+	it('keeps an explicitly visible child focusable inside a visibility-hidden ancestor', () => {
+		render(
+			<TestOverlay open onEscape={() => {}} testId="visible-child">
+				<div style={{ visibility: 'hidden' }}>
+					<button style={{ visibility: 'visible' }}>Visible child action</button>
+				</div>
+			</TestOverlay>,
+		)
+		const first = screen.getByRole('button', { name: 'visible-child initial action' })
+		fireEvent.keyDown(first, { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+		expect(screen.getByRole('button', { name: 'Visible child action' })).toHaveFocus()
+	})
+
+	it('keeps the first summary reachable while skipping closed details descendants', () => {
+		render(
+			<TestOverlay open onEscape={() => {}} testId="closed-details">
+				<details>
+					<summary>Details toggle</summary>
+					<summary>Additional summary</summary>
+					<details open><summary>Nested toggle</summary><button>Hidden nested action</button></details>
+				</details>
+			</TestOverlay>,
+		)
+		const first = screen.getByRole('button', { name: 'closed-details initial action' })
+		const summary = screen.getByText('Details toggle')
+		fireEvent.keyDown(first, { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+		expect(summary).toHaveFocus()
+		fireEvent.keyDown(summary, { key: 'Tab', bubbles: true, cancelable: true })
+		expect(first).toHaveFocus()
+	})
+
+	it('includes controls inside open details in the focus cycle', () => {
+		render(
+			<TestOverlay open onEscape={() => {}} testId="open-details">
+				<details open><summary>Open details toggle</summary><button>Last details action</button></details>
+			</TestOverlay>,
+		)
+		const first = screen.getByRole('button', { name: 'open-details initial action' })
+		fireEvent.keyDown(first, { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+		expect(screen.getByRole('button', { name: 'Last details action' })).toHaveFocus()
+	})
+
 	it('locks body scroll across nested overlays and only closes the top layer on Escape', async () => {
 		function Example() {
 			const [outerOpen, setOuterOpen] = useState(true)

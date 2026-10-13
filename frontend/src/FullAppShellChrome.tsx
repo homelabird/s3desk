@@ -8,7 +8,7 @@ import {
 	ToolOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import { Button, Layout } from 'antd'
+import { Button, Layout, Tooltip } from 'antd'
 import { Link } from 'react-router'
 import { useEffect, type ReactNode } from 'react'
 
@@ -70,27 +70,35 @@ export type FullAppShellChromeProps = {
 function AppNavigation(props: {
 	selectedKey: string
 	onSelect?: () => void
+	compact?: boolean
 }) {
 	return (
 		<div className={styles.navColumn}>
-			<nav className={styles.navList} aria-label="Primary">
-				{NAV_ITEMS.map((item) => (
-					<Link
-						key={item.key}
-						to={item.to}
-						onClick={props.onSelect}
-						aria-current={props.selectedKey === item.key ? 'page' : undefined}
-						className={[
-							styles.navLink,
-							props.selectedKey === item.key ? styles.navLinkActive : '',
-						]
-							.filter(Boolean)
-							.join(' ')}
-					>
-						{item.icon}
-						<span>{item.label}</span>
-					</Link>
-				))}
+			<nav className={`${styles.navList} ${props.compact ? styles.navListCompact : ''}`} aria-label="Primary">
+				{NAV_ITEMS.map((item) => {
+					const link = (
+						<Link
+							key={item.key}
+							to={item.to}
+							onClick={props.onSelect}
+							aria-current={props.selectedKey === item.key ? 'page' : undefined}
+							className={[
+								styles.navLink,
+								props.selectedKey === item.key ? styles.navLinkActive : '',
+							]
+								.filter(Boolean)
+								.join(' ')}
+						>
+							{item.icon}
+							<span className={props.compact ? 'sr-only' : undefined}>{item.label}</span>
+						</Link>
+					)
+					return props.compact ? (
+						<Tooltip key={item.key} title={item.label} placement="right" trigger={['hover', 'focus']}>
+							{link}
+						</Tooltip>
+					) : link
+				})}
 			</nav>
 		</div>
 	)
@@ -122,7 +130,9 @@ export function FullAppShellChrome({
 		if (isDesktop) closeNav()
 	}, [closeNav, isDesktop])
 	const navigationOpen = isDesktop ? !sidebarCollapsed : navOpen
-	const navigationLabel = navigationOpen ? 'Close navigation' : 'Open navigation'
+	const navigationLabel = isDesktop
+		? navigationOpen ? 'Collapse navigation' : 'Expand navigation'
+		: navigationOpen ? 'Close navigation' : 'Open navigation'
 	const contentClassName = `${styles.content} ${hasMediumBreakpoint ? styles.contentPadMd : styles.contentPadSm}`
 	const shellClassName = `${styles.appLayout} ${styles.appShell}`
 	const headerClassName = [
@@ -159,7 +169,7 @@ export function FullAppShellChrome({
 					width={192}
 					collapsible
 					collapsed={sidebarCollapsed}
-					collapsedWidth={48}
+					collapsedWidth={64}
 					trigger={null}
 					theme={theme.mode}
 					className={`${styles.desktopSider} ${sidebarCollapsed ? styles.desktopSiderCollapsed : ''}`}
@@ -176,7 +186,7 @@ export function FullAppShellChrome({
 							</Link>
 						)}
 					</div>
-					{sidebarCollapsed ? null : <AppNavigation selectedKey={selectedKey} />}
+					<AppNavigation selectedKey={selectedKey} compact={sidebarCollapsed} />
 				</Sider>
 			) : null}
 

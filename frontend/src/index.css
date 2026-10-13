@@ -134,7 +134,7 @@
 	--ant-color-text-quaternary: rgba(215, 220, 225, 0.62) !important;
 	--ant-color-text-placeholder: rgba(215, 220, 225, 0.62) !important;
 	--ant-color-primary: #376f9f !important;
-	--ant-color-primary-hover: #447eae !important;
+	--ant-color-primary-hover: #417aa9 !important;
 	--ant-color-primary-active: #2e5f89 !important;
 	--ant-color-link: #84add2 !important;
 	--ant-color-link-hover: #a0bfda !important;
@@ -224,7 +224,7 @@
   --s3d-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.36), 0 8px 22px rgba(0, 0, 0, 0.24);
 }
 
-.ant-btn-primary.ant-btn-dangerous.ant-btn-variant-solid {
+.ant-btn-primary.ant-btn-dangerous.ant-btn-variant-solid:not(:disabled):not(.ant-btn-disabled) {
   color: var(--s3d-color-danger-solid-text) !important;
   background: var(--s3d-color-danger-solid) !important;
   border-color: var(--s3d-color-danger-solid) !important;
@@ -418,6 +418,11 @@ body::after {
 .ant-picker-focused {
   border-color: var(--s3d-color-focus) !important;
   box-shadow: 0 0 0 3px var(--s3d-color-focus-ring) !important;
+}
+
+.ant-input.ant-input-status-error,
+.ant-input-affix-wrapper.ant-input-status-error {
+  border-color: var(--s3d-color-error) !important;
 }
 
 .ant-card,

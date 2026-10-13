@@ -180,11 +180,14 @@ export function PopoverSurface(props: Props) {
 			})
 		}
 		updatePosition()
+		const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePosition)
+		resizeObserver?.observe(panel)
 		window.addEventListener('resize', updatePosition)
 		window.addEventListener('scroll', updatePosition, true)
 		return () => {
 			window.removeEventListener('resize', updatePosition)
 			window.removeEventListener('scroll', updatePosition, true)
+			resizeObserver?.disconnect()
 			safeAreaProbe?.remove()
 		}
 	}, [align, anchorElement, getViewportRect, open])

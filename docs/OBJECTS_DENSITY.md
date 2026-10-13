@@ -52,9 +52,10 @@ than 44px to preserve their touch targets.
 
 ## Left navigation
 
-The header hamburger is always present. At desktop breakpoints it toggles the
-192px app sidebar to zero width; the hidden navigation children are removed to
-avoid focusable links in an invisible pane. The state uses the existing safe
+The navigation hamburger is always present. At desktop breakpoints it toggles the
+192px app sidebar to a 64px icon rail. All five routes remain accessible, with
+the current route highlighted, accessible link names, and labels shown on hover
+or keyboard focus. The state uses the existing safe
 `useLocalStorageState` helper under `appSidebarCollapsed`, defaults to expanded,
 and accepts only boolean `true` as collapsed. Storage failures do not prevent
 in-memory toggling. The state belongs to `useFullAppShellState`, passed through

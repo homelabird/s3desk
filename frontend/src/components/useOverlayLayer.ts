@@ -27,6 +27,7 @@ const focusableSelector = [
 	'select:not([disabled])',
 	'textarea:not([disabled])',
 	'iframe',
+	'summary',
 	'[tabindex]:not([tabindex="-1"])',
 	'[contenteditable="true"]',
 ].join(', ')
@@ -46,11 +47,18 @@ export function hasOpenOverlayLayer() {
 }
 
 function isFocusableElement(element: HTMLElement) {
-	if (element.hidden) return false
-	if (element.getAttribute('aria-hidden') === 'true') return false
-	if (element.closest('[aria-hidden="true"]')) return false
+	if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
 	if (element.matches(':disabled')) return false
 	if (element.tabIndex < 0) return false
+	const visibility = window.getComputedStyle(element).visibility
+	if (visibility === 'hidden' || visibility === 'collapse') return false
+	for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+		if (window.getComputedStyle(ancestor).display === 'none') return false
+		if (ancestor instanceof HTMLDetailsElement && !ancestor.open) {
+			const summary = Array.from(ancestor.children).find((child) => child.tagName === 'SUMMARY')
+			if (!summary?.contains(element)) return false
+		}
+	}
 	return true
 }
 

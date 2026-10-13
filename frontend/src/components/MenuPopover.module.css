@@ -20,6 +20,7 @@
 
 .item {
 	width: 100%;
+	min-width: 0;
 	border: 1px solid transparent;
 	border-radius: 10px;
 	background: transparent;
@@ -68,6 +69,8 @@
 .itemLabel {
 	min-width: 0;
 	flex: 1 1 auto;
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
 .itemChevron {

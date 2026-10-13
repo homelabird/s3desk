@@ -9,7 +9,7 @@
 
 .panel {
 	z-index: 1300;
-	min-width: 220px;
+	min-width: min(220px, var(--popover-available-width, calc(100vw - 32px)));
 	max-width: min(
 		360px,
 		var(
@@ -17,6 +17,8 @@
 			calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))
 		)
 	);
+	max-height: var(--popover-available-height, calc(100vh - 32px));
+	overflow: auto;
 	border: 1px solid var(--s3d-color-border-strong);
 	border-radius: 14px;
 	background: var(--s3d-color-bg-elevated);

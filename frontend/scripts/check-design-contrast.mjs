@@ -3,6 +3,9 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { theme as antdTheme } from 'antd'
+
+import { getAppTheme } from '../src/theme.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -17,6 +20,9 @@ const pairs = [
 	{ label: 'body text on input', fg: 's3d-color-text', bg: 's3d-color-bg-input', min: 4.5 },
 	{ label: 'disabled text on disabled bg', fg: 's3d-color-text-muted', bg: 's3d-color-bg-disabled', min: 3 },
 	{ label: 'primary link on card', fg: 's3d-color-primary', bg: 's3d-color-bg-card', min: 4.5 },
+	{ label: 'primary button text', fg: 'ant-color-text-light-solid', bg: 'ant-color-primary', min: 4.5 },
+	{ label: 'primary button hover text', fg: 'ant-color-text-light-solid', bg: 'ant-color-primary-hover', min: 4.5 },
+	{ label: 'primary button active text', fg: 'ant-color-text-light-solid', bg: 'ant-color-primary-active', min: 4.5 },
 	{ label: 'warning text on warning bg', fg: 's3d-color-warning-text', bg: 's3d-color-warning-bg', min: 4.5 },
 	{ label: 'error text on error bg', fg: 's3d-color-error-dark', bg: 's3d-color-error-bg', min: 4.5 },
 	{ label: 'success text on success bg', fg: 's3d-color-success-text', bg: 's3d-color-success-bg', min: 4.5 },
@@ -35,6 +41,16 @@ const themes = {
 const findings = []
 
 for (const [themeName, tokens] of Object.entries(themes)) {
+	// ConfigProvider declares button colors on each component's own CSS variable scope.
+	const appTokens = antdTheme.getDesignToken(getAppTheme(themeName))
+	for (const [name, value] of Object.entries({
+		'ant-color-text-light-solid': appTokens.colorTextLightSolid,
+		'ant-color-primary': appTokens.colorPrimary,
+		'ant-color-primary-hover': appTokens.colorPrimaryHover,
+		'ant-color-primary-active': appTokens.colorPrimaryActive,
+	})) {
+		tokens.set(name, value)
+	}
 	for (const pair of pairs) {
 		const bgBase = pair.bgBase ?? 's3d-color-bg-card'
 		const bg = resolveColorToken(pair.bg, tokens, bgBase)

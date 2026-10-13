@@ -10,6 +10,7 @@ export function getAppTheme(mode: ThemeMode): ThemeConfig {
 		algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
 		token: {
 			colorPrimary: primary,
+			colorPrimaryHover: isDark ? '#417aa9' : '#285f96',
 			colorInfo: isDark ? '#84add2' : '#285f96',
 			colorInfoText: isDark ? '#84add2' : '#285f96',
 			colorInfoBg: isDark ? 'rgba(132, 173, 210, 0.15)' : '#e8f0f6',

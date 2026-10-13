@@ -140,6 +140,10 @@
   outline-offset: 2px;
 }
 
+.tabButton:focus-visible {
+  outline-offset: -2px;
+}
+
 .panel {
   padding-top: 12px;
 }
