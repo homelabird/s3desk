@@ -7,6 +7,58 @@ import {
 import { gotoProfilesPage } from './support/ui'
 
 test.describe('@mobile-responsive Login mobile workflows', () => {
+	test('login validation follows token edits and protects pending login input at 320px', async ({ page }, testInfo) => {
+		await seedLoginMobileResponsiveStorage(page, '')
+		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
+		await page.setViewportSize({ width: 320, height: 740 })
+		await gotoProfilesPage(page, { ready: (scope) => scope.getByRole('heading', { name: 'S3Desk' }) })
+		const token = page.getByPlaceholder('API_TOKEN')
+		await token.fill('invalid-token')
+		await page.getByRole('button', { name: 'Login', exact: true }).click()
+		await expect(page.getByText('Login failed: invalid API token.', { exact: true })).toBeVisible()
+		const wrapper = page.locator('.ant-input-affix-wrapper')
+		await page.mouse.move(0, 0)
+		await expect(wrapper).toHaveCSS('border-top-color', 'rgb(185, 74, 67)')
+		await wrapper.hover()
+		await expect(wrapper).toHaveCSS('border-top-color', 'rgb(185, 74, 67)')
+		await token.focus()
+		await page.keyboard.press('Tab')
+		await page.keyboard.press('Shift+Tab')
+		await expect(token).toBeFocused()
+		await expect(wrapper).toHaveCSS('border-top-color', 'rgb(185, 74, 67)')
+		await page.screenshot({ path: testInfo.outputPath('login-invalid-token-320.png'), fullPage: true })
+		await page.getByRole('button', { name: 'Dark mode' }).click()
+		await expect(wrapper).toHaveCSS('border-top-color', 'rgb(220, 145, 141)')
+		await wrapper.hover()
+		await expect(wrapper).toHaveCSS('border-top-color', 'rgb(220, 145, 141)')
+		await token.focus()
+		await page.keyboard.press('Tab')
+		await page.keyboard.press('Shift+Tab')
+		await expect(token).toBeFocused()
+		await expect(wrapper).toHaveCSS('border-top-color', 'rgb(220, 145, 141)')
+		await page.screenshot({ path: testInfo.outputPath('login-invalid-token-dark-320.png'), fullPage: true })
+		await page.getByRole('button', { name: 'Light mode' }).click()
+		await token.fill('valid-token')
+		await expect(page.getByText('Login failed: invalid API token.', { exact: true })).toHaveCount(0)
+		await expect(wrapper).not.toHaveClass(/ant-input-status-error/)
+		await expect(wrapper).not.toHaveCSS('border-top-color', 'rgb(185, 74, 67)')
+		let releaseLogin!: () => void
+		const loginGate = new Promise<void>((resolve) => { releaseLogin = resolve })
+		await page.route('**/api/v1/bootstrap', async (route) => {
+			await loginGate
+			return route.fallback()
+		})
+		try {
+			await page.getByRole('button', { name: 'Login', exact: true }).click()
+			await expect(token).toBeDisabled()
+			await page.screenshot({ path: testInfo.outputPath('login-pending-320.png'), fullPage: true })
+			releaseLogin()
+			await expect(page.getByText('No profiles yet', { exact: true })).toBeVisible()
+		} finally {
+			releaseLogin()
+		}
+	})
+
 	test('login succeeds on a narrow mobile viewport', async ({ page }) => {
 		const validToken = 'valid-token'
 		const bootstrapStatuses: number[] = []

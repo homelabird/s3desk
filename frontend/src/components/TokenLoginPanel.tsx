@@ -13,6 +13,7 @@ type TokenLoginPanelProps = {
 	submitting: boolean
 	validationError?: string | null
 	onSubmitToken: (token: string) => void | Promise<void>
+	onTokenChange: () => void
 	onClearSavedToken?: () => void
 	autoFocus?: boolean
 	errorId?: string
@@ -83,10 +84,13 @@ export function TokenLoginPanel(props: TokenLoginPanelProps) {
 							onChange={(event) => {
 								setToken(event.target.value)
 								if (localError) setLocalError(null)
+								props.onTokenChange()
 							}}
 							placeholder="API_TOKEN…"
 							autoFocus={props.autoFocus}
 							autoComplete="current-password"
+							disabled={props.submitting}
+							status={visibleError ? 'error' : undefined}
 							aria-invalid={visibleError ? 'true' : undefined}
 							aria-describedby={visibleError ? errorId : undefined}
 						/>

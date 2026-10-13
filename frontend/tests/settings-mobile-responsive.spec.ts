@@ -55,6 +55,36 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await seedSettingsMobileResponsiveStorage(page)
 	})
 
+	test('access settings keep a long profile ID readable and distinguish unapplied token edits at 320px', async ({ page }, testInfo) => {
+		const profileId = `profile-${'regional-workspace-identifier-'.repeat(8)}`
+		await page.setViewportSize({ width: 320, height: 740 })
+		await page.route('**/api/v1/profiles', (route) => route.fulfill({ json: [{
+			id: profileId, name: 'Long regional workspace profile', provider: 's3_compatible',
+			endpoint: 'http://localhost:9000', region: 'us-east-1', forcePathStyle: true,
+			preserveLeadingSlash: false, tlsInsecureSkipVerify: false,
+			createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+		}] }))
+		await page.goto('/settings')
+		const drawer = dialogByName(page, 'Settings')
+		const identifier = drawer.getByText(`ID: ${profileId}`, { exact: true })
+		await expect(identifier).toBeVisible()
+		await page.screenshot({ path: testInfo.outputPath('settings-access-long-id-320.png'), fullPage: true })
+		await expect.poll(() => identifier.evaluate((element) => {
+			const rect = element.getBoundingClientRect() // e2e-geometry-allow proves the complete selectable profile ID reflows at 320 CSS px
+			return rect.left >= 0 && rect.right <= window.innerWidth
+		})).toBe(true)
+		const apply = drawer.getByRole('button', { name: 'Apply', exact: true })
+		await expect(apply).toBeDisabled()
+		const token = drawer.getByPlaceholder('Must match API_TOKEN')
+		await token.fill('edited-session-token')
+		await expect(apply).toBeEnabled()
+		await expect(drawer.getByText('Unapplied token change. Select Apply to reconnect.')).toBeVisible()
+		await page.screenshot({ path: testInfo.outputPath('settings-access-token-draft-320.png'), fullPage: true })
+		await token.fill('valid-token')
+		await expect(apply).toBeDisabled()
+		await expect(drawer.getByText('Unapplied token change. Select Apply to reconnect.')).toHaveCount(0)
+	})
+
 	test('thumbnail quality remains usable and saved on narrow mobile', async ({ page }) => {
 		await page.setViewportSize({ width: 320, height: 568 })
 		await page.goto('/settings')

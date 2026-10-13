@@ -71,6 +71,7 @@ export function LoginPage(props: Props) {
 				submitting={submitting}
 				validationError={validationError}
 				onSubmitToken={submit}
+				onTokenChange={() => setValidationError(null)}
 				onClearSavedToken={props.onClearSavedToken}
 				autoFocus={shouldAutoFocus}
 				inputId="login-api-token"

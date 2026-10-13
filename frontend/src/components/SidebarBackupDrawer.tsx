@@ -151,19 +151,19 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 					</Typography.Text>
 				</div>
 				<Space wrap>
-					<Button type={activeTask === 'export' ? 'primary' : 'default'} onClick={() => setActiveTask('export')}>
+					<Button type={activeTask === 'export' ? 'primary' : 'default'} aria-pressed={activeTask === 'export'} onClick={() => setActiveTask('export')}>
 						Export backup
 					</Button>
-					<Button type={activeTask === 'restore' ? 'primary' : 'default'} onClick={() => setActiveTask('restore')}>
+					<Button type={activeTask === 'restore' ? 'primary' : 'default'} aria-pressed={activeTask === 'restore'} onClick={() => setActiveTask('restore')}>
 						Stage restore
 					</Button>
-					<Button type={activeTask === 'remote' ? 'primary' : 'default'} onClick={() => setActiveTask('remote')}>
+					<Button type={activeTask === 'remote' ? 'primary' : 'default'} aria-pressed={activeTask === 'remote'} onClick={() => setActiveTask('remote')}>
 						Remote storage
 					</Button>
-					<Button type={activeTask === 'portable' ? 'primary' : 'default'} onClick={() => setActiveTask('portable')}>
+					<Button type={activeTask === 'portable' ? 'primary' : 'default'} aria-pressed={activeTask === 'portable'} onClick={() => setActiveTask('portable')}>
 						Import portable bundle
 					</Button>
-					<Button type={activeTask === 'cleanup' ? 'primary' : 'default'} onClick={() => setActiveTask('cleanup')}>
+					<Button type={activeTask === 'cleanup' ? 'primary' : 'default'} aria-pressed={activeTask === 'cleanup'} onClick={() => setActiveTask('cleanup')}>
 						Clean staged restores
 					</Button>
 				</Space>

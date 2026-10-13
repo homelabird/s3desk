@@ -1,6 +1,7 @@
 import { Alert, Button, Checkbox, Input, Typography } from 'antd'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 
+import { FormField } from './FormField'
 import styles from './SidebarBackupAction.module.css'
 
 type RestoreValidationView = {
@@ -44,6 +45,7 @@ export function SidebarRestoreBundleSection(props: SidebarRestoreBundleSectionPr
 	const restoreResult = props.restoreResult
 	const restoreValidation = props.restoreValidation
 	const inputRef = useRef<HTMLInputElement | null>(null)
+	const passwordId = useId()
 
 	return (
 		<div className={styles.section}>
@@ -51,11 +53,14 @@ export function SidebarRestoreBundleSection(props: SidebarRestoreBundleSectionPr
 			<Typography.Text type="secondary">
 				Upload a backup bundle to stage a restorable <Typography.Text code>DATA_DIR</Typography.Text>. If the bundle used password protection, enter the same password here.
 			</Typography.Text>
-			<Input.Password
-				placeholder="Bundle password (optional)"
-				value={props.restorePassword}
-				onChange={(event) => props.setRestorePassword(event.target.value)}
-			/>
+			<FormField label="Bundle password (optional)" htmlFor={passwordId}>
+				<Input.Password
+					id={passwordId}
+					placeholder="Bundle password (optional)"
+					value={props.restorePassword}
+					onChange={(event) => props.setRestorePassword(event.target.value)}
+				/>
+			</FormField>
 			<Checkbox checked={props.restoreAllowUnsigned} onChange={(event) => props.setRestoreAllowUnsigned(event.target.checked)}>
 				I trust this unsigned backup (authenticity cannot be verified)
 			</Checkbox>

@@ -1,7 +1,8 @@
 import { Alert, Button, Checkbox, Input, Typography } from 'antd'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 
 import { confirmDangerAction } from '../lib/confirmDangerAction'
+import { FormField } from './FormField'
 import styles from './SidebarBackupAction.module.css'
 
 type PortableSummaryView = {
@@ -36,6 +37,7 @@ type SidebarPortableImportSectionProps = {
 
 export function SidebarPortableImportSection(props: SidebarPortableImportSectionProps) {
 	const inputRef = useRef<HTMLInputElement | null>(null)
+	const passwordId = useId()
 
 	return (
 		<div className={styles.section}>
@@ -43,12 +45,15 @@ export function SidebarPortableImportSection(props: SidebarPortableImportSection
 			<Typography.Text type="secondary">
 				Preview first, then confirm import. If the portable bundle used password protection, supply the same password before previewing.
 			</Typography.Text>
-			<Input.Password
-				placeholder="Portable bundle password (optional)"
-				disabled={props.portableLoading === 'import'}
-				value={props.portablePassword}
-				onChange={(event) => props.onPortablePasswordChange(event.target.value)}
-			/>
+			<FormField label="Portable bundle password (optional)" htmlFor={passwordId}>
+				<Input.Password
+					id={passwordId}
+					placeholder="Portable bundle password (optional)"
+					disabled={props.portableLoading === 'import'}
+					value={props.portablePassword}
+					onChange={(event) => props.onPortablePasswordChange(event.target.value)}
+				/>
+			</FormField>
 			<Checkbox disabled={props.portableLoading === 'import'} checked={props.portableAllowUnsigned} onChange={(event) => props.onPortableAllowUnsignedChange(event.target.checked)}>
 				I trust this unsigned backup (authenticity cannot be verified)
 			</Checkbox>

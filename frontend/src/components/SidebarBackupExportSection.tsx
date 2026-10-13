@@ -1,6 +1,8 @@
 import { Alert, Button, Input, Radio, Typography } from 'antd'
+import { useId } from 'react'
 
 import type { ServerBackupScope } from '../api/client'
+import { FormField } from './FormField'
 import styles from './SidebarBackupAction.module.css'
 
 type BackupProtectionMode = 'clear' | 'server_key' | 'password'
@@ -35,6 +37,10 @@ type SidebarBackupExportSectionProps = {
 }
 
 export function SidebarBackupExportSection(props: SidebarBackupExportSectionProps) {
+	const passwordId = useId()
+	const confirmationId = `${passwordId}-confirm`
+	const passwordMismatch = props.backupPasswordConfirm !== '' && props.backupPassword !== props.backupPasswordConfirm
+	const passwordIncomplete = props.backupProtection === 'password' && (!props.backupPassword || props.backupPassword !== props.backupPasswordConfirm)
 	return (
 		<div className={styles.section}>
 			<Typography.Text strong>Backup export</Typography.Text>
@@ -84,16 +90,27 @@ export function SidebarBackupExportSection(props: SidebarBackupExportSectionProp
 			</div>
 			{props.backupProtection === 'password' ? (
 				<div className={styles.actions}>
-					<Input.Password
-						placeholder="Backup password"
-						value={props.backupPassword}
-						onChange={(event) => props.setBackupPassword(event.target.value)}
-					/>
-					<Input.Password
-						placeholder="Confirm backup password"
-						value={props.backupPasswordConfirm}
-						onChange={(event) => props.setBackupPasswordConfirm(event.target.value)}
-					/>
+					<FormField label="Backup password" htmlFor={passwordId} required>
+						<Input.Password
+							id={passwordId}
+							aria-required="true"
+							placeholder="Backup password"
+							value={props.backupPassword}
+							onChange={(event) => props.setBackupPassword(event.target.value)}
+						/>
+					</FormField>
+					<FormField label="Confirm backup password" htmlFor={confirmationId} required error={passwordMismatch ? 'Backup password confirmation does not match.' : undefined}>
+						<Input.Password
+							id={confirmationId}
+							aria-required="true"
+							aria-invalid={passwordMismatch || undefined}
+							aria-describedby={passwordMismatch ? `${confirmationId}-error` : undefined}
+							status={passwordMismatch ? 'error' : undefined}
+							placeholder="Confirm backup password"
+							value={props.backupPasswordConfirm}
+							onChange={(event) => props.setBackupPasswordConfirm(event.target.value)}
+						/>
+					</FormField>
 				</div>
 			) : null}
 			<Alert type={props.backupProtection === 'clear' ? 'warning' : 'info'} showIcon title="Payload protection" description={props.protectionSummary} />
@@ -101,7 +118,7 @@ export function SidebarBackupExportSection(props: SidebarBackupExportSectionProp
 				<Button
 					type="primary"
 					loading={props.loadingScope === props.backupScope}
-					disabled={!props.backupSupported || !props.backupScopeAvailability[props.backupScope].enabled || props.loadingScope !== null}
+					disabled={!props.backupSupported || !props.backupScopeAvailability[props.backupScope].enabled || props.loadingScope !== null || passwordIncomplete}
 					onClick={() => void props.onDownload()}
 				>
 					Download backup

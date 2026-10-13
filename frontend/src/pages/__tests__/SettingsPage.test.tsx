@@ -83,10 +83,15 @@ describe('SettingsPage', () => {
 
 	it('applies a trimmed API token and keeps selected profile management out of settings', async () => {
 		const { setApiToken } = renderSettingsPage()
+		await screen.findByPlaceholderText('Must match API_TOKEN…', undefined, { timeout: 10_000 })
+		expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+		fireEvent.keyDown(screen.getByPlaceholderText('Must match API_TOKEN…'), { key: 'Enter', keyCode: 13 })
+		expect(setApiToken).not.toHaveBeenCalled()
 
 		fireEvent.change(await screen.findByPlaceholderText('Must match API_TOKEN…', undefined, { timeout: 10_000 }), {
 			target: { value: '  next-token  ' },
 		})
+		expect(screen.getByRole('status')).toHaveTextContent('Unapplied token change. Select Apply to reconnect.')
 		fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
 		expect(setApiToken).toHaveBeenCalledWith('next-token')
@@ -105,13 +110,38 @@ describe('SettingsPage', () => {
 		expect(setApiToken).not.toHaveBeenCalled()
 		fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 		expect(setApiToken).toHaveBeenCalledWith('draft-token')
+		fireEvent.change(tokenInput, { target: { value: ' current-token ' } })
+		expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+		expect(screen.queryByText('Unapplied token change. Select Apply to reconnect.')).not.toBeInTheDocument()
+	}, 20_000)
+
+	it('keeps token validation beside the field and clears it after editing', async () => {
+		const { setApiToken } = renderSettingsPage()
+		const tokenInput = await screen.findByPlaceholderText('Must match API_TOKEN…', undefined, { timeout: 10_000 })
+
+		fireEvent.change(tokenInput, { target: { value: '한글-token' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+		expect(setApiToken).not.toHaveBeenCalled()
+		expect(screen.getByRole('alert')).toHaveTextContent('API token must use only ASCII or Latin-1 characters.')
+		expect(tokenInput).toHaveAttribute('aria-invalid', 'true')
+		expect(tokenInput).toHaveAttribute('aria-describedby', 'settings-api-token-error')
+		expect(screen.queryByText('Unapplied token change. Select Apply to reconnect.')).not.toBeInTheDocument()
+
+		fireEvent.change(tokenInput, { target: { value: '  next-token  ' } })
+		expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+		expect(tokenInput).not.toHaveAttribute('aria-invalid')
+		expect(tokenInput).not.toHaveAttribute('aria-describedby')
+		expect(screen.getByRole('status')).toHaveTextContent('Unapplied token change. Select Apply to reconnect.')
+		fireEvent.keyDown(tokenInput, { key: 'Enter', keyCode: 13 })
+		expect(setApiToken).toHaveBeenCalledExactlyOnceWith('next-token')
 	}, 20_000)
 
 	it('stores transfer preferences in localStorage', async () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
-		expect(await screen.findByLabelText('Transfer safety')).toHaveValue('auto')
+		expect(await screen.findByLabelText('Transfer safety', undefined, { timeout: 10_000 })).toHaveValue('auto')
 		expect(screen.queryByRole('switch', { name: 'Use server for downloads and previews' })).not.toBeInTheDocument()
 		fireEvent.click(screen.getByText('Advanced transfer options'))
 		const proxySwitch = await screen.findByRole('switch', { name: 'Use server for downloads and previews' })
@@ -129,7 +159,7 @@ describe('SettingsPage', () => {
 
 	it('saves thumbnail quality and disables it when thumbnails are hidden', async () => {
 		renderSettingsPage(undefined, '/?settings=objects')
-		const quality = await screen.findByRole('combobox', { name: 'Thumbnail quality' })
+		const quality = await screen.findByRole('combobox', { name: 'Thumbnail quality' }, { timeout: 10_000 })
 		expect(quality).toHaveValue('256')
 		fireEvent.change(quality, { target: { value: '512' } })
 		await waitFor(() => expect(window.localStorage.getItem('objectsThumbnailQuality')).toBe('512'))
